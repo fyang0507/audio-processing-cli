@@ -338,6 +338,12 @@ class EnhancementPipeline:
             )
             source_stage_report = _stage_result(stage, self.profile, result)
             stages.append(source_stage_report)
+        raw_abstained_regions = source_stage_report.get("abstained_regions", [])
+        abstained_source_region_ids = (
+            {str(region_id) for region_id in raw_abstained_regions}
+            if isinstance(raw_abstained_regions, list)
+            else set()
+        )
 
         current, fullband_adjustments = apply_fullband_adjustments(
             current,
@@ -475,6 +481,8 @@ class EnhancementPipeline:
                     corrections: dict[str, float] = {}
                     for measured_region in simulated_regional["machine_regions"]:
                         region_id = str(measured_region["region_id"])
+                        if region_id in abstained_source_region_ids:
+                            continue
                         difference = float(measured_region["difference_from_speech_db"])
                         if (
                             self.profile.machine_relative_minimum_lu
@@ -715,6 +723,15 @@ class EnhancementPipeline:
                     for measured_region in after_regional["machine_regions"]:
                         region_id = str(measured_region["region_id"])
                         difference = float(measured_region["difference_from_speech_db"])
+                        if region_id in abstained_source_region_ids:
+                            final_region_evaluations.append(
+                                {
+                                    "region_id": region_id,
+                                    "difference_from_speech_db": round(difference, 3),
+                                    "status": "abstained_overlap",
+                                }
+                            )
+                            continue
                         inside = (
                             self.profile.machine_relative_minimum_lu - 0.25
                             <= difference
