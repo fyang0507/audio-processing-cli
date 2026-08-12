@@ -60,6 +60,46 @@ def _canonical_hash(payload: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _resolved_operations_hash(
+    profile: Profile,
+    stages: list[dict[str, object]],
+    adjustments: list[dict[str, object]],
+    source_sha256: object,
+) -> str:
+    stage_resolutions: list[dict[str, object]] = []
+    for stage in stages:
+        raw_operations = stage.get("operations", [])
+        operations: list[object] = []
+        if isinstance(raw_operations, list):
+            for operation in raw_operations:
+                if isinstance(operation, dict):
+                    operations.append(
+                        {
+                            key: value
+                            for key, value in operation.items()
+                            if key != "codec_peak_correction_db"
+                        }
+                    )
+                else:
+                    operations.append(operation)
+        stage_resolutions.append(
+            {
+                "name": stage.get("name"),
+                "status": stage.get("status"),
+                "reason": stage.get("reason"),
+                "operations": operations,
+            }
+        )
+    return _canonical_hash(
+        {
+            "profile": profile.as_dict(),
+            "stages": stage_resolutions,
+            "adjustments": adjustments,
+            "source_sha256": source_sha256,
+        }
+    )
+
+
 def _vad_audio(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     mono = np.mean(audio, axis=1, dtype=np.float64).astype(np.float32)
     if sample_rate == 16_000:
@@ -594,13 +634,11 @@ class EnhancementPipeline:
                 "dry_run": dry_run,
                 "rendered": False,
             }
-            report["resolved_operations_sha256"] = _canonical_hash(
-                {
-                    "profile": self.profile.as_dict(),
-                    "stages": stages,
-                    "adjustments": resolved_adjustments,
-                    "source_sha256": source_info["sha256"],
-                }
+            report["resolved_operations_sha256"] = _resolved_operations_hash(
+                self.profile,
+                stages,
+                resolved_adjustments,
+                source_info["sha256"],
             )
             if dry_run:
                 return report
@@ -761,13 +799,11 @@ class EnhancementPipeline:
             report["timeline_preserved"] = timeline_ok
             report["dry_run"] = False
             report["rendered"] = True
-            report["resolved_operations_sha256"] = _canonical_hash(
-                {
-                    "profile": self.profile.as_dict(),
-                    "stages": stages,
-                    "adjustments": resolved_adjustments,
-                    "source_sha256": source_info["sha256"],
-                }
+            report["resolved_operations_sha256"] = _resolved_operations_hash(
+                self.profile,
+                stages,
+                resolved_adjustments,
+                source_info["sha256"],
             )
             return report
 

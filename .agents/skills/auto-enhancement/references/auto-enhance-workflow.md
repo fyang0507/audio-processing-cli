@@ -67,7 +67,7 @@ Read these surfaces before accepting a result:
 - `stages`: terminal status, reason, exact operations, component evaluations, and resolved transitions.
 - `measurements.before`, `measurements.predicted`, and `measurements.after`: program and regional verification using stable region IDs.
 - `adjustments`: resolved user- or agent-authorized operations.
-- `resolved_operations_sha256`, source hash, and output hash: reproducibility surfaces.
+- `resolved_operations_sha256`, source hash, and output hash: reproducibility surfaces. The resolved-operations hash covers the pre-encode processing plan; render-only verification diagnostics such as codec peak correction remain explicit report fields but do not change that plan hash.
 
 ## Render verification
 

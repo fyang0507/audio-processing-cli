@@ -30,6 +30,7 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     wavfile.write(source, sample_rate, audio)
 
     pipeline = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad())
+    dry_run_report = pipeline.run(source, output=None, dry_run=True)
     report = pipeline.run(source, output=output, dry_run=False)
 
     assert output.is_file()
@@ -43,3 +44,7 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     )
     after_lufs = report["measurements"]["after"]["program"]["input_i"]
     assert abs(after_lufs - PROFILES["product-demo"].target_lufs) <= 0.6
+    assert (
+        report["resolved_operations_sha256"]
+        == dry_run_report["resolved_operations_sha256"]
+    )

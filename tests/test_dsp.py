@@ -121,3 +121,29 @@ def test_voice_and_machine_balance_close_the_declared_gap() -> None:
     assert initial["machine_regions"][0]["difference_from_speech_db"] > 20
     difference = final["machine_regions"][0]["difference_from_speech_db"]
     assert -4.5 <= difference <= -1.5
+
+
+def test_machine_region_padding_that_reaches_speech_abstains() -> None:
+    sample_rate = 16_000
+    audio = np.zeros((sample_rate * 4, 2), dtype=np.float32)
+    machine = _sine(sample_rate, 0.5, 1000.0, 0.12)
+    speech_signal = _sine(sample_rate, 1.98, 220.0, 0.004)
+    audio[round(0.5 * sample_rate) : round(1.0 * sample_rate)] = machine[:, None]
+    audio[round(1.02 * sample_rate) : round(3.0 * sample_rate)] = speech_signal[:, None]
+    speech = [SpeechRegion(1.02, 3.0, 0.9, 1.0)]
+    profile = PROFILES["product-demo"]
+
+    analysis = analyze_signal(audio, sample_rate, speech, profile)
+
+    assert len(analysis.machine_regions) == 1
+    region = analysis.machine_regions[0]
+    assert region.end > speech[0].start
+    assert region.overlaps_speech is True
+
+    balanced, source_stage = apply_source_balance(audio, sample_rate, profile, analysis)
+
+    assert source_stage["status"] == "abstained"
+    assert source_stage["reason"] == "speech_and_machine_audio_overlap"
+    assert source_stage["abstained_regions"] == [region.region_id]
+    assert source_stage["operations"] == []
+    np.testing.assert_array_equal(balanced, audio)

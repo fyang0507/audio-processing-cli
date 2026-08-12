@@ -362,6 +362,13 @@ def _detect_machine_regions(
     # speech reference; quiet/ambiguous events remain canonical and unmodified.
     threshold = max(noise_floor + 15.0, speech_reference_dbfs + 3.0, -55.0)
     candidates = (~speech_frames) & (levels >= threshold)
+    speech_sample_spans = [
+        (
+            max(0, round(region.start * sample_rate)),
+            min(audio.shape[0], round(region.end * sample_rate)),
+        )
+        for region in speech_regions
+    ]
 
     # Close gaps up to 200 ms so one sound with internal decay remains one stable region.
     max_gap_frames = 2
@@ -387,6 +394,10 @@ def _detect_machine_regions(
         if level < noise_floor + 8.0:
             continue
         region_id = f"machine_audio_{len(regions) + 1:03d}"
+        overlaps_speech = any(
+            start < speech_end and end > speech_start
+            for speech_start, speech_end in speech_sample_spans
+        )
         regions.append(
             MachineRegion(
                 region_id=region_id,
@@ -394,6 +405,7 @@ def _detect_machine_regions(
                 end=end / sample_rate,
                 measured_rms_dbfs=level,
                 difference_from_speech_db=level - speech_reference_dbfs,
+                overlaps_speech=overlaps_speech,
             )
         )
     return regions, noise_floor, threshold
