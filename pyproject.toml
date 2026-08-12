@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "audio-processing-cli"
+version = "0.1.0"
+description = "Profile-driven, local-first audio enhancement for agent workflows"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Fred Yang" }]
+dependencies = [
+  "numpy>=2.0",
+  "onnxruntime>=1.20",
+  "scipy>=1.14",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+]
+
+[project.scripts]
+audio = "audio_cli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/audio_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/.agents/skills/auto-enhancement",
+  "/src",
+  "/tests",
+  "/LICENSE",
+  "/README.md",
+  "/pyproject.toml",
+  "/uv.lock",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+markers = [
+  "live: exercises downloaded models and real media",
+]
