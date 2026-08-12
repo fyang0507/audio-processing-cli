@@ -1,0 +1,20 @@
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.egg-info/
+*.py[cod]
+coverage.xml
+htmlcov/
+
+# Generated enhancement artifacts
+*-enhanced.*
+*.report.json
+
+# Local research/model experiments and user-supplied media
+model_tests/forced_aligner/
+model_tests/vibeasr_cpp/
+autio-test-sample.m4a
+demo-video-audio-to-improve.mp4
+test-sample-multispeaker.m4a

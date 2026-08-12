@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auto Enhancement"
+  short_description: "Inspect and tune profile-driven audio"
+  default_prompt: "Use $auto-enhancement to inspect this recording, run the appropriate profile, and verify or surgically tune the result."
