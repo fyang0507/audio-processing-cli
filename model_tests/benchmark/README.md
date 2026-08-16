@@ -173,6 +173,74 @@ sherpa-onnx baseline with `run_sherpa_diarization.py`. Both normalize output to
 diarization stress fixture, use `score_repeat_diarization.py`, which compares
 anonymous-speaker activity as well as interval and transition stability.
 
+For the direct, platform-independent `pyannote.audio` candidate, use
+`run_pyannote_community_diarization.py`. It imports
+`pyannote/speaker-diarization-community-1` directly; it is not the FluidAudio
+Core ML/VBx implementation. The public model is gated, so the Hugging Face
+account used by the runner must first accept its access conditions. Provision
+the model in a separate process, then run the timed profile with the known
+two-speaker interview setting:
+
+```bash
+/tmp/pyannote-community-1-venv/bin/python - <<'PY'
+from pyannote.audio import Pipeline
+Pipeline.from_pretrained(
+    "pyannote/speaker-diarization-community-1",
+    revision="3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+    token=True,
+)
+PY
+
+python3 model_tests/benchmark/run_pyannote_community_diarization.py \
+  --python /tmp/pyannote-community-1-venv/bin/python \
+  --model-revision 3533c8cf8e369892e6b79ff1bf80f7b0286a54ee \
+  --audio model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio.wav \
+  --output model_tests/benchmark_runs/pyannote_community1_cantomap150s.json \
+  --raw-output model_tests/benchmark_runs/pyannote_community1_cantomap150s.raw.json \
+  --num-speakers 2 --device mps --regular-output
+```
+
+The runner defaults to the pipeline's exclusive output, but use
+`--regular-output` when matching FluidAudio's quality evidence, which preserves
+overlap. It records the immutable requested Hub revision. Profile the same canonical
+SpiCE downmix and score both artifacts with `score_diarization.py`; SpiCE
+remains a participant-interval diagnostic, not full-DER ground truth. MPS is
+an available PyTorch acceleration path, not a Core ML backend. The runner feeds
+the already-canonical PCM16 WAV samples directly to pyannote because the
+current macOS TorchCodec wheel cannot locate its FFmpeg dylibs when given a
+file path.
+
+To test FluidAudio's Core ML Silero VAD as a serving-backend candidate without
+changing the product VAD contract, run the exact 16 kHz mono CantoMap fixture
+through both the pinned ONNX implementation and FluidAudio's `VadManager`.
+The harness passes the same threshold, exit threshold, minimum speech/silence,
+and padding policy, saves each backend's probability sequence, and compares
+final speech regions at a fixed 10 ms score grid. It is a compatibility test,
+not a claim of probability or bitwise equality: FluidAudio uses a Core ML
+artifact with 256 ms inference frames, while the existing ONNX backend uses
+32 ms frames.
+
+```bash
+python model_tests/benchmark/run_fluidaudio_vad_compare.py \
+  --fluid-source /tmp/FluidAudio \
+  --fluid-version 0.15.5 \
+  --fluid-commit 19600a485baa4998812e4654b70d2bab8f2c9949 \
+  --audio model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio.wav \
+  --reference model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/reference.json \
+  --output model_tests/benchmark_runs/fluidaudio_vad_cantomap.json \
+  --raw-log model_tests/benchmark_runs/fluidaudio_vad_cantomap.log \
+  --threshold 0.5 --exit-threshold 0.35 \
+  --min-speech-ms 100 --min-silence-ms 300 --speech-pad-ms 120
+```
+
+The runner generates an isolated temporary Swift package which imports the
+specified FluidAudio checkout and invokes `VadManager` directly. Its wall time
+therefore includes Swift-package build and Core ML initialization, whereas the
+ONNX figures are measured inside the Python runner; do not treat those timing
+fields as a speed comparison. Promote a FluidAudio backend only after its
+region behavior and downstream enhancement plan pass predeclared acceptance
+gates.
+
 Both runner formats expose `output.segments`, so a frozen reference can be
 scored with:
 

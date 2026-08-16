@@ -33,7 +33,11 @@ Two test clips (repo root, not committed elsewhere):
 4. **Qwen/Qwen3-ForcedAligner-0.6B**, via the `qwen-asr` pip package — `forced_aligner/`
 5. **mlx-community/Qwen3-ASR-0.6B-8bit**, **Qwen3-ASR-1.7B-8bit**, and
    **whisper-large-v3-turbo-asr-4bit**, via `mlx-audio`
-6. **sherpa-onnx** pyannote segmentation with 3D-Speaker/TitaNet embeddings, and **FluidAudio 0.15.5**, as dedicated diarizers
+6. **sherpa-onnx** pyannote segmentation with 3D-Speaker/TitaNet embeddings, and
+   FluidAudio's **v0.15.5 offline VBx diarization CLI** backed by its
+   `FluidInference/speaker-diarization-coreml` package, as dedicated diarizers.
+   Here *FluidAudio* names the product/SDK and diarization pipeline—not one
+   separately benchmarked model.
 
 Still unmeasured from Issue #2's candidate list: CrisperWhisper 2.0, Whisper
 large-v3-turbo 8-bit/whisper.cpp, pyannote Community-1, and NeMo Sortformer.
@@ -512,6 +516,15 @@ population and separate reporting by variety.
 
 ### Dedicated-diarizer result
 
+**What “FluidAudio” denotes in these results.** The experiment invoked the
+prebuilt `fluidaudiocli` from FluidAudio tag `v0.15.5`, commit
+`19600a485baa4998812e4654b70d2bab8f2c9949`, in offline mode with a known
+two-speaker prior. That CLI ran FluidAudio's offline VBx diarization pipeline
+using the provisioned `FluidInference/speaker-diarization-coreml` package.
+Accordingly, the figures below evaluate that specific Core ML-backed pipeline,
+configuration, and model-package inventory—not a generic model called
+“FluidAudio” and not FluidAudio's product capabilities as a whole.
+
 Neither lightweight diarizer solved the dense CantoMap conversation. Across
 the four sherpa-onnx CPU configurations, the best short-run row was INT8
 segmentation plus the Chinese 3D-Speaker embedding: 8.81 seconds script wall,
@@ -548,6 +561,51 @@ zero-collar error. Preserve source channels and role metadata, but do not treat
 instantaneous channel dominance as diarization. A causal channel-aware test
 still needs predeclared VAD, hysteresis/minimum-duration, and bleed/ambiguity
 policies evaluated on held-out conversations.
+
+### Direct pyannote offboarding test
+
+Direct offboarding is feasible: `pyannote.audio` 4.0.7 loaded
+`pyannote/speaker-diarization-community-1` directly at immutable Hub revision
+`3533c8cf8e369892e6b79ff1bf80f7b0286a54ee`, with the same known-two-speaker
+prior and regular (overlap-permitting) output as the selected FluidAudio quality
+run. This is a direct PyTorch/MPS pipeline, not FluidAudio or its Core ML/VBx
+implementation. The current macOS TorchCodec wheel could not locate any of its
+FFmpeg dylibs when passed an audio path. The tracked runner therefore decodes
+only the frozen uncompressed PCM16 WAV fixtures with Python's standard library
+and passes their exact sample tensor to pyannote—no resampling or channel
+conversion. That workaround is a real integration cost, not a model-quality
+claim.
+
+On CantoMap, Community-1 improved the limited dense-change agreement evidence:
+**19.20%** exclusive 250-ms-collar error, **46.36%** overlap-included
+zero-collar error, and **42.00%** one-second speaker-change F1, compared with
+FluidAudio's **22.31%**, **48.05%**, and **5.50%**. It cost **10.80 s** wall
+(RTF 0.0721) and **1.30 GiB** peak target-process RSS, compared with
+FluidAudio's **1.26 s** (RTF 0.00839) and **0.31 GiB** sampled CLI RSS. The
+gain is confined to this one non-adjudicated CantoMap slice; it does not make
+either system reliable for backchannels or overlap analysis.
+
+On the same 30-minute canonical SpiCE downmix, Community-1 took **43.18 s**
+(RTF 0.0240), used **1.51 GiB** peak process RSS, produced 307 regular
+intervals, and reached **97.26% precision, 92.22% recall, 94.67% F1** on the
+oracle-selected participant label. FluidAudio took **14.74 s**, used **0.55
+GiB** sampled CLI RSS, produced 589 intervals, and reached **96.65% / 94.22% /
+95.42%**. This remains participant-only interval overlap, not full DER; the
+direct route was both slower/heavier and 0.75 F1 points lower on the available
+long-form diagnostic. A CPU-only Community-1 compatibility run on CantoMap
+was still more expensive (**81.79 s**, **4.27 GiB**), while MPS yielded the
+same exclusive segments.
+
+**Decision:** do not migrate the production diarizer off FluidAudio yet.
+Community-1 is a legitimate modular fallback and should remain behind the
+same `output.segments` adapter contract, but it is not a simplification on this
+Mac: it adds gated model access, a large PyTorch runtime, and the decoder
+workaround while losing the current speed/footprint lead. Conversely, this does
+not justify adopting FluidAudio as a general platform: keep the pinned
+standalone Silero ONNX VAD and evaluate every additional capability separately.
+If vendor removal becomes a hard requirement, promote the direct MPS route only
+after rerunning sample-exact reconciliation plus Qwen on its 307 intervals and
+testing an independent, fully two-speaker-labeled interview set.
 
 ### Integrated speed-first interview route
 

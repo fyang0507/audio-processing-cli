@@ -29,6 +29,15 @@ The recommendation is deliberately use-case bounded:
   the selected configuration took 133.86 seconds on 30 minutes and one output
   label absorbed 1,740 of 1,768 labeled seconds. It is not the preferred
   interview separator on this evidence.
+- **Direct pyannote offboarding candidate:** Community-1 is technically viable
+  with a known-two-speaker prior and PyTorch MPS, but not the default migration.
+  Its matched regular-output CantoMap run improved 250-ms-collar agreement
+  error/change F1 to **19.20% / 42.00%** versus FluidAudio's **22.31% / 5.50%**;
+  its SpiCE participant-interval F1 was slightly lower (**94.67%** versus
+  **95.42%**) while wall/RSS rose to **43.18 s / 1.51 GiB** versus **14.74 s /
+  560 MiB**. Direct pyannote also needs gated Hub access and a PCM-WAV loading
+  workaround on this Mac because TorchCodec cannot load its FFmpeg dylibs.
+  Keep it as an adapter-compatible fallback, not an immediate simplification.
 - **Clean dedicated channels:** first validate channel dominance and bleed. If
   roles remain separable, per-channel ASR can be more reliable than downmix
   diarization; use diarization as an audit/deduplication stage.
