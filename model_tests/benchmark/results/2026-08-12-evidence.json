@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-12",
+  "purpose": "Compact provenance sidecar for the aggregate findings. Full transcripts, console logs, and memory timelines remain local under ignored model_tests/benchmark_runs/.",
+  "numeric_policy": "Timing values are seconds rounded to 6 decimals; byte counters and SHA-256 values are exact; quality metrics retain scorer precision.",
+  "artifact_root": "model_tests/benchmark_runs",
+  "contract_caveats": [
+    "All listed VibeVoice artifacts predate the final evidence-contract runner. Their embedded runner, source, stability, system-available-memory, and swap fields are absent or null. The current run_vibevoice.py hash is recorded only as the tracked continuation runner and must not be treated as the exact historical runner hash.",
+    "The VibeVoice source commit, checkpoint revision, and applied inference-file diff were recovered from the same local checkout after the runs. The inference diff exactly matches the tracked patch, but those source fields were not embedded in the pre-contract artifacts.",
+    "The listed FireRed artifacts embed argv, source commit, checkpoint revisions, runtime packages, audio hashes, configuration, and normalized output hashes. They do not embed their runner file hash; the recorded runner hash was recovered from the unchanged local file that predates the artifacts.",
+    "Raw run and score artifacts are intentionally ignored. Their hashes below identify the exact local evidence used for this report but do not make those large artifacts available in a fresh clone.",
+    "The 27.797333-second local fixture is user-supplied and ignored. Its hash identifies the bytes used, but the media is not redistributable from this repository.",
+    "MPS current-allocation and driver-allocation counters are distinct. Driver allocation is not resident-memory evidence and must not be added to process RSS. Pre-contract VibeVoice artifacts did not sample host swap or available memory."
+  ],
+  "tracked_code_and_sources": {
+    "vibevoice_runner_current_not_historical": {
+      "path": "model_tests/benchmark/run_vibevoice.py",
+      "sha256": "37c9600030cecc38168e55ed5202f7ee666c5949b4e5ef3b8cbb529c3ec2d5fd",
+      "historical_runner_sha256": null,
+      "recovery_status": "unrecoverable: current file postdates every listed VibeVoice run"
+    },
+    "firered_runner": {
+      "path": "model_tests/benchmark/run_firered.py",
+      "sha256": "6a4f146867950d4db7d58958f1f6ae6701b20e9194265c7db4594095c72687d4",
+      "recovery_status": "locally recovered: file predates listed FireRed artifacts; hash was not embedded"
+    },
+    "asr_scorer": {
+      "path": "model_tests/benchmark/score_asr.py",
+      "sha256": "a455bb9708e03bd4091d57eb1940c169394fdef60a66c00141e95124f30475e1",
+      "schema_version": 2,
+      "normalization_version": 2,
+      "recovery_status": "exact for listed ASR score artifacts; scores were regenerated after this file settled"
+    },
+    "speaker_scorer": {
+      "path": "model_tests/benchmark/score_diarization.py",
+      "sha256": "61d6d05cf2993c0c3d16e0c2f3d819ffd0fbe747ce838425094e6e53015d4257",
+      "historical_artifact_generator_sha256": "305a1d46f6d2f95c947b47675cae2e71eca83c758d7417e00502df4dc4d6561e",
+      "schema_version": 2,
+      "recovery_status": "The current scorer postdates the listed artifacts but reproduces both byte-for-byte; the historical generator hash remains recorded separately."
+    },
+    "repeat_stability_scorer": {
+      "path": "model_tests/benchmark/score_repeat_stability.py",
+      "sha256": "cae3b8a858b96552de29a339f1d71c96a0b602b4d939fa9b18b6826cb447de65",
+      "schema_version": 2,
+      "recovery_status": "exact for the listed repeated-fixture structural repeat-consistency artifact"
+    },
+    "vibevoice_patch": {
+      "path": "model_tests/benchmark/patches/vibevoice-logits-to-keep.patch",
+      "sha256": "6901752b2df03621bdc18c391e3fddc33011cde9d032019ae395894a84ae0731",
+      "applied_modeling_file_diff_sha256": "6901752b2df03621bdc18c391e3fddc33011cde9d032019ae395894a84ae0731"
+    },
+    "vibevoice_source": {
+      "code_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
+      "checkpoint_revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
+      "patched_inference_file": "model_tests/vibevoice/VibeVoice/vibevoice/modular/modeling_vibevoice_asr.py",
+      "patched_inference_file_sha256": "b20a301dc489c9c7c71bbe02589d77448758afd08822eb0576ff9bc26dd53ac4",
+      "runtime_recovered_from_local_environment": {
+        "python": "3.12.12",
+        "torch": "2.13.0",
+        "transformers": "4.57.6",
+        "numpy": "2.4.6",
+        "psutil": "7.2.2",
+        "soundfile": "0.14.0"
+      },
+      "recovery_status": "commit, checkpoint metadata, runtime, and applied diff recovered; pre-contract artifacts embed only Python and torch versions"
+    },
+    "firered_source": {
+      "code_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
+      "source_file": "model_tests/firered/FireRedASR2S/fireredasr2s/fireredasr2system.py",
+      "source_file_sha256": "8bfada7cfc7ff424c73484a94150bc6fa5030a05b7146db983cb7ac374ad1782",
+      "checkpoint_revisions": {
+        "vad": "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+        "asr": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+        "lid": "1bb4d285c8456429385d9c0810300df4297bc11b",
+        "punctuation": "e448fd967f44182a1c323cc30f5d89f2400c28da"
+      },
+      "runtime_embedded_in_artifacts": {
+        "python": "3.12.12",
+        "fireredasr2s": "0.0.1",
+        "torch": "2.10.0",
+        "transformers": "5.1.0",
+        "numpy": "2.4.2",
+        "soundfile": "0.13.1",
+        "torchaudio": "2.10.0",
+        "kaldi-native-fbank": "1.22.3",
+        "ffmpeg": "8.1"
+      }
+    }
+  },
+  "fixtures": {
+    "local_27_8s": {
+      "audio_sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "duration_s": 27.797333,
+      "tracked": false,
+      "availability": "local user-supplied fixture"
+    },
+    "cantomap_149_9s": {
+      "audio_sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+      "duration_s": 149.9,
+      "slice_manifest": "model_tests/benchmark/manifests/cantomap_yue_hk_37_38_d.json",
+      "slice_manifest_sha256": "b59556ae59377b1d47abeda04941d5590c3aed96ba5b697069c4f178ad40027d",
+      "derived_reference_sha256": "4cd2fc6e531f6ad035dbc09234a8ecf55ed54a4f50b1dfb2c9eba2243b20002e"
+    },
+    "spice_participant_1800s": {
+      "audio_sha256": "0769ce2478709153d6e7ba5c10078f49edc58a76351189fcf92d1d8e7b6f233c",
+      "duration_s": 1800.0,
+      "reference_manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m.json",
+      "reference_manifest_sha256": "61e191626e701bac5a8e7c52fb0d39b759e63075b0722096775490fc7a7286c8"
+    },
+    "spice_participant_repeat_3600s": {
+      "audio_sha256": "d0049e2bd6080dbd2125ff2981acc8d8e25c09e63a5a6413d0e2d088e43c549e",
+      "duration_s": 3600.0,
+      "fixture_manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview60m_concat.json",
+      "fixture_manifest_sha256": "0e47b481289b8491fa09118ca0928c4c670ee511211db25e9092855e318f1fce",
+      "quality_scoring_allowed": false
+    }
+  },
+  "runs": {
+    "vibevoice_short_calibration_pre_contract": [
+      {
+        "id": "vibe_cpu_fp32_single",
+        "artifact_sha256": "1caf549f81a2ec9546382ef26c6b51b8abf1ba01c63c3cafaac44c40d8efcdba",
+        "configuration": "cpu/float32/sdpa, max_new_tokens=2048, unseeded",
+        "timing_s": {"load": 17.355118, "generate": 28.587412, "runner_wall": 47.463082},
+        "memory_bytes": {"peak_sampled_rss": 33364295680},
+        "normalized_segments_sha256": "8bf50d386d68b3d94cc1900dfeb148624eb2639f9ae9b8151eadebf774a9a91e"
+      },
+      {
+        "id": "vibe_cpu_bf16_single",
+        "artifact_sha256": "c7293cc9d857996404c2a5cdac2d2a55c9a8b615b73bd4fe052d1bfcbb6b7505",
+        "configuration": "cpu/bfloat16/sdpa, max_new_tokens=2048, unseeded",
+        "timing_s": {"load": 0.785328, "generate": 161.103762, "runner_wall": 163.044351},
+        "memory_bytes": {"peak_sampled_rss": 16437395456},
+        "normalized_segments_sha256": "4f6fd0cb1523cb4b8da0cbc4fa61e7fbcae5034d377708abc8ee46caa14e35b4"
+      },
+      {
+        "id": "vibe_mps_fp32_single",
+        "artifact_sha256": "7690871a794f72485f1611a53202bbebb95c5321437de504f8e46b33e5d0663a",
+        "configuration": "mps/float32/sdpa, max_new_tokens=2048, fallback=0, unseeded",
+        "timing_s": {"load": 23.637613, "generate": 8.585119, "runner_wall": 33.745323},
+        "memory_bytes": {"peak_mps_current": 34958403328, "peak_mps_driver": 39647821824},
+        "normalized_segments_sha256": "d9e082b34602311415b1235c6de06d724dc5ac880f8eb026a288c7965c80ba5e"
+      },
+      {
+        "id": "vibe_mps_bf16_single",
+        "artifact_sha256": "7f43be65654d95176f989198250c993f3ed552a5993fefd69b414cabaadd94a9",
+        "configuration": "mps/bfloat16/sdpa, max_new_tokens=2048, fallback=0, unseeded",
+        "timing_s": {"load": 8.45951, "generate": 7.330541, "runner_wall": 16.856544},
+        "memory_bytes": {"peak_mps_current": 17652404224, "peak_mps_driver": 19402817536},
+        "normalized_segments_sha256": "add55272cee2c1e54a0caddac12eadabf4563ecfc9fa76b291e67ca7d8527c12"
+      }
+    ],
+    "vibevoice_seeded_repeat_validation_pre_contract": {
+      "common": "fixture=local_27_8s, seed=1234, attention=sdpa, max_new_tokens=1024, fallback=0, full_prompt_logits=false, three fresh processes per configuration",
+      "cpu_float32": {
+        "stable_normalized_segments_sha256": "033d6650008e118a3ae8e48cb94fd12b4a2e53794bfb7b75eca3ddf5612e3d3a",
+        "runs": [
+          {"id": "vibe_seed1234_repeat1_cpu_fp32", "artifact_sha256": "6474b6356f42b17e05a4a4e636ef6c6f932f6de74414510a29303e4099718d94", "generate_s": 22.170227, "runner_wall_s": 34.481268, "peak_rss_bytes": 34615279616},
+          {"id": "vibe_seed1234_repeat2_cpu_fp32", "artifact_sha256": "ff4988e3cdb7ed34273ee6ee89e7a170ea27407e88a76bbecad8ba23f62737bc", "generate_s": 21.040274, "runner_wall_s": 25.175981, "peak_rss_bytes": 35583803392},
+          {"id": "vibe_seed1234_repeat3_cpu_fp32", "artifact_sha256": "5b37c959c1bc8080b9af08981b4111ee45dc5b3b46dcd29ddbf26b6a7408b09e", "generate_s": 20.464501, "runner_wall_s": 24.294272, "peak_rss_bytes": 35670097920}
+        ]
+      },
+      "mps_float32": {
+        "stable_normalized_segments_sha256": "8e5a179c3b0c096437995ce10caef7ea522ad2693e902da2146779644b0660b3",
+        "runs": [
+          {"id": "vibe_seed1234_repeat1_mps_fp32", "artifact_sha256": "3df6087786a25dfd18c1ff18cd9d55892d56f539d4f1f334b2d8e9585bfda00c", "generate_s": 8.007025, "runner_wall_s": 27.214385, "peak_mps_current_bytes": 34741347840},
+          {"id": "vibe_seed1234_repeat2_mps_fp32", "artifact_sha256": "4624554e34675c701fb66690ce42e36b226962bed522caab42bef386ab5ee547", "generate_s": 7.911064, "runner_wall_s": 23.698486, "peak_mps_current_bytes": 34741116672},
+          {"id": "vibe_seed1234_repeat3_mps_fp32", "artifact_sha256": "0b9e6c0312db31b5882113dbbf1d9c451cc2fc6b122947ebfe870f00df7dd500", "generate_s": 7.708573, "runner_wall_s": 27.910278, "peak_mps_current_bytes": 34743449088}
+        ]
+      },
+      "mps_bfloat16": {
+        "stable_normalized_segments_sha256": "8669987e03b7f0dd3c086e5b49d97932e0c7ecc6f1626f4a07446bae5d953668",
+        "runs": [
+          {"id": "vibe_seed1234_repeat1_mps_bf16", "artifact_sha256": "da41691c034515c5b78b7c0146ca1027d588104ebef9f8b9e8ca3ed21ea86afa", "generate_s": 4.693876, "runner_wall_s": 13.246532, "peak_mps_current_bytes": 17387347968},
+          {"id": "vibe_seed1234_repeat2_mps_bf16", "artifact_sha256": "90d648e597db2a86515c5571ed5ef53a129e668e56b6aef6010a71b146b63b58", "generate_s": 4.650493, "runner_wall_s": 12.037023, "peak_mps_current_bytes": 17387436800},
+          {"id": "vibe_seed1234_repeat3_mps_bf16", "artifact_sha256": "a09eddbb38763b8d54a117543d4f78090ee5c81a436dc358a4c7631c7e1d218c", "generate_s": 4.638608, "runner_wall_s": 12.416235, "peak_mps_current_bytes": 17387230208}
+        ]
+      }
+    },
+    "vibevoice_mps_allocator_pre_contract": [
+      {
+        "id": "vibe_mps_bf16_16gib_single",
+        "artifact_sha256": "2956778d22aed191f3afbc52acc21d3901abcee5ccf3cae3c8f8388d444f034f",
+        "configuration": "mps/bfloat16/sdpa, allocator_limit_gib=16, max_new_tokens=2048, fallback=0, unseeded",
+        "status": "error",
+        "runner_wall_s": 2.528338,
+        "peak_mps_current_bytes": 15511802880,
+        "error": "MPS allocated 16.04 GiB with 16.00 GiB maximum; OOM during load"
+      },
+      {
+        "id": "vibe_mps_bf16_18gib_single",
+        "artifact_sha256": "e9e13d6ec7fadd586197eecf4fc42d3de9acf0b77f6318498fc389e338581624",
+        "configuration": "mps/bfloat16/sdpa, allocator_limit_gib=18, max_new_tokens=2048, fallback=0, unseeded",
+        "status": "ok",
+        "timing_s": {"load": 2.503428, "generate": 5.181623, "runner_wall": 8.737281},
+        "peak_mps_current_bytes": 17387722240,
+        "normalized_segments_sha256": "add55272cee2c1e54a0caddac12eadabf4563ecfc9fa76b291e67ca7d8527c12"
+      }
+    ],
+    "vibevoice_logits_to_keep_seeded_ab_pre_contract": [
+      {"id": "vibe_mps_bf16_seed1234_fullprompt_single", "artifact_sha256": "3cfb10237a9c7fd48d891ab857db74bdecf49a36efbd3f1d0a4ba016d6de6c92", "fixture": "local_27_8s", "full_prompt_logits": true, "generate_s": 4.664934, "runner_wall_s": 8.345297, "peak_mps_current_bytes": 17387232256, "normalized_segments_sha256": "8669987e03b7f0dd3c086e5b49d97932e0c7ecc6f1626f4a07446bae5d953668"},
+      {"id": "vibe_mps_bf16_seed1234_logitskeep_single", "artifact_sha256": "c00abc04c06ee0d5040db4c938052ad11fd97d6ef2cb0720e38864a1264635db", "fixture": "local_27_8s", "full_prompt_logits": false, "generate_s": 4.734096, "runner_wall_s": 8.30401, "peak_mps_current_bytes": 17528705024, "normalized_segments_sha256": "8669987e03b7f0dd3c086e5b49d97932e0c7ecc6f1626f4a07446bae5d953668"},
+      {"id": "vibe_mps_bf16_seed1234_fullprompt_cantomap150s", "artifact_sha256": "4480aae033cd17247c60aa85842fa173db113e5f0d936e4c3c81c25739bfbd8c", "fixture": "cantomap_149_9s", "full_prompt_logits": true, "generate_s": 75.312352, "runner_wall_s": 78.614995, "peak_mps_current_bytes": 20845867776, "normalized_segments_sha256": "0e9136cbb27df792a3847e299e932cdcb979fe3d7661358b823a811f5019b2fb"},
+      {"id": "vibe_mps_bf16_seed1234_logitskeep_cantomap150s_repeat", "artifact_sha256": "766b4c3ce1baf1f38d76723961f805b5279e7a91d16594291170132a879c2e7d", "fixture": "cantomap_149_9s", "full_prompt_logits": false, "generate_s": 76.344363, "runner_wall_s": 86.102822, "peak_mps_current_bytes": 20845867520, "normalized_segments_sha256": "0e9136cbb27df792a3847e299e932cdcb979fe3d7661358b823a811f5019b2fb"}
+    ],
+    "cantomap_149_9s": {
+      "vibevoice": {
+        "id": "vibe_mps_bf16_logitskeep_cantomap150s",
+        "artifact_sha256": "b266e689cafd42f6772f750dad20bfec2da658354db04d8a826f6275273eb387",
+        "configuration": "mps/bfloat16/sdpa, seed=1234, max_new_tokens=4096, fallback=0, full_prompt_logits=false",
+        "timing_s": {"load": 2.570714, "preprocess": 1.100675, "generate": 79.666425, "postprocess": 0.056534, "runner_wall": 83.404759, "rtf_runner_wall": 0.556403},
+        "memory_bytes": {"peak_sampled_rss": 823459840, "peak_mps_current": 20840765952, "peak_mps_driver": 73312256000},
+        "normalized_segments_sha256": "0e9136cbb27df792a3847e299e932cdcb979fe3d7661358b823a811f5019b2fb"
+      },
+      "firered": {
+        "id": "firered_lidoff_batch4_cantomap150s",
+        "artifact_sha256": "5eca019507898f0e0e18da45ae4d34944db96efd1c83b82c78445ab581e57fd8",
+        "configuration": "cpu/float32, LID off, ASR batch 4, punctuation batch 4",
+        "canonical_audio_sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+        "timing_s": {"preprocess": 0.095465, "import": 5.853542, "load": 2.963971, "inference": 60.658785, "runner_wall": 69.572296, "rtf_runner_wall": 0.464125},
+        "memory_bytes": {"peak_sampled_rss": 9832480768},
+        "normalized_segments_sha256": "8988f2719032e75eb09e17073b5792e0f255ff9e868fc8ad4276ae0ef4f78530",
+        "normalized_result_sha256": "e70ac597f99de624e790f219133b31e46e0a731d14cadef6588a401c8a9bef10"
+      }
+    },
+    "spice_participant_1800s": {
+      "vibevoice": {
+        "id": "vibe_mps_bf16_logitskeep_spice30m_participant",
+        "artifact_sha256": "4606bc1042de5574b38e5d8b306943856cc17dddd41a6fbc54b2dded6d092a54",
+        "configuration": "mps/bfloat16/sdpa, seed=1234, max_new_tokens=16384, fallback=0, full_prompt_logits=false",
+        "timing_s": {"load": 2.393235, "preprocess": 0.270401, "generate": 851.060138, "postprocess": 0.091795, "runner_wall": 853.826162, "rtf_runner_wall": 0.474348},
+        "memory_bytes": {"peak_sampled_rss": 1504444416, "peak_mps_current": 21770457600, "peak_mps_driver": 78479507456, "system_swap": null},
+        "tokens": {"input": 13562, "generated_including_eos": 11345},
+        "normalized_segments_sha256": "6a8681d11ed61112c12ee6dacc4635d53f970fad00214d9a617a744f4b967beb"
+      },
+      "firered": {
+        "id": "firered_lidoff_batch4_spice30m_participant",
+        "artifact_sha256": "1531ae96a0370873fde5033f32971d9ea2da2f21a290ea74fcf410e49a74436a",
+        "configuration": "cpu/float32, LID off, ASR batch 4, punctuation batch 4",
+        "canonical_audio_sha256": "da21efaa2dfd7135c86caa0acb4a1469a863038bcaf08d0abb4b424cef04c5c0",
+        "timing_s": {"preprocess": 0.339895, "import": 3.975489, "load": 2.860905, "inference": 658.08205, "runner_wall": 665.259354, "rtf_runner_wall": 0.369589},
+        "memory_bytes": {
+          "peak_sampled_rss": 9789620224,
+          "peak_inference_rss": 7101431808
+        },
+        "stability": {"last_sentence_end_s": 1796.44, "last_sentence_end_ratio": 0.998022, "vad_segments": 413, "sentences": 571, "words": 3833, "sentence_timestamps_monotonic": true, "word_timestamps_monotonic": true},
+        "normalized_segments_sha256": "f2e23baa48b1fda2715d2bd914c99ae618e4f88eb3310721d6c65ff6680351d2",
+        "normalized_result_sha256": "985e3c72415d0e19f481f2bfdc7af824a0ac75f729fe46051aeda4c59bb9da7d"
+      }
+    },
+    "spice_participant_repeat_3600s": {
+      "firered": {
+        "id": "firered_lidoff_batch4_spice60m_participant_concat",
+        "artifact_sha256": "94fd21f7a54eb419708841ec0257baee394e102f94ea5ccb9090351c847df06a",
+        "configuration": "cpu/float32, LID off, ASR batch 4, punctuation batch 4",
+        "canonical_audio_sha256": "94e55cb5d3661af9a6063ed2196c77f4abb126860d9d83acfc98e398d70284de",
+        "timing_s": {"preprocess": 0.559607, "import": 4.073735, "load": 2.900614, "inference": 1337.043217, "runner_wall": 1344.577656, "rtf_runner_wall": 0.373494},
+        "memory_bytes": {
+          "peak_sampled_rss": 9826074624,
+          "peak_inference_rss": 8378859520,
+          "peak_inference_rss_growth_vs_standalone_30m_bytes": 1277427712,
+          "peak_inference_rss_growth_vs_standalone_30m_percent": 17.988312026892018
+        },
+        "stability": {"last_sentence_end_s": 3596.44, "last_sentence_end_ratio": 0.999011, "vad_segments": 826, "sentences": 1142, "words": 7666, "sentence_timestamps_monotonic": true, "word_timestamps_monotonic": true},
+        "normalized_segments_sha256": "ae201d315d1c74a3253392bf84f061a336f33045c5880b9a1270865a9d6bb2d1",
+        "normalized_result_sha256": "3b7db888a907e512001d019c7fdd3b53470026c9c4474c821129ae5c50337834",
+        "repeat_stability_score": {
+          "artifact": "firered_lidoff_batch4_spice60m_repeat_stability.json",
+          "artifact_sha256": "610b0f24488128b11ba71762cd065c247df6ffe97ec1bc09e678c4f16805b026",
+          "scorer": "repeat_stability_scorer",
+          "schema_version": 2,
+          "period_s": 1800.0,
+          "repeat_windows": 2,
+          "segments_per_window": [571, 571],
+          "standalone_30m_run_id": "firered_lidoff_batch4_spice30m_participant",
+          "first_half_exactly_matches_standalone_30m_segments": true,
+          "both_half_text_sequences_match_standalone_30m": true,
+          "pairable_text_and_speaker_sequence": true,
+          "all_text_sequences_equal": true,
+          "all_normalized_segments_equal": false,
+          "maximum_rebased_timestamp_drift_ms": 1.0000000002037268,
+          "timestamp_tolerance_ms": 2.0,
+          "within_timestamp_tolerance": true
+        }
+      }
+    }
+  },
+  "scores": {
+    "cantomap_vibe_asr": {
+      "artifact": "score_vibe_cantomap150s.json",
+      "artifact_sha256": "4828ad57ac714bced050ae98e07cf4f75374933f77c79284cfa779f349f02446",
+      "scorer": "asr_scorer",
+      "run_id": "vibe_mps_bf16_logitskeep_cantomap150s",
+      "reference_tokens": 381,
+      "hypothesis_tokens": 387,
+      "distance": 171,
+      "mixed_error_rate": 0.44881889763779526
+    },
+    "cantomap_firered_asr": {
+      "artifact": "score_firered_cantomap150s.json",
+      "artifact_sha256": "c40a7fec62263c428d21047fd2507e270d31caf25e52506c6f88a7b2d7f3babd",
+      "scorer": "asr_scorer",
+      "run_id": "firered_lidoff_batch4_cantomap150s",
+      "reference_tokens": 381,
+      "hypothesis_tokens": 379,
+      "distance": 182,
+      "mixed_error_rate": 0.4776902887139108
+    },
+    "cantomap_vibe_speaker": {
+      "artifact": "cantomap-vibe-diarization.json",
+      "artifact_sha256": "a9bdd0bd3c2758f0efe433678d3327353ba33dbd938cfa37221a9586ae8f38d5",
+      "scorer": "speaker_scorer",
+      "run_id": "vibe_mps_bf16_logitskeep_cantomap150s",
+      "exclusive_zero_collar_der": 0.3881240147136101,
+      "exclusive_250ms_collar_der": 0.11420043983663211,
+      "exclusive_250ms_evaluated_fraction": 0.5779853235490326,
+      "speaker_change_boundaries": {"reference": 75, "hypothesis": 41, "matched": 39, "precision": 0.9512195121951219, "recall": 0.52, "f1": 0.6724137931034483}
+    },
+    "spice_vibe_oracle_participant_asr": {
+      "artifact": "vibe_mps_bf16_logitskeep_spice30m_speaker1_score.json",
+      "artifact_sha256": "d690317f6ef3981b7654bc8a90b264fcd490273548b77c394eebcf78c2db2022",
+      "scorer": "asr_scorer",
+      "run_id": "vibe_mps_bf16_logitskeep_spice30m_participant",
+      "hypothesis_speaker_filter": "1",
+      "mapping_policy": "oracle-selected against participant-only reference",
+      "reference_tokens": 3972,
+      "hypothesis_tokens": 3872,
+      "distance": 1799,
+      "mixed_error_rate": 0.452920443101712,
+      "first_middle_last_180s_error_rate": [0.42857142857142855, 0.4513064133016627, 0.4953271028037383]
+    },
+    "spice_firered_participant_asr": {
+      "artifact": "firered_lidoff_batch4_spice30m_participant_score.json",
+      "artifact_sha256": "6dbaf7c104dbc8c046d6ecce0e376f646b86ae5875a32158fb53371e55af19a4",
+      "scorer": "asr_scorer",
+      "run_id": "firered_lidoff_batch4_spice30m_participant",
+      "reference_tokens": 3972,
+      "hypothesis_tokens": 3833,
+      "distance": 1947,
+      "mixed_error_rate": 0.4901812688821752,
+      "first_middle_last_180s_error_rate": [0.4597402597402597, 0.5106888361045131, 0.5373831775700935]
+    },
+    "spice_vibe_oracle_participant_utterance_interval_overlap": {
+      "artifact": "vibe_mps_bf16_logitskeep_spice30m_participant_activity.json",
+      "artifact_sha256": "4b3274a4010dad2bc5efaa1397074e6f25b840f3dc202a14e5c8b5ca1f203201",
+      "scorer": "speaker_scorer",
+      "run_id": "vibe_mps_bf16_logitskeep_spice30m_participant",
+      "oracle_best_hypothesis_speaker": "1",
+      "frame_ms": 10.0,
+      "overlap_s": 1053.51,
+      "hypothesis_utterance_interval_s": 1107.74,
+      "reference_utterance_interval_s": 1066.11,
+      "precision": 0.9510444689186993,
+      "recall": 0.9881813321327068,
+      "f1": 0.9692573084619454
+    }
+  },
+  "excluded_stale_local_scores": [
+    "cantomap-vibe-score-recheck.json (171/381 predecessor without scorer v2 provenance)",
+    "vibe_mps_bf16_logitskeep_spice30m_participant_score.json (all-speaker score against participant-only reference; invalid scope and stale 4020-token denominator)",
+    "vibe_mps_bf16_logitskeep_spice30m_speaker0_score.json (wrong oracle role and stale 4020-token denominator)"
+  ]
+}

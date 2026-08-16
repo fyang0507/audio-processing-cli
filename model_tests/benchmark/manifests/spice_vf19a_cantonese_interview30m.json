@@ -1,0 +1,943 @@
+{
+  "schema_version": 1,
+  "corpus": "SpiCE: Speech in Cantonese and English",
+  "license": "CC BY 4.0",
+  "source_url": "https://doi.org/10.5683/SP2/MJOXP3",
+  "reference_scope": "Human-corrected participant speech only. Interviewer speech is audible but intentionally absent from the corpus transcript.",
+  "source": {
+    "audio_filename": "VF19A_Cantonese_interview30m_participant_24k.wav",
+    "audio_sha256": "0769ce2478709153d6e7ba5c10078f49edc58a76351189fcf92d1d8e7b6f233c",
+    "textgrid_filename": "VF19A_Cantonese_I2_20181114.TextGrid",
+    "textgrid_sha256": "1e878f633a64f97832bc88f82ec477b7096ca0ab3eb77af6fbee73ca510fbf0f",
+    "start_s": 271.130649013,
+    "duration_s": 1800.0,
+    "tasks": [
+      {
+        "start_s": 271.1306490129996,
+        "end_s": 2072.9179138321997,
+        "text": "interview"
+      }
+    ]
+  },
+  "utterances": [
+    {
+      "start_s": 18.333350987000017,
+      "end_s": 27.725350987000013,
+      "speaker": "participant",
+      "text": "um 我 媽咪 喺 江 門 嚟 的@m um 我 爸爸 又 喺 江 門 跟著 佢 細 【 個 嗰 】 時 搬 咗 去 香港 【 佢 喺 】 香港 長大 的@m"
+    },
+    {
+      "start_s": 31.621350987000028,
+      "end_s": 32.51735098700004,
+      "speaker": "participant",
+      "text": "廣東話"
+    },
+    {
+      "start_s": 45.98935098700002,
+      "end_s": 55.33335098700002,
+      "speaker": "participant",
+      "text": "um 應該 係 似 中國 或者 香 【 港 嘅 】 因為 我 返到 去 呢 同 我 姐係 um"
+    },
+    {
+      "start_s": 56.42935098700002,
+      "end_s": 65.86935098700002,
+      "speaker": "participant",
+      "text": "我 啲 姑媽 呀 喺 香港 呢 &k 通常 傾計 冇乜 大問題 同埋 有 返到 去 同 我 媽咪 嗰邊 度 呀 婆婆 呀"
+    },
+    {
+      "start_s": 66.58935098700005,
+      "end_s": 70.22935098700003,
+      "speaker": "participant",
+      "text": "姨媽 呀 聽@m 嘢 呢 又 冇乜 大問題"
+    },
+    {
+      "start_s": 74.30935098700002,
+      "end_s": 83.59735098700003,
+      "speaker": "participant",
+      "text": "um 唔多 返 呀 我 以前 細個 嗰時 呢 每四年 返 一次 度 依家 um 我讀 咗 中學 耐咗 囉"
+    },
+    {
+      "start_s": 86.437350987,
+      "end_s": 90.043350987,
+      "speaker": "participant",
+      "text": "最尾 一次 係 我 十年 級度 【 嗰陣 】 時返"
+    },
+    {
+      "start_s": 95.62935098700001,
+      "end_s": 103.83535098700003,
+      "speaker": "participant",
+      "text": "um 去 平時 嗰啲 地方 呢 um 姐係 我 媽咪 出 【 世 嗰 】 度 um 【 姐係 】 江門 呀 新會 呀"
+    },
+    {
+      "start_s": 103.971350987,
+      "end_s": 109.58135098700001,
+      "speaker": "participant",
+      "text": "uh 香港 呀 go5 哋 【 嗰 一 】 次返 呢 又去 咗 澳門 同 北京 玩"
+    },
+    {
+      "start_s": 114.877350987,
+      "end_s": 118.293350987,
+      "speaker": "participant",
+      "text": "um 我 最 【 鍾意 】 係 去 一度 澳門 一度 香港 囉"
+    },
+    {
+      "start_s": 119.925350987,
+      "end_s": 141.00535098700004,
+      "speaker": "participant",
+      "text": "um 因為 【 比較 】 多 um 是非 like rules um 同埋 呢 姐係 我去 嗰 &bi3 北京 呢 我 覺得 好 污糟 呀 同埋 um 我 返去 新會 呀 江門 呀 【 因為 】 我 唔係好 敢 或者 識 自己 過馬路 因為 啲 車 唔停 吖嘛"
+    },
+    {
+      "start_s": 148.757350987,
+      "end_s": 160.98135098700004,
+      "speaker": "participant",
+      "text": "um 我 媽咪 呢 呀 佢 話 佢 唔 【 鍾意 】 香港 佢 話 啲人 呀 成日 都 【 行緊 咁 】 快 呀 咁 忙 呀 佢 唔 【 鍾意 】 佢 比較 【 鍾意 】 佢 新 會 呀 或者 江門 呀 多啲"
+    },
+    {
+      "start_s": 162.805350987,
+      "end_s": 174.79735098700002,
+      "speaker": "participant",
+      "text": "我 爹哋 好少 同 我哋 返 【 所以 】 佢 通常 佢 返 呢 &j uh 佢 係 自己 一個 煩返 好少 【 都 一 】 跟 埋 我哋 好少 跟 埋 我 媽咪 我 妹妹 或者 我返"
+    },
+    {
+      "start_s": 186.117350987,
+      "end_s": 188.26135098700001,
+      "speaker": "participant",
+      "text": "哦 佢 冇 講 o3"
+    },
+    {
+      "start_s": 193.865350987,
+      "end_s": 196.26035098700004,
+      "speaker": "participant",
+      "text": "哦 廿一 年"
+    },
+    {
+      "start_s": 206.49335098700004,
+      "end_s": 212.77935098700004,
+      "speaker": "participant",
+      "text": "唔 準呀 有 um 我 媽咪 嘅 英文 呢 比 我 爸爸 學好 少少"
+    },
+    {
+      "start_s": 212.91235098700002,
+      "end_s": 217.79235098700002,
+      "speaker": "participant",
+      "text": "um 因為 我 爸爸 可能 做 廚房 佢 通常 講 英文 機會 唔多"
+    },
+    {
+      "start_s": 217.925350987,
+      "end_s": 226.89535098700003,
+      "speaker": "participant",
+      "text": "and 我 媽咪 呢 佢 um 【 邪日 】 【 姐係 】 好似 um 幫 我 妹妹 呀 或者 我 呀 姐係 um 報名 嗰啲"
+    },
+    {
+      "start_s": 227.08535098700003,
+      "end_s": 234.89335098700002,
+      "speaker": "participant",
+      "text": "um 活動 呢 佢 講 英文 呢個 機會 多啲 um 而且 呢 我 肯定 我 嫲"
+    },
+    {
+      "start_s": 235.16035098700002,
+      "end_s": 242.32535098700004,
+      "speaker": "participant",
+      "text": "媽咪 呢 嚟 到 哩 &s 嗰時 呢 佢 有 讀過 英文 課 我 爸爸 我 冇 聽@m 【 佢 佢 】 有冇 讀過"
+    },
+    {
+      "start_s": 250.50135098699997,
+      "end_s": 258.85335098700006,
+      "speaker": "participant",
+      "text": "有時 佢 講 啲 音 呀 唔啱 uh 特別 佢 姐係 佢 um 佢 個 grammar 呢 好多 【 時候 】 都 唔唔 正確"
+    },
+    {
+      "start_s": 267.061350987,
+      "end_s": 273.101350987,
+      "speaker": "participant",
+      "text": "uh 我 我 大部分 呢 都會 試吓 【 但係 】 佢 有時 呢 講極 都 唔啱 的@m"
+    },
+    {
+      "start_s": 278.23735098700007,
+      "end_s": 279.013350987,
+      "speaker": "participant",
+      "text": "yeah"
+    },
+    {
+      "start_s": 288.11735098700007,
+      "end_s": 295.3333509870001,
+      "speaker": "participant",
+      "text": "一般 用 英文 um 有時 呢 耐不耐 呢 姐係 我講 【 笑緊 】 會同 我 媽咪 講 uh"
+    },
+    {
+      "start_s": 296.085350987,
+      "end_s": 297.56535098700004,
+      "speaker": "participant",
+      "text": "普通話 噉"
+    },
+    {
+      "start_s": 316.620350987,
+      "end_s": 323.86835098700004,
+      "speaker": "participant",
+      "text": "um 冇乜 我 覺得 【 姐係 】 冇乜嘢 係 我 喺 嗰邊 食過 呀 哩邊 冇乜 機會 食 囉"
+    },
+    {
+      "start_s": 324.00735098700005,
+      "end_s": 329.93135098700003,
+      "speaker": "participant",
+      "text": "姐係 我去 香港 呢 佢哋 又 帶過 你 食 壽司 【 但係 】 我 覺得 都 唔夠 我哋 哩邊 好"
+    },
+    {
+      "start_s": 330.186350987,
+      "end_s": 338.66135098700005,
+      "speaker": "participant",
+      "text": "um 【 即係 】 【 如果 】 食燒 鴨 呀 哩啲 嗰啲 哩邊 都有 得食 &k 冇乜嘢 【 姐係 】 我 覺得 係 hong kong 有 我哋 冇 囉"
+    },
+    {
+      "start_s": 352.605350987,
+      "end_s": 356.779350987,
+      "speaker": "participant",
+      "text": "um 冇乜 的@m 但 我 通常 呢 我 返去"
+    },
+    {
+      "start_s": 356.98735098700007,
+      "end_s": 363.941350987,
+      "speaker": "participant",
+      "text": "中國 呀 【 姐係 】 um 【 即係 】 如果 返去 江門 呀 或者 香港 呢 我 比較 揀 食"
+    },
+    {
+      "start_s": 364.03235098700003,
+      "end_s": 371.581350987,
+      "speaker": "participant",
+      "text": "【 姐係 】 我 細個 x 特別 呢 我 唔會 點 食肉 㗎 因為 我唔知 道 係咩 肉 我有 少少 驚"
+    },
+    {
+      "start_s": 387.3093509870001,
+      "end_s": 396.87735098700006,
+      "speaker": "participant",
+      "text": "uh 冇乜 【 但係 】 我 唔 【 覺得 】 【 即係 】 唔係好 習慣 佢 好似 嗰邊 冇咁 剛 乾淨 或者 有 少少 安全 【 感 嘅 】 感覺 囉"
+    },
+    {
+      "start_s": 402.82935098700005,
+      "end_s": 407.22935098700003,
+      "speaker": "participant",
+      "text": "我 鍾意 我 喺 香港 比較 感覺 安全 啲"
+    },
+    {
+      "start_s": 418.904350987,
+      "end_s": 428.99735098700006,
+      "speaker": "participant",
+      "text": "一 定有 我 媽咪 【 成日 】 都 話 呢@m 你 咁 揀 食 做乜 呀 你 已經 &ga3 對 咁多 嘢 過敏 呀 你 做乜 咁 揀 食 㗎 &d 嗯"
+    },
+    {
+      "start_s": 431.645350987,
+      "end_s": 441.845350987,
+      "speaker": "participant",
+      "text": "um 佢 點都 會 逼 我 食 姐係 um 【 即係 】 如果 佢哋 出去 食 嘅 佢 都 &m 都 叫 你 吖 試吓 哩 yo3 吖 試吓 哩 yo3 吖 你 食 少少 哩啲 啦 噉"
+    },
+    {
+      "start_s": 450.269350987,
+      "end_s": 453.109350987,
+      "speaker": "participant",
+      "text": "有 好多 嘢 我 唔 唔係好 【 鍾意 】 食 的@m"
+    },
+    {
+      "start_s": 453.504350987,
+      "end_s": 463.52535098699997,
+      "speaker": "participant",
+      "text": "um 特別 姐係 um 如果 姐係 你 出去 食 點心 呢 好多 【 時候 】 有 嗰啲 蒸個 肉 【 姐係 】 &p 蒸 排骨 呀 嗰啲 我超 唔鍾意 食 的@m"
+    },
+    {
+      "start_s": 468.669350987,
+      "end_s": 471.861350987,
+      "speaker": "participant",
+      "text": "呀 燒賣 又 食 唔到 【 所以 】 我 唔唔 知道"
+    },
+    {
+      "start_s": 485.46935098700004,
+      "end_s": 492.264350987,
+      "speaker": "participant",
+      "text": "有 呀 佢 日 有時 話 姐係 um 唔係 咁 開 【 心 囉 】 佢 話 &na1 你"
+    },
+    {
+      "start_s": 492.393350987,
+      "end_s": 497.717350987,
+      "speaker": "participant",
+      "text": "你 咁 揀 食 你 又 咁多 過敏 你 應該 食 多啲 呀 【 睇吓 】 你 咁 瘦"
+    },
+    {
+      "start_s": 505.20535098700003,
+      "end_s": 511.57335098699997,
+      "speaker": "participant",
+      "text": "【 成日 】 都講 的@m 佢 以前 【 細個 呢 】 【 成日 】 話 我 瘦 依家 【 反而 成日 】 【 話 吓 】 你 肥 咗 咁 【 多 嘅 】"
+    },
+    {
+      "start_s": 518.389350987,
+      "end_s": 525.5253509869999,
+      "speaker": "participant",
+      "text": "有時 呀 姐係 感覺 太瘦 又 唔得 太 【 肥 又 】 唔得 【 姐係 】 你 你 究竟 想點 啫"
+    },
+    {
+      "start_s": 539.0373509870001,
+      "end_s": 545.8813509869999,
+      "speaker": "participant",
+      "text": "um 通常 唔會 點講 【 姐係 】 可能 講吓笑 會講 吓 呢@m 【 但係 】 姐係"
+    },
+    {
+      "start_s": 546.1033509870001,
+      "end_s": 553.029350987,
+      "speaker": "participant",
+      "text": "我 媽咪 【 比較 】 嚴 呢 【 所以 】 【 姐係 我 】 開始 拍拖 呀 到 依家 我 都 唔會 點 同 佢 講 啲 咩"
+    },
+    {
+      "start_s": 563.501350987,
+      "end_s": 572.1893509870001,
+      "speaker": "participant",
+      "text": "我 媽咪 話 一直都 唔可以 至到 我 開始 大學 先 但 我 依家 開始 讀大學 覺得 有啲驚 同 佢 講"
+    },
+    {
+      "start_s": 575.9973509870001,
+      "end_s": 577.549350987,
+      "speaker": "participant",
+      "text": "我唔知 呀"
+    },
+    {
+      "start_s": 589.914350987,
+      "end_s": 592.629350987,
+      "speaker": "participant",
+      "text": "um 冇乜 大要 求 囉"
+    },
+    {
+      "start_s": 601.405350987,
+      "end_s": 611.0953509870001,
+      "speaker": "participant",
+      "text": "um 應該 都係 【 姐係 】 講到 um 【 廣東 】 話 或者 國語 因為 有時 【 姐係 】 你 溝通 呀 或者 你"
+    },
+    {
+      "start_s": 611.2773509870001,
+      "end_s": 616.176350987,
+      "speaker": "participant",
+      "text": "生活 上 呀 或者 姐係 你 um 你 以前 細個"
+    },
+    {
+      "start_s": 616.358350987,
+      "end_s": 626.0373509870001,
+      "speaker": "participant",
+      "text": "長大 嗰時 個 um 家庭 個 環境 都 差唔多 先 di3 【 姐係 】 比較 夾 囉 容易 啲 um understand each 【 other 囉 】"
+    },
+    {
+      "start_s": 631.1813509870001,
+      "end_s": 632.6213509869999,
+      "speaker": "participant",
+      "text": "應該 &c ok 吖"
+    },
+    {
+      "start_s": 647.5653509870001,
+      "end_s": 656.117350987,
+      "speaker": "participant",
+      "text": "我 覺得 應該 要學 um 因為 呢 我 覺得 你學 多個 語言 呢 對 你 【 姐係 】 第日 將來 呀 或者 姐係 你 um"
+    },
+    {
+      "start_s": 656.981350987,
+      "end_s": 665.6413509870001,
+      "speaker": "participant",
+      "text": "uh apply for 嗰啲 工呀 或者 【 姐係 】 好似 你 ubc 你 都要 一個 second language requirement 吖嘛 right"
+    },
+    {
+      "start_s": 665.763350987,
+      "end_s": 671.925350987,
+      "speaker": "participant",
+      "text": "【 所以 我 】 覺得 你 &a 如果 你家 庭講 一個 其他 個 語言 呢 會對 di5 【 細佬 】 仔 好好 【 多 囉 】"
+    },
+    {
+      "start_s": 682.301350987,
+      "end_s": 687.898350987,
+      "speaker": "participant",
+      "text": "我 覺得 你 讀 廣東話 呢 會 好 啲 因為 廣東話 呢 人哋 話 多啲 音 吖嘛 right"
+    },
+    {
+      "start_s": 687.933350987,
+      "end_s": 693.0953509870001,
+      "speaker": "participant",
+      "text": "【 所以 我 】 【 好多 】 【 時候 】 呢 姐係 我講 廣東話 我 聽到 我 聽得 明 &d 好多"
+    },
+    {
+      "start_s": 693.2373509870001,
+      "end_s": 697.677350987,
+      "speaker": "participant",
+      "text": "我講 國語 個 朋友 講 嘅 嘢 【 但係 】 佢哋 又 聽 唔到"
+    },
+    {
+      "start_s": 697.819350987,
+      "end_s": 706.061350987,
+      "speaker": "participant",
+      "text": "明 我講 廣東話 【 所以 】 我 覺得 起碼 如果 你學 咗 廣東 【 話 呢 】 你 即使 你 唔識 講 普通話 &ni 都 聽得 明 好多 【 嘢 囉 】"
+    },
+    {
+      "start_s": 721.2293509870001,
+      "end_s": 732.117350987,
+      "speaker": "participant",
+      "text": "um 冇乜 的@m 因為 佢 都 &m 冇乜 話 有 咩嘢 要求 囉 因為 一直都 即係 冇 點 講過 話 有 應該 同邊 個 拍拖 呀 或者 【 咩嘢 】 盛 囉"
+    },
+    {
+      "start_s": 746.685350987,
+      "end_s": 753.965350987,
+      "speaker": "participant",
+      "text": "佢哋 uh 一定要 呀 姐係 喺 um 大學畢業 呀 搵 到 份 好個 工呀 【 噉 囉 】"
+    },
+    {
+      "start_s": 756.493350987,
+      "end_s": 760.445350987,
+      "speaker": "participant",
+      "text": "um 佢哋 覺得 唔唔 知 呀 【 姐係 】 起碼"
+    },
+    {
+      "start_s": 760.6343509870001,
+      "end_s": 772.6133509869999,
+      "speaker": "participant",
+      "text": "你族 到 大學 出嚟 你 畢 咗 業呢 你 可以 搵 到 份 【 工 囉 】 因為 有時 呢 你 喺 大學畢業 出嚟 呢 你 都 未必 搵 到 【 工 囉 】 佢哋 希望 唔係 噉 個 【 case 囉 】"
+    },
+    {
+      "start_s": 787.301350987,
+      "end_s": 796.552350987,
+      "speaker": "participant",
+      "text": "um 我唔知 呀 我 覺得 我學 【 習個 】 方式 一 定有 um 有機會 可以 改變 可以 improve"
+    },
+    {
+      "start_s": 796.7193509869999,
+      "end_s": 805.589350987,
+      "speaker": "participant",
+      "text": "因為 依家 個學 &s 習 方式 【 我覺 】 得 唔係 太好 囉 因為 我 第一 同 第二年 呢個 成 【 績到 】 依家 唔係 太 【 好 囉 】"
+    },
+    {
+      "start_s": 809.637350987,
+      "end_s": 814.4133509870001,
+      "speaker": "participant",
+      "text": "um 我 依家 呢 讀緊 依家 係 我 第二年 喺 ubc"
+    },
+    {
+      "start_s": 825.5093509870001,
+      "end_s": 833.7473509869999,
+      "speaker": "participant",
+      "text": "um 即係 儘量 呢 做多 【 啲 嗰 】 啲 uh practice problems 呀 或者 姐係 uh 有 咩 唔識 呀 &c 多啲 去 搵 人 幫 囉"
+    },
+    {
+      "start_s": 833.925350987,
+      "end_s": 840.213350987,
+      "speaker": "participant",
+      "text": "因為 我 依家 最 困難 嗰 兩個 【 course 呢 】 係 我 &y take 緊 係數 學 【 即係 】 cal cu lu s"
+    },
+    {
+      "start_s": 840.394350987,
+      "end_s": 848.213350987,
+      "speaker": "participant",
+      "text": "um 係 我 舊年 冇 合格 的@m 同埋 我 依家 係 take 緊 um organic chemistry 我又 覺得 好難 的@m"
+    },
+    {
+      "start_s": 864.301350987,
+      "end_s": 869.7183509869999,
+      "speaker": "participant",
+      "text": "um 喺 chemistry 呢 我 啲 labs 呢 我 容易 啲 pass"
+    },
+    {
+      "start_s": 869.8643509869999,
+      "end_s": 879.137350987,
+      "speaker": "participant",
+      "text": "um 因為 【 姐係 】 有 【 時 呢 】 你 即 【 使 你 】 做 【 錯 咗 】 你 ta 呢 佢 都 【 係 個 】 學生 吖嘛 佢 明白 呢 會 畀 分 都 起 &m 畀 高 啲 吖嘛 right"
+    },
+    {
+      "start_s": 879.2653509869999,
+      "end_s": 887.405350987,
+      "speaker": "participant",
+      "text": "um 你 lecture 呢 &z daai1 部分 的@m 分 全部 係 靠 你 考試 同埋 有時 你 考得 冇咁 好的@m 分 a6 低 啲 囉"
+    },
+    {
+      "start_s": 892.492350987,
+      "end_s": 903.9383509869999,
+      "speaker": "participant",
+      "text": "um math 嗰啲 呢 &m 覺得 樣樣 都 咁 難 呢@m 因為 【 姐係 】 【 譬如 】 你 math tutorial 呢 【 姐係 】 你 係 有機會 呢 同人 【 姐係 】 work together um"
+    },
+    {
+      "start_s": 903.984350987,
+      "end_s": 914.8133509869999,
+      "speaker": "participant",
+      "text": "【 姐係 】 解決 哩個 問題 【 但係 】 你 始終 呢 你 都要 自己 識得 點做 囉 同埋 有時 呢 你 數學 呢 真係 好 【 難 囉 】 特別 我 我 數學 唔 叻 的@m"
+    },
+    {
+      "start_s": 936.0373509869999,
+      "end_s": 947.7083509869999,
+      "speaker": "participant",
+      "text": "um 我 覺得 我 依家 慣 咗 喺 大型 【 嗰啲 】 因為 我 大部分 的@m 課 呢 都係 好 大型 【 嗰啲 】 um 我 喺 ubc 咁 哩 【 哩 一 】 年半 呢"
+    },
+    {
+      "start_s": 947.937350987,
+      "end_s": 955.6693509869999,
+      "speaker": "participant",
+      "text": "我 剩係 有一 堂課 係 細型 啲 好多 discussion 呢@m 係 我 英語 嗰個 班 同埋 我 依家 唔使 再學 英語"
+    },
+    {
+      "start_s": 965.1533509870001,
+      "end_s": 973.205350987,
+      "speaker": "participant",
+      "text": "um 我 比較鍾意 個 細班 係因為 你有 【 時候 】 呢 你老 師 你 認到 你 個面 吖嘛 right"
+    },
+    {
+      "start_s": 973.9573509869999,
+      "end_s": 983.685350987,
+      "speaker": "participant",
+      "text": "跟住 你有 時 你 搵 佢 幫 呀 佢 佢 知道 你 係 邊個 有時 你 大型 嗰啲 呢 佢 幾百個 學生 佢 未必 認到 你 係 邊個"
+    },
+    {
+      "start_s": 994.3253509869999,
+      "end_s": 1003.062350987,
+      "speaker": "participant",
+      "text": "我 覺得 依家 未有 咁 重要 可能 我 【 大個 】 啲 姐係 開始 research 呀 或者 um 需要 reference 嗰時 會 重要 啲 囉"
+    },
+    {
+      "start_s": 1003.309350987,
+      "end_s": 1005.965350987,
+      "speaker": "participant",
+      "text": "【 但係 】 依家 我 啱啱 開始 我 覺得 未 咁 重要"
+    },
+    {
+      "start_s": 1011.5933509869999,
+      "end_s": 1023.269350987,
+      "speaker": "participant",
+      "text": "uh um 應該 都會 因為 我 以前 喺 high school 呢 有個 program 叫做 ap xxx 我係 做過 research 【 跟住 】 寫過 同埋 我 好 鍾意"
+    },
+    {
+      "start_s": 1026.741350987,
+      "end_s": 1036.237350987,
+      "speaker": "participant",
+      "text": "um 係 research 呢 um 食蟲 ga3 like um 點解 個 哋 喺 溫哥華 唔 做"
+    },
+    {
+      "start_s": 1048.253350987,
+      "end_s": 1058.221350987,
+      "speaker": "participant",
+      "text": "um 冇呀 因為 我 覺得 嚟 到 大學 呢 佢 姐係 um 比較 難 搵 【 哩啲 】 機會 呢 因為 我 high school 係 一個 program 吖嘛 right 你 申請 呀"
+    },
+    {
+      "start_s": 1058.8933509869998,
+      "end_s": 1063.619350987,
+      "speaker": "participant",
+      "text": "uh 入到 呀 好 &ou2 容易 【 即係 】 冇乜 【 好多 】 人 知道 呀"
+    },
+    {
+      "start_s": 1063.751350987,
+      "end_s": 1073.693350987,
+      "speaker": "participant",
+      "text": "噉 呀 【 但係 】 high school 呢 好多人 囉 【 同埋 】 你好 &x@m 我 感覺 你好 少 哩啲 機會 囉 同埋 難 搵 呢@m 多人 【 要 囉 】 【 所以 】 我 冇 做到"
+    },
+    {
+      "start_s": 1091.8053509869999,
+      "end_s": 1103.357350987,
+      "speaker": "participant",
+      "text": "我 覺得 【 呢 一 】 係 睇 你 讀 乜嘢 【 course 囉 】 因為 我知道 呢 姐係 你 for example um for &z 嗰啲 英 【 語 嗰 】 啲 班 呢 um"
+    },
+    {
+      "start_s": 1103.855350987,
+      "end_s": 1111.2573509869999,
+      "speaker": "participant",
+      "text": "&o 我 就噉 at tend lecture 呀 跟住 我 通常 做得 ok 呀 right um same with like sociology"
+    },
+    {
+      "start_s": 1111.442350987,
+      "end_s": 1121.754350987,
+      "speaker": "participant",
+      "text": "uh 哩啲 班 【 但係 】 如果 【 姐係 】 math 同埋 chemistry 呢 我要 做好 多 自己 【 喺 屋 】 企 溫書 呀 做好 多"
+    },
+    {
+      "start_s": 1121.887350987,
+      "end_s": 1128.117350987,
+      "speaker": "participant",
+      "text": "嗰啲 practice 個 problem 先先 先 可以 合格"
+    },
+    {
+      "start_s": 1143.669350987,
+      "end_s": 1152.714350987,
+      "speaker": "participant",
+      "text": "呣 冇 但 我 妹妹 有 um 我 依家 特別 咗 我 依家 入咗 大學 呢 佢 開始"
+    },
+    {
+      "start_s": 1152.833350987,
+      "end_s": 1162.253350987,
+      "speaker": "participant",
+      "text": "因為 佢 睇 &m 【 姐係 】 冇乜 uh 嗰啲 report card 吖嘛 佢 睇 唔到 我 攞 到 咩嘢 成績 㗎 嘛 zo3 係 靠 如果 我講 畀佢 佢 先知 吖嘛"
+    },
+    {
+      "start_s": 1168.205350987,
+      "end_s": 1169.013350987,
+      "speaker": "participant",
+      "text": "係呀"
+    },
+    {
+      "start_s": 1171.109350987,
+      "end_s": 1176.186350987,
+      "speaker": "participant",
+      "text": "um 【 姐係 】 如果 我 妹妹 呢 第一次 a6 考 合格 &k 佢"
+    },
+    {
+      "start_s": 1176.371350987,
+      "end_s": 1183.5753509869999,
+      "speaker": "participant",
+      "text": "um 佢 溜冰 呀 或者 游水 呀 㗎 課程 佢 爸爸 或者 媽媽 會 送"
+    },
+    {
+      "start_s": 1183.840350987,
+      "end_s": 1190.275350987,
+      "speaker": "participant",
+      "text": "【 即係 】 畀佢 揀 唔知幾 多份 禮物 呀 【 噉 囉 】 計 囉 【 姐係 】 你 哦 你 可以 揀 哩 一份 禮物"
+    },
+    {
+      "start_s": 1190.4603509869999,
+      "end_s": 1197.317350987,
+      "speaker": "participant",
+      "text": "【 噉 囉 】 &ne 哦 你 話 咗 三份 禮物 你 【 可以 】 揀 你想 要 咩嘢 噉 但 【 係 以 】 前 細個 我 冇啲 噉 嘅 機會"
+    },
+    {
+      "start_s": 1210.149350987,
+      "end_s": 1216.487350987,
+      "speaker": "participant",
+      "text": "um um 媽咪 呢 【 成日 】 都 話 哎呀 你 數學 要 做好 啲 呀 【 你 睇吓 】 你 姐姐"
+    },
+    {
+      "start_s": 1216.645350987,
+      "end_s": 1225.994350987,
+      "speaker": "participant",
+      "text": "um 你 姐姐 數學 唔得 㗎 你 【 睇吓 】 佢 依家 &d 噉 你 應該 你 你 數學 你 應該 好 啲 呀 【 姐係 】 &t 放 多啲 努力 呀"
+    },
+    {
+      "start_s": 1226.417350987,
+      "end_s": 1234.134350987,
+      "speaker": "participant",
+      "text": "um 【 即係 】 try harder 【 呀 噉 】 【 但係 】 【 即係 】 佢 佢 我 媽咪 呢 佢 會 明顯 噉 講話"
+    },
+    {
+      "start_s": 1234.372350987,
+      "end_s": 1243.405350987,
+      "speaker": "participant",
+      "text": "我 妹妹 需要 攞 到 幾多 個 a 呀 或者 【 咩嘢 】 盛 呀 同 【 我以 】 前 細個 一樣 吖 同 我 感覺 呢 我 媽咪 對 我 【 阿妹 】 呢 冇咁 【 嚴 囉 】"
+    },
+    {
+      "start_s": 1255.957350987,
+      "end_s": 1261.2293509869999,
+      "speaker": "participant",
+      "text": "um 我 以前 【 細個 】 呢 我 我 冇 點 攞 過 c"
+    },
+    {
+      "start_s": 1262.309350987,
+      "end_s": 1266.917350987,
+      "speaker": "participant",
+      "text": "同埋 【 呢 我 】 妹妹 呢 佢 最低 呢 好似 佢 都係 個 b 噉"
+    },
+    {
+      "start_s": 1277.965350987,
+      "end_s": 1288.606350987,
+      "speaker": "participant",
+      "text": "我 覺得 如果 我 妹妹 攞 到 b 就 &w 會話 吓 佢 呀 話 呀 你 應該 你 攞 到 咁 低 你 【 睇吓 】 你 你 啲 同學 攞 到 個個 都係 a 【 呀 um 】 你 應該 你 【 努力 】 啲 【 呀 噉 】"
+    },
+    {
+      "start_s": 1288.818350987,
+      "end_s": 1294.749350987,
+      "speaker": "participant",
+      "text": "【 但係 】 姐係 【 我以 】 前細 【 個 呢 】 媽媽 呢 &d 都 又 【 會 噉 】 話 囉 冇乜 大分 別 囉"
+    },
+    {
+      "start_s": 1309.061350987,
+      "end_s": 1319.093350987,
+      "speaker": "participant",
+      "text": "喺 我 依家 我 最 鍾意 呢 係 有一 個 課程 叫做 fn h two hundred um 係 講 即係 你 食物 呢 入邊 &d"
+    },
+    {
+      "start_s": 1319.2863509869999,
+      "end_s": 1331.232350987,
+      "speaker": "participant",
+      "text": "點樣 構成 啲 材料 先 整到 好似 um for example 【 mayonnaise 呢 】 我 對 蛋 過敏 呢 我 細個 呢 一直都 【 點解 】 樣樣 都有 蛋 呀"
+    },
+    {
+      "start_s": 1331.3823509869999,
+      "end_s": 1337.747350987,
+      "speaker": "participant",
+      "text": "我食 唔到 蛋 呀 點解 佢 每一 樣 都 需要 蛋 我 依家 明白 係因為 佢 蛋白 呢 喺 入面 呢"
+    },
+    {
+      "start_s": 1337.919350987,
+      "end_s": 1343.397350987,
+      "speaker": "participant",
+      "text": "係 做 一個 em uls i fier 【 所以 】 係 需要 先 um 整到 哩 一個 product"
+    },
+    {
+      "start_s": 1356.701350987,
+      "end_s": 1367.061350987,
+      "speaker": "participant",
+      "text": "um 【 嗰陣 】 時 哩個 【 course 呢 】 我個 professor 呢 好 bo ring 【 所以 】 我 【 好多 】 【 時候 】 呢 姐係 um 去 【 我個 】 lecture 呢 就 覺得 好悶 因為 佢"
+    },
+    {
+      "start_s": 1367.9413509869999,
+      "end_s": 1370.861350987,
+      "speaker": "participant",
+      "text": "【 即係 】 講嘢 um 好 姐係"
+    },
+    {
+      "start_s": 1371.4693509869999,
+      "end_s": 1378.203350987,
+      "speaker": "participant",
+      "text": "佢 個 tone 呢 比較 flat 同埋 呢 【 唔係 話 】 太 interesting 【 但係 】 有 幾個 lecture 呢 geoi5 哋"
+    },
+    {
+      "start_s": 1378.331350987,
+      "end_s": 1385.6323509869999,
+      "speaker": "participant",
+      "text": "個 senior ta 呢 會 【 教過 】 同埋 佢 比較 interesting 呢 因為 佢 會 整 啲 um 好 【 似 嗰 】 啲 uh m"
+    },
+    {
+      "start_s": 1386.029350987,
+      "end_s": 1393.453350987,
+      "speaker": "participant",
+      "text": "【 participation 嗰啲 】 【 噉 個 】 question 問你 吖 你 覺得 姐係 for example um de h yd rating 係咩 嘢 呀 係咪"
+    },
+    {
+      "start_s": 1393.505350987,
+      "end_s": 1402.301350987,
+      "speaker": "participant",
+      "text": "【 哩個 】 【 哩個 】 【 哩個 呀 】 或者 係 get 【 姐係 】 getting roasted by your midterm 【 呀 噉 】 like um 哩啲 噉 嘅 笑話 比較 【 即係 】"
+    },
+    {
+      "start_s": 1403.165350987,
+      "end_s": 1404.117350987,
+      "speaker": "participant",
+      "text": "more 【 interesting 囉 】"
+    },
+    {
+      "start_s": 1413.765350987,
+      "end_s": 1424.5653509869999,
+      "speaker": "participant",
+      "text": "um 我 試過 我個 chemistry 呢 依家 個 chemistry 個 uh professor 又會 【 噉樣 】 講 哩啲 笑話 講出 嚟 【 但係 】 姐係 um"
+    },
+    {
+      "start_s": 1425.717350987,
+      "end_s": 1433.8833509869999,
+      "speaker": "participant",
+      "text": "我個 班 呢 係 八點鐘 【 朝頭 】 早 同埋 呢 um 我 住喺 burnaby 吖嘛 right 【 所以 】 我有 時 呢"
+    },
+    {
+      "start_s": 1434.041350987,
+      "end_s": 1438.165350987,
+      "speaker": "participant",
+      "text": "um 即使 嚟 到 學校 呢 都 未必 瞓醒"
+    },
+    {
+      "start_s": 1444.109350987,
+      "end_s": 1450.468350987,
+      "speaker": "participant",
+      "text": "通常 我 &g 我個 com mu te 係 個半 鐘 有時 呢 即係 如果 我 夜晚黑 um"
+    },
+    {
+      "start_s": 1450.626350987,
+      "end_s": 1460.531350987,
+      "speaker": "participant",
+      "text": "三點 到 六點 嗰個時候 返 呢 佢 通常 都會 搞到 兩個 鐘度 呀 因為 佢 人哋 放班 呢"
+    },
+    {
+      "start_s": 1460.630350987,
+      "end_s": 1463.749350987,
+      "speaker": "participant",
+      "text": "喺度 好 【 忙 囉 】 【 所以 個 】 巴士 會慢 好多 喇"
+    },
+    {
+      "start_s": 1472.405350987,
+      "end_s": 1474.397350987,
+      "speaker": "participant",
+      "text": "留低 喺 學校 溫好 啲"
+    },
+    {
+      "start_s": 1475.733350987,
+      "end_s": 1485.206350987,
+      "speaker": "participant",
+      "text": "um 唔知 呀 係 因 【 為 可 】 能個 環境 有關 囉 同埋 呢 我 喺 學校 【 呀 好多 】 【 時候 】 【 都係 喺 】 學校 呀 【 即係 】 如果 我"
+    },
+    {
+      "start_s": 1485.329350987,
+      "end_s": 1493.339350987,
+      "speaker": "participant",
+      "text": "um 讀完 lecture 呢 留 喺度 溫 呢 好多 【 時候 】 都 同人 哋 &s 【 噉樣 】 【 study 囉 】 【 即係 】 for example 佢哋"
+    },
+    {
+      "start_s": 1493.461350987,
+      "end_s": 1502.821350987,
+      "speaker": "participant",
+      "text": "有 midterm 呀 或者 【 咩嘢 】 盛 人哋 都 噉 好 努力 噉 搞到 我又 會 努力 um 【 喺 屋 】 企 呢 冇 噉 個 【 pressure 囉 】"
+    },
+    {
+      "start_s": 1503.533350987,
+      "end_s": 1509.531350987,
+      "speaker": "participant",
+      "text": "同埋 呢 我 好多 【 時候 】 呢 um for example 呢 我有 個三 個鐘 頭個 break"
+    },
+    {
+      "start_s": 1509.653350987,
+      "end_s": 1515.957350987,
+      "speaker": "participant",
+      "text": "um 從 九點 到 十二點 【 所以 】 我 【 嗰 一個 】 【 時候 】 又會 做好 多 功課 喺 個 um 【 ikb 度 】"
+    },
+    {
+      "start_s": 1523.761350987,
+      "end_s": 1525.789350987,
+      "speaker": "participant",
+      "text": "好少 囉"
+    },
+    {
+      "start_s": 1534.4693509869999,
+      "end_s": 1541.973350987,
+      "speaker": "participant",
+      "text": "通常 比較 【 多 囉 】 因為 um 我 從 burnaby 嚟 到 ubc 好遠 吖嘛 【 但係 】 我去 嗰啲 可能 近 啲 方便 啲"
+    },
+    {
+      "start_s": 1553.061350987,
+      "end_s": 1554.605350987,
+      "speaker": "participant",
+      "text": "依家 暫時 冇"
+    },
+    {
+      "start_s": 1558.1423509869999,
+      "end_s": 1561.541350987,
+      "speaker": "participant",
+      "text": "um 今年 我 冇 點睇"
+    },
+    {
+      "start_s": 1572.341350987,
+      "end_s": 1578.861350987,
+      "speaker": "participant",
+      "text": "uh 有 um 我 舊年 &ya3 去 【 過 嗰 】 個 um the welcome back barbeque"
+    },
+    {
+      "start_s": 1579.741350987,
+      "end_s": 1582.317350987,
+      "speaker": "participant",
+      "text": "i've also been to um the frats once"
+    },
+    {
+      "start_s": 1586.391350987,
+      "end_s": 1590.573350987,
+      "speaker": "participant",
+      "text": "um 我 其實 冇乜 特 【 別 囉 我 】 覺得"
+    },
+    {
+      "start_s": 1591.309350987,
+      "end_s": 1597.0463509869999,
+      "speaker": "participant",
+      "text": "【 姐係 】 覺得 你 【 去過 】 一次 經驗 過你 a6 冇 唔會 話 哦 好想 又去 呀"
+    },
+    {
+      "start_s": 1597.169350987,
+      "end_s": 1605.381350987,
+      "speaker": "participant",
+      "text": "【 姐係 】 每 【 一個 】 星期 去 噉 可能 耐不耐 呀 哦 我有 啲 想去 呀 噉 【 但係 】 唔會 係 每 【 一個 】 星期 【 哇 我 】 又 想去 【 呀 噉 】"
+    },
+    {
+      "start_s": 1608.965350987,
+      "end_s": 1610.810350987,
+      "speaker": "participant",
+      "text": "uh 我 【 剩係 】 去過 一次"
+    },
+    {
+      "start_s": 1612.069350987,
+      "end_s": 1613.765350987,
+      "speaker": "participant",
+      "text": "暫時 囉"
+    },
+    {
+      "start_s": 1628.427350987,
+      "end_s": 1634.579350987,
+      "speaker": "participant",
+      "text": "um 我 覺得 睇吓 【 姐係 】 我 同邊 個 去 係 &h 好 有關 【 於 㗎 】 囉"
+    },
+    {
+      "start_s": 1647.165350987,
+      "end_s": 1655.869350987,
+      "speaker": "participant",
+      "text": "um 我有 兩份 【 工 囉 】 【 所以 】 佢 um 【 有一 】 份 【 工 呢 我係 】 喺 &s 寫字 &s like kumon"
+    },
+    {
+      "start_s": 1656.252350987,
+      "end_s": 1661.791350987,
+      "speaker": "participant",
+      "text": "um 跟住 【 有一 】 份 【 工 呢 】 係 我 喺 the uh city of 【 burnaby 呢 】"
+    },
+    {
+      "start_s": 1661.913350987,
+      "end_s": 1667.9783509869999,
+      "speaker": "participant",
+      "text": "做 一個 assistant program leader 【 所以 】 我 幫 佢 run 嗰啲 after school program 呀 um"
+    },
+    {
+      "start_s": 1673.365350987,
+      "end_s": 1677.203350987,
+      "speaker": "participant",
+      "text": "um 其實 佢 啱啱 請 咗 我 【 所以 】 我 除咗"
+    },
+    {
+      "start_s": 1677.4303509869999,
+      "end_s": 1688.646350987,
+      "speaker": "participant",
+      "text": "一個 shadow shift 係 um 一個 同 啲 五歲 【 細路 】 仔 cooking 個 program 【 有一 】 個 呢 係 &ji3 係 大概 十歲 度個 【 細路 】 仔 係 一個"
+    },
+    {
+      "start_s": 1688.8733509869999,
+      "end_s": 1699.301350987,
+      "speaker": "participant",
+      "text": "all sports 的@m program 跟住 我 嚟緊 呢 有一 個 呢 係 叫做 science in the kitchen 所以 我 未知 【 道 啲 】 【 細路 】 仔 幾歲 【 但係 】 應該 係"
+    },
+    {
+      "start_s": 1699.997350987,
+      "end_s": 1701.405350987,
+      "speaker": "participant",
+      "text": "都係 比較 細啦"
+    },
+    {
+      "start_s": 1706.289350987,
+      "end_s": 1716.869350987,
+      "speaker": "participant",
+      "text": "um 做 基本上 係 做 &z 【 姐係 】 有 少少 似試工 呀 睇吓 嗰個 program leader 需要 做咩 嘢 呀 【 點樣 】 處理 啲 【 細路 】 仔 噉"
+    },
+    {
+      "start_s": 1721.341350987,
+      "end_s": 1727.461350987,
+      "speaker": "participant",
+      "text": "um 【 有一 】 個 係 煮 嘢食 有一 個 係 sports 因為 我去 過 兩個 shadow shift 吖嘛"
+    },
+    {
+      "start_s": 1733.261350987,
+      "end_s": 1740.309350987,
+      "speaker": "participant",
+      "text": "um 我 覺得 嗰個 all 【 sports 嗰 】 個 容易 搞 啲 因為 你 基本上 你 &h 行入 去 係 喺 個"
+    },
+    {
+      "start_s": 1740.449350987,
+      "end_s": 1749.0373509869999,
+      "speaker": "participant",
+      "text": "um 學校 個 gy m room 度 你問 啲 【 細佬 】 仔 吖 你想 玩 啲 咩 遊戲 呀 【 噉樣 】 【 先至 】 會 姐係 整個 vote 呀 跟住 a6 好容 【 易 噉 】 set up 呀 【 咩嘢 】 盛"
+    },
+    {
+      "start_s": 1754.9893509869999,
+      "end_s": 1763.500350987,
+      "speaker": "participant",
+      "text": "um goei5 哋 【 嗰 一 】 次 呢 係 煮 嗰啲 sam os as 印 【 度 嗰 】 啲 sam os as 【 但係 啲 】 【 細路 】 仔好 細個 呢 跟住 um"
+    },
+    {
+      "start_s": 1763.6233509869999,
+      "end_s": 1774.193350987,
+      "speaker": "participant",
+      "text": "go5 哋 有個 re c leader 呢 佢 想 試 um 哦 你 應該 畀 啲 【 細路 】 仔 試吓 用刀 呀 【 但係 】 啲 【 細路 】 仔好 細個 五歲 的@m 【 所以 】 我 覺得 比較 危 【 險 囉 】"
+    },
+    {
+      "start_s": 1774.543350987,
+      "end_s": 1776.485350987,
+      "speaker": "participant",
+      "text": "有 有 少少 緊張 啦"
+    },
+    {
+      "start_s": 1789.704350987,
+      "end_s": 1796.695350987,
+      "speaker": "participant",
+      "text": "um 冇乜 我 覺得 其實 因為 佢 比較 簡單 個 【 re ci pe 囉 】 唔係 太難 的@m"
+    }
+  ],
+  "reference_text": "um 我 媽咪 喺 江 門 嚟 的@m um 我 爸爸 又 喺 江 門 跟著 佢 細 【 個 嗰 】 時 搬 咗 去 香港 【 佢 喺 】 香港 長大 的@m 廣東話 um 應該 係 似 中國 或者 香 【 港 嘅 】 因為 我 返到 去 呢 同 我 姐係 um 我 啲 姑媽 呀 喺 香港 呢 &k 通常 傾計 冇乜 大問題 同埋 有 返到 去 同 我 媽咪 嗰邊 度 呀 婆婆 呀 姨媽 呀 聽@m 嘢 呢 又 冇乜 大問題 um 唔多 返 呀 我 以前 細個 嗰時 呢 每四年 返 一次 度 依家 um 我讀 咗 中學 耐咗 囉 最尾 一次 係 我 十年 級度 【 嗰陣 】 時返 um 去 平時 嗰啲 地方 呢 um 姐係 我 媽咪 出 【 世 嗰 】 度 um 【 姐係 】 江門 呀 新會 呀 uh 香港 呀 go5 哋 【 嗰 一 】 次返 呢 又去 咗 澳門 同 北京 玩 um 我 最 【 鍾意 】 係 去 一度 澳門 一度 香港 囉 um 因為 【 比較 】 多 um 是非 like rules um 同埋 呢 姐係 我去 嗰 &bi3 北京 呢 我 覺得 好 污糟 呀 同埋 um 我 返去 新會 呀 江門 呀 【 因為 】 我 唔係好 敢 或者 識 自己 過馬路 因為 啲 車 唔停 吖嘛 um 我 媽咪 呢 呀 佢 話 佢 唔 【 鍾意 】 香港 佢 話 啲人 呀 成日 都 【 行緊 咁 】 快 呀 咁 忙 呀 佢 唔 【 鍾意 】 佢 比較 【 鍾意 】 佢 新 會 呀 或者 江門 呀 多啲 我 爹哋 好少 同 我哋 返 【 所以 】 佢 通常 佢 返 呢 &j uh 佢 係 自己 一個 煩返 好少 【 都 一 】 跟 埋 我哋 好少 跟 埋 我 媽咪 我 妹妹 或者 我返 哦 佢 冇 講 o3 哦 廿一 年 唔 準呀 有 um 我 媽咪 嘅 英文 呢 比 我 爸爸 學好 少少 um 因為 我 爸爸 可能 做 廚房 佢 通常 講 英文 機會 唔多 and 我 媽咪 呢 佢 um 【 邪日 】 【 姐係 】 好似 um 幫 我 妹妹 呀 或者 我 呀 姐係 um 報名 嗰啲 um 活動 呢 佢 講 英文 呢個 機會 多啲 um 而且 呢 我 肯定 我 嫲 媽咪 呢 嚟 到 哩 &s 嗰時 呢 佢 有 讀過 英文 課 我 爸爸 我 冇 聽@m 【 佢 佢 】 有冇 讀過 有時 佢 講 啲 音 呀 唔啱 uh 特別 佢 姐係 佢 um 佢 個 grammar 呢 好多 【 時候 】 都 唔唔 正確 uh 我 我 大部分 呢 都會 試吓 【 但係 】 佢 有時 呢 講極 都 唔啱 的@m yeah 一般 用 英文 um 有時 呢 耐不耐 呢 姐係 我講 【 笑緊 】 會同 我 媽咪 講 uh 普通話 噉 um 冇乜 我 覺得 【 姐係 】 冇乜嘢 係 我 喺 嗰邊 食過 呀 哩邊 冇乜 機會 食 囉 姐係 我去 香港 呢 佢哋 又 帶過 你 食 壽司 【 但係 】 我 覺得 都 唔夠 我哋 哩邊 好 um 【 即係 】 【 如果 】 食燒 鴨 呀 哩啲 嗰啲 哩邊 都有 得食 &k 冇乜嘢 【 姐係 】 我 覺得 係 hong kong 有 我哋 冇 囉 um 冇乜 的@m 但 我 通常 呢 我 返去 中國 呀 【 姐係 】 um 【 即係 】 如果 返去 江門 呀 或者 香港 呢 我 比較 揀 食 【 姐係 】 我 細個 x 特別 呢 我 唔會 點 食肉 㗎 因為 我唔知 道 係咩 肉 我有 少少 驚 uh 冇乜 【 但係 】 我 唔 【 覺得 】 【 即係 】 唔係好 習慣 佢 好似 嗰邊 冇咁 剛 乾淨 或者 有 少少 安全 【 感 嘅 】 感覺 囉 我 鍾意 我 喺 香港 比較 感覺 安全 啲 一 定有 我 媽咪 【 成日 】 都 話 呢@m 你 咁 揀 食 做乜 呀 你 已經 &ga3 對 咁多 嘢 過敏 呀 你 做乜 咁 揀 食 㗎 &d 嗯 um 佢 點都 會 逼 我 食 姐係 um 【 即係 】 如果 佢哋 出去 食 嘅 佢 都 &m 都 叫 你 吖 試吓 哩 yo3 吖 試吓 哩 yo3 吖 你 食 少少 哩啲 啦 噉 有 好多 嘢 我 唔 唔係好 【 鍾意 】 食 的@m um 特別 姐係 um 如果 姐係 你 出去 食 點心 呢 好多 【 時候 】 有 嗰啲 蒸個 肉 【 姐係 】 &p 蒸 排骨 呀 嗰啲 我超 唔鍾意 食 的@m 呀 燒賣 又 食 唔到 【 所以 】 我 唔唔 知道 有 呀 佢 日 有時 話 姐係 um 唔係 咁 開 【 心 囉 】 佢 話 &na1 你 你 咁 揀 食 你 又 咁多 過敏 你 應該 食 多啲 呀 【 睇吓 】 你 咁 瘦 【 成日 】 都講 的@m 佢 以前 【 細個 呢 】 【 成日 】 話 我 瘦 依家 【 反而 成日 】 【 話 吓 】 你 肥 咗 咁 【 多 嘅 】 有時 呀 姐係 感覺 太瘦 又 唔得 太 【 肥 又 】 唔得 【 姐係 】 你 你 究竟 想點 啫 um 通常 唔會 點講 【 姐係 】 可能 講吓笑 會講 吓 呢@m 【 但係 】 姐係 我 媽咪 【 比較 】 嚴 呢 【 所以 】 【 姐係 我 】 開始 拍拖 呀 到 依家 我 都 唔會 點 同 佢 講 啲 咩 我 媽咪 話 一直都 唔可以 至到 我 開始 大學 先 但 我 依家 開始 讀大學 覺得 有啲驚 同 佢 講 我唔知 呀 um 冇乜 大要 求 囉 um 應該 都係 【 姐係 】 講到 um 【 廣東 】 話 或者 國語 因為 有時 【 姐係 】 你 溝通 呀 或者 你 生活 上 呀 或者 姐係 你 um 你 以前 細個 長大 嗰時 個 um 家庭 個 環境 都 差唔多 先 di3 【 姐係 】 比較 夾 囉 容易 啲 um understand each 【 other 囉 】 應該 &c ok 吖 我 覺得 應該 要學 um 因為 呢 我 覺得 你學 多個 語言 呢 對 你 【 姐係 】 第日 將來 呀 或者 姐係 你 um uh apply for 嗰啲 工呀 或者 【 姐係 】 好似 你 ubc 你 都要 一個 second language requirement 吖嘛 right 【 所以 我 】 覺得 你 &a 如果 你家 庭講 一個 其他 個 語言 呢 會對 di5 【 細佬 】 仔 好好 【 多 囉 】 我 覺得 你 讀 廣東話 呢 會 好 啲 因為 廣東話 呢 人哋 話 多啲 音 吖嘛 right 【 所以 我 】 【 好多 】 【 時候 】 呢 姐係 我講 廣東話 我 聽到 我 聽得 明 &d 好多 我講 國語 個 朋友 講 嘅 嘢 【 但係 】 佢哋 又 聽 唔到 明 我講 廣東話 【 所以 】 我 覺得 起碼 如果 你學 咗 廣東 【 話 呢 】 你 即使 你 唔識 講 普通話 &ni 都 聽得 明 好多 【 嘢 囉 】 um 冇乜 的@m 因為 佢 都 &m 冇乜 話 有 咩嘢 要求 囉 因為 一直都 即係 冇 點 講過 話 有 應該 同邊 個 拍拖 呀 或者 【 咩嘢 】 盛 囉 佢哋 uh 一定要 呀 姐係 喺 um 大學畢業 呀 搵 到 份 好個 工呀 【 噉 囉 】 um 佢哋 覺得 唔唔 知 呀 【 姐係 】 起碼 你族 到 大學 出嚟 你 畢 咗 業呢 你 可以 搵 到 份 【 工 囉 】 因為 有時 呢 你 喺 大學畢業 出嚟 呢 你 都 未必 搵 到 【 工 囉 】 佢哋 希望 唔係 噉 個 【 case 囉 】 um 我唔知 呀 我 覺得 我學 【 習個 】 方式 一 定有 um 有機會 可以 改變 可以 improve 因為 依家 個學 &s 習 方式 【 我覺 】 得 唔係 太好 囉 因為 我 第一 同 第二年 呢個 成 【 績到 】 依家 唔係 太 【 好 囉 】 um 我 依家 呢 讀緊 依家 係 我 第二年 喺 ubc um 即係 儘量 呢 做多 【 啲 嗰 】 啲 uh practice problems 呀 或者 姐係 uh 有 咩 唔識 呀 &c 多啲 去 搵 人 幫 囉 因為 我 依家 最 困難 嗰 兩個 【 course 呢 】 係 我 &y take 緊 係數 學 【 即係 】 cal cu lu s um 係 我 舊年 冇 合格 的@m 同埋 我 依家 係 take 緊 um organic chemistry 我又 覺得 好難 的@m um 喺 chemistry 呢 我 啲 labs 呢 我 容易 啲 pass um 因為 【 姐係 】 有 【 時 呢 】 你 即 【 使 你 】 做 【 錯 咗 】 你 ta 呢 佢 都 【 係 個 】 學生 吖嘛 佢 明白 呢 會 畀 分 都 起 &m 畀 高 啲 吖嘛 right um 你 lecture 呢 &z daai1 部分 的@m 分 全部 係 靠 你 考試 同埋 有時 你 考得 冇咁 好的@m 分 a6 低 啲 囉 um math 嗰啲 呢 &m 覺得 樣樣 都 咁 難 呢@m 因為 【 姐係 】 【 譬如 】 你 math tutorial 呢 【 姐係 】 你 係 有機會 呢 同人 【 姐係 】 work together um 【 姐係 】 解決 哩個 問題 【 但係 】 你 始終 呢 你 都要 自己 識得 點做 囉 同埋 有時 呢 你 數學 呢 真係 好 【 難 囉 】 特別 我 我 數學 唔 叻 的@m um 我 覺得 我 依家 慣 咗 喺 大型 【 嗰啲 】 因為 我 大部分 的@m 課 呢 都係 好 大型 【 嗰啲 】 um 我 喺 ubc 咁 哩 【 哩 一 】 年半 呢 我 剩係 有一 堂課 係 細型 啲 好多 discussion 呢@m 係 我 英語 嗰個 班 同埋 我 依家 唔使 再學 英語 um 我 比較鍾意 個 細班 係因為 你有 【 時候 】 呢 你老 師 你 認到 你 個面 吖嘛 right 跟住 你有 時 你 搵 佢 幫 呀 佢 佢 知道 你 係 邊個 有時 你 大型 嗰啲 呢 佢 幾百個 學生 佢 未必 認到 你 係 邊個 我 覺得 依家 未有 咁 重要 可能 我 【 大個 】 啲 姐係 開始 research 呀 或者 um 需要 reference 嗰時 會 重要 啲 囉 【 但係 】 依家 我 啱啱 開始 我 覺得 未 咁 重要 uh um 應該 都會 因為 我 以前 喺 high school 呢 有個 program 叫做 ap xxx 我係 做過 research 【 跟住 】 寫過 同埋 我 好 鍾意 um 係 research 呢 um 食蟲 ga3 like um 點解 個 哋 喺 溫哥華 唔 做 um 冇呀 因為 我 覺得 嚟 到 大學 呢 佢 姐係 um 比較 難 搵 【 哩啲 】 機會 呢 因為 我 high school 係 一個 program 吖嘛 right 你 申請 呀 uh 入到 呀 好 &ou2 容易 【 即係 】 冇乜 【 好多 】 人 知道 呀 噉 呀 【 但係 】 high school 呢 好多人 囉 【 同埋 】 你好 &x@m 我 感覺 你好 少 哩啲 機會 囉 同埋 難 搵 呢@m 多人 【 要 囉 】 【 所以 】 我 冇 做到 我 覺得 【 呢 一 】 係 睇 你 讀 乜嘢 【 course 囉 】 因為 我知道 呢 姐係 你 for example um for &z 嗰啲 英 【 語 嗰 】 啲 班 呢 um &o 我 就噉 at tend lecture 呀 跟住 我 通常 做得 ok 呀 right um same with like sociology uh 哩啲 班 【 但係 】 如果 【 姐係 】 math 同埋 chemistry 呢 我要 做好 多 自己 【 喺 屋 】 企 溫書 呀 做好 多 嗰啲 practice 個 problem 先先 先 可以 合格 呣 冇 但 我 妹妹 有 um 我 依家 特別 咗 我 依家 入咗 大學 呢 佢 開始 因為 佢 睇 &m 【 姐係 】 冇乜 uh 嗰啲 report card 吖嘛 佢 睇 唔到 我 攞 到 咩嘢 成績 㗎 嘛 zo3 係 靠 如果 我講 畀佢 佢 先知 吖嘛 係呀 um 【 姐係 】 如果 我 妹妹 呢 第一次 a6 考 合格 &k 佢 um 佢 溜冰 呀 或者 游水 呀 㗎 課程 佢 爸爸 或者 媽媽 會 送 【 即係 】 畀佢 揀 唔知幾 多份 禮物 呀 【 噉 囉 】 計 囉 【 姐係 】 你 哦 你 可以 揀 哩 一份 禮物 【 噉 囉 】 &ne 哦 你 話 咗 三份 禮物 你 【 可以 】 揀 你想 要 咩嘢 噉 但 【 係 以 】 前 細個 我 冇啲 噉 嘅 機會 um um 媽咪 呢 【 成日 】 都 話 哎呀 你 數學 要 做好 啲 呀 【 你 睇吓 】 你 姐姐 um 你 姐姐 數學 唔得 㗎 你 【 睇吓 】 佢 依家 &d 噉 你 應該 你 你 數學 你 應該 好 啲 呀 【 姐係 】 &t 放 多啲 努力 呀 um 【 即係 】 try harder 【 呀 噉 】 【 但係 】 【 即係 】 佢 佢 我 媽咪 呢 佢 會 明顯 噉 講話 我 妹妹 需要 攞 到 幾多 個 a 呀 或者 【 咩嘢 】 盛 呀 同 【 我以 】 前 細個 一樣 吖 同 我 感覺 呢 我 媽咪 對 我 【 阿妹 】 呢 冇咁 【 嚴 囉 】 um 我 以前 【 細個 】 呢 我 我 冇 點 攞 過 c 同埋 【 呢 我 】 妹妹 呢 佢 最低 呢 好似 佢 都係 個 b 噉 我 覺得 如果 我 妹妹 攞 到 b 就 &w 會話 吓 佢 呀 話 呀 你 應該 你 攞 到 咁 低 你 【 睇吓 】 你 你 啲 同學 攞 到 個個 都係 a 【 呀 um 】 你 應該 你 【 努力 】 啲 【 呀 噉 】 【 但係 】 姐係 【 我以 】 前細 【 個 呢 】 媽媽 呢 &d 都 又 【 會 噉 】 話 囉 冇乜 大分 別 囉 喺 我 依家 我 最 鍾意 呢 係 有一 個 課程 叫做 fn h two hundred um 係 講 即係 你 食物 呢 入邊 &d 點樣 構成 啲 材料 先 整到 好似 um for example 【 mayonnaise 呢 】 我 對 蛋 過敏 呢 我 細個 呢 一直都 【 點解 】 樣樣 都有 蛋 呀 我食 唔到 蛋 呀 點解 佢 每一 樣 都 需要 蛋 我 依家 明白 係因為 佢 蛋白 呢 喺 入面 呢 係 做 一個 em uls i fier 【 所以 】 係 需要 先 um 整到 哩 一個 product um 【 嗰陣 】 時 哩個 【 course 呢 】 我個 professor 呢 好 bo ring 【 所以 】 我 【 好多 】 【 時候 】 呢 姐係 um 去 【 我個 】 lecture 呢 就 覺得 好悶 因為 佢 【 即係 】 講嘢 um 好 姐係 佢 個 tone 呢 比較 flat 同埋 呢 【 唔係 話 】 太 interesting 【 但係 】 有 幾個 lecture 呢 geoi5 哋 個 senior ta 呢 會 【 教過 】 同埋 佢 比較 interesting 呢 因為 佢 會 整 啲 um 好 【 似 嗰 】 啲 uh m 【 participation 嗰啲 】 【 噉 個 】 question 問你 吖 你 覺得 姐係 for example um de h yd rating 係咩 嘢 呀 係咪 【 哩個 】 【 哩個 】 【 哩個 呀 】 或者 係 get 【 姐係 】 getting roasted by your midterm 【 呀 噉 】 like um 哩啲 噉 嘅 笑話 比較 【 即係 】 more 【 interesting 囉 】 um 我 試過 我個 chemistry 呢 依家 個 chemistry 個 uh professor 又會 【 噉樣 】 講 哩啲 笑話 講出 嚟 【 但係 】 姐係 um 我個 班 呢 係 八點鐘 【 朝頭 】 早 同埋 呢 um 我 住喺 burnaby 吖嘛 right 【 所以 】 我有 時 呢 um 即使 嚟 到 學校 呢 都 未必 瞓醒 通常 我 &g 我個 com mu te 係 個半 鐘 有時 呢 即係 如果 我 夜晚黑 um 三點 到 六點 嗰個時候 返 呢 佢 通常 都會 搞到 兩個 鐘度 呀 因為 佢 人哋 放班 呢 喺度 好 【 忙 囉 】 【 所以 個 】 巴士 會慢 好多 喇 留低 喺 學校 溫好 啲 um 唔知 呀 係 因 【 為 可 】 能個 環境 有關 囉 同埋 呢 我 喺 學校 【 呀 好多 】 【 時候 】 【 都係 喺 】 學校 呀 【 即係 】 如果 我 um 讀完 lecture 呢 留 喺度 溫 呢 好多 【 時候 】 都 同人 哋 &s 【 噉樣 】 【 study 囉 】 【 即係 】 for example 佢哋 有 midterm 呀 或者 【 咩嘢 】 盛 人哋 都 噉 好 努力 噉 搞到 我又 會 努力 um 【 喺 屋 】 企 呢 冇 噉 個 【 pressure 囉 】 同埋 呢 我 好多 【 時候 】 呢 um for example 呢 我有 個三 個鐘 頭個 break um 從 九點 到 十二點 【 所以 】 我 【 嗰 一個 】 【 時候 】 又會 做好 多 功課 喺 個 um 【 ikb 度 】 好少 囉 通常 比較 【 多 囉 】 因為 um 我 從 burnaby 嚟 到 ubc 好遠 吖嘛 【 但係 】 我去 嗰啲 可能 近 啲 方便 啲 依家 暫時 冇 um 今年 我 冇 點睇 uh 有 um 我 舊年 &ya3 去 【 過 嗰 】 個 um the welcome back barbeque i've also been to um the frats once um 我 其實 冇乜 特 【 別 囉 我 】 覺得 【 姐係 】 覺得 你 【 去過 】 一次 經驗 過你 a6 冇 唔會 話 哦 好想 又去 呀 【 姐係 】 每 【 一個 】 星期 去 噉 可能 耐不耐 呀 哦 我有 啲 想去 呀 噉 【 但係 】 唔會 係 每 【 一個 】 星期 【 哇 我 】 又 想去 【 呀 噉 】 uh 我 【 剩係 】 去過 一次 暫時 囉 um 我 覺得 睇吓 【 姐係 】 我 同邊 個 去 係 &h 好 有關 【 於 㗎 】 囉 um 我有 兩份 【 工 囉 】 【 所以 】 佢 um 【 有一 】 份 【 工 呢 我係 】 喺 &s 寫字 &s like kumon um 跟住 【 有一 】 份 【 工 呢 】 係 我 喺 the uh city of 【 burnaby 呢 】 做 一個 assistant program leader 【 所以 】 我 幫 佢 run 嗰啲 after school program 呀 um um 其實 佢 啱啱 請 咗 我 【 所以 】 我 除咗 一個 shadow shift 係 um 一個 同 啲 五歲 【 細路 】 仔 cooking 個 program 【 有一 】 個 呢 係 &ji3 係 大概 十歲 度個 【 細路 】 仔 係 一個 all sports 的@m program 跟住 我 嚟緊 呢 有一 個 呢 係 叫做 science in the kitchen 所以 我 未知 【 道 啲 】 【 細路 】 仔 幾歲 【 但係 】 應該 係 都係 比較 細啦 um 做 基本上 係 做 &z 【 姐係 】 有 少少 似試工 呀 睇吓 嗰個 program leader 需要 做咩 嘢 呀 【 點樣 】 處理 啲 【 細路 】 仔 噉 um 【 有一 】 個 係 煮 嘢食 有一 個 係 sports 因為 我去 過 兩個 shadow shift 吖嘛 um 我 覺得 嗰個 all 【 sports 嗰 】 個 容易 搞 啲 因為 你 基本上 你 &h 行入 去 係 喺 個 um 學校 個 gy m room 度 你問 啲 【 細佬 】 仔 吖 你想 玩 啲 咩 遊戲 呀 【 噉樣 】 【 先至 】 會 姐係 整個 vote 呀 跟住 a6 好容 【 易 噉 】 set up 呀 【 咩嘢 】 盛 um goei5 哋 【 嗰 一 】 次 呢 係 煮 嗰啲 sam os as 印 【 度 嗰 】 啲 sam os as 【 但係 啲 】 【 細路 】 仔好 細個 呢 跟住 um go5 哋 有個 re c leader 呢 佢 想 試 um 哦 你 應該 畀 啲 【 細路 】 仔 試吓 用刀 呀 【 但係 】 啲 【 細路 】 仔好 細個 五歲 的@m 【 所以 】 我 覺得 比較 危 【 險 囉 】 有 有 少少 緊張 啦 um 冇乜 我 覺得 其實 因為 佢 比較 簡單 個 【 re ci pe 囉 】 唔係 太難 的@m"
+}

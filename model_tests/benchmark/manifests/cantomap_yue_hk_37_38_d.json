@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "slice_id": "cantomap_yue_hk_37_38_d_030500_180400",
+  "language": {
+    "bcp47": "yue-Hant-HK",
+    "name": "Hong Kong Cantonese",
+    "evaluation_category": "yue_dialect_conversation",
+    "control_group": "not_regional_mandarin"
+  },
+  "corpus": {
+    "name": "CantoMap",
+    "repository": "https://github.com/gwinterstein/CantoMap",
+    "revision": "9f03a43827c7a75e095b0bfd6ef539c11115f2cf",
+    "license": "GPL-3.0",
+    "citation": "Winterstein, Tang, and Lai (2020), CantoMap: a Hong Kong Cantonese MapTask Corpus, LREC 2020"
+  },
+  "source": {
+    "eaf": "ConversationData/Subjects-37_38/160818_009F37_38_D.eaf",
+    "audio": "ConversationData/Subjects-37_38/160818_009F37_38_D.wav",
+    "eaf_sha256": "6fb25bc21026c55520b6e1592a80c53f131ac7b2c8926c4cab0155ac82c5a0c8",
+    "audio_sha256": "84d6edb64f9115992c89a0ca8e72c0f53259117e00139e0d463201f802b96d98",
+    "audio_duration_ms": 289732,
+    "audio_sample_rate_hz": 44100,
+    "audio_channels": 2
+  },
+  "clip": {
+    "start_ms": 30500,
+    "end_ms": 180400,
+    "boundary_policy": "include_only_fully_contained_annotations"
+  },
+  "tiers": {
+    "speakers": [
+      "F",
+      "G"
+    ],
+    "character_suffix": "",
+    "word_suffix": "-word",
+    "jyutping_suffix": "-jyutping"
+  },
+  "preparation": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "codec": "pcm_s16le"
+  },
+  "selection": {
+    "description": "A boundary-clean 149.9-second MapTask span with dense bidirectional speech, short backchannels, repairs, corpus annotation tokens, and cross-speaker overlap.",
+    "expected_segments": 83,
+    "expected_segments_by_speaker": {
+      "F": 43,
+      "G": 40
+    },
+    "expected_speaker_transitions": 75,
+    "expected_cross_speaker_overlap_pairs": 10
+  }
+}

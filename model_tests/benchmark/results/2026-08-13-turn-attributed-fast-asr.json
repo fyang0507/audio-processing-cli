@@ -1,0 +1,382 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-13",
+  "purpose": "FluidAudio anonymous speaker turns followed by a controlled persistent Qwen3-ASR 0.6B-versus-1.7B 8-bit MLX comparison on the frozen 30-minute SpiCE canonical interview mix.",
+  "host": {
+    "device": "Apple M4 Max",
+    "physical_memory_bytes": 68719476736,
+    "os": "macOS 26.5.2",
+    "python": "3.12.12"
+  },
+  "runtime": {
+    "mlx": "0.32.0",
+    "mlx_metal": "0.32.0",
+    "mlx_audio": "0.4.5",
+    "mlx_lm": "0.31.3",
+    "numpy": "2.5.1",
+    "miniaudio": "1.71",
+    "hub_offline": true
+  },
+  "evidence_contract": {
+    "raw_artifact_root": "model_tests/benchmark_runs",
+    "raw_artifacts_tracked": false,
+    "runner_current_sha256": "d4a442c4e2152234b97ce36ecc311b571b402762c11e685d56212d0ce02620e7",
+    "asr_scorer_sha256": "a455bb9708e03bd4091d57eb1940c169394fdef60a66c00141e95124f30475e1",
+    "asr_scorer_schema_version": 2,
+    "memory_semantics": "Process RSS, MLX active memory, and MLX cache memory are overlapping observations and must not be summed. Core ML service memory from FluidAudio is outside the ASR process. None is a physical-16-GB validation.",
+    "timing_semantics": "ASR runner wall excludes interpreter startup but includes imports, model load, audio/turn preparation, synchronized inference, and JSON construction through the recorded timestamp. Service-job wall begins after model load. ASR-only measurements consume an already staged FluidAudio artifact and exclude diarization.",
+    "quality_semantics": "MER is orthography-sensitive mixed Han-character/Latin-token agreement against a participant-only reference. S1 is an oracle mapping established by the separate FluidAudio participant-interval score; it is not identity inference."
+  },
+  "fixture": {
+    "manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m_canonical_mix.json",
+    "manifest_sha256": "1b2b085c31f4821fa4b1fde83342e5c658c45c3489834418783039920f35068c",
+    "audio_sha256": "79c28259614253cb589c968c4d27693eea98ceaf7c2db372a4cdbeb8a77eb511",
+    "duration_s": 1800.0,
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "reference_manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m.json",
+    "reference_manifest_sha256": "61e191626e701bac5a8e7c52fb0d39b759e63075b0722096775490fc7a7286c8",
+    "reference_scope": "153 hand-corrected participant utterance intervals only; no interviewer transcript tier"
+  },
+  "diarization_input": {
+    "artifact": "fluidaudio_v0155_quality_regular_spice30m_canonical_mix.json",
+    "artifact_sha256": "cdb9ba6eba883e0f04af8635718249e4cd655803f4f2f377794ad451e8bc41e0",
+    "segments": 589,
+    "configuration": {
+      "fluid_version": "0.15.5",
+      "fluid_commit": "19600a485baa4998812e4654b70d2bab8f2c9949",
+      "known_speakers": 2,
+      "threshold": 0.6,
+      "step_ratio": 0.1,
+      "minimum_segment_s": 0.0,
+      "embedding_batch_size": 32,
+      "regular_overlap_output": true
+    },
+    "participant_interval_oracle_artifact": "fluidaudio_v0155_quality_regular_spice30m_canonical_mix_participant_interval_score.json",
+    "participant_interval_oracle_artifact_sha256": "d11cc2069c53ef8f1036cd991c23bef4052de37f0bb091a5f619a4b5c719d77b",
+    "oracle_participant_label": "S1",
+    "oracle_participant_interval_f1": 0.9541922368096062
+  },
+  "model": {
+    "name": "Qwen3-ASR-0.6B-8bit",
+    "snapshot_revision": "89e96d92ba34aca20b3e29fb10cc284097d1219f",
+    "config_sha256": "5d104a945fed08728ab010f12bf3ce5ab4d0794bba276d81bff5bd83ae9d2be0",
+    "weight_sha256": "b5bfe4abc1b4c6e58b633096682ec2b6297298add1527119936107d211adf0e8",
+    "weight_bytes": 1006229426,
+    "loaded_parameter_bytes": 1006116864,
+    "quantization_bits": 8,
+    "mlx_audio_qwen_source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
+    "private_api": "_generate_chunks_batched(chunks, *, max_tokens, sampler, language, system_prompt, batch_size, verbose)"
+  },
+  "turn_policy": {
+    "provenance": "Declared before the 3-minute smoke; not selected against quality scores.",
+    "clock_hz": 16000,
+    "raw_fragment_min_s": 0.25,
+    "same_label_true_silence_merge_max_s": 0.3,
+    "accepted_turn_min_s": 0.5,
+    "overlap_policy": "abstain; never double-transcribe",
+    "identity_policy": "preserve anonymous FluidAudio labels",
+    "accepted_windows_overlap": false,
+    "coverage_partition_exact": true,
+    "plan_sha256": "1b69d9152419e887a79ea233cd16dd6a93fe895854fe6fcc2df5edc9859569b8"
+  },
+  "coverage_30m": {
+    "accepted_turns": 195,
+    "accepted_turns_by_anonymous_label": {
+      "S1": 104,
+      "S2": 91
+    },
+    "accepted_transcription_window_s": 1647.860875,
+    "accepted_single_speaker_active_s": 1645.6195,
+    "accepted_single_speaker_active_fraction": 0.9142330555555556,
+    "accepted_bridge_silence_s": 2.241375,
+    "short_turn_abstain_s": 6.553375,
+    "overlap_abstain_s": 3.701125,
+    "raw_fragment_only_abstain_s": 14.7710625,
+    "unclaimed_gap_s": 127.1135625,
+    "partition_sum_s": 1800.0
+  },
+  "smoke_3m_batch4": {
+    "artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice3m_mix.json",
+    "artifact_sha256": "18da93d8df0917c373893b991d132c20f9d0093469f10d30e33d6ebf15b44bfd",
+    "status": "ok",
+    "input_turns": 27,
+    "processed_turns": 27,
+    "fresh_runner_wall_s": 3.379110167035833,
+    "service_job_after_model_load_s": 1.9151695840992033,
+    "peak_sampled_rss_bytes": 1614888960,
+    "peak_sampled_mlx_active_plus_cache_bytes": 5684079697,
+    "host_swap_used_delta_bytes": 0,
+    "generation_tokens": 662,
+    "generation_budget_remaining_tokens": 15722,
+    "participant_oracle_s1_mer": 0.44415584415584414,
+    "full_stream_mer_invalid_against_participant_only_reference": 0.922077922077922
+  },
+  "resource_ab": {
+    "batch4_cache_retained": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix.json",
+      "artifact_sha256": "fa2ef8a336176fb43f85a0cd6cf472d6772d2c38a85999345dcd3160b481e0eb",
+      "fresh_runner_wall_s": 17.191727583063766,
+      "service_job_after_model_load_s": 15.7414622080978,
+      "peak_sampled_rss_bytes": 1759870976,
+      "peak_sampled_mlx_active_bytes": 2467921451,
+      "peak_sampled_mlx_active_plus_cache_bytes": 23479086786,
+      "output_segments_sha256": "dc5b2e77562b8a381d95e71e144c0b08ef4f87974fa111890c966d354aa3a8fe",
+      "disposition": "Reject as the memory-bounded default."
+    },
+    "batch1_cache_retained": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1.json",
+      "artifact_sha256": "8cfdcdfd5fde0756c7b00cd7b0c815a9824c607de2246409df94f27c73b5986d",
+      "fresh_runner_wall_s": 29.094766875030473,
+      "service_job_after_model_load_s": 27.279154166113585,
+      "peak_sampled_rss_bytes": 1957920768,
+      "peak_sampled_mlx_active_bytes": 2512489772,
+      "peak_sampled_mlx_active_plus_cache_bytes": 19560477042,
+      "output_segments_sha256": "bde962f3db664b3e72b9797c3dc496b7ee2bf81a4fbc0d129597e2d2071afaa0",
+      "disposition": "Speed passes; cache accumulation fails the allocator-footprint gate."
+    },
+    "batch1_cache_cleared": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache.json",
+      "artifact_sha256": "940f480c1d32d67821f3be3caed8d93b7c984074d8a1d94d449f7732005b5fa6",
+      "runner_embedded_sha256": "d4a442c4e2152234b97ce36ecc311b571b402762c11e685d56212d0ce02620e7",
+      "status": "ok",
+      "fresh_runner_wall_s": 29.904042458860204,
+      "fresh_runner_rtf": 0.016613356921589002,
+      "service_job_after_model_load_s": 28.458308750065044,
+      "service_job_rtf": 0.015810171527813912,
+      "inference_s": 28.336889625061303,
+      "peak_sampled_rss_bytes": 1777156096,
+      "peak_sampled_mlx_active_bytes": 2067392152,
+      "explicit_mlx_peak_active_bytes": 2462894384,
+      "peak_sampled_mlx_active_plus_cache_bytes": 3433210288,
+      "max_synchronous_pre_clear_active_bytes": 1011545820,
+      "max_synchronous_pre_clear_cache_bytes": 2421664468,
+      "max_synchronous_post_clear_cache_bytes": 0,
+      "synchronous_cache_clear_observations": 195,
+      "background_sample_interval_s": 0.1,
+      "host_swap_used_delta_bytes": 0,
+      "input_turns": 195,
+      "processed_turns": 195,
+      "generation_tokens": 6752,
+      "generation_budget_remaining_tokens": 9632,
+      "output_segments_sha256": "bde962f3db664b3e72b9797c3dc496b7ee2bf81a4fbc0d129597e2d2071afaa0",
+      "exact_output_equal_to_cache_retained_batch1": true,
+      "prompt_and_generation_counts_equal_to_cache_retained_batch1": true,
+      "disposition": "Recommended measured resource-aware ASR configuration; physical-16-GB validation remains required."
+    }
+  },
+  "scores_resource_aware_batch1": {
+    "reference_tokens": 3972,
+    "full_stream": {
+      "score_artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_full_score.json",
+      "score_artifact_sha256": "3ab0a5190b164cdb014a4bed97d0c97bfc78b142e3ed511432357cc94a91e5c1",
+      "hypothesis_tokens": 5918,
+      "edits": 4094,
+      "mer": 1.0307150050352467,
+      "valid_quality_comparison": false,
+      "reason": "Interviewer output is penalized against a participant-only reference."
+    },
+    "s1_participant_interval_oracle": {
+      "score_artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_S1_score.json",
+      "score_artifact_sha256": "9d8d4c3f15ea529bfc1e26603e9371c5888f03da74ec0483bc24d6e61ce5aae7",
+      "hypothesis_tokens": 3746,
+      "edits": 2091,
+      "deletions": 276,
+      "insertions": 50,
+      "substitutions": 1765,
+      "mer": 0.5264350453172205
+    },
+    "s2_transparent_counterfactual": {
+      "score_artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_S2_score.json",
+      "score_artifact_sha256": "2647400d298014d20e6aff725d1411a648e6388729e9e27811271c36eeb13e86",
+      "hypothesis_tokens": 2172,
+      "edits": 3673,
+      "mer": 0.92472306143001
+    }
+  },
+  "controlled_model_ab_same_turns": {
+    "contract": {
+      "only_changed_variable": "Qwen3-ASR checkpoint: 0.6B 8-bit to 1.7B 8-bit",
+      "same_audio_sha256": true,
+      "same_prepared_audio_sha256": true,
+      "same_diarization_artifact_sha256": true,
+      "same_diarization_segments_sha256": true,
+      "same_configuration": true,
+      "same_turn_plan_sha256": true,
+      "turn_plan_sha256": "1b69d9152419e887a79ea233cd16dd6a93fe895854fe6fcc2df5edc9859569b8",
+      "jq_sort_keys_serialized_accepted_turn_array_sha256": "380c05c1a374fc5cd3180931d0952b5b2d043ee3548c8e2c2cc109dcb5bc55bf",
+      "accepted_turns": 195,
+      "batch_size": 1,
+      "cache_cleared_after_every_batch": true,
+      "language": "Cantonese",
+      "global_generation_budget_tokens": 16384,
+      "oracle_participant_label": "S1",
+      "oracle_label_source": "Independent FluidAudio participant-utterance interval overlap score; not inferred from either ASR output."
+    },
+    "qwen_1_7b_8bit": {
+      "model": {
+        "snapshot_revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
+        "config_sha256": "1b76b3b6c655fc54595da025f7a96474ad9fa86363303fbdd61a7d8483ccfaf7",
+        "weight_sha256": "bf304b009cc7eca79283056f787b44c952d24ac22cec787b39732bba3c23c13c",
+        "weight_bytes": 2463307541,
+        "loaded_parameter_bytes": 2463182080,
+        "quantization_bits": 8,
+        "mlx_audio_qwen_source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250"
+      },
+      "artifact": "mlx_qwen3_asr_1.7b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache.json",
+      "artifact_sha256": "386614b15fcf66edf111181333914d5942fe6eb62f5e102cc86ddee8a68e03cc",
+      "runner_embedded_sha256": "d4a442c4e2152234b97ce36ecc311b571b402762c11e685d56212d0ce02620e7",
+      "status": "ok",
+      "fresh_runner_wall_s": 53.76893762499094,
+      "fresh_runner_rtf": 0.029871632013883855,
+      "service_job_after_model_load_s": 52.26982408296317,
+      "service_job_rtf": 0.02903879115720176,
+      "inference_s": 52.14797883387655,
+      "peak_sampled_rss_bytes": 3241689088,
+      "peak_sampled_mlx_active_bytes": 3949763212,
+      "explicit_mlx_peak_active_bytes": 4042586868,
+      "peak_sampled_mlx_active_plus_cache_bytes": 5214246116,
+      "max_synchronous_pre_clear_active_bytes": 2469372892,
+      "max_synchronous_pre_clear_cache_bytes": 2744873224,
+      "max_synchronous_post_clear_cache_bytes": 0,
+      "synchronous_cache_clear_observations": 195,
+      "host_swap_used_delta_bytes": 0,
+      "input_turns": 195,
+      "processed_turns": 195,
+      "prompt_tokens": 25157,
+      "generation_tokens": 6827,
+      "generation_budget_remaining_tokens": 9557,
+      "output_segments_sha256": "5a2d958992412ba3351c1e68b493c0312737d0642cb7c57a4d8971283da6fd3d",
+      "scores": {
+        "full_stream_invalid_against_participant_only_reference": {
+          "score_artifact": "mlx_qwen3_asr_1.7b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_full_score.json",
+          "score_artifact_sha256": "ca0dd0deafba709c1630515bad0e9a1729ee533ca089bed11cb5480ea346e908",
+          "hypothesis_tokens": 5925,
+          "edits": 3335,
+          "deletions": 136,
+          "insertions": 2089,
+          "substitutions": 1110,
+          "mer": 0.8396273917421954,
+          "valid_quality_comparison": false
+        },
+        "s1_participant_interval_oracle": {
+          "score_artifact": "mlx_qwen3_asr_1.7b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_S1_score.json",
+          "score_artifact_sha256": "afae8386c43b6e4b2782ad42833f10cd7c528344096161af659c8d3599600521",
+          "reference_tokens": 3972,
+          "hypothesis_tokens": 3758,
+          "edits": 1333,
+          "deletions": 241,
+          "insertions": 27,
+          "substitutions": 1065,
+          "mer": 0.33559919436052366,
+          "diagnostic_windows": [
+            {"start_s": 0.0, "end_s": 180.0, "mer": 0.35324675324675325},
+            {"start_s": 810.0, "end_s": 990.0, "mer": 0.3159144893111639},
+            {"start_s": 1620.0, "end_s": 1800.0, "mer": 0.34813084112149534}
+          ]
+        },
+        "s2_transparent_counterfactual": {
+          "score_artifact": "mlx_qwen3_asr_1.7b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_S2_score.json",
+          "score_artifact_sha256": "cf2e37f90dbb409be580d3a1b80ae43a1e5f82e7a1d77285dd510518ca594acb",
+          "hypothesis_tokens": 2167,
+          "edits": 3589,
+          "mer": 0.9035750251762337
+        }
+      }
+    },
+    "relative_to_qwen_0_6b": {
+      "fresh_runner_wall_ratio": 1.7980491332889965,
+      "service_job_wall_ratio": 1.836715756442965,
+      "inference_wall_ratio": 1.840285914363607,
+      "sampled_rss_ratio": 1.824087988273147,
+      "sampled_rss_delta_bytes": 1464532992,
+      "mlx_active_plus_cache_ratio": 1.5187668912170054,
+      "mlx_active_plus_cache_delta_bytes": 1781035828,
+      "s1_mer_absolute_reduction": 0.19083585095669687,
+      "s1_mer_relative_reduction": 0.36250597800095646,
+      "s1_edit_reduction": 758,
+      "s1_deletion_reduction": 35,
+      "s1_insertion_reduction": 23,
+      "s1_substitution_reduction": 700,
+      "all_three_diagnostic_windows_improved": true
+    },
+    "supersedes_monolithic_disposition": {
+      "earlier_monolithic_participant_microphone_mer": {
+        "qwen_0_6b": 0.5445619335347432,
+        "qwen_1_7b": 0.7409365558912386
+      },
+      "earlier_limit": "The participant-only reference penalized 1.7B for transcribing more audible interviewer bleed, so the result could not rank speaker-specific ASR quality.",
+      "controlled_same_turn_mer": {
+        "qwen_0_6b": 0.5264350453172205,
+        "qwen_1_7b": 0.33559919436052366
+      },
+      "updated_disposition": "Prefer 1.7B for interview transcript quality and speed; retain 0.6B as the smallest and fastest worker."
+    },
+    "non_measured_component_sum": {
+      "measured_fluid_wrapper_stage_s_from_separate_0_6b_e2e_run": 15.387478792108595,
+      "measured_qwen_1_7b_fresh_asr_runner_s": 53.76893762499094,
+      "arithmetic_sum_s": 69.15641641709954,
+      "arithmetic_sum_rtf": 0.038420231342833074,
+      "arithmetic_realtime_factor_x": 26.0279536340309,
+      "measured_end_to_end": false,
+      "reason": "The components came from different runs and cache states; this sum is planning context only."
+    },
+    "decision": "Qwen3-ASR 1.7B 8-bit earns its extra latency and memory as the default transcript worker for the measured mono Cantonese interview route: it reduces oracle-participant MER from 52.64 to 33.56 percent while keeping actual 30-minute ASR wall at 53.77 seconds. Retain 0.6B when minimum latency or memory is the priority. Physical-16-GB and 1.7B end-to-end sequential validation remain open."
+  },
+  "comparison_with_scope_caveats": {
+    "qwen_0_6b_monolithic_participant_microphone_mer": 0.5445619335347432,
+    "firered_participant_microphone_mer": 0.4901812688821752,
+    "vibevoice_internally_attributed_participant_microphone_mer": 0.452920443101712,
+    "caveat": "FluidAudio plus Qwen uses the canonical two-microphone downmix and an oracle-selected anonymous diarization label. FireRed and monolithic Qwen use the participant microphone; VibeVoice uses its own internal speaker attribution. This is a pipeline comparison, not a controlled model-only ranking."
+  },
+  "measured_end_to_end_sequential": {
+    "orchestrator": "model_tests/benchmark/run_interview_pipeline.py",
+    "orchestrator_sha256": "582e67549c4d00bd0aea162ce1a76a22e06dc3298bb6bfa17fd8339854fc90ec",
+    "pipeline_artifact": "interview_pipeline_fluidaudio_qwen0.6b_spice30m_e2e_20260813.json",
+    "pipeline_artifact_sha256": "a8db770b7dd9161d4c29cd5dcdffbb9323294c35f816fd795a97c3434f3a3884",
+    "status": "ok",
+    "execution": "Strictly sequential fresh FluidAudio-wrapper and Qwen-wrapper subprocesses using cached and staged models.",
+    "external_pipeline_wall_s": 45.66958949994296,
+    "external_pipeline_rtf": 0.02537199416663498,
+    "external_realtime_factor_x": 39.41353578407461,
+    "external_fluid_wrapper_subprocess_wall_s": 15.387478792108595,
+    "external_asr_wrapper_subprocess_wall_s": 30.28207891713828,
+    "fluid": {
+      "artifact": "fluidaudio_v0155_quality_regular_spice30m_canonical_mix_e2e_20260813.json",
+      "artifact_sha256": "2b9c69a47be758657cff8c03e9cd1ba2ac32c927dddd53893863ad0ec540b44a",
+      "raw_artifact_sha256": "5a14d5da4c9cabb94c920de10ba6c60e20b7b1ba86f6d926fbd53ed228979321",
+      "fresh_cli_wall_s": 15.20698495884426,
+      "peak_sampled_cli_rss_bytes": 591364096,
+      "segments": 589,
+      "normalized_output_exact_equal_to_settled_artifact": true,
+      "normalized_segments_sha256": "b59f432346f5d44b92638c4e628944a8ad89cfd6bdd57bec162a98a36bf63ad0"
+    },
+    "asr": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache_e2e_20260813.json",
+      "artifact_sha256": "e931a461e40efd371ab93b7cec7ef72335a593f5c0e66da34e5643457a4b4c26",
+      "fresh_runner_wall_s": 29.538462541997433,
+      "service_job_after_model_load_s": 28.074704499915242,
+      "inference_s": 27.95221637492068,
+      "peak_sampled_process_rss_bytes": 1780695040,
+      "peak_sampled_mlx_active_bytes": 2123505688,
+      "explicit_mlx_peak_active_bytes": 2462894384,
+      "peak_sampled_mlx_active_plus_cache_bytes": 3432979002,
+      "host_swap_used_delta_bytes": 0,
+      "turn_plan_sha256": "1b69d9152419e887a79ea233cd16dd6a93fe895854fe6fcc2df5edc9859569b8",
+      "output_segments_sha256": "bde962f3db664b3e72b9797c3dc496b7ee2bf81a4fbc0d129597e2d2071afaa0",
+      "text_and_segments_exact_equal_to_settled_resource_aware_artifact": true,
+      "prompt_tokens": 25157,
+      "generation_tokens": 6752,
+      "generation_budget_remaining_tokens": 9632,
+      "score_artifacts": {
+        "full_invalid_against_participant_only_reference_sha256": "546a339d17a95af1ec18f0d28348c087a8dd925fcf32a4ae326966e096a78c86",
+        "s1_participant_oracle_sha256": "80d9a3126267ccbd97421d8de7fb9acf3a091a6281b3970210d6a30765b629fa",
+        "s2_counterfactual_sha256": "73fc5ba26a1ba7eab403957d34ad9aa93e5511d5e1ebcc6d947e83b21cd220fd"
+      }
+    },
+    "resource_semantics": "Stages did not overlap. FluidAudio CLI RSS excludes Core ML service memory. Qwen RSS and MLX active/cache counters overlap. Peaks must not be summed and do not prove physical-16-GB compatibility.",
+    "content_nondeterminism_observed": false,
+    "artifact_hash_difference_expected": "Whole evidence and raw FluidAudio artifacts include run-specific paths, timing, and resource telemetry; normalized FluidAudio output, turn plan, ASR text, segment dictionaries, and tokens were exact."
+  },
+  "decision": "Use FluidAudio plus resource-aware batch-one Qwen3-ASR 1.7B as the provisional transcript-quality mono-interview route; use 0.6B as the minimum-latency/minimum-memory fallback. The controlled same-turn A/B shows a 19.08-point oracle-participant MER reduction at 1.80x ASR wall, with both far below the five-minute target. Physical-16-GB, 1.7B end-to-end sequential wall, dense-turn quality, word timestamps, non-oracle role mapping, and behavioral-validity gates remain open."
+}

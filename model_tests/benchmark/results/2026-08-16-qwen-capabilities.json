@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-16",
+  "purpose": "Verify the locally integrated Qwen3-ASR capability interface without substituting upstream model-card claims.",
+  "host": {
+    "device": "Apple M4 Max",
+    "physical_memory_bytes": 68719476736,
+    "os": "macOS 26.5.2",
+    "python": "3.12.12"
+  },
+  "runtime": {
+    "mlx": "0.32.0",
+    "mlx_metal": "0.32.0",
+    "mlx_audio": "0.4.5",
+    "runner_sha256": "de5166a3164fce9d08022f131e31eacabdbc9b364de29d11e9a8139b2991c3f2",
+    "qwen_adapter_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
+    "hub_offline": true
+  },
+  "fixture": {
+    "description": "Local 139.284-second two-speaker Mandarin-English code-switch and Sichuanese/filler probe.",
+    "audio_sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+    "prepared_audio_sha256": "acd0b06546e9c009271005ad1addc5209f290f0591cf5a855cd4e300759a39d5",
+    "duration_s": 139.284,
+    "frozen_code_switch_or_lid_labels": false
+  },
+  "configuration": {
+    "language_request": "auto",
+    "language_argument_to_model": null,
+    "chunk_seconds": 180.0,
+    "batch_size": 1,
+    "max_tokens": 4096,
+    "temperature": 0.0,
+    "fresh_process_per_checkpoint": true
+  },
+  "runs": {
+    "qwen3_asr_0_6b_8bit": {
+      "snapshot_revision": "89e96d92ba34aca20b3e29fb10cc284097d1219f",
+      "config_sha256": "5d104a945fed08728ab010f12bf3ce5ab4d0794bba276d81bff5bd83ae9d2be0",
+      "weight_sha256": "b5bfe4abc1b4c6e58b633096682ec2b6297298add1527119936107d211adf0e8",
+      "raw_artifact": "benchmark_runs/qwen3_asr_0.6b_8bit_capabilities_auto_139s_20260816.json",
+      "raw_artifact_sha256": "447658c33a560c89822c29c648c63fe5c8889516fb889c5f1bad0abb8f771f60",
+      "status": "ok",
+      "inference_s": 1.4580650003626943,
+      "fresh_process_s": 7.676484750118107,
+      "peak_sampled_rss_bytes": 1644969984,
+      "peak_sampled_mlx_active_plus_cache_bytes": 3882134552,
+      "detected_language": ["Chinese"],
+      "segment_count": 1,
+      "speaker_values": [null],
+      "timestamp_semantics": "model_chunk_bounds_not_speech_timestamps",
+      "han_character_count": 120,
+      "latin_word_count": 129,
+      "sichuanese_lexeme_rendering": "刷啥子",
+      "text_sha256": "3f5ba5b1c90cc3c43cf9d8dde62eaf4aec45bad436dcb4837812c298230825ff"
+    },
+    "qwen3_asr_1_7b_8bit": {
+      "snapshot_revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
+      "config_sha256": "1b76b3b6c655fc54595da025f7a96474ad9fa86363303fbdd61a7d8483ccfaf7",
+      "weight_sha256": "bf304b009cc7eca79283056f787b44c952d24ac22cec787b39732bba3c23c13c",
+      "raw_artifact": "benchmark_runs/qwen3_asr_1.7b_8bit_capabilities_auto_139s_20260816.json",
+      "raw_artifact_sha256": "bb0378a2faae67ab122f6300e13888bb9cc3126578e19a971a236fdb2fc0a157",
+      "status": "ok",
+      "inference_s": 2.4243123750202358,
+      "fresh_process_s": 7.059600959066302,
+      "peak_sampled_rss_bytes": 3099820032,
+      "peak_sampled_mlx_active_plus_cache_bytes": 5345593904,
+      "detected_language": ["English"],
+      "segment_count": 1,
+      "speaker_values": [null],
+      "timestamp_semantics": "model_chunk_bounds_not_speech_timestamps",
+      "han_character_count": 121,
+      "latin_word_count": 125,
+      "sichuanese_lexeme_rendering": "耍啥子",
+      "text_sha256": "4fd141933a570b2cc0f2083d2d8c2d65353da4c89e563116601cd42ffc58fe2b"
+    }
+  },
+  "observations": {
+    "automatic_language_interface": "Both checkpoints emitted one language label when passed no language hint, but the labels disagreed on the same mixed-language recording. The label applies to the whole processing container and is not localized code-switch metadata.",
+    "code_switch_interface": "Both outputs contain Han and Latin text in the same segment. This verifies mixed-script retention through the local adapter, not code-switch accuracy.",
+    "dialect_interface": "The 1.7B output retained the Sichuanese lexeme 耍啥子 while 0.6B rendered 刷啥子. One unlabelled clip cannot validate dialect breadth or error rate.",
+    "speaker_interface": "Both normalized outputs contain speaker=null; Qwen3-ASR supplies no diarization through this adapter.",
+    "time_interface": "Each output contains one 0.0-139.284 second processing-container interval and no speech, word, or character timestamps. Timing must come from VAD, diarization, or forced alignment.",
+    "verbatim_interface": "No filler-specific or verbatim mode was exercised. Filler preservation remains a transcript-quality measurement, not a native output capability."
+  },
+  "decision": "Use Qwen3-ASR as a fast transcript worker behind an external timing/speaker plan. Automatic language output exists but is not a reliable code-switch locator or routing signal on this probe; prefer an explicit primary-language hint when known."
+}
