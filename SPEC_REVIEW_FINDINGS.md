@@ -98,7 +98,7 @@ Three things the verification turned up that were in no document:
 Found while verifying the above against artifacts and runner sources. N1–N3 are
 decisions; N4–N6 are applied and listed so the changes are reviewable.
 
-### N1. `verbatim`'s interface was never exercised on Qwen — verified, needs a decision
+### N1. `verbatim`'s interface was never exercised on Qwen — verified, live verification in progress
 
 The capability record states plainly: *"No filler-specific or verbatim mode was
 exercised. Filler preservation remains a transcript-quality measurement, not a native
@@ -112,35 +112,86 @@ pipeline cleans, so the old claim "absent this, text is clean-rendered" describe
 machinery that does not exist — the same defect class as O2. I have redefined it as an
 assertion the plan answers with evidence (and two stacks answer `refuted`), which
 keeps it useful to an agent choosing a stack. The alternative is to demote it to
-provenance-only until a rendering stage exists. Worth your call, because it is the
-one requestable capability that resolves identically everywhere.
+provenance-only until a rendering stage exists.
 
-### N2. FireRed is text-deterministic but not timestamp-deterministic — verified, needs a decision
+**Being resolved by experiment rather than by argument.** A live probe is running
+against `test-sample-multispeaker.m4a` (139.33 s, the same clip the recorded FireRed
+and VibeVoice runs used) to answer two things the record cannot: whether Qwen's default
+output retains disfluencies, and whether the `system_prompt` argument that every
+recorded run passed as `None` is a usable verbatim control. If a prompt measurably
+changes filler retention, `verbatim` is a real configuration switch on this stack and
+the "changes no plan composition" claim above is wrong — it would change
+`roles.asr.config`. If not, the capability is a property of whatever the model emits and
+the demote-to-provenance option gets stronger. Either way the answer replaces an
+inference with a measurement, which is the process rule this document ends on.
+
+### N2. FireRed is text-deterministic but not timestamp-deterministic — verified, decided
 
 The recorded exact-repeat 60-minute run reproduced text exactly
 (`all_text_sequences_equal: true`) with a maximum rebased timestamp drift of
 **1.0 ms** against a declared 2.0 ms tolerance, so `all_normalized_segments_equal` is
 **false**. A single `deterministic: true` boolean would have overclaimed this.
 
-I added `determinism_tolerance_ms` (`1.0` for FireRed, `0.0` for the other two) so the
-boolean means "reproducible within the declared tolerance". This matters downstream:
-any `word_id` scheme keyed on word start times is not stable across FireRed runs, and
-the Observation Store's identity scheme has not been specified yet. If `word_id` must
-be run-stable, that is a constraint on the schema, not on the backend.
+**Decision: return this in the `plan` phase so an agent understands whether it needs a
+forced aligner for precise timing — and more broadly, step one plus the stack choice
+should return the contextual data an agent needs to decide step-two add-ons.** Applied,
+and it is the largest change in this pass.
 
-### N3. Every interview-route figure used a language hint — verified, needs a decision
+`determinism_tolerance_ms` is declared per backend (`1.0` FireRed, `0.0` the other two)
+and surfaced in step one with an `implication` field, because the number alone is not
+decision-ready: **1 ms is a fraction of a video frame** — 41.7 ms at 24 fps, 16.7 ms at
+60 fps — so it is irrelevant to subtitle cues, and fatal only to byte-equality
+assertions and to any `word_id` keyed on a start time. That last point is a constraint
+on the Observation Store's identity scheme, which has not been specified yet.
+
+Step one is now built around the step-two decision rather than around availability
+lookup. Four additions, each answering a question `availability` alone cannot:
+
+- `determinism` — what the stack's timing is worth, with the implication spelled out.
+- `add_on_cost` — packages, environment, external tools, measured stage time and
+  memory. `speaker_attribution` needs a Swift toolchain, a second environment, and an
+  unsized Core ML download (14.74 s and 560.3 MiB on the 30-minute fixture);
+  `speech_bounds` on Qwen needs a hash-pinned file that fetches itself. Both read
+  `requires_add_on` without this.
+- `shares_stage_with` — `speaker_attribution`, `turn_bounds`, and `overlap_intervals`
+  all come from one diarizer run, so requesting three costs what requesting one costs.
+  An agent budgeting per capability would triple-count.
+- `timing_precision` and `alternative` — whether native is *good enough*. FireRed's
+  native word timing and the aligner are both unscored against hand-labelled
+  boundaries, so adding the aligner buys a different unmeasured number, not a better
+  one. `speech_bounds` is the inverse: the Silero add-on has a measured 0.8505 F1 where
+  the native FireRedVAD stage has none.
+
+Also added: `measured_envelope` per stack (FireRed's whole pipeline ran 665.26 s at
+RTF 0.3696 and 9.12 GiB peak RSS on the 30-minute channel) and `language_input`, so
+resource and input questions are answerable before provisioning anything.
+
+### N3. Every interview-route figure used a language hint — verified, decided
 
 The controlled A/B that produced 53.77 s, 3.02 GiB, and the 33.56%/52.64% MER pair ran
-with `language = "Cantonese"` explicitly passed. The plan as specified passes
-`language: null`. The measured block now says so rather than implying the figures
-describe the no-hint path.
+with `language = "Cantonese"` explicitly passed, while the plan as specified passed
+`language: null`.
 
-The open question is whether a language hint should be caller-settable. It is an
-explicit input rather than an intent abstraction, so it does not conflict with the
-"name the requirement" rule — but it is a new flag, so I have not added one. The
-recorded no-hint probe shows both Qwen sizes still emit a language label and
-**disagree with each other on the same recording**, which is an argument for allowing
-the hint and against trusting the label.
+**Decision: include the data anyway — a specific constraint beats a broad statement.**
+Applied as `--language`, the one caller-settable model input in v1. Rationale recorded
+in the spec: exposing it is what makes the measured configuration reachable from the
+CLI at all, since otherwise every recorded figure describes a configuration no caller
+could ask for.
+
+It is an input, not a capability, and VOCABULARY now keeps those apart by name:
+`--language` constrains a decode; `region_language`, `container_language`, and
+`token_language` report one. It adds no role, no package, and no output field. Only the
+Qwen stacks accept it — VibeVoice advertises code switching without language selection
+and FireRed's ASR takes no language argument, its language being an LID *output* — so
+each stack declares `language_input` in step one and a stack that takes none refuses
+the flag with the new `option_unsupported_on_stack` rather than ignoring it. Accepting
+a flag that does nothing would let a caller believe it had constrained a decode it
+never touched.
+
+The no-hint path stays a real second configuration rather than a default: both Qwen
+sizes still emit a language label with no hint and **disagreed with each other on the
+same recording**, which argues for stating the language you know and against trusting
+the label you get back.
 
 ### N4. VibeVoice's `Speaker: "N/A"` is the absence of a label — verified, applied
 

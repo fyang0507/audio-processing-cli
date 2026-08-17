@@ -107,7 +107,17 @@ the second point in time contributes exactly one thing: provenance carries an
 
 Planning is answered in two steps. Given only a stack, it returns that stack's
 capability catalog — what is native, what an add-on would supply, what is
-impossible — with no input file, since that is a static property. Given a stack
+impossible — with no input file, since that is a static property. Because step one is
+the only place a caller can decide step two, the catalog carries the context that
+decision needs and not just the `availability` enum: the stack's `determinism` and
+measured resource envelope, whether it accepts a language input, an `add_on_cost` per
+capability that requires one (packages, environment, external tools, measured stage
+time and memory), a `shares_stage_with` list where several capabilities come from one
+add-on run, and a `timing_precision` block where a capability is native but its
+accuracy is unmeasured. An `availability` value alone cannot distinguish a free add-on
+from one that pulls a second runtime, nor tell a caller whether native is good enough.
+
+Given a stack
 and requirements, it returns the resolved plan plus a `sample_output` block built
 by serializing a placeholder result through the same serializer `run` uses. The
 sample is generated, never hand-written, so output shape stays a pure function of
@@ -138,6 +148,21 @@ recorded in provenance and is not a caller-facing knob; every backend declares
 `deterministic` alongside it, plus a `determinism_basis` that cites either a
 repeat-hash measurement or the decode configuration in the runner that produced
 the recorded figures. "By construction" without a citation is not a basis.
+
+`deterministic` is qualified by `determinism_tolerance_ms`, because one boolean cannot
+carry a measured near-miss. `0.0` claims byte-identical normalized output on repeat.
+FireRed declares `1.0`: its exact-repeat run reproduced text exactly and timestamps
+only to within a millisecond. Publish what a tolerance means for the caller rather than
+the number alone — 1 ms is a fraction of a video frame and irrelevant to subtitle cues,
+while being fatal to a `word_id` keyed on a start time.
+
+**language input** — a hint passed *to* an ASR, distinct from every language
+capability, which is an output. Keep the two apart in naming: `--language` is an input
+that constrains a decode; `region_language`, `container_language`, and `token_language`
+are outputs that report one. A stack declares whether it accepts an input in its
+`language_input` block, and passing the flag where it is not accepted is an error
+rather than a silently ignored argument. This is the only caller-settable model input
+in v1.
 
 **abstention** — a recorded refusal to assert, carrying an interval and a
 reason. Abstentions must survive to the output.

@@ -25,7 +25,7 @@ as the simplest command. The deviation is deliberate.
 | --- | --- |
 | 0 | Success. |
 | 1 | Runtime or backend failure. Partial results are not written. Distinct from a principled abstention, which is a successful run. |
-| 2 | Request or validation error: missing stack, unknown capability, a capability the chosen stack cannot satisfy, a pin that conflicts with a requirement, absent word timing on export. |
+| 2 | Request or validation error: missing stack, unknown capability, a capability the chosen stack cannot satisfy, an option the stack does not accept, a pin that conflicts with a requirement, absent word timing on export. |
 | 3 | A required package is not provisioned. Only `run` can return this. |
 
 Every error payload carries `code` and `fix`. The remaining fields are fixed per
@@ -36,6 +36,7 @@ code, or missing one that is, is a defect:
 | --- | --- | --- |
 | `stack_required` | 2 | `field`, `allowed`, `stacks` (id → one-line characterization) |
 | `capability_unknown` | 2 | `field`, `provided`, `allowed` |
+| `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty) |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
 | `capability_not_requestable` | 2 | `capability`, `allowed` (empty), `alternatives` |
@@ -63,6 +64,22 @@ array, which is a stdout field of the plan document, not a stderr message.
 `run` defaults to `--format json` on stdout, matching the existing CLI's
 machine-readable convention. `--format md|txt` are for human consumption.
 
+`--language` is the one caller-settable model input, and it is a hint passed to the
+ASR rather than a capability. Only the Qwen stacks accept it; `vibevoice` advertises
+code switching without language selection, and FireRed's ASR takes no language
+argument at all — its language is an output of the optional LID stage, not an input.
+Each stack's `language_input` block in step one says which it is, and passing the flag
+to a stack that does not accept one is `option_unsupported_on_stack` rather than a
+silently ignored argument.
+
+Every recorded interview figure was produced with `--language Cantonese`, so exposing
+the flag is what makes those numbers reachable from the CLI at all; without it the
+measured configuration would be one no caller could ask for. Omitting the flag is a
+real second configuration, not a default: the model still emits a language label with
+no hint, and the two Qwen sizes disagreed with each other on the same recording when
+run that way, which is an argument for stating the language you know and against
+trusting the label you get back.
+
 ## Planning in two steps
 
 `plan` answers progressively, matching the order the interface enforces. Neither
@@ -76,6 +93,14 @@ any media exists.
 ```bash
 audio transcribe plan --stack firered
 ```
+
+Step one is not an availability lookup. It is the only place an agent can decide
+step two, so it has to carry the context that decision needs: what the stack
+already produces and how precisely, what each add-on would cost in packages, time,
+and memory, and what a recorded run showed about quality. An agent that only learns
+`requires_add_on` cannot tell a free add-on from one that pulls a second runtime, and
+an agent that only learns `native` cannot tell whether native is *good enough* for
+what it is building. Both are step-two decisions, so both belong here.
 
 The catalog uses its own axis, `availability`, because nothing has been requested
 yet and `satisfaction` is defined only for a requested capability:
@@ -91,30 +116,72 @@ yet and `satisfaction` is defined only for a requested capability:
   "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
              "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
              "adapter_normalization"],
+  "determinism": {
+    "deterministic": true,
+    "tolerance_ms": 1.0,
+    "basis": "exact-repeat 60-minute fixture: both halves' text sequences equal the standalone 30-minute run; maximum rebased timestamp drift 1.0 ms within a declared 2.0 ms tolerance",
+    "implication": "text is reproducible; a bound may move up to 1 ms between runs, which is far below a video frame at any frame rate and irrelevant to subtitle cues, but means byte-equality assertions and any word_id keyed on a start time are not stable across runs",
+    "record": "model_tests/benchmark/results/2026-08-12-evidence.json"
+  },
+  "language_input": {
+    "accepted": false,
+    "note": "the ASR takes no language argument; language is an output of the optional LID stage, not an input"
+  },
+  "measured_envelope": {
+    "reference_run": "spice-30min-participant",
+    "hardware": "apple-m4-max-64gib",
+    "config": "cpu, float32, lid off, asr and punc batch size 4",
+    "fixture_duration_seconds": 1800.0,
+    "end_to_end_seconds": 665.26,
+    "rtf_end_to_end": 0.3696,
+    "peak_rss_bytes": 9789620224,
+    "note": "the whole pipeline on one 30-minute channel; scale by RTF, and add the region_language cost below if that capability is requested",
+    "record": "model_tests/benchmark_runs/firered_lidoff_batch4_spice30m_participant.json"
+  },
   "capabilities": {
     "verbatim":            {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
                             "note": "retained 看哈 on the 27.8 s Sichuanese probe; two examples cannot rank varieties"},
     "word_bounds":         {"availability": "native",
-                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
+                            "evidence": {"interface": "verified", "quality": "unmeasured"},
+                            "timing_precision": {"repeat_drift_ms": 1.0, "boundary_mae_ms": null,
+                                                 "note": "monotonic in both the 30- and 60-minute runs; accuracy against hand-labelled boundaries is unmeasured, so an aligner is not obviously better here, only differently unmeasured"}},
     "speech_bounds":       {"availability": "native", "stage": "FireRedVAD",
-                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
+                            "evidence": {"interface": "verified", "quality": "unmeasured"},
+                            "alternative": {"add_on": ["silero-vad"], "note": "the add-on Silero path has a measured 0.8505 frame-level F1 on one fixture where FireRedVAD has none; --vad selects it"}},
     "segment_bounds":      {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "region_language":     {"availability": "native", "stage": "FireRedLID",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "cost": "~2x inference; additional weights, size unrecorded",
+                            "stage_cost": {"measured_added_seconds": 77.85,
+                                           "measured_on_fixture_seconds": 139.284,
+                                           "ratio": 1.92,
+                                           "download_bytes": null,
+                                           "note": "162.09 s with LID versus 84.24 s without, CPU float32 batch 4; weights fetched only when requested, size unrecorded"},
                             "granularity_note": "one label per VAD region, copied onto every sentence in that region; per-sentence variation would be fabricated"},
     "speaker_attribution": {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
+                            "add_on_cost": {"packages": ["fluidaudio", "speaker-diarization-coreml"],
+                                            "environment": "swift", "requires_tool": ["swift"],
+                                            "download_bytes": null,
+                                            "measured_stage_seconds": 14.74,
+                                            "measured_stage_on_fixture_seconds": 1800.0,
+                                            "measured_stage_peak_rss_bytes": 587481088,
+                                            "note": "122x real time; RSS excludes memory held by system Core ML services"},
                             "evidence": {"interface": "verified", "quality": "measured"},
                             "measured_limit": "3 of 75 annotated speaker changes matched on the 149.9 s CantoMap dense conversation",
                             "record": "model_tests/benchmark/DIARIZATION.md"},
     "turn_bounds":         {"availability": "requires_add_on", "add_on": ["fluidaudio"],
+                            "add_on_cost": {"packages": ["fluidaudio", "speaker-diarization-coreml"],
+                                            "environment": "swift", "requires_tool": ["swift"],
+                                            "shares_stage_with": ["speaker_attribution", "overlap_intervals"],
+                                            "note": "one diarizer run serves all three, so requesting them together costs the same stage once"},
                             "evidence": {"interface": "verified", "quality": "measured"},
                             "measured_limit": "95.42% participant-interval F1 on the 30-minute SpiCE mix, but 5.50% speaker-change F1 at a one-second tolerance on the CantoMap dense conversation; strong on long turns, weak on rapid change detection",
                             "record": "model_tests/benchmark/DIARIZATION.md"},
     "overlap_intervals":   {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
+                            "add_on_cost": {"shares_stage_with": ["speaker_attribution", "turn_bounds"]},
+                            "evidence": {"interface": "verified", "quality": "unmeasured"},
+                            "note": "without this, policy.overlap_detection is \"unavailable\" and an empty abstention ledger means undetected rather than absent"},
     "token_language":      {"availability": "impossible", "reason": "no_backend_declares"},
     "capture_role":        {"availability": "impossible", "reason": "not_implemented_v1"},
     "filler_candidates":       {"availability": "impossible", "reason": "not_implemented_v1"},
@@ -125,6 +192,32 @@ yet and `satisfaction` is defined only for a requested capability:
   "next": "audio transcribe plan INPUT --stack firered --want <capabilities>"
 }
 ```
+
+Four things in that document exist purely so step two can be decided without
+running anything.
+
+`determinism` tells an agent what its timing is worth. FireRed's 1.0 ms repeat drift
+is not a subtitle problem — one frame is 41.7 ms at 24 fps and 16.7 ms at 60 fps, so
+the drift is a fraction of a frame — and saying so is more useful than a bare
+tolerance number, because the same value *is* a problem for byte-equality assertions
+and for any word identity keyed on a start time. An agent that needs stable ids
+across runs learns here that it needs them from something other than a timestamp.
+
+`add_on_cost` is what distinguishes a cheap add-on from an expensive one.
+`speaker_attribution` needs a Swift toolchain, a second environment, and an
+unsized Core ML download; `speech_bounds` on a Qwen stack needs a hash-pinned file
+that fetches itself. Both read `requires_add_on` without it.
+
+`shares_stage_with` prevents the opposite error. `speaker_attribution`, `turn_bounds`,
+and `overlap_intervals` all come from one diarizer run, so requesting all three costs
+what requesting one costs. An agent budgeting per capability would triple-count.
+
+`timing_precision` and `alternative` are how an agent judges whether native is good
+enough. FireRed's native word timing has never been scored against hand-labelled
+boundaries and neither has the aligner, so adding the aligner buys a different
+unmeasured number rather than a better one — worth stating plainly, because
+"native" otherwise reads as "no reason to look further". `speech_bounds` is the
+inverse case: the add-on has a measured figure where the native stage has none.
 
 `provenance_only` is present in every plan and every catalog, and empty on every
 stack except Qwen: `container_bounds` and `container_language` record a processing
@@ -342,13 +435,11 @@ has no real `meeting.m4a` — and is deliberately *not* the `measured` block's
 `fixture_duration_seconds: 1800.0`, which describes the reference fixture, not this
 input.
 
-One gap the `measured` block now states rather than hides: every figure in it comes
-from a run that passed the language hint `"Cantonese"`, while the plan passes
-`language: null`. The MER figures in §1.5 therefore do not describe the no-hint
-path. Whether a language hint should be caller-settable is an open surface question,
-not a flag this document defines; the recorded capability probe passed no hint and
-both Qwen sizes still emitted a language label, disagreeing with each other on the
-same recording.
+One thing the `measured` block states rather than hides: every figure in it comes from
+a run that passed the language hint `"Cantonese"`, while this plan passes
+`language: null` because the command did not. The MER figures in §1.5 therefore
+describe the hinted path, and this request is not it. §1.5 shows the flag that closes
+that gap.
 
 ### 1.2 What `run` does with packages absent
 
@@ -463,14 +554,21 @@ without it this exits 3:
 ```bash
 audio packages pull --stack qwen-0.6b --want speaker_attribution
 audio transcribe run meeting.m4a --stack qwen-0.6b --want speaker_attribution \
-  --format md
+  --language Cantonese --format md
 ```
 
 Measured on the 30-minute Cantonese SpiCE fixture, Apple M4 Max / 64 GiB, batch 1
 with the MLX cache cleared after every batch: `qwen-0.6b` ran 29.90 s at 1.66 GiB RSS
 versus `qwen-1.7b` at 53.77 s and 3.02 GiB, and scored 52.64% mixed-token error
-versus 33.56%. Those are ASR-stage walls on identical diarized turns, both with the
-`"Cantonese"` language hint, and the accuracy comparison is Cantonese-only.
+versus 33.56%. Those are ASR-stage walls on identical diarized turns, and the accuracy
+comparison is Cantonese-only.
+
+`--language Cantonese` is on that command deliberately: it is the configuration those
+figures were measured under, and the flag exists so a caller who knows the language
+can state it instead of leaving the model to guess. The plan echoes it as
+`roles.asr.config.language`, so the executed provenance records which of the two
+configurations ran. Nothing else in the plan changes — a hint is an input to the ASR,
+not a capability, so it adds no role, no package, and no output field.
 
 `qwen-0.6b` is not simply a smaller `qwen-1.7b`. On the 139.284-second probe it
 rendered `刷啥子` where 1.7B retained `耍啥子`, so its `verbatim` catalog entry carries
@@ -832,6 +930,16 @@ Exit 2, `code: "capability_unknown"`, `field: "--want"`, `provided: "word_timing
 `allowed` listing the nine requestable names. A misspelling and an unsatisfiable
 requirement are different failures: this one has no `capability` field, because the
 name is not one.
+
+```bash
+audio transcribe plan demo.mp4 --stack vibevoice --want verbatim --language Cantonese
+```
+
+Exit 2, `code: "option_unsupported_on_stack"`, `field: "--language"`,
+`provided: "Cantonese"`, `allowed: []`, `stacks_accepting: ["qwen-1.7b", "qwen-0.6b"]`.
+VibeVoice takes no language argument, so the alternative to refusing is accepting a
+flag that does nothing — which would let a caller believe it had constrained a decode
+it had not touched.
 
 ```bash
 audio transcribe plan meeting.m4a --stack firered --want token_language

@@ -62,7 +62,13 @@ Keep three kinds of statement separate in code and documentation:
   no basis to judge. See [VOCABULARY.md](VOCABULARY.md) and
   [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md).
 - Make the plan answerable in two steps, and generate its sample output rather
-  than writing one. A stack alone returns that stack's capability catalog; a
+  than writing one. Step one is the only place a caller can decide step two, so its
+  catalog carries the context that decision needs, not just an `availability` enum:
+  the stack's determinism tolerance and measured resource envelope, whether it accepts
+  a language input, the packages/environment/tools/measured time and memory each
+  add-on costs, which capabilities share one add-on stage so a caller does not
+  triple-count a single diarizer run, and where a capability is native but its accuracy
+  is unmeasured. A stack alone returns that catalog; a
   stack plus requirements returns the resolved plan and a `sample_output` built by
   serializing a placeholder result through the same serializer `run` uses. Four
   stacks against nine requestable capabilities is roughly 2,048 combinations, so a
@@ -212,8 +218,16 @@ and experiment digest rather than the full findings file.
   composition in v1, because nothing cleans — it is an assertion the plan answers
   with evidence.
 - Every figure in the interview route's `measured` block comes from a run that passed
-  the language hint `"Cantonese"`. The no-hint path is unmeasured for accuracy, and
-  whether a hint should be caller-settable is an open surface question.
+  the language hint `"Cantonese"`, so `--language` is exposed on the Qwen stacks: the
+  measured configuration has to be one a caller can actually ask for. It is an input,
+  not a capability — no role, no package, no output field — and the stacks that take no
+  language argument refuse it rather than ignoring it. The no-hint path remains
+  unmeasured for accuracy.
+- FireRed reproduces text exactly but timestamps only to 1 ms, so
+  `determinism_tolerance_ms` is declared per backend and surfaced in step one. That
+  drift is a fraction of a video frame and irrelevant to subtitles; it is not
+  irrelevant to a `word_id` keyed on a start time, so the Observation Store's identity
+  scheme cannot key on one.
 
 ## Working commands
 
