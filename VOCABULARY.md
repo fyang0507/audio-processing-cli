@@ -108,9 +108,11 @@ companion is required:
 they imply, the backends filling those roles with revisions and configuration,
 the policy block, and the packages required. Computed before any model loads, so
 it also drives the provisioning check; emitted afterwards as Issue #1 §11.2
-provenance. Plan and provenance are the same object at two points in time, and
-the second point in time contributes exactly one thing: provenance carries an
-`outcome` per capability, a plan does not.
+provenance. Provenance embeds the executed plan verbatim and adds only what running it
+revealed: the `stack` that ran, an `outcomes` map saying what became of each requested
+capability, and an `observed` block of stage walls, peaks, and cardinalities. It does not
+restate the plan's `satisfaction`, `backend`, or `evidence` around each outcome — those are
+in the embedded plan, and repeating them is how two copies of one fact start to disagree.
 
 Planning is answered in two steps, and both require a stack and an input. Step one
 returns that stack's capability catalog — what is native, what an add-on would supply,

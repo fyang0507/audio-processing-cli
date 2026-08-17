@@ -43,15 +43,18 @@ as the simplest command. The deviation is deliberate.
 | 3 | A required package is not provisioned, or a provisioned one failed its integrity check. Only `run` can return these. |
 | 4 | Incomplete: some units were transcribed and some were not. A partial result **is** written, with a coverage ledger and a resume command. Only `run` can return this, and only on a stack whose work is partitioned. |
 
-Every error payload carries `code` and `fix`. The remaining fields are fixed per
-code, and this table is the contract — a payload with a field not listed for its
-code, or missing one that is, is a defect:
+Every error payload carries `code` and `fix`. **`fix` is a runnable command wherever a
+configuration exists that would work**, so a caller can copy one line and be right on the next
+attempt; where nothing would work it is a sentence saying so and naming the nearest available
+output. Emitting a plausible command that fails again is worse than admitting there is none.
+The remaining fields are fixed per code, and this table is the contract — a payload with a
+field not listed for its code, or missing one that is, is a defect:
 
 | Code | Exit | Fields beyond `code` and `fix` |
 | --- | --- | --- |
 | `stack_required` | 2 | `field`, `allowed`, `stacks` (id → one-line characterization) |
 | `input_required` | 2 | `field`, `note` |
-| `capability_unknown` | 2 | `field`, `provided`, `allowed` |
+| `capability_unknown` | 2 | `field`, `provided`, `allowed`, `did_you_mean` when a near name exists |
 | `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty) |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
@@ -381,7 +384,7 @@ Exits 0 whether or not anything is provisioned:
     "abstentions": [
       {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
     ],
-    "provenance": "<the full executed plan; elided in this printed example only>"
+    "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
 }
 ```
@@ -891,6 +894,9 @@ FireRed's native times and the aligner, so these files are producible but not ye
 claimed broadcast-acceptable.
 
 ## 5. Refusals
+
+Each of these is shown as a caller sees it, with the corrected command, in
+[TRANSCRIBE_HAPPY_PATH.md](TRANSCRIBE_HAPPY_PATH.md) §4.
 
 ```bash
 audio transcribe run --input meeting.m4a --want diarization

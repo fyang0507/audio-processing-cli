@@ -4,8 +4,9 @@
 the unabridged step-by-step an implementer can diff against and an agent can read as a
 worked example. [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is organized around
 *why* the surface looks like this and abridges output to whatever differs; this document
-does the opposite — it shows every command in order and the complete stdout of each, with
-no design commentary.
+does the opposite — it shows every command in order and the complete stdout of each, with no
+design commentary. §4 covers the refusals, because what an agent actually sees includes being
+told it was wrong, and a refusal that cannot be acted on is a worse outcome than a slow run.
 
 Three use cases, one per recommended stack row in
 [model_tests/DECISION_REPORT.md](model_tests/DECISION_REPORT.md):
@@ -256,7 +257,7 @@ audio transcribe plan --input meeting.m4a \
     "abstentions": [
       {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
     ],
-    "provenance": "<the full executed plan; elided in this printed example only>"
+    "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
 }
 ```
@@ -333,8 +334,7 @@ audio transcribe run --input meeting.m4a \
   --format json -o meeting.timed.json
 ```
 
-Exit 0. `meeting.timed.json`, with `provenance` shown collapsed here for length and
-otherwise byte-identical to the plan above plus one `outcome` per capability:
+Exit 0. `meeting.timed.json`:
 
 ```json
 {
@@ -373,14 +373,7 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
   ],
   "provenance": {
     "stack": "qwen-1.7b",
-    "capabilities": {
-      "diarization": {"satisfaction": "derived", "outcome": "produced",
-                              "backend": "fluidaudio",
-                              "evidence": {"interface": "verified", "quality": "measured"}},
-      "word_timestamps":         {"satisfaction": "derived", "outcome": "produced",
-                              "backend": "qwen3-forcedaligner",
-                              "evidence": {"interface": "verified", "quality": "unmeasured"}}
-    },
+    "outcomes": {"diarization": "produced", "word_timestamps": "produced"},
     "observed": {
       "stage_wall_seconds": {"decode": 3.91, "diarizer": 14.68,
                              "asr": 54.02, "aligner": 46.77},
@@ -392,11 +385,17 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
       "words": 13,
       "turns": 2,
       "abstentions": 2
-    },
-    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 1.2"
+    }
   }
 }
 ```
+
+`provenance` carries three things and embeds a fourth. `stack` names what ran, `outcomes`
+says what became of each requested capability, and `observed` records what the run actually
+cost. The fourth is `plan`: the executed plan verbatim, which these printouts omit because
+§1.2 already shows it in full — a result does not restate what the plan said, it appends
+what only running could tell you. The key-set test therefore compares against a real run,
+not against these trimmed prints.
 
 Note `peak_rss_bytes` is the **maximum** of the per-stage peaks, not their sum — that is
 what `execution.residency` buys, and the per-stage numbers are kept so the claim is
@@ -524,7 +523,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
       {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
     ],
     "abstentions": [],
-    "provenance": "<the full executed plan; elided in this printed example only>"
+    "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
 }
 ```
@@ -588,17 +587,7 @@ Exit 0. `demo.transcript.json`:
   "abstentions": [],
   "provenance": {
     "stack": "vibevoice",
-    "capabilities": {
-      "verbatim":            {"satisfaction": "native", "outcome": "produced",
-                              "evidence": {"interface": "verified", "quality": "refuted"}},
-      "diarization": {"satisfaction": "native", "outcome": "produced",
-                              "evidence": {"interface": "verified", "quality": "measured"}},
-      "segment_timestamps":      {"satisfaction": "native", "outcome": "produced",
-                              "evidence": {"interface": "verified", "quality": "unmeasured"}},
-      "word_timestamps":         {"satisfaction": "derived", "outcome": "produced",
-                              "backend": "qwen3-forcedaligner",
-                              "evidence": {"interface": "verified", "quality": "unmeasured"}}
-    },
+    "outcomes": {"verbatim": "produced", "diarization": "produced", "segment_timestamps": "produced", "word_timestamps": "produced"},
     "observed": {
       "stage_wall_seconds": {"decode": 0.44, "asr": 53.16, "aligner": 3.72},
       "total_wall_seconds": 57.32,
@@ -609,8 +598,7 @@ Exit 0. `demo.transcript.json`:
       "turns": 2,
       "segments_without_words": 1,
       "abstentions": 0
-    },
-    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 2.1"
+    }
   }
 }
 ```
@@ -733,7 +721,7 @@ audio transcribe plan --input field.wav --stack firered \
     "vad_regions": [{"start": null, "end": null}],
     "lid_regions": [{"start": null, "end": null, "language": null, "confidence": null}],
     "abstentions": [],
-    "provenance": "<the full executed plan; elided in this printed example only>"
+    "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
 }
 ```
@@ -787,18 +775,7 @@ Exit 0. `field.transcript.json`:
   "abstentions": [],
   "provenance": {
     "stack": "firered",
-    "capabilities": {
-      "verbatim":        {"satisfaction": "native", "outcome": "produced",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"}},
-      "word_timestamps":     {"satisfaction": "native", "outcome": "produced",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"}},
-      "vad":   {"satisfaction": "native", "outcome": "produced",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"}},
-      "segment_timestamps":  {"satisfaction": "native", "outcome": "produced",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"}},
-      "lid": {"satisfaction": "native", "outcome": "produced",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"}}
-    },
+    "outcomes": {"verbatim": "produced", "word_timestamps": "produced", "vad": "produced", "segment_timestamps": "produced", "lid": "produced"},
     "observed": {
       "stage_wall_seconds": {"decode": 0.09, "vad": 0.61, "lid": 8.83, "asr": 9.14,
                              "punctuator": 1.07},
@@ -813,8 +790,7 @@ Exit 0. `field.transcript.json`:
       "abstentions": 0,
       "punctuation_invariant_checked": true,
       "punctuation_invariant_note": "each segment's text, stripped of punctuation and whitespace, equalled the case-insensitive concatenation of its word texts"
-    },
-    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 3.1"
+    }
   }
 }
 ```
@@ -849,7 +825,190 @@ two orders of magnitude below the 41.7 ms of a single frame at 24 fps, so it doe
 affect cue placement. What is still unvalidated is accuracy, not stability: boundary
 MAE/P95 is unmeasured here exactly as it is for the aligner.
 
-## 4. Teardown
+## 4. Paths that correct themselves
+
+Every refusal carries a `fix`, and `fix` is a runnable command wherever a configuration
+exists that would work. That is the point: an agent that misconfigures a request should be
+able to copy one line and be right on the next attempt, without reading this document. The
+seven request errors below are the ones where self-correction is the whole story; the
+remaining five are in [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) §5 and summarised at
+the end.
+
+### 4.1 No stack
+
+```bash
+audio transcribe plan --input meeting.m4a --want diarization
+```
+
+Exit 2:
+
+```json
+{
+  "code": "stack_required",
+  "field": "--stack",
+  "allowed": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"],
+  "stacks": {
+    "qwen-1.7b": "fast transcript, no native timing or speakers; the interview default",
+    "qwen-0.6b": "same shape, smaller and faster, measurably worse text",
+    "vibevoice": "native speakers and segment bounds, highest memory, cannot resume a failed run",
+    "firered": "native word timing, speech regions and region language; no speakers"
+  },
+  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want diarization"
+}
+```
+
+The `fix` names one stack rather than listing four again, because a fix a caller has to
+choose between is not a fix. `stacks` is there so the choice can be revisited deliberately,
+and the one-liners say what each stack costs as well as what it gives — including that
+`vibevoice` cannot resume, which is the kind of thing nobody discovers until a long run dies.
+
+### 4.2 No input
+
+```bash
+audio transcribe plan --stack qwen-1.7b --want diarization
+```
+
+Exit 2:
+
+```json
+{
+  "code": "input_required",
+  "field": "--input",
+  "note": "a stack alone cannot be planned: how the audio is partitioned, how many units that is, what the run will cost, and whether a failure leaves anything usable are all properties of this file",
+  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want diarization"
+}
+```
+
+### 4.3 A capability name that does not exist
+
+```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timing
+```
+
+Exit 2:
+
+```json
+{
+  "code": "capability_unknown",
+  "field": "--want",
+  "provided": "word_timing",
+  "did_you_mean": "word_timestamps",
+  "allowed": ["languages", "verbatim", "diarization", "overlapped_speech", "vad",
+              "word_timestamps", "segment_timestamps", "lid", "token_lid"],
+  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timestamps"
+}
+```
+
+`did_you_mean` is the difference between an error an agent can act on and one it has to
+research. A misspelling is the most likely request error by far, and the eight names are
+close enough to each other that a caller reaching for the wrong one is not being careless.
+
+### 4.4 A real capability this stack cannot satisfy
+
+```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want segment_timestamps
+```
+
+Exit 2:
+
+```json
+{
+  "code": "capability_unsatisfiable_on_stack",
+  "capability": "segment_timestamps",
+  "allowed": ["vibevoice", "firered"],
+  "fix": "audio transcribe plan --input meeting.m4a --stack firered --want segment_timestamps"
+}
+```
+
+Distinct from 4.3: the name is real, so `did_you_mean` would be wrong and misleading. The
+correction is a different stack, and `fix` picks the one whose other properties are closest
+to what was asked for rather than the first in the list.
+
+### 4.5 A capability nothing provides
+
+```bash
+audio transcribe plan --input meeting.m4a --stack firered --want token_lid
+```
+
+Exit 2:
+
+```json
+{
+  "code": "capability_unsupported",
+  "capability": "token_lid",
+  "allowed": [],
+  "reason": "no_backend_declares",
+  "fix": "no stack or add-on satisfies this; code-switching support does not imply per-token language labels, and the nearest available output is lid, which labels a whole speech region"
+}
+```
+
+This is the one case where `fix` is a sentence rather than a command, because there is no
+command. Emitting a plausible-looking one would be worse than admitting it: an agent that
+retries a suggested fix and fails again learns nothing, while an agent told "nothing does
+this, here is the nearest thing that does" can decide whether region-level labels are enough.
+
+### 4.6 An option this stack does not take
+
+```bash
+audio transcribe plan --input demo.mp4 --stack vibevoice --want verbatim --language Cantonese
+```
+
+Exit 2:
+
+```json
+{
+  "code": "option_unsupported_on_stack",
+  "field": "--language",
+  "provided": "Cantonese",
+  "allowed": [],
+  "stacks_accepting": ["qwen-1.7b", "qwen-0.6b"],
+  "fix": "audio transcribe plan --input demo.mp4 --stack vibevoice --want verbatim"
+}
+```
+
+The `fix` drops the flag rather than switching stacks, because the stack was the deliberate
+choice and the flag was the accident. `stacks_accepting` is there for the caller who meant
+the opposite. Accepting the flag silently would be the real failure: a caller would believe
+it had constrained a decode it never touched.
+
+### 4.7 A pin the plan has no role for
+
+```bash
+audio transcribe plan --input demo.mp4 --stack vibevoice --want diarization --diarizer fluidaudio
+```
+
+Exit 2:
+
+```json
+{
+  "code": "pin_conflicts_with_native_capability",
+  "field": "--diarizer",
+  "provided": "fluidaudio",
+  "allowed": [],
+  "capability": "diarization",
+  "fix": "audio transcribe plan --input demo.mp4 --stack vibevoice --want diarization"
+}
+```
+
+`vibevoice` satisfies `diarization` natively, so this plan contains no diarizer role for a
+pin to select among. Pins choose between implementations of a role that exists.
+
+### 4.8 The rest
+
+| Code | Exit | Trigger | What `fix` says |
+| --- | --- | --- | --- |
+| `packages_not_provisioned` | 3 | `run` before `pull` | The exact `audio packages pull` line for this stack and want set |
+| `package_integrity_failed` | 3 | a digest, size, or revision mismatch on something already provisioned | `audio packages pull --repair <package>` |
+| `timing_required_for_format` | 2 | `export --format srt` on a transcript with no word timing | The `transcribe run` line that would produce timing, with `word_timestamps` added |
+| `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing |
+| `backend_failed` | 1 | a crash, most often out of memory | A suggestion — a smaller stack, or freeing memory — and it is a suggestion, not a guarantee |
+
+The last row is the honest exception. Everything above it has a correction the tool can
+compute; a crash does not, so `fix` proposes rather than instructs, and the payload says
+which `role` and `backend` failed so a caller can tell a memory ceiling from a missing
+toolchain.
+
+## 5. Teardown
 
 ```bash
 audio packages list
