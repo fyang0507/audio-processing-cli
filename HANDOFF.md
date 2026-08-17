@@ -21,8 +21,14 @@ stack and states requirements, plus its associated agent skill.
   stack, role, backend, add-on, package, environment, capability, satisfaction,
   availability, evidence, plan, policy, and the floors that are never optional.
   It also records which words were retired so they do not drift back in.
-- [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is the command sequence that
-  contract must produce, end to end for all four stack ids including teardown.
+- [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is the command surface that contract
+  must produce, end to end for all four stack ids including teardown, and
+  [TRANSCRIBE_HAPPY_PATH.md](TRANSCRIBE_HAPPY_PATH.md) is the unabridged expected output per
+  use case plus all twelve refusals. Both are signed off; none of it is built.
+- [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is where the next phase starts:
+  what is decided, what is open design work, the risks worst-first, and a suggested build
+  order. Read it before designing anything under `src/`.
+- `tests/test_spec_docs.py` holds the spec documents' invariants and runs in the normal suite.
 
 ## Read this first
 
