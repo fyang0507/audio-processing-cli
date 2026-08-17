@@ -105,20 +105,26 @@ provenance. Plan and provenance are the same object at two points in time, and
 the second point in time contributes exactly one thing: provenance carries an
 `outcome` per capability, a plan does not.
 
-Planning is answered in two steps. Given only a stack, it returns that stack's
-capability catalog — what is native, what an add-on would supply, what is
-impossible — with no input file, since that is a static property. Because step one is
-the only place a caller can decide step two, the catalog carries the context that
-decision needs and not just the `availability` enum: the stack's `determinism` and
-measured resource envelope, whether it accepts a language input, an `add_on_cost` per
-capability that requires one (packages, environment, external tools, measured stage
-time and memory), a `shares_stage_with` list where several capabilities come from one
-add-on run, and a `timing_precision` block where a capability is native but its
-accuracy is unmeasured. An `availability` value alone cannot distinguish a free add-on
-from one that pulls a second runtime, nor tell a caller whether native is good enough.
+Planning is answered in two steps, and both require a stack and an input. Step one
+returns that stack's capability catalog — what is native, what an add-on would supply,
+what is impossible — together with what this particular file implies: how it will be
+partitioned, how many units that is, what the run will cost, and whether a failure leaves
+anything usable. Because step one is the only place a caller can decide step two, the
+catalog carries the context that decision needs and not just the `availability` enum:
+`cost` at stack and add-on scope in one shape so the pieces can be summed,
+`shares_stage_with` where several capabilities come from one add-on run, `timing_precision`
+where a capability is native but its accuracy is unmeasured, `failure_recovery`, and
+`language_input`. An `availability` value alone cannot distinguish a free add-on from one
+that pulls a second runtime, nor tell a caller whether native is good enough.
 
-Given a stack
-and requirements, it returns the resolved plan plus a `sample_output` block built
+The converse rule matters as much: a payload carries what a caller can act on, and nothing
+else. Justification belongs in this document and evidence forensics belong behind a
+`record` pointer. Anything constant for a `catalog_version` — the floors, for instance — is
+not printed, because a caller can neither opt in nor out of it and a version number already
+implies it.
+
+Step two takes a stack, an input, and requirements, and returns the resolved plan plus a
+`sample_output` block built
 by serializing a placeholder result through the same serializer `run` uses. The
 sample is generated, never hand-written, so output shape stays a pure function of
 the resolved capability set and no combination needs enumerating. It guarantees
@@ -141,20 +147,23 @@ carries no rendering field. In v1 the capability's absence does not mean clean,
 because nothing cleans; it means the plan was not asked to answer for text
 fidelity.
 
-A backend whose inference is not deterministic runs at a fixed internal seed so
-repeated runs agree and a downstream `word_id` stays stable. VibeVoice needs
-this because its acoustic tokenizer samples a Gaussian latent. The seed is
-recorded in provenance and is not a caller-facing knob; every backend declares
-`deterministic` alongside it, plus a `determinism_basis` that cites either a
-repeat-hash measurement or the decode configuration in the runner that produced
-the recorded figures. "By construction" without a citation is not a basis.
+A backend whose inference is not deterministic runs at a fixed internal seed so a run is
+reproducible at all. VibeVoice needs this because its acoustic tokenizer samples a
+Gaussian latent. The seed is recorded in provenance and is not a caller-facing knob; each
+backend declares `deterministic`, a `determinism_tolerance_ms`, and a
+`determinism_basis` that cites either a repeat-hash measurement or the decode
+configuration in the runner that produced the recorded figures. "By construction" without
+a citation is not a basis. The tolerance exists because one boolean cannot carry a
+measured near-miss: `0.0` claims byte-identical normalized output on repeat, while FireRed
+declares `1.0` because its exact-repeat run reproduced text exactly and timestamps only to
+within a millisecond.
 
-`deterministic` is qualified by `determinism_tolerance_ms`, because one boolean cannot
-carry a measured near-miss. `0.0` claims byte-identical normalized output on repeat.
-FireRed declares `1.0`: its exact-repeat run reproduced text exactly and timestamps
-only to within a millisecond. Publish what a tolerance means for the caller rather than
-the number alone — 1 ms is a fraction of a video frame and irrelevant to subtitle cues,
-while being fatal to a `word_id` keyed on a start time.
+All of that is **provenance, not a decision input**, and it lives in the executed plan's
+`roles` rather than in the step-one catalog. Its only consumer is an auditor asking whether
+two artifacts should be byte-comparable. It is specifically *not* the answer to "do I need
+an aligner for accurate timing" — that is `timing_precision`, which reports boundary error
+against labels, and reproducibility is not accuracy. Conflating the two is easy and was
+done here once.
 
 **language input** — a hint passed *to* an ASR, distinct from every language
 capability, which is an output. Keep the two apart in naming: `--language` is an input
@@ -205,8 +214,12 @@ reason. Abstentions must survive to the output.
 
 ## Floors
 
-Floors are not capabilities. A caller never opts into them and never opts out,
-and a backend that cannot meet one is not a conforming backend:
+Floors are not capabilities. A caller never opts into them and never opts out, and a
+backend that cannot meet one is not a conforming backend. They are therefore **not printed
+in any payload**: they are constant for a schema version, a caller cannot act on them, and
+an array of six invariant names in every plan is decoration. They live here, and in the
+test suite as assertions. That is also the point of keeping them distinct from `policy` —
+encoding an invariant as a field makes it look like a setting.
 
 - **Punctuated, sentence-segmented text.** Nothing downstream wants raw text —
   not a reader, not an LLM, not a cue splitter that needs sentence boundaries.
@@ -280,21 +293,20 @@ can be refused as a timing or routing source. They are never requestable:
 | `container_bounds` | Records the processing container a stack used. | Not time evidence. Never promotable to any other `*_bounds`. |
 | `container_language` | Records a stack's single language label. | No output artifact needs it. On one Mandarin-majority clip `qwen-1.7b` reported English and `qwen-0.6b` reported Chinese, so it is not a routing oracle. It is read off the model's own output scaffold, not a separate detector. |
 
-Declared in the namespace but not implemented in v1:
+Not in the namespace at all, and deliberately not reserved in it: capture role, and
+filler / repetition / false-start annotation. They are future work — capture role needs
+the dedicated-channel merge and non-oracle role mapping, which are unmeasured, and
+annotation needs a `DisfluencyAnnotator` role that belongs to `analyze` rather than
+`transcribe`. Naming them in the catalog as `impossible` would advertise a surface that
+does not exist, so requesting one is simply `capability_unknown`: the name is not a
+capability yet. When they arrive they enter the namespace with the rest.
 
-| Capability | Blocked on |
-| --- | --- |
-| `capture_role` | The dedicated-channel merge and non-oracle role mapping are unmeasured. Never inferred; only capture metadata may establish it. |
-| `filler_candidates`, `repetition_candidates`, `false_start_candidates` | Need a `DisfluencyAnnotator` role. `verbatim` preserves fillers in text without annotating them. Belongs to `analyze`/`inspect`. |
+`token_language` is the one exception, and it earns it: code-switching support invites the
+assumption that per-token labels come with it, so the name exists purely to refuse loudly
+with `no_backend_declares` instead of letting the assumption stand.
 
-Requesting any of these fails with exit 2 `capability_unsupported`, `allowed: []`,
-`reason: "not_implemented_v1"`. Step one's catalog reports them
-`availability: impossible` with the same reason, so their status is discoverable
-without a failed command.
-
-Speaker identity and semantic role are not capabilities at all. They stay
-external to ASR unless capture metadata establishes them, in which case they
-appear as `capture_role`.
+Speaker identity and semantic role are not capabilities either. They stay external to ASR
+unless capture metadata establishes them.
 
 ## Resolution
 
@@ -336,7 +348,6 @@ render them alike.
 | `region_language` | exit 2: unsatisfiable_on_stack | exit 2: unsatisfiable_on_stack | native (FireRedLID stage) |
 | `token_language` | exit 2: unsupported | exit 2: unsupported | exit 2: unsupported |
 | `container_bounds`, `container_language` | exit 2: not_requestable | exit 2: not_requestable | exit 2: not_requestable |
-| `capture_role`, `*_candidates` | exit 2: unsupported | exit 2: unsupported | exit 2: unsupported |
 
 Four cell forms, and a test parametrized over this table must accept exactly these:
 `native`; `native (<stage>)`; `+ <package>` or `+ <package> + <role>`; and
@@ -348,7 +359,7 @@ it.
 
 The three refusal codes: `unsatisfiable_on_stack` carries a non-empty `allowed`, so
 the fix is to switch stacks; `unsupported` carries `allowed: []` and a reason —
-`no_backend_declares` for `token_language`, `not_implemented_v1` for the rest;
+`no_backend_declares`, which today is `token_language` alone;
 `not_requestable` carries `allowed: []` and an `alternatives` list, because the
 provenance-only pair is present in the output and merely cannot be asked for.
 

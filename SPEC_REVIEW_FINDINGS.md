@@ -208,7 +208,12 @@ lookup. Four additions, each answering a question `availability` alone cannot:
   one. `speech_bounds` is the inverse: the Silero add-on has a measured 0.8505 F1 where
   the native FireRedVAD stage has none.
 
-Also added: `measured_envelope` per stack (FireRed's whole pipeline ran 665.26 s at
+Superseded in shape on the same day: `measured_envelope` and `add_on_cost` were folded into
+one `cost` object used at stack, add-on, and stage scope, and the `floors` array and
+`determinism` block were dropped from the payload entirely — a caller can act on neither.
+The substance below stands; the field names are historical.
+
+Also added: a per-stack resource envelope (FireRed's whole pipeline ran 665.26 s at
 RTF 0.3696 and 9.12 GiB peak RSS on the 30-minute channel) and `language_input`, so
 resource and input questions are answerable before provisioning anything.
 

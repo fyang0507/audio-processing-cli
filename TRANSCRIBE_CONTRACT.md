@@ -141,11 +141,7 @@ yet and `satisfaction` is defined only for a requested capability:
     "unit_rule": "FireRedVAD segments the audio and every later stage runs per region, batched four at a time",
     "unit_count": null,
     "unit_count_known_at_plan_time": false,
-    "unit_count_note": "the count is a function of the audio's speech activity, which requires running the VAD; a recorded 30-minute channel produced 55 regions and 571 sentences",
-    "projected_wall_seconds": 10.3,
-    "projection_basis": "27.8 s at the measured end-to-end RTF of 0.3696, LID off",
-    "projected_peak_bytes": 9789620224,
-    "projection_note": "peak is dominated by model weights, not duration, so it does not scale down with a shorter input"
+    "unit_count_note": "the count is a function of the audio's speech activity, which requires running the VAD; a recorded 30-minute channel produced 55 regions and 571 sentences"
   },
   "failure_recovery": {
     "partial_results": "per_unit",
@@ -153,85 +149,74 @@ yet and `satisfaction` is defined only for a requested capability:
     "resume_mechanism": "--range",
     "note": "regions are independent, so a failure part-way leaves the completed regions usable and the remainder addressable by time range"
   },
-  "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
-             "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
-             "adapter_normalization"],
-  "determinism": {
-    "deterministic": true,
-    "tolerance_ms": 1.0,
-    "basis": "exact-repeat 60-minute fixture: both halves' text sequences equal the standalone 30-minute run; maximum rebased timestamp drift 1.0 ms within a declared 2.0 ms tolerance",
-    "implication": "text is reproducible; a bound may move up to 1 ms between runs, which is far below a video frame at any frame rate and irrelevant to subtitle cues, but means byte-equality assertions and any word_id keyed on a start time are not stable across runs",
-    "record": "model_tests/benchmark/results/2026-08-12-evidence.json"
-  },
   "language_input": {
     "accepted": false,
     "note": "the ASR takes no language argument; language is an output of the optional LID stage, not an input"
   },
-  "measured_envelope": {
-    "reference_run": "spice-30min-participant",
-    "hardware": "apple-m4-max-64gib",
+  "cost": {
+    "scope": "stack_base",
+    "measured_seconds": 665.26,
+    "measured_on_seconds": 1800.0,
+    "rtf": 0.3696,
+    "peak_bytes": 9789620224,
+    "projected_seconds": 10.3,
+    "projected_peak_bytes": 9789620224,
+    "projection_note": "27.8 s at the measured RTF; peak is dominated by model weights, not duration, so it does not scale down with a shorter input",
     "config": "cpu, float32, lid off, asr and punc batch size 4",
-    "fixture_duration_seconds": 1800.0,
-    "end_to_end_seconds": 665.26,
-    "rtf_end_to_end": 0.3696,
-    "peak_rss_bytes": 9789620224,
-    "note": "the whole pipeline on one 30-minute channel; scale by RTF, and add the region_language cost below if that capability is requested",
+    "hardware": "apple-m4-max-64gib",
+    "note": "measured with LID off; add the region_language cost below if that capability is requested",
     "record": "model_tests/benchmark_runs/firered_lidoff_batch4_spice30m_participant.json"
   },
   "capabilities": {
     "verbatim":            {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "interface_basis": "emits disfluencies rather than cleaning them: 24 filler hits on the 139.284 s probe, against 26 to 28 for the other stacks",
-                            "note": "retained 看哈 on the 27.8 s Sichuanese probe and 耍啥子 on the 139.284 s probe; two lexemes cannot rank varieties, and no filler recall figure exists for any stack",
+                            "note": "does not clean disfluencies, and retained the dialect forms on both probed clips; filler recall unmeasured, and two lexemes cannot rank varieties",
                             "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
     "word_bounds":         {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "timing_precision": {"repeat_drift_ms": 1.0, "boundary_mae_ms": null,
-                                                 "note": "monotonic in both the 30- and 60-minute runs; accuracy against hand-labelled boundaries is unmeasured, so an aligner is not obviously better here, only differently unmeasured"}},
+                            "timing_precision": {"boundary_mae_ms": null,
+                                                 "note": "monotonic on the 30- and 60-minute runs, but never scored against hand-labelled boundaries; the aligner is equally unscored, so adding it would trade one unmeasured number for another"}},
     "speech_bounds":       {"availability": "native", "stage": "FireRedVAD",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "alternative": {"add_on": ["silero-vad"], "note": "the add-on Silero path has a measured 0.8505 frame-level F1 on one fixture where FireRedVAD has none; --vad selects it"}},
+                            "alternative": {"add_on": ["silero-vad"], "note": "the Silero path has a measured 0.8505 frame-level F1 where this stage has none; --vad selects it"}},
     "segment_bounds":      {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "region_language":     {"availability": "native", "stage": "FireRedLID",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "stage_cost": {"measured_added_seconds": 77.85,
-                                           "measured_on_fixture_seconds": 139.284,
-                                           "ratio": 1.92,
-                                           "download_bytes": null,
-                                           "note": "162.09 s with LID versus 84.24 s without, CPU float32 batch 4; weights fetched only when requested, size unrecorded"},
+                            "cost": {"scope": "stage", "download_bytes": null,
+                                     "measured_added_seconds": 77.85,
+                                     "measured_on_seconds": 139.284,
+                                     "ratio": 1.92,
+                                     "projected_added_seconds": 15.5,
+                                     "note": "162.09 s with LID versus 84.24 s without, CPU float32 batch 4; weights fetched only when requested, size unrecorded"},
                             "granularity_note": "one label per VAD region, copied onto every sentence in that region; per-sentence variation would be fabricated"},
     "speaker_attribution": {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
-                            "add_on_cost": {"packages": ["fluidaudio", "speaker-diarization-coreml"],
-                                            "environment": "swift", "requires_tool": ["swift"],
-                                            "download_bytes": null,
-                                            "measured_stage_seconds": 14.74,
-                                            "measured_stage_on_fixture_seconds": 1800.0,
-                                            "measured_stage_peak_rss_bytes": 587481088,
-                                            "note": "122x real time; RSS excludes memory held by system Core ML services"},
+                            "cost": {"scope": "add_on",
+                                     "packages": ["fluidaudio", "speaker-diarization-coreml"],
+                                     "environment": "swift", "requires_tool": ["swift"],
+                                     "download_bytes": null,
+                                     "measured_seconds": 14.74, "measured_on_seconds": 1800.0,
+                                     "rtf": 0.0082, "peak_bytes": 587481088,
+                                     "projected_seconds": 0.2,
+                                     "note": "RSS excludes memory held by system Core ML services"},
                             "evidence": {"interface": "verified", "quality": "measured"},
-                            "measured_limit": "3 of 75 annotated speaker changes matched on the 149.9 s CantoMap dense conversation",
+                            "measured_limit": "matched 3 of 75 annotated speaker changes on a dense two-speaker conversation; unsuitable where turns are short or overlapping",
                             "record": "model_tests/benchmark/DIARIZATION.md"},
     "turn_bounds":         {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                            "add_on_cost": {"packages": ["fluidaudio", "speaker-diarization-coreml"],
-                                            "environment": "swift", "requires_tool": ["swift"],
-                                            "shares_stage_with": ["speaker_attribution", "overlap_intervals"],
-                                            "note": "one diarizer run serves all three, so requesting them together costs the same stage once"},
+                            "cost": {"scope": "add_on",
+                                     "shares_stage_with": ["speaker_attribution", "overlap_intervals"]},
                             "evidence": {"interface": "verified", "quality": "measured"},
-                            "measured_limit": "95.42% participant-interval F1 on the 30-minute SpiCE mix, but 5.50% speaker-change F1 at a one-second tolerance on the CantoMap dense conversation; strong on long turns, weak on rapid change detection",
+                            "measured_limit": "95.42% participant-interval F1 on a 30-minute interview but 5.50% speaker-change F1 on a dense conversation; strong on long turns, weak on rapid change",
                             "record": "model_tests/benchmark/DIARIZATION.md"},
     "overlap_intervals":   {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                            "add_on_cost": {"shares_stage_with": ["speaker_attribution", "turn_bounds"]},
+                            "cost": {"scope": "add_on",
+                                     "shares_stage_with": ["speaker_attribution", "turn_bounds"]},
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
                             "note": "without this, policy.overlap_detection is \"unavailable\" and an empty abstention ledger means undetected rather than absent"},
-    "token_language":      {"availability": "impossible", "reason": "no_backend_declares"},
-    "capture_role":        {"availability": "impossible", "reason": "not_implemented_v1"},
-    "filler_candidates":       {"availability": "impossible", "reason": "not_implemented_v1"},
-    "repetition_candidates":   {"availability": "impossible", "reason": "not_implemented_v1"},
-    "false_start_candidates":  {"availability": "impossible", "reason": "not_implemented_v1"}
+    "token_language":      {"availability": "impossible", "reason": "no_backend_declares"}
   },
   "provenance_only": {},
-  "next": "audio transcribe plan INPUT --stack firered --want <capabilities>"
+  "next": "audio transcribe plan --input field.wav --stack firered --want <capabilities>"
 }
 ```
 
@@ -248,31 +233,35 @@ file. It is `per_unit` here and on Qwen; it is **`none` on `vibevoice`**, which 
 whole media in a single `generate` call, so there is no partition to salvage and a failure
 at minute forty of a forty-one-minute run yields nothing. See §5.1.
 
-Four more things in that document exist purely so step two can be decided without
-running anything.
+Everything in that document is there because a caller acts on it. The test applied to
+every field was whether it changes what the agent does next; anything that only justified
+a design decision was moved to this document or to the research record, and anything
+constant for a `catalog_version` was dropped. That is why there is no `floors` array in the
+payload — a caller can neither opt in nor out, and the six invariants are fixed for a
+schema version, so printing them is decoration — and no `determinism` block, which answers
+a question about re-running that this CLI gives no way to ask.
 
-`determinism` tells an agent what its timing is worth. FireRed's 1.0 ms repeat drift
-is not a subtitle problem — one frame is 41.7 ms at 24 fps and 16.7 ms at 60 fps, so
-the drift is a fraction of a frame — and saying so is more useful than a bare
-tolerance number, because the same value *is* a problem for byte-equality assertions
-and for any word identity keyed on a start time. An agent that needs stable ids
-across runs learns here that it needs them from something other than a timestamp.
+`cost` is one shape at three scopes: `stack_base` once, `add_on` per capability that needs
+one, and `stage` for a stage the stack already contains. Same keys throughout, so an agent
+adds the base to the additions it wants and gets a total. `projected_seconds` is the
+measured RTF applied to *this* input, so nobody re-derives it. Before this, the same
+information appeared under four different shapes and could not be summed.
 
-`add_on_cost` is what distinguishes a cheap add-on from an expensive one.
-`speaker_attribution` needs a Swift toolchain, a second environment, and an
-unsized Core ML download; `speech_bounds` on a Qwen stack needs a hash-pinned file
-that fetches itself. Both read `requires_add_on` without it.
+`shares_stage_with` stops the opposite error. `speaker_attribution`, `turn_bounds`, and
+`overlap_intervals` all come from one diarizer run, so asking for three costs what asking
+for one costs; a caller budgeting per capability would triple-count.
 
-`shares_stage_with` prevents the opposite error. `speaker_attribution`, `turn_bounds`,
-and `overlap_intervals` all come from one diarizer run, so requesting all three costs
-what requesting one costs. An agent budgeting per capability would triple-count.
+`timing_precision` and `alternative` are how a caller judges whether native is good enough,
+and the honest answer here is uncomfortable: FireRed's native word timing has never been
+scored against hand-labelled boundaries and neither has the aligner, so switching for
+timing accuracy trades one unmeasured number for another. Saying that is the point —
+`native` otherwise reads as "no reason to look further". `speech_bounds` is the inverse: the
+add-on has a measured figure where the native stage has none.
 
-`timing_precision` and `alternative` are how an agent judges whether native is good
-enough. FireRed's native word timing has never been scored against hand-labelled
-boundaries and neither has the aligner, so adding the aligner buys a different
-unmeasured number rather than a better one — worth stating plainly, because
-"native" otherwise reads as "no reason to look further". `speech_bounds` is the
-inverse case: the add-on has a measured figure where the native stage has none.
+The measured limits are stated as consequences rather than as forensics. "Matched 3 of 75
+annotated speaker changes on a dense two-speaker conversation; unsuitable where turns are
+short or overlapping" is actionable; naming the fixture and the collar is not, and lives
+behind `record` for anyone who wants to audit it.
 
 `provenance_only` is present in every plan and every catalog, and empty on every
 stack except Qwen: `container_bounds` and `container_language` record a processing
@@ -404,9 +393,6 @@ Exits 0 whether or not anything is provisioned:
                    "config": {"partition": "sample_exact"},
                    "selected_by": "add_on_required_by:speaker_attribution"}
   },
-  "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
-             "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
-             "adapter_normalization"],
   "execution": {
     "stage_order": ["decode", "diarizer", "reconciler", "asr"],
     "residency": "one_model_stage_at_a_time",
@@ -707,9 +693,6 @@ processing container to record.
                 "config": {"scope": "all_segments"},
                 "selected_by": "add_on_required_by:word_bounds"}
   },
-  "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
-             "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
-             "adapter_normalization"],
   "provenance_only": {},
   "policy": {
     "policy_version": 1,
@@ -1235,7 +1218,6 @@ Where each capability in the namespace is exercised above:
 | `region_language` | §3 | native on FireRed only, with its inference cost and region granularity |
 | `token_language` | step one, §5 | `impossible` in the catalog; exit 2 `unsupported` when requested |
 | `container_bounds`, `container_language` | §1.1, §5 | provenance-only; exit 2 `not_requestable` when requested |
-| `capture_role`, `*_candidates` | step one | `impossible` in the catalog; exit 2 `unsupported` with `reason: "not_implemented_v1"` when requested |
 
 All eight roles appear in a resolved plan: `decode` and `asr` in §1.1, §2 and §3;
 `diarizer` and `reconciler` in §1.1; `vad` in §1.4 (`silero-vad`) and §3
