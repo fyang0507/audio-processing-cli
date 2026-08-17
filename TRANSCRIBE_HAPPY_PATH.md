@@ -51,13 +51,19 @@ first and should be read as **proposed, pending confirmation**, not as already s
 | `segments[].words[]` with `word_id` | word text and bounds | `word_timestamps` | §1.4, §2.2, §3.1 |
 | `vad_regions[]` | speech-activity regions | `vad` | §3.1 |
 | `lid_regions[]` | region language labels | `lid` | §3.1 |
-| `turns[]` with `turn_id` | diarization-grade turn intervals | `diarization_turns` | not exercised |
-| `overlaps[]` with `overlap_id` | cross-speaker overlap intervals | `overlapped_speech` | not exercised |
+| `turns[]` with `turn_id` | speaker turn intervals | `diarization` | §1.2, §1.4, §2.1, §2.2 |
+| `overlapped_speech[]` with `overlap_id` | cross-speaker overlap intervals | `overlapped_speech` | not exercised |
 
-The last two are named for completeness and are the two result keys this document does
-*not* demonstrate: none of the three use cases needs them, since the interview path cuts
-on segment speaker rather than on turn intervals. `TRANSCRIBE_CONTRACT.md` §1.4 is where
-they are requested.
+`overlapped_speech[]` is the one result key this document does not demonstrate: none of the
+three use cases requests it. `TRANSCRIBE_CONTRACT.md` §1.4 is where it is requested.
+
+`turns[]` arrives with `diarization` rather than as a separate request, because there is no
+use for one without the other — labelling a transcript "three people spoke here" while
+withholding who said what answers nothing, and intervals-without-text was never purchasable
+anyway, since punctuated text is a floor rather than a capability. Both come out of the same
+diarizer run, so splitting them would have priced one stage twice. Note that the turn bounds
+in §1.4 are not the segments' word bounds: the diarizer measured them independently, and the
+plan keeps both rather than deriving one from the other.
 
 Ids are positional and **document-scoped** (`seg_0`, `w_0`, `turn_0`, `ab_0`), extending
 the `segment_id`/`abstention_id` convention the contract's `sample_output` already shows.
@@ -150,21 +156,18 @@ audio transcribe plan --stack qwen-1.7b --input meeting.m4a
                           "note": "does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words; filler recall unmeasured",
                           "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
     "diarization":       {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
+                          "produces": ["segments[].speaker", "turns[]"],
                           "cost": {"proved": "15 s and 0.55 GiB peak on a 30-minute sample; RSS excludes memory held by system Core ML services",
-                                   "projected_seconds": 14.7,
+                                   "projected_seconds": 0.2,
                                    "packages": ["fluidaudio", "speaker-diarization-coreml"],
                                    "environment": "swift", "requires_tool": ["swift"],
-                                   "download_bytes": null},
+                                   "download_bytes": null,
+                                   "shares_stage_with": ["overlapped_speech"]},
                           "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "matched 3 of 75 annotated speaker changes on a dense two-speaker conversation; unsuitable where turns are short or overlapping",
-                          "record": "model_tests/benchmark/DIARIZATION.md"},
-    "diarization_turns": {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                          "cost": {"shares_stage_with": ["diarization", "overlapped_speech"]},
-                          "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "95.42% participant-interval F1 on a 30-minute interview but 5.50% speaker-change F1 on a dense conversation; strong on long turns, weak on rapid change",
+                          "measured_limit": "95.42% participant-interval F1 on a 30-minute interview, but only 3 of 75 annotated speaker changes matched on a dense two-speaker conversation; strong on long turns, unsuitable where turns are short or overlapping",
                           "record": "model_tests/benchmark/DIARIZATION.md"},
     "overlapped_speech": {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                          "cost": {"shares_stage_with": ["diarization", "diarization_turns"]},
+                          "cost": {"shares_stage_with": ["diarization"]},
                           "evidence": {"interface": "verified", "quality": "unmeasured"},
                           "note": "without this, policy.overlap_detection is \"unavailable\" and an empty abstention ledger means undetected rather than absent"},
     "vad":               {"availability": "requires_add_on", "add_on": ["silero-vad"],
@@ -308,6 +311,9 @@ audio transcribe plan --input meeting.m4a \
       {"segment_id": "seg_0", "text": null, "speaker": null,
        "words": [{"word_id": "w_0", "text": null, "start": null, "end": null}]}
     ],
+    "turns": [
+      {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
+    ],
     "abstentions": [
       {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
     ],
@@ -418,6 +424,10 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
        {"word_id": "w_12", "text": "設計", "start": 6.95, "end": 7.44}
      ]}
   ],
+  "turns": [
+    {"turn_id": "turn_0", "speaker": "S1", "start": 2.28, "end": 4.79},
+    {"turn_id": "turn_1", "speaker": "S2", "start": 5.06, "end": 7.51}
+  ],
   "abstentions": [
     {"abstention_id": "ab_0", "reason": "overlap", "start": 41.86, "end": 42.73},
     {"abstention_id": "ab_1", "reason": "short_turn", "start": 118.44, "end": 118.79}
@@ -444,6 +454,7 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
       "peak_rss_bytes": 3243020288,
       "segments": 2,
       "words": 13,
+      "turns": 2,
       "abstentions": 2
     },
     "elided": "roles, floors, execution, policy, packages, measured, and warnings are byte-identical to the plan in 1.2"
@@ -595,6 +606,9 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
        "start": null, "end": null,
        "words": [{"word_id": "w_0", "text": null, "start": null, "end": null}]}
     ],
+    "turns": [
+      {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
+    ],
     "abstentions": [],
     "provenance": "<the full executed plan; elided in this printed example only>"
   }
@@ -653,6 +667,10 @@ Exit 0. `demo.transcript.json`:
        {"word_id": "w_18", "text": "away", "start": 7.48, "end": 7.86}
      ]}
   ],
+  "turns": [
+    {"turn_id": "turn_0", "speaker": "0", "start": 0.0, "end": 4.52},
+    {"turn_id": "turn_1", "speaker": "1", "start": 6.08, "end": 9.41}
+  ],
   "abstentions": [],
   "provenance": {
     "plan_version": 1,
@@ -677,6 +695,7 @@ Exit 0. `demo.transcript.json`:
       "peak_mps_live_bytes": 19983452160,
       "segments": 3,
       "words": 19,
+      "turns": 2,
       "segments_without_words": 1,
       "abstentions": 0
     },

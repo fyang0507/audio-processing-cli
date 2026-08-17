@@ -282,16 +282,15 @@ Requestable, because a caller genuinely chooses them:
 Names follow the field rather than this document. `diarization`, `vad`, `lid`, and
 `word_timestamps` are what the literature, the model cards, and `DIARIZATION.md` already
 call these things, and an internal dialect costs more than the precision it buys. Where a
-standard term is genuinely ambiguous the qualifier goes in the name — `diarization` is the
-speaker label on text, `diarization_turns` the intervals — rather than into a private
-coinage.
+standard term covers more than one output, it stays one capability rather than being split
+into coinages: `diarization` delivers both the speaker label on text and the turn intervals,
+because they come out of one stage and neither is useful alone.
 
 | Capability | Meaning | Why it is its own name |
 | --- | --- | --- |
 | `languages` | Which languages the stack handles, separated into what it advertises and what a recorded run here actually exercised. | The first stack-choice question and the one most easily answered with a marketing number. Advertised counts are 30, 50+, and 100+; the set verified locally is Mandarin, English, and Cantonese on every stack. Carries `hint_accepted`, which is the only part of the old `language_input` block a caller could act on. |
 | `verbatim` | The stack **can produce** verbatim text: it emits what it heard, disfluencies included, rather than a cleaned rendering. How faithfully it does so is the quality axis, not this one. | Interface verified on all four stacks — 24 to 28 filler hits on one probe, none of them cleaning and none of them complete. No backend exposes a verbatim switch and nothing in v1 cleans, so requesting this asserts an interface rather than selecting a mode, and the plan answers for fidelity separately: `quality: "refuted"` on the two stacks a recorded run caught normalizing a dialect form. |
-| `diarization` | Anonymous speaker label on transcript text. | The outcome both multi-speaker paths deliver. Whether it was native or reconciled from a diarizer is provenance, not a separate request. |
-| `diarization_turns` | Diarization-grade speaker turn intervals in time, independent of text. | Cutting on a speaker change needs time, not text. ASR segment bounds are not diarization-grade. |
+| `diarization` | Anonymous speaker labels on transcript text **and** the speaker turn intervals, as `segments[].speaker` and `turns[]`. | One request, because there is no use for either half alone: intervals without text say "three people spoke" and never who said what, and text-without-intervals is not even purchasable, since punctuated text is a floor. Both fall out of one diarizer run, so splitting them would price one stage twice. Whether the labels were native or reconciled from a diarizer is provenance, not a separate request. |
 | `overlapped_speech` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
 | `vad` | Speech-activity regions. | Speech activity only; not turns and not events. |
 | `segment_timestamps` | ASR segment extents. | Cheap coarse timing where a stack emits it natively. Cannot produce subtitle-grade cues. |
@@ -347,7 +346,6 @@ render them alike.
 | `languages` | native | native | native |
 | `verbatim` | native | native | native |
 | `diarization` | + `fluidaudio` + reconciler | native | + `fluidaudio` + reconciler |
-| `diarization_turns` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
 | `overlapped_speech` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
 | `vad` | + `silero-vad` | + `silero-vad` | native |
 | `segment_timestamps` | exit 2: unsatisfiable_on_stack | native | native |
@@ -464,9 +462,9 @@ provisioning history can still locate everything.
   `backend`. The command group is `audio packages`.
 - **speaker_attribution**, **turn_bounds**, **overlap_intervals**, **speech_bounds**,
   **word_bounds**, **segment_bounds**, **region_language**, **token_language** — the first
-  draft's coinages, replaced by the field's own terms: `diarization`,
-  `diarization_turns`, `overlapped_speech`, `vad`, `word_timestamps`,
-  `segment_timestamps`, `lid`, `token_lid`. The old names drew a method/outcome
+  draft's coinages, replaced by the field's own terms. `speaker_attribution` and
+  `turn_bounds` both became `diarization`, which produces both; the rest map to
+  `overlapped_speech`, `vad`, `word_timestamps`, `segment_timestamps`, `lid`, `token_lid`. The old names drew a method/outcome
   distinction that reads well in a design document and creates a private dialect
   everywhere else. Where the standard term is ambiguous, qualify it rather than invent.
 - **language_input** — folded into the `languages` capability as `hint_accepted`. A block

@@ -184,21 +184,18 @@ yet and `satisfaction` is defined only for a requested capability:
                                    "note": "weights are fetched only when this capability is requested; their size is unrecorded"},
                           "granularity_note": "one label per VAD region, copied onto every sentence in that region; per-sentence variation would be fabricated"},
     "diarization":       {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
+                          "produces": ["segments[].speaker", "turns[]"],
                           "cost": {"proved": "15 s and 0.55 GiB peak on a 30-minute sample; RSS excludes memory held by system Core ML services",
                                    "projected_seconds": 0.2,
                                    "packages": ["fluidaudio", "speaker-diarization-coreml"],
                                    "environment": "swift", "requires_tool": ["swift"],
-                                   "download_bytes": null},
+                                   "download_bytes": null,
+                                   "shares_stage_with": ["overlapped_speech"]},
                           "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "matched 3 of 75 annotated speaker changes on a dense two-speaker conversation; unsuitable where turns are short or overlapping",
-                          "record": "model_tests/benchmark/DIARIZATION.md"},
-    "diarization_turns": {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                          "cost": {"shares_stage_with": ["diarization", "overlapped_speech"]},
-                          "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "95.42% participant-interval F1 on a 30-minute interview but 5.50% speaker-change F1 on a dense conversation; strong on long turns, weak on rapid change",
+                          "measured_limit": "95.42% participant-interval F1 on a 30-minute interview, but only 3 of 75 annotated speaker changes matched on a dense two-speaker conversation; strong on long turns, unsuitable where turns are short or overlapping",
                           "record": "model_tests/benchmark/DIARIZATION.md"},
     "overlapped_speech": {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                          "cost": {"shares_stage_with": ["diarization", "diarization_turns"]},
+                          "cost": {"shares_stage_with": ["diarization"]},
                           "evidence": {"interface": "verified", "quality": "unmeasured"},
                           "note": "without this, policy.overlap_detection is \"unavailable\" and an empty abstention ledger means undetected rather than absent"},
     "token_lid":         {"availability": "impossible", "reason": "no_backend_declares"}
@@ -234,9 +231,11 @@ adds the base to the additions it wants and gets a total. `projected_seconds` is
 measured RTF applied to *this* input, so nobody re-derives it. Before this, the same
 information appeared under four different shapes and could not be summed.
 
-`shares_stage_with` stops the opposite error. `diarization`, `diarization_turns`, and
-`overlapped_speech` all come from one diarizer run, so asking for three costs what asking
-for one costs; a caller budgeting per capability would triple-count.
+`shares_stage_with` stops the opposite error. `diarization` and `overlapped_speech` come
+out of the same diarizer run, so asking for both costs what asking for one costs; a caller
+budgeting per capability would double-count. This is also why `diarization` is one
+capability rather than two — an earlier draft split the speaker labels from the turn
+intervals, which priced a single stage twice and offered a choice nobody can want.
 
 `timing_precision` and `alternative` are how a caller judges whether native is good enough,
 and the honest answer here is uncomfortable: FireRed's native word timing has never been
@@ -433,6 +432,9 @@ Exits 0 whether or not anything is provisioned:
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null}
     ],
+    "turns": [
+      {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
+    ],
     "abstentions": [
       {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
     ],
@@ -441,14 +443,17 @@ Exits 0 whether or not anything is provisioned:
 }
 ```
 
-Two things the sample deliberately does *not* contain. There is no `turns` array,
-because `diarization_turns` was not requested — §1.4 adds it explicitly. And segments
-carry no `words` array, because `word_timestamps` was not requested. They also carry no
-`start` or `end`: those are the `segment_timestamps` capability, which is exit-2 on
-this stack, and Qwen's only time-like output is the container extents this document
-forbids promoting. A segment exists as a floor artifact; its time extents do not
-come free with it. Keys are absent rather than null-valued at the container level,
-so absence can never read as a measured value.
+`turns` is present because `diarization` was requested, and the two arrive together: the
+speaker labels land on `segments[].speaker` and the intervals the diarizer measured land in
+`turns`. They are separate arrays because they are separate measurements at separate
+granularities — a turn can span several sentences — and neither is derived from the other.
+
+Two things the sample deliberately does *not* contain. Segments carry no `words` array,
+because `word_timestamps` was not requested. And they carry no `start` or `end`: those are
+`segment_timestamps`, which is exit-2 on this stack, since Qwen emits no segment extents and
+the chunk boundaries it works in are not speech timing. A segment exists as a floor artifact;
+its time extents do not come free with it. Keys are absent rather than null-valued at the
+container level, so absence can never read as a measured value.
 
 `provenance` is shown as a string here purely to keep the example readable. In a
 real result it is the full executed plan, and the key-set test must compare against
@@ -547,11 +552,11 @@ Qwen has no native word timing, so `word_timestamps` forces the aligner and its
 
 ```bash
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
-  --want diarization,word_timestamps,diarization_turns,overlapped_speech,vad
+  --want diarization,word_timestamps,overlapped_speech,vad
 audio packages pull --stack qwen-1.7b \
-  --want diarization,word_timestamps,diarization_turns,overlapped_speech,vad
+  --want diarization,word_timestamps,overlapped_speech,vad
 audio transcribe run --input meeting.m4a --stack qwen-1.7b \
-  --want diarization,word_timestamps,diarization_turns,overlapped_speech,vad \
+  --want diarization,word_timestamps,overlapped_speech,vad \
   --format json -o meeting.timed.json
 ```
 
@@ -1180,8 +1185,7 @@ Where each capability in the namespace is exercised above:
 | Capability | Exercised | Shown as |
 | --- | --- | --- |
 | `verbatim` | requested in §2 and §3; evidence divergence in §1.5 | native on all four; `quality: "refuted"` on `vibevoice` and `qwen-0.6b` |
-| `diarization` | §1, §2, §3 | derived on Qwen and FireRed, native on VibeVoice |
-| `diarization_turns` | §1.4 | derived |
+| `diarization` | §1, §2, §3 | derived on Qwen and FireRed, native on VibeVoice; yields `segments[].speaker` and `turns[]` together |
 | `overlapped_speech` | §1.4, §3 | derived |
 | `vad` | §1.4, §3 | derived on Qwen via `silero-vad`, native on FireRed |
 | `segment_timestamps` | §2, §3, §5 | native on VibeVoice and FireRed; exit 2 `unsatisfiable_on_stack` on Qwen |
