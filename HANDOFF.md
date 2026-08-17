@@ -212,11 +212,16 @@ and experiment digest rather than the full findings file.
   Apache-2.0 and `speaker-diarization-coreml` is CC-BY-4.0. Every other package
   reports `license: "unreviewed"` rather than omitting the field, so an unreviewed
   package cannot read as a cleared one.
-- Qwen's `verbatim` interface was never exercised: the capability record states that
-  no verbatim or filler mode was run, so the only text-fidelity evidence for either
-  Qwen size is a single Sichuanese lexeme. `verbatim` also changes no plan
-  composition in v1, because nothing cleans — it is an assertion the plan answers
-  with evidence.
+- `verbatim` declares that a stack **can produce** verbatim text — that it emits
+  disfluencies rather than cleaning them — and leaves accuracy to the quality axis.
+  The interface half is now measured on all four stacks (24 to 28 filler hits on one
+  probe, none cleaning, none complete) rather than assumed. Nothing selects it: four
+  verbatim-requesting system prompts left Qwen's output byte-identical to its
+  unprompted baseline, no backend exposes a switch, and nothing in v1 cleans, so it
+  asserts an interface and changes no plan composition. The differentiating half is
+  dialect form, where `firered` and `qwen-1.7b` retained both probed lexemes and
+  `vibevoice` and `qwen-0.6b` did not. Filler recall remains unmeasured for every
+  stack.
 - Every figure in the interview route's `measured` block comes from a run that passed
   the language hint `"Cantonese"`, so `--language` is exposed on the Qwen stacks: the
   measured configuration has to be one a caller can actually ask for. It is an input,
@@ -228,6 +233,14 @@ and experiment digest rather than the full findings file.
   drift is a fraction of a video frame and irrelevant to subtitles; it is not
   irrelevant to a `word_id` keyed on a start time, so the Observation Store's identity
   scheme cannot key on one.
+- Qwen's determinism is measured only *within* one process: back-to-back calls on the
+  batched path were byte-identical, and cross-process repetition of that call shape has
+  not been run. Worth closing before any repeat-hash assertion ships.
+- Qwen has two decode entry points that do not agree. The public `generate()` and the
+  private `_generate_chunks_batched` paths matched on every word and differed by two
+  Chinese commas on the same input. Declare `api_path` in every plan and attribute each
+  recorded figure to the path that produced it, or a punctuation-sensitive consumer will
+  read evidence from the wrong one.
 
 ## Working commands
 

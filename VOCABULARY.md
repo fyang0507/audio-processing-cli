@@ -226,7 +226,7 @@ Requestable, because a caller genuinely chooses them:
 
 | Capability | Meaning | Why it is its own name |
 | --- | --- | --- |
-| `verbatim` | Disfluency- and dialect-form-preserving text. | Backends differ where nothing else records it: VibeVoice normalized `看哈→看一下` where FireRed retained it. v1 has no clean-rendering stage and no backend exposes a verbatim switch, so this is the one requirement that changes no plan composition; what it changes is that the plan must answer for text fidelity, and two stacks answer `quality: "refuted"`. |
+| `verbatim` | The stack **can produce** verbatim text: it emits what it heard, disfluencies included, rather than a cleaned rendering. How faithfully it does so is the quality axis, not this one. | Interface verified on all four stacks — 24 to 28 filler hits on one probe, none of them cleaning and none of them complete. No backend exposes a verbatim switch and nothing in v1 cleans, so requesting this asserts an interface rather than selecting a mode, and the plan answers for fidelity separately: `quality: "refuted"` on the two stacks a recorded run caught normalizing a dialect form. |
 | `speaker_attribution` | Anonymous speaker label on transcript text. | The outcome both multi-speaker paths deliver. Whether it was native or reconciled from a diarizer is provenance, not a separate request. |
 | `turn_bounds` | Diarization-grade speaker turn intervals in time, independent of text. | Cutting on a speaker change needs time, not text. ASR segment bounds are not diarization-grade. |
 | `overlap_intervals` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
@@ -317,10 +317,12 @@ Cells carry resolution only. Evidence lives in the per-stack catalog, because it
 differs where resolution does not: `verbatim` resolves `native` on all four stacks
 and has a recorded refutation on two of them. That is also why the two Qwen sizes
 share one column and get separate catalogs — their resolution is identical for
-every capability here and their observed text fidelity is not. On the same
-139.284-second probe, `qwen-1.7b` retained `耍啥子` where `qwen-0.6b` rendered
-`刷啥子`; the recorded capability run also states that no verbatim or filler mode
-was exercised on either, so neither has quality evidence beyond that one lexeme.
+every capability here and their observed text fidelity is not. Across two probes and
+two dialect lexemes the split is consistent: `firered` and `qwen-1.7b` retained `看哈`
+and `耍啥子`, while `vibevoice` normalized `看哈` to `看一下` and both it and
+`qwen-0.6b` rendered `刷啥子`. Filler retention, by contrast, separates nothing — 24
+to 28 hits across all four — so the differentiating half of text fidelity is dialect
+form, and the catalog says which half a figure describes.
 
 ## Packages and environments
 

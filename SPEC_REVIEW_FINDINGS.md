@@ -5,11 +5,16 @@ Adversarial review of [VOCABULARY.md](VOCABULARY.md) and
 Four review passes: three by a reviewer that had seen the drafts evolve, one by a
 fresh reviewer with no prior context.
 
-**Everything raised in that review is now closed.** O1 and O2 were decided by the
-repository owner; O3–O9 are applied; O10–O13 were evidence questions and the evidence
-now exists. What remains open is the N-series below — findings this triage pass
-turned up while verifying the others, three of which are genuine decisions rather
-than fixes.
+**Nothing here is open.** O1 and O2 were decided by the repository owner; O3–O9 are
+applied; O10–O13 were evidence questions and the evidence now exists. The N-series is
+what this triage pass turned up while verifying the O-series, and it is decided too —
+N1 by a live experiment, N2 and N3 by the owner, N4–N6 by applying them.
+
+The only open items left in the project are the ones that need measurements nobody has
+taken: boundary MAE/P95 for FireRed's native word times and the aligner (O13), filler
+recall for any stack, cross-process determinism for the Qwen batched path, and the
+license review. All four are carried in [HANDOFF.md](HANDOFF.md)'s open-evidence list
+rather than here.
 
 Verification status is stated per item:
 
@@ -93,37 +98,78 @@ Three things the verification turned up that were in no document:
 | O12 | `license` asserted on one package only, which could read as "the others are cleared". | Licenses are a registry field reported by `audio packages list`, not a plan field — a plan resolves a pipeline, not a redistribution question. Two are recorded (FluidAudio SDK Apache-2.0, `speaker-diarization-coreml` CC-BY-4.0); every other package reports `license: "unreviewed"`. The field is dropped from the plan payload. |
 | O13 | Boundary MAE/P95 unmeasured for FireRed native times and the aligner. | Still unmeasured — correctly, it is an open evidence item, not a spec defect. It stays in HANDOFF's open list and `export` states that its output is producible but not claimed broadcast-acceptable. |
 
-## Open — from this triage pass
+## From this triage pass
 
-Found while verifying the above against artifacts and runner sources. N1–N3 are
-decisions; N4–N6 are applied and listed so the changes are reviewable.
+Found while verifying the above against artifacts and runner sources. All are now
+decided or applied; N1 was settled by a live experiment rather than by argument.
 
-### N1. `verbatim`'s interface was never exercised on Qwen — verified, live verification in progress
+### N1. `verbatim`'s interface was never exercised on Qwen — verified, decided by experiment
 
-The capability record states plainly: *"No filler-specific or verbatim mode was
+The capability record stated plainly: *"No filler-specific or verbatim mode was
 exercised. Filler preservation remains a transcript-quality measurement, not a native
-output capability."* The only text-fidelity evidence for either Qwen size is one
-Sichuanese lexeme. The spec currently declares `verbatim` `native` with
-`interface: "verified"` on all four stacks.
+output capability."* The spec nevertheless declared `verbatim` `native` with
+`interface: "verified"` on all four stacks, and the only text-fidelity evidence for
+either Qwen size was one Sichuanese lexeme.
 
-Related, and the reason this is a decision rather than a fix: **`verbatim` changes no
-plan composition in v1.** No backend exposes a verbatim switch and nothing in the
-pipeline cleans, so the old claim "absent this, text is clean-rendered" described
-machinery that does not exist — the same defect class as O2. I have redefined it as an
-assertion the plan answers with evidence (and two stacks answer `refuted`), which
-keeps it useful to an agent choosing a stack. The alternative is to demote it to
-provenance-only until a rendering stage exists.
+**Resolved by a live probe** rather than by argument
+(`model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json`, runner
+`model_tests/benchmark/run_qwen_verbatim_probe.py`). Two questions, both answered on the
+139.284 s clip the recorded FireRed and VibeVoice runs used, with all counts recomputed
+independently of the probe's own report before publication:
 
-**Being resolved by experiment rather than by argument.** A live probe is running
-against `test-sample-multispeaker.m4a` (139.33 s, the same clip the recorded FireRed
-and VibeVoice runs used) to answer two things the record cannot: whether Qwen's default
-output retains disfluencies, and whether the `system_prompt` argument that every
-recorded run passed as `None` is a usable verbatim control. If a prompt measurably
-changes filler retention, `verbatim` is a real configuration switch on this stack and
-the "changes no plan composition" claim above is wrong — it would change
-`roles.asr.config`. If not, the capability is a property of whatever the model emits and
-the demote-to-provenance option gets stronger. Either way the answer replaces an
-inference with a measurement, which is the process rule this document ends on.
+- **Does Qwen's default output retain disfluencies? Yes.** Filler hits: FireRed 24,
+  VibeVoice 28, `qwen-1.7b` 26, `qwen-0.6b` 26. No stack cleans and none is complete.
+  Qwen 1.7B drops every spoken "uh", sometimes fusing the neighbours
+  (*"this, uh, this test"* → *"this this tester"*), so one of its two Latin repeat hits
+  is a filler-deletion artifact rather than preserved repetition.
+- **Is `system_prompt` a verbatim knob? No.** Three of four verbatim-requesting prompts
+  produced byte-identical text to the unprompted baseline; the fourth differed by three
+  Chinese commas and one mis-hearing, with filler counts unchanged in all four. The
+  prompts reached the model — `prompt_tokens` scaled 1826 → 1854–1872 with prompt length
+  — so this is a negative result, not a wiring failure. Limit: greedy argmax text only,
+  so a sub-threshold logit shift that never wins argmax would be invisible.
+
+**Decision: `verbatim` says the stack *can produce* verbatim output; accuracy is a
+second story.** Applied, and it is exactly the `interface`/`quality` split the evidence
+object already defines. `interface: "verified"` now means something measured — the stack
+emits disfluencies rather than cleaning them — where before it was asserted without the
+interface ever being exercised. `quality` carries fidelity separately: `refuted` on
+`vibevoice` and `qwen-0.6b`, `unmeasured` on the other two. The capability changes no
+plan composition, and that is now by design rather than by oversight: nothing selects
+it, because no backend has a switch and nothing in v1 cleans.
+
+The probe also reshaped what the capability is *about*. Filler retention differentiates
+nothing — 24 to 28 across four stacks. Dialect form does, consistently across two clips
+and two lexemes: `firered` and `qwen-1.7b` retained `看哈` and `耍啥子`; `vibevoice`
+normalized `看哈` to `看一下` and both it and `qwen-0.6b` rendered `刷啥子`. That gave
+VibeVoice a second, independent refutation on a different clip and lexeme, and gave
+`qwen-1.7b` a `看哈` retention it had never been credited with. Caveat carried into the
+spec: `刷` and `耍` are near-homophones, so this cannot be separated from ordinary
+homophone error on two examples.
+
+Three findings the probe produced incidentally, all applied:
+
+- **Qwen's two decode entry points disagree.** The public `generate()` path and the
+  private `_generate_chunks_batched` path agree on every word and differ by **two
+  Chinese commas**, at 242 versus 240 generated tokens on identical input, weights, and
+  greedy settings. Lexical evidence transfers between paths; punctuation does not, and
+  punctuation is what cue splitting breaks on. `roles.asr.config` now declares
+  `api_path`, and the recorded evidence is explicitly split: MER and timing from the
+  batched path, dialect lexemes from the public one. (The probe's own report attributed
+  this divergence to a `玩`/`耍` word choice; that is wrong — both paths say `玩` and both
+  retain `耍啥子`. The hashes and token counts confirm the divergence, the stated example
+  did not.)
+- **The batched API returns the model's scaffold inside its text** — the observed prefix
+  is `language English<asr_text>` — where the public path strips it. Recorded as
+  `adapter_strips` and as the third verified instance of the adapter-normalization floor,
+  now one per stack.
+- **`container_language` is read off that scaffold**, and on one Mandarin-majority clip
+  `qwen-1.7b` reported English while `qwen-0.6b` reported Chinese. The abstract
+  "disagreed across sizes" note is replaced by the labels.
+
+Qwen determinism also improved from a decode-configuration citation to a measurement:
+back-to-back calls in one process were byte-identical; cross-process repetition remains
+untested.
 
 ### N2. FireRed is text-deterministic but not timestamp-deterministic — verified, decided
 

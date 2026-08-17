@@ -141,7 +141,9 @@ yet and `satisfaction` is defined only for a requested capability:
   "capabilities": {
     "verbatim":            {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "note": "retained 看哈 on the 27.8 s Sichuanese probe; two examples cannot rank varieties"},
+                            "interface_basis": "emits disfluencies rather than cleaning them: 24 filler hits on the 139.284 s probe, against 26 to 28 for the other stacks",
+                            "note": "retained 看哈 on the 27.8 s Sichuanese probe and 耍啥子 on the 139.284 s probe; two lexemes cannot rank varieties, and no filler recall figure exists for any stack",
+                            "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
     "word_bounds":         {"availability": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
                             "timing_precision": {"repeat_drift_ms": 1.0, "boundary_mae_ms": null,
@@ -595,7 +597,9 @@ not a capability, so it adds no role, no package, and no output field.
 rendered `刷啥子` where 1.7B retained `耍啥子`, so its `verbatim` catalog entry carries
 `quality: "refuted"` with that `observed_limit` while 1.7B's carries `unmeasured`.
 Identical resolution, different recorded fidelity — which is why the two share a
-column in the derivation table and not a catalog.
+column in the derivation table and not a catalog. Their filler retention is identical
+at 26 hits, so the interface half of `verbatim` is the same on both; only the dialect
+half separates them.
 
 ## 2. Product-demo editing — `vibevoice`
 
@@ -648,8 +652,9 @@ processing container to record.
   "capabilities": {
     "verbatim":            {"satisfaction": "native",
                             "evidence": {"interface": "verified", "quality": "refuted"},
-                            "observed_limit": "normalized 看哈 to 看一下 on the 27.8 s Sichuanese probe, where firered retained it; filler recall unmeasured",
-                            "record": "model_tests/EXPERIMENT_RESULTS.md"},
+                            "interface_basis": "emits disfluencies rather than cleaning them: 28 filler hits on the 139.284 s probe, the highest of the four stacks",
+                            "observed_limit": "dialect form normalized twice: 看哈 to 看一下 on the 27.8 s probe and 刷啥子 for 耍啥子 on the 139.284 s probe, both retained by firered",
+                            "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
     "speaker_attribution": {"satisfaction": "native",
                             "evidence": {"interface": "verified", "quality": "measured"},
                             "measured_limit": "on the 149.9 s CantoMap conversation with 75 annotated speaker changes this stack matched 39; not validated for rapid backchannels, interruptions, or dense overlap",
@@ -685,12 +690,22 @@ audio transcribe run demo.mp4 --stack vibevoice \
   --format json -o demo.transcript.json
 ```
 
-`verbatim` is the reason this stack's catalog is worth reading before choosing it.
-It resolves `native` here exactly as it does on `firered`, and the difference is
-entirely in the evidence: a recorded run *refuted* it. `quality: "refuted"` with an
-`observed_limit` is not the same statement as `unmeasured`, and filing the
-normalization as unmeasured would have made the stack that failed the probe read
-like the stack that was never tested.
+`verbatim` is the reason this stack's catalog is worth reading before choosing it, and
+it is worth being precise about what the capability claims. It claims the stack **can
+produce** verbatim text — that it emits what it heard rather than a cleaned rendering —
+and that is now measured rather than assumed: 28 filler hits here, 26 on both Qwen
+sizes, 24 on FireRed, no stack cleaning and no stack complete. Accuracy is a separate
+story, carried by `quality`. So `verbatim` resolves `native` here exactly as it does on
+`firered`, and the entire difference is that a recorded run *refuted* the quality half
+twice, on two clips and two lexemes. `quality: "refuted"` with an `observed_limit` is
+not the same statement as `unmeasured`; filing the normalization as unmeasured would
+have made the stack that failed the probe read like the stack that was never tested.
+
+Nothing selects this. No backend exposes a verbatim switch — four verbatim-requesting
+system prompts left Qwen's output byte-identical to its unprompted baseline — and
+nothing in v1 cleans, so the request asserts an interface and the plan answers for
+fidelity. It is the one requestable capability that never changes plan composition, by
+design rather than by oversight.
 
 Two adapter obligations this stack creates, both from its recorded output.
 VibeVoice emits `Speaker: "N/A"` on non-speech segments; that is the absence of a
