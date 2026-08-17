@@ -35,8 +35,8 @@ model-specific object past it.
 
 **add-on** — a backend the planner adds because a requirement cannot be met
 natively by the chosen stack. Add-ons are derived mechanically, never chosen by
-preference: `word_bounds` on a stack without native word timing forces the
-aligner, `speaker_attribution` on a stack without native speaker structure forces
+preference: `word_timestamps` on a stack without native word timing forces the
+aligner, `diarization` on a stack without native speaker structure forces
 a diarizer and the reconciler.
 
 **package** — the provisionable unit: pinned weights, the environment they target,
@@ -113,9 +113,14 @@ anything usable. Because step one is the only place a caller can decide step two
 catalog carries the context that decision needs and not just the `availability` enum:
 `cost` at stack and add-on scope in one shape so the pieces can be summed,
 `shares_stage_with` where several capabilities come from one add-on run, `timing_precision`
-where a capability is native but its accuracy is unmeasured, `failure_recovery`, and
-`language_input`. An `availability` value alone cannot distinguish a free add-on from one
-that pulls a second runtime, nor tell a caller whether native is good enough.
+where a capability is native but its accuracy is unmeasured, and `failure_recovery`. An
+`availability` value alone cannot distinguish a free add-on from one that pulls a second
+runtime, nor tell a caller whether native is good enough.
+
+`cost` states a run that actually happened before it states a rate: `proved` carries seconds
+and gibibytes against a named sample in units a reader can hold, and `projected_seconds`
+applies that to the input in hand. A caller should not have to multiply an RTF by a duration
+to find out whether a job takes a minute or an hour.
 
 The converse rule matters as much: a payload carries what a caller can act on, and nothing
 else. Justification belongs in this document and evidence forensics belong behind a
@@ -167,9 +172,10 @@ done here once.
 
 **language input** — a hint passed *to* an ASR, distinct from every language
 capability, which is an output. Keep the two apart in naming: `--language` is an input
-that constrains a decode; `region_language`, `container_language`, and `token_language`
+that constrains a decode; `lid` and `token_lid`
 are outputs that report one. A stack declares whether it accepts an input in its
-`language_input` block, and passing the flag where it is not accepted is an error
+`languages` capability's `hint_accepted` flag, and passing the flag where it is not
+accepted is an error
 rather than a silently ignored argument. This is the only caller-settable model input
 in v1.
 
@@ -273,25 +279,25 @@ encoding an invariant as a field makes it look like a setting.
 
 Requestable, because a caller genuinely chooses them:
 
+Names follow the field rather than this document. `diarization`, `vad`, `lid`, and
+`word_timestamps` are what the literature, the model cards, and `DIARIZATION.md` already
+call these things, and an internal dialect costs more than the precision it buys. Where a
+standard term is genuinely ambiguous the qualifier goes in the name — `diarization` is the
+speaker label on text, `diarization_turns` the intervals — rather than into a private
+coinage.
+
 | Capability | Meaning | Why it is its own name |
 | --- | --- | --- |
+| `languages` | Which languages the stack handles, separated into what it advertises and what a recorded run here actually exercised. | The first stack-choice question and the one most easily answered with a marketing number. Advertised counts are 30, 50+, and 100+; the set verified locally is Mandarin, English, and Cantonese on every stack. Carries `hint_accepted`, which is the only part of the old `language_input` block a caller could act on. |
 | `verbatim` | The stack **can produce** verbatim text: it emits what it heard, disfluencies included, rather than a cleaned rendering. How faithfully it does so is the quality axis, not this one. | Interface verified on all four stacks — 24 to 28 filler hits on one probe, none of them cleaning and none of them complete. No backend exposes a verbatim switch and nothing in v1 cleans, so requesting this asserts an interface rather than selecting a mode, and the plan answers for fidelity separately: `quality: "refuted"` on the two stacks a recorded run caught normalizing a dialect form. |
-| `speaker_attribution` | Anonymous speaker label on transcript text. | The outcome both multi-speaker paths deliver. Whether it was native or reconciled from a diarizer is provenance, not a separate request. |
-| `turn_bounds` | Diarization-grade speaker turn intervals in time, independent of text. | Cutting on a speaker change needs time, not text. ASR segment bounds are not diarization-grade. |
-| `overlap_intervals` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
-| `speech_bounds` | Speech-activity regions. | Speech activity only; not turns and not events. |
-| `segment_bounds` | ASR segment extents. | Cheap coarse timing where a stack emits it natively. Cannot produce subtitle-grade cues. |
-| `word_bounds` | Word or character intervals. | The only timing that supports subtitle cues or word-level editing. Never inferred from `container_bounds`. May be legitimately absent on a segment that has no speech to align. |
-| `region_language` | Region language label and confidence. | Region-level; cannot locate a switch. Costs roughly double inference on FireRed. FireRed carries the label on each *sentence*, but it is produced once per VAD region and copied onto the sentences inside it (`fireredasr2system.py:129-155`), so per-sentence variation would be fabricated. |
-| `token_language` | Per-token language. | **No backend provides this.** Named so the catalog can report it `impossible` and a request for it can fail loudly with `capability_unsupported`, rather than the assumption being drawn silently from code-switching support. |
-
-Provenance-only. These appear in every plan so they can be audited and so they
-can be refused as a timing or routing source. They are never requestable:
-
-| Capability | Why it exists | Why it is not requestable |
-| --- | --- | --- |
-| `container_bounds` | Records the processing container a stack used. | Not time evidence. Never promotable to any other `*_bounds`. |
-| `container_language` | Records a stack's single language label. | No output artifact needs it. On one Mandarin-majority clip `qwen-1.7b` reported English and `qwen-0.6b` reported Chinese, so it is not a routing oracle. It is read off the model's own output scaffold, not a separate detector. |
+| `diarization` | Anonymous speaker label on transcript text. | The outcome both multi-speaker paths deliver. Whether it was native or reconciled from a diarizer is provenance, not a separate request. |
+| `diarization_turns` | Diarization-grade speaker turn intervals in time, independent of text. | Cutting on a speaker change needs time, not text. ASR segment bounds are not diarization-grade. |
+| `overlapped_speech` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
+| `vad` | Speech-activity regions. | Speech activity only; not turns and not events. |
+| `segment_timestamps` | ASR segment extents. | Cheap coarse timing where a stack emits it natively. Cannot produce subtitle-grade cues. |
+| `word_timestamps` | Word or character intervals. | The only timing that supports subtitle cues or word-level editing. Never inferred from a stack's internal chunk boundaries. May be legitimately absent on a segment that has no speech to align. |
+| `lid` | Region language label and confidence. | Region-level; cannot locate a switch. Costs roughly double inference on FireRed. FireRed carries the label on each *sentence*, but it is produced once per VAD region and copied onto the sentences inside it (`fireredasr2system.py:129-155`), so per-sentence variation would be fabricated. |
+| `token_lid` | Per-token language. | **No backend provides this.** Named so the catalog can report it `impossible` and a request for it can fail loudly with `capability_unsupported`, rather than the assumption being drawn silently from code-switching support. |
 
 Not in the namespace at all, and deliberately not reserved in it: capture role, and
 filler / repetition / false-start annotation. They are future work — capture role needs
@@ -301,7 +307,7 @@ annotation needs a `DisfluencyAnnotator` role that belongs to `analyze` rather t
 does not exist, so requesting one is simply `capability_unknown`: the name is not a
 capability yet. When they arrive they enter the namespace with the rest.
 
-`token_language` is the one exception, and it earns it: code-switching support invites the
+`token_lid` is the one exception, and it earns it: code-switching support invites the
 assumption that per-token labels come with it, so the name exists purely to refuse loudly
 with `no_backend_declares` instead of letting the assumption stand.
 
@@ -333,35 +339,34 @@ ordering, because a stack choice is a quality judgement the planner cannot make.
    forced; the pin is defined so that adding a second one is not a surface change.
 
 This table is the planner's whole logic and the source the anti-fabrication test
-is parametrized over, so it must distinguish all three refusal codes rather than
+is parametrized over, so it must distinguish both refusal codes rather than
 render them alike.
 
 | Requirement | `qwen-1.7b`, `qwen-0.6b` | `vibevoice` | `firered` |
 | --- | --- | --- | --- |
+| `languages` | native | native | native |
 | `verbatim` | native | native | native |
-| `speaker_attribution` | + `fluidaudio` + reconciler | native | + `fluidaudio` + reconciler |
-| `turn_bounds` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
-| `overlap_intervals` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
-| `speech_bounds` | + `silero-vad` | + `silero-vad` | native |
-| `segment_bounds` | exit 2: unsatisfiable_on_stack | native | native |
-| `word_bounds` | + `qwen3-forcedaligner` | + `qwen3-forcedaligner` | native |
-| `region_language` | exit 2: unsatisfiable_on_stack | exit 2: unsatisfiable_on_stack | native (FireRedLID stage) |
-| `token_language` | exit 2: unsupported | exit 2: unsupported | exit 2: unsupported |
-| `container_bounds`, `container_language` | exit 2: not_requestable | exit 2: not_requestable | exit 2: not_requestable |
+| `diarization` | + `fluidaudio` + reconciler | native | + `fluidaudio` + reconciler |
+| `diarization_turns` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
+| `overlapped_speech` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
+| `vad` | + `silero-vad` | + `silero-vad` | native |
+| `segment_timestamps` | exit 2: unsatisfiable_on_stack | native | native |
+| `word_timestamps` | + `qwen3-forcedaligner` | + `qwen3-forcedaligner` | native |
+| `lid` | exit 2: unsatisfiable_on_stack | exit 2: unsatisfiable_on_stack | native (FireRedLID stage) |
+| `token_lid` | exit 2: unsupported | exit 2: unsupported | exit 2: unsupported |
 
 Four cell forms, and a test parametrized over this table must accept exactly these:
 `native`; `native (<stage>)`; `+ <package>` or `+ <package> + <role>`; and
 `exit 2: <code>`. `native (<stage>)` is not an add-on. FireRedLID ships inside the
 `firered` package and fills the `lid` role the stack already declares, so requesting
-`region_language` adds nothing to the plan the stack did not already contain — it
+`lid` adds nothing to the plan the stack did not already contain — it
 changes cost, not composition, which is why the add-on `+` notation would misreport
 it.
 
-The three refusal codes: `unsatisfiable_on_stack` carries a non-empty `allowed`, so
-the fix is to switch stacks; `unsupported` carries `allowed: []` and a reason —
-`no_backend_declares`, which today is `token_language` alone;
-`not_requestable` carries `allowed: []` and an `alternatives` list, because the
-provenance-only pair is present in the output and merely cannot be asked for.
+The two refusal codes: `unsatisfiable_on_stack` carries a non-empty `allowed`, so the fix
+is to switch stacks; `unsupported` carries `allowed: []` and a `reason`, which today is
+`no_backend_declares` on `token_lid` alone. A name that is not in the namespace at all is
+neither of these — it is `capability_unknown`.
 
 Cells carry resolution only. Evidence lives in the per-stack catalog, because it
 differs where resolution does not: `verbatim` resolves `native` on all four stacks
@@ -457,6 +462,21 @@ provisioning history can still locate everything.
   provisioned set includes a Swift build product, one Core ML model package, and
   two dependency environments containing no weights. Prefer `package`, `stack`, or
   `backend`. The command group is `audio packages`.
+- **speaker_attribution**, **turn_bounds**, **overlap_intervals**, **speech_bounds**,
+  **word_bounds**, **segment_bounds**, **region_language**, **token_language** — the first
+  draft's coinages, replaced by the field's own terms: `diarization`,
+  `diarization_turns`, `overlapped_speech`, `vad`, `word_timestamps`,
+  `segment_timestamps`, `lid`, `token_lid`. The old names drew a method/outcome
+  distinction that reads well in a design document and creates a private dialect
+  everywhere else. Where the standard term is ambiguous, qualify it rather than invent.
+- **language_input** — folded into the `languages` capability as `hint_accepted`. A block
+  saying a stack accepts a language hint, without saying which languages it handles, gave
+  a caller nothing to act on.
+- **container_bounds**, **container_language**, **provenance_only** — removed outright, not
+  renamed. They published a stack's internal chunk extents and its own language guess on
+  the theory that auditability justified the space. A caller can act on neither, and their
+  removal took a refusal code with it: a capability that does not exist cannot be one that
+  exists but may not be asked for.
 - **punctuation** — not a capability, and not a flag. See Floors.
 - **word_confidence** — retired as a capability. FireRed was the only claimed
   source and it emits no per-word confidence: every word is exactly

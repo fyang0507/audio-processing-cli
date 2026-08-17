@@ -208,7 +208,10 @@ lookup. Four additions, each answering a question `availability` alone cannot:
   one. `speech_bounds` is the inverse: the Silero add-on has a measured 0.8505 F1 where
   the native FireRedVAD stage has none.
 
-Superseded in shape on the same day: `measured_envelope` and `add_on_cost` were folded into
+Superseded in shape on the same day, twice: capability names were later standardized to the
+field's own terms (`diarization`, `vad`, `lid`, `word_timestamps`, …), `language_input` was
+folded into a `languages` capability, and the container/provenance-only pair was removed
+outright — see VOCABULARY's retired words for the full mapping. Also: `measured_envelope` and `add_on_cost` were folded into
 one `cost` object used at stack, add-on, and stage scope, and the `floors` array and
 `determinism` block were dropped from the payload entirely — a caller can act on neither.
 The substance below stands; the field names are historical.

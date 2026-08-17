@@ -54,8 +54,8 @@ Keep three kinds of statement separate in code and documentation:
   `qwen-1.7b`, `qwen-0.6b`, `vibevoice`, or `firered` — that choice fixes
   transcript quality, language and dialect behavior, and which capabilities
   arrive natively, none of which is derivable from a requirement list. The
-  planner then derives add-ons mechanically: `word_bounds` on a stack without
-  native word timing forces the aligner, `speaker_attribution` on a stack without
+  planner then derives add-ons mechanically: `word_timestamps` on a stack without
+  native word timing forces the aligner, `diarization` on a stack without
   native speaker structure forces a diarizer and the reconciler. No default
   stack, no preference scalar, no tie-break ordering — an earlier draft had the
   planner select the ASR from capabilities, which made it decide quality it has
@@ -141,7 +141,7 @@ both as "no number".
 Word-level timing is required output, not a nice-to-have, because the subtitle
 artifact depends on it: container bounds give one cue per processing container and
 diarizer turns averaged 9.2 seconds on the 30-minute fixture against a ≤7-second
-subtitle convention. Only `word_bounds` supports real cues. Qwen and VibeVoice
+subtitle convention. Only `word_timestamps` supports real cues. Qwen and VibeVoice
 need the aligner for it, so one request can span all three provisioned
 environments; FireRed is the only stack that produces subtitle-grade timing
 natively.
