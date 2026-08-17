@@ -99,10 +99,17 @@ the resolved capability set and no combination needs enumerating. It guarantees
 key sets, types, and which fields are absent; it does not predict cardinality,
 whether abstentions occur, or runtime degradation.
 
-**policy** — the rules applied regardless of which backend runs: abstain on
-ambiguous overlap, minimum turn duration, clean versus verbatim rendering,
-never synthesize a bound that no backend produced, fail closed on protected
-intervals. Emitted in the plan. Not caller-selectable in v1.
+**policy** — the genuine choices applied regardless of which backend runs:
+abstain on ambiguous overlap, the minimum turn duration and what happens below
+it, and failing closed on protected intervals. Emitted in the plan alongside the
+`floors` array, and not caller-selectable in v1.
+
+Policy holds only what could legitimately have been decided otherwise. Two things
+therefore do **not** belong in it: a floor, because a floor is not a choice and
+encoding one as a boolean makes an invariant read like a setting; and anything
+already determined by the request, because that would create a second source of
+truth. Clean versus verbatim rendering is the second case — it is the `verbatim`
+capability, and its absence means clean.
 
 A backend whose inference is not deterministic runs at a fixed internal seed so
 repeated runs agree and a downstream `word_id` stays stable. VibeVoice needs
@@ -167,7 +174,7 @@ can be refused as a timing or routing source. They are never requestable:
 | `container_bounds` | Records the processing container a stack used. | Not time evidence. Never promotable to any other `*_bounds`. |
 | `container_language` | Records a stack's single language label. | No output artifact needs it, and it disagreed across Qwen sizes on one clip, so it is not a routing oracle. |
 
-Declared but `unavailable` in v1:
+Declared in the namespace but not implemented in v1:
 
 | Capability | Blocked on |
 | --- | --- |
@@ -208,7 +215,7 @@ render them alike.
 
 | Requirement | `qwen-1.7b`, `qwen-0.6b` | `vibevoice` | `firered` |
 | --- | --- | --- | --- |
-| `verbatim` | native; interface verified, quality unmeasured | native; normalization observed | native; dialect form retained |
+| `verbatim` | native; interface verified, quality unmeasured | native; interface verified, quality unmeasured — normalization observed | native; interface verified, quality unmeasured — dialect form retained |
 | `speaker_attribution` | + `fluidaudio` + reconciler | native | + `fluidaudio` + reconciler |
 | `turn_bounds` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
 | `overlap_intervals` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |

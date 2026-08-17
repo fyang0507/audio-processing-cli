@@ -83,9 +83,12 @@ yet and `satisfaction` is defined only for a requested capability:
                             "cost": "~2x inference; additional weights, size unrecorded"},
     "speaker_attribution": {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
                             "evidence": {"interface": "verified", "quality": "measured"},
-                            "measured_limit": "3 of 75 annotated speaker changes matched on a 149.9 s dense conversation"},
+                            "measured_limit": "3 of 75 annotated speaker changes matched on the 149.9 s CantoMap dense conversation",
+                            "record": "model_tests/benchmark/DIARIZATION.md"},
     "turn_bounds":         {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                            "evidence": {"interface": "verified", "quality": "measured"}},
+                            "evidence": {"interface": "verified", "quality": "measured"},
+                            "measured_limit": "95.42% participant-interval F1 on the 30-minute SpiCE mix, but 5.50% speaker-change F1 at a one-second tolerance on the CantoMap dense conversation; strong on long turns, weak on rapid change detection",
+                            "record": "model_tests/benchmark/DIARIZATION.md"},
     "overlap_intervals":   {"availability": "requires_add_on", "add_on": ["fluidaudio"],
                             "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "token_language":      {"availability": "impossible", "reason": "no_backend_declares"},
@@ -132,10 +135,12 @@ string. `0.0` is a legal timestamp and would violate the `no_synthesized_bounds`
 floor the moment a consumer read it as measured. Real metadata that the plan
 genuinely has — duration, path — is populated rather than stubbed.
 
-Enum-valued fields are the one exception: they show a legal member rather than
-`null`, because the member set is part of the shape a consumer needs. So
-`"reason": "overlap"` is shape, while `"text": null` is content withheld. Free-text
-and numeric fields are always `null`.
+Enum-valued fields are the one exception: they show one legal member rather than
+`null`, so a consumer can see the field is categorical. So `"reason": "overlap"` is
+shape, while `"text": null` is content withheld. Free-text and numeric fields are
+always `null`. One member is not the member set, so the sample is not where a
+consumer learns it: `policy.abstention_reasons` publishes the set this plan can
+actually produce, and an empty array there means the ledger cannot fill.
 
 The binding test is that the sample's key set equals a real run's key set, and
 that no key exists for a capability that was not requested. That is the
@@ -188,24 +193,34 @@ Exits 0 whether or not anything is provisioned:
     "diarizer":   {"backend": "fluidaudio", "version": "0.15.5",
                    "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
                    "environment": "swift",
+                   "config": {"preset": "quality", "step_ratio": 0.1,
+                              "min_segment_duration": 0.0, "output": "regular",
+                              "threshold": 0.6, "num_speakers": 2},
+                   "config_note": "every cited diarization measurement used a known two-speaker prior; num_speakers must be supplied or the measured_limit figures do not apply",
                    "selected_by": "add_on_required_by:speaker_attribution"},
     "reconciler": {"backend": "sample-exact-turn-partition",
                    "config": {"partition": "sample_exact"},
                    "selected_by": "add_on_required_by:speaker_attribution"}
   },
+  "floors": ["punctuated_sentence_segmented_text", "punctuation_attached_to_word",
+             "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
+             "adapter_normalization"],
   "policy": {
     "policy_version": 1,
     "overlap": "abstain",
-    "min_turn_ms": 250,
-    "rendering": "clean",
-    "synthesize_bounds": false,
-    "protected_intervals": "fail_closed"
+    "overlap_detection": "fluidaudio",
+    "raw_fragment_min_ms": 250,
+    "accepted_turn_min_ms": 500,
+    "same_label_merge_max_ms": 300,
+    "below_threshold": "abstain",
+    "abstention_reasons": ["overlap", "raw_fragment", "short_turn"]
   },
   "capabilities": {
     "speaker_attribution": {"satisfaction": "derived", "backend": "fluidaudio",
                             "evidence": {"interface": "verified", "quality": "measured"},
                             "note": "reconciled sample-exactly onto ASR text; anonymous labels only",
-                            "measured_limit": "on a 149.9 s conversation with 75 annotated speaker changes this diarizer matched 3; not validated for rapid backchannels, interruptions, or dense overlap"}
+                            "measured_limit": "on the 149.9 s CantoMap conversation with 75 annotated speaker changes this diarizer preset matched 3; not validated for rapid backchannels, interruptions, or dense overlap",
+                            "record": "model_tests/benchmark/DIARIZATION.md"}
   },
   "provenance_only": {
     "container_bounds":   {"backend": "qwen3-asr-1.7b-8bit",
@@ -240,21 +255,28 @@ Exits 0 whether or not anything is provisioned:
     "schema_version": 1,
     "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
     "segments": [
-      {"segment_id": "seg_0", "text": null, "start": null, "end": null, "speaker": null}
+      {"segment_id": "seg_0", "text": null, "speaker": null}
     ],
     "abstentions": [
       {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
     ],
-    "provenance": {"plan_version": 1, "stack": "qwen-1.7b"}
+    "provenance": "<the full executed plan; elided in this printed example only>"
   }
 }
 ```
 
 Two things the sample deliberately does *not* contain. There is no `turns` array,
 because `turn_bounds` was not requested — §1.4 adds it explicitly. And segments
-carry no `words` array, because `word_bounds` was not requested. Keys are absent
-rather than null-valued at the container level, so absence can never read as a
-measured value.
+carry no `words` array, because `word_bounds` was not requested. They also carry no
+`start` or `end`: those are the `segment_bounds` capability, which is exit-2 on
+this stack, and Qwen's only time-like output is the container extents this document
+forbids promoting. A segment exists as a floor artifact; its time extents do not
+come free with it. Keys are absent rather than null-valued at the container level,
+so absence can never read as a measured value.
+
+`provenance` is shown as a string here purely to keep the example readable. In a
+real result it is the full executed plan, and the key-set test must compare against
+that, not against this placeholder.
 
 The `abstentions` ledger *is* present, and not as an exception to that rule: it is
 a floor artifact, governed by `policy.overlap` above rather than by any requested
@@ -325,7 +347,11 @@ boundary MAE/P95 has no labels.
 
 ### 1.5 Smaller stack, named directly
 
+`qwen-0.6b` is a separate package from `qwen-1.7b`, so it needs its own pull —
+without it this exits 3:
+
 ```bash
+audio packages pull --stack qwen-0.6b --want speaker_attribution
 audio transcribe run meeting.m4a --stack qwen-0.6b --want speaker_attribution \
   --format md
 ```
@@ -357,7 +383,8 @@ fields that differ from §1.1** — the envelope, `request`, `provenance_only`,
     "decode":  {"backend": "ffmpeg",
                 "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
     "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch",
-                "revision": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
+                "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
+                "source_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
                 "patch": "vibevoice-logits-to-keep",
                 "config": {"device": "mps", "dtype": "bfloat16", "attention": "sdpa",
                            "seed": 1234},
@@ -369,13 +396,15 @@ fields that differ from §1.1** — the envelope, `request`, `provenance_only`,
                 "config": {"scope": "all_segments"},
                 "selected_by": "add_on_required_by:word_bounds"}
   },
+  "floors": ["punctuated_sentence_segmented_text", "punctuation_attached_to_word",
+             "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
+             "adapter_normalization"],
   "policy": {
     "policy_version": 1,
     "overlap": "abstain",
-    "min_turn_ms": 250,
-    "rendering": "verbatim",
-    "synthesize_bounds": false,
-    "protected_intervals": "fail_closed"
+    "overlap_detection": "unavailable",
+    "overlap_detection_note": "no backend in this plan detects overlap, so an empty abstention ledger means undetected, not absent",
+    "abstention_reasons": []
   },
   "capabilities": {
     "verbatim":            {"satisfaction": "native",
@@ -383,7 +412,8 @@ fields that differ from §1.1** — the envelope, `request`, `provenance_only`,
                             "note": "normalized 看哈→看一下 on the Sichuanese probe; filler recall unmeasured"},
     "speaker_attribution": {"satisfaction": "native",
                             "evidence": {"interface": "verified", "quality": "measured"},
-                            "measured_limit": "on a 149.9 s conversation with 75 annotated speaker changes this stack matched 39; not validated for rapid backchannels, interruptions, or dense overlap"},
+                            "measured_limit": "on the 149.9 s CantoMap conversation with 75 annotated speaker changes this stack matched 39; not validated for rapid backchannels, interruptions, or dense overlap",
+                            "record": "model_tests/benchmark/DIARIZATION.md"},
     "segment_bounds":      {"satisfaction": "native",
                             "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "word_bounds":         {"satisfaction": "derived",
@@ -421,10 +451,13 @@ fourteen minutes of generation for thirty minutes of audio — an RTF near 0.47,
 which is the figure to scale by; the plan cannot know `demo.mp4`'s duration cost
 in advance. Cut and rerender from the original media; this command only reads it.
 
-No byte size is recorded anywhere for `vibevoice-asr-7b` or
-`qwen3-forcedaligner`, so both appear in `unsized_packages`. The tracked figures
-are a legacy "~17 GB" note and a 16.157 GiB BF16 weight floor, neither of which is
-a provisioning measurement.
+Neither `vibevoice-asr-7b` nor `qwen3-forcedaligner` has a byte size from the
+reproducible harness, so both appear in `unsized_packages`. What exists is a
+pre-harness table of disk notes — `~17 GB` and `~1.8 GB` respectively — plus a
+16.157 GiB BF16 weight floor. That table's own document marks it as history rather
+than decision evidence, and none of its figures is a provisioning measurement, but
+it is the same table this contract cites for FireRed, so it should not be described
+as nonexistent here and authoritative there.
 
 ## 3. Dialect and audit — `firered`
 
@@ -458,7 +491,9 @@ runs as a separate stage and emits punctuation with its own bounds, so the adapt
 reattaches each mark to the preceding word token and drops the mark's bounds; the
 word keeps its own `start` and `end` unchanged, since extending them over the
 punctuation would synthesize a bound. Cue splitting reads the mark's presence in
-the token, which is all it needs.
+the token, which is all it needs. `word_confidence` follows the same rule: the
+confidence stays the word's and a mark carries none, so nothing is merged and no
+value is invented for a mark.
 
 Adding the region language label pulls LID and roughly doubles inference: 162.09
 versus 84.24 seconds on the 139.284-second probe, CPU float32 at batch size 4,
