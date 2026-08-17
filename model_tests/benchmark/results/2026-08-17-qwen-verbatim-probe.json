@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-17",
+  "purpose": "Live-verify two things the 2026-08-16 Qwen capability probe explicitly did not exercise: whether Qwen3-ASR's default output retains disfluencies, and whether the private batched API's system_prompt argument is a usable verbatim control.",
+  "runner": {
+    "path": "model_tests/benchmark/run_qwen_verbatim_probe.py",
+    "sha256": "c4a9a70e847ff7064054fa68c4f0f6f2c5d9a668431e4b305741d6a7700efad1"
+  },
+  "host": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9 (main, Oct 28 2025, 12:02:14) [Clang 20.1.4 ]",
+    "hw_model": "Mac16,5",
+    "physical_memory_bytes": 68719476736
+  },
+  "runtime": {
+    "mlx": "0.32.0",
+    "mlx-metal": "0.32.0",
+    "mlx-audio": "0.4.5",
+    "mlx-lm": "0.31.3",
+    "numpy": "2.5.2",
+    "miniaudio": "1.71"
+  },
+  "evidence_contract": {
+    "raw_artifact": "model_tests/benchmark_runs/qwen_verbatim_probe_multispeaker_20260817.json",
+    "raw_artifact_sha256": "7c28573e61928b0121292e2d494e213b8065fcc6d1d311fd4f2bcb3579b90b66",
+    "raw_artifacts_tracked": false,
+    "counts_independently_recomputed": true,
+    "count_semantics": "Latin tokens matched with non-letter boundaries, CJK tokens by substring. 'like' conflates filler and approximator senses; 啊 conflates a sentence-final particle with disfluent use. Absolute totals are inflated roughly uniformly, so the cross-stack comparison is the usable signal, not the absolute count.",
+    "filler_token_list": {
+      "english": [
+        "um",
+        "uh",
+        "er",
+        "erm",
+        "hmm",
+        "like",
+        "you know"
+      ],
+      "chinese": [
+        "呃",
+        "嗯",
+        "啊",
+        "那个",
+        "那個",
+        "就是",
+        "这个",
+        "這個"
+      ]
+    }
+  },
+  "api_probe": {
+    "model_generate_signature": "(audio: Union[str, mlx.core.array, numpy.ndarray, List[Union[str, mlx.core.array, numpy.ndarray]]], *, max_tokens: int = 8192, batch_size: int = 1, temperature: float = 0.0, top_p: float = 1.0, top_k: int = 0, min_p: float = 0.0, min_tokens_to_keep: int = 1, repetition_penalty: Optional[float] = None, repetition_context_size: int = 100, language: Optional[str] = None, prefill_step_size: int = 2048, chunk_duration: float = 1200.0, min_chunk_duration: float = 1.0, verbose: bool = False, stream: bool = False, system_prompt: str | None = None, **kwargs) -> Union[mlx_audio.stt.models.base.STTOutput, Generator[str, NoneType, NoneType]]",
+    "private_batched_method": "_generate_chunks_batched",
+    "private_batched_signature": "(chunks, *, max_tokens, sampler, language, system_prompt, batch_size, verbose)",
+    "signature_matches_runner_contract": true,
+    "source_path": "/private/tmp/mlxprobe-venv/lib/python3.13/site-packages/mlx_audio/stt/models/qwen3_asr/qwen3_asr.py",
+    "source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
+    "expected_source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
+    "source_sha256_matches_expected": true
+  },
+  "configuration": {
+    "temperature": 0.0,
+    "sampler": "mlx_lm.sample_utils.make_sampler(temp=0.0)",
+    "language_argument": null,
+    "language_argument_note": "language=None (the no-hint path) is held constant across every run in this probe so language hinting is not a confound in the system_prompt comparison.",
+    "max_tokens": 8192,
+    "batch_size": 1,
+    "chunking": "whole-clip single chunk per call; no FluidAudio diarization plan feeds this script, unlike run_turn_attributed_mlx_asr.py",
+    "system_prompts_tested": {
+      "none": null,
+      "verbatim_en_direct": "Transcribe this audio verbatim. Include every filler word (um, uh, like), false start, repetition, and self-correction exactly as spoken. Do not clean up, paraphrase, or omit any disfluency.",
+      "verbatim_en_editing": "This transcript will be used for downstream video editing. Preserve all hesitations, stutters, and repeated words exactly as they occur in the recording. Do not smooth, summarize, or correct the speech in any way.",
+      "verbatim_zh": "请逐字转录这段音频，完整保留所有语气词、重复用词和说话中断（例如“嗯”、“呃”、“那个”、“就是”），不要删除、合并或改写任何内容。",
+      "verbatim_en_imperative": "VERBATIM MODE: ON. Output every um/uh/repetition/false start literally. No cleanup, no punctuation normalization, no summary."
+    }
+  },
+  "fixture": {
+    "path": "test-sample-multispeaker.m4a",
+    "container_duration_s": 139.328,
+    "decoded_duration_s": 139.284,
+    "audio_sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+    "same_prepared_audio_as_prior_probes": true,
+    "register_caveat": "a deliberately scripted, self-consciously read filler test rather than spontaneous conversation, so retention here may be an upper bound"
+  },
+  "q1_default_disfluency_retention": {
+    "verdict": "Qwen does not clean disfluencies by default, and no stack retains them completely.",
+    "per_token": {
+      "firered": {
+        "um": 4,
+        "uh": 1,
+        "like": 6,
+        "you know": 3,
+        "呃": 2,
+        "嗯": 2,
+        "啊": 1,
+        "就是": 4,
+        "这个": 1
+      },
+      "vibevoice": {
+        "um": 5,
+        "uh": 3,
+        "like": 6,
+        "you know": 3,
+        "呃": 2,
+        "嗯": 3,
+        "啊": 1,
+        "就是": 4,
+        "这个": 1
+      },
+      "qwen_1_7b": {
+        "um": 5,
+        "like": 6,
+        "you know": 3,
+        "呃": 2,
+        "嗯": 4,
+        "啊": 1,
+        "就是": 4,
+        "这个": 1
+      },
+      "qwen_0_6b": {
+        "um": 5,
+        "uh": 1,
+        "like": 6,
+        "you know": 3,
+        "呃": 2,
+        "嗯": 3,
+        "啊": 1,
+        "就是": 4,
+        "这个": 1
+      }
+    },
+    "totals": {
+      "firered": 24,
+      "vibevoice": 28,
+      "qwen_1_7b": 26,
+      "qwen_0_6b": 26
+    },
+    "interpretation": "24 to 28 hits across four stacks is not a differentiator. Qwen 1.7B dropped every spoken 'uh', sometimes fusing the neighbours ('this, uh, this test' -> 'this this tester'), so its two Latin repeat hits include one filler-deletion artifact rather than preserved repetition."
+  },
+  "q2_system_prompt_as_verbatim_control": {
+    "verdict": "No. system_prompt is not a verbatim configuration switch at greedy decoding.",
+    "runs": [
+      {
+        "label": "baseline",
+        "prompt_tokens": 1826,
+        "generation_tokens": 240,
+        "text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+        "filler_total": 26
+      },
+      {
+        "label": "baseline_repeat",
+        "prompt_tokens": 1826,
+        "generation_tokens": 240,
+        "text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+        "filler_total": 26
+      },
+      {
+        "label": "prompt_1",
+        "prompt_tokens": 1872,
+        "generation_tokens": 239,
+        "text_sha256": "149214c8bee3c2856bdde23244adcd193f5ed7a317b63342bf6914e1b77efc0f",
+        "filler_total": 26
+      },
+      {
+        "label": "prompt_2",
+        "prompt_tokens": 1869,
+        "generation_tokens": 240,
+        "text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+        "filler_total": 26
+      },
+      {
+        "label": "prompt_3",
+        "prompt_tokens": 1871,
+        "generation_tokens": 240,
+        "text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+        "filler_total": 26
+      },
+      {
+        "label": "prompt_4",
+        "prompt_tokens": 1854,
+        "generation_tokens": 240,
+        "text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+        "filler_total": 26
+      }
+    ],
+    "identical_to_baseline": [
+      "baseline_repeat",
+      "prompt_2",
+      "prompt_3",
+      "prompt_4"
+    ],
+    "only_divergent_prompt": {
+      "label": "prompt_1",
+      "difference": "three dropped Chinese commas and 'deficiency'->'deflency'; filler and repetition counts unchanged"
+    },
+    "prompt_reached_the_model": "prompt_tokens scaled 1826 -> 1854-1872 with prompt length, so three of four prompts were consumed and changed nothing",
+    "limits": "greedy argmax text only; a sub-threshold logit shift that never wins argmax would be invisible. Four prompts, no few-shot, no scaffold-override attempts."
+  },
+  "within_process_determinism": {
+    "measured": true,
+    "basis": "baseline and an immediate repeat in one process produced byte-identical text (sha256 f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd)",
+    "not_measured": "cross-process repetition of this call shape"
+  },
+  "decode_path_divergence": {
+    "finding": "The public generate() path and the private _generate_chunks_batched path produce different text on identical input, weights, and greedy config.",
+    "public_path_record": "model_tests/benchmark_runs/qwen3_asr_1.7b_8bit_capabilities_auto_139s_20260816.json",
+    "public_text_sha256": "4fd141933a570b2cc0f2083d2d8c2d65353da4c89e563116601cd42ffc58fe2b",
+    "public_generation_tokens": 242,
+    "batched_text_sha256": "f6d9c54ed84d0c09c860905fea77319b51689e7ae037076db415765e9da440dd",
+    "batched_generation_tokens": 240,
+    "difference": [
+      {
+        "op": "delete",
+        "public": "，",
+        "batched": ""
+      },
+      {
+        "op": "delete",
+        "public": "，",
+        "batched": ""
+      }
+    ],
+    "interpretation": "Every word agrees; the two paths differ only in two Chinese commas. Lexical evidence is path-independent, but punctuation is not path-stable, and punctuation is what cue splitting breaks on.",
+    "consequence": "A plan must declare which decode path it uses, and evidence must be attributed to the path that produced it: the recorded MER and timing figures come from the batched path, the dialect-lexeme observations from the public path."
+  },
+  "adapter_obligation": {
+    "finding": "The private batched API returns the model's own scaffold in its text; the public path strips it.",
+    "observed_prefix": "language English<asr_text>",
+    "consequence": "An adapter on the batched path must strip the scaffold or a transcript begins with it. This is the adapter-normalization floor with a live instance."
+  },
+  "container_language_labels": {
+    "finding": "The scaffold carries the container-level language label, and the two checkpoints disagree on the same recording.",
+    "qwen_1_7b_on_139s_clip": "English",
+    "qwen_0_6b_on_139s_clip": "Chinese",
+    "qwen_1_7b_on_27_8s_clip": "English",
+    "interpretation": "Both clips are Mandarin-majority with English switches. 1.7B labelled both English. This is direct evidence for keeping container_language provenance-only rather than a routing input."
+  },
+  "dialect_form_retention": {
+    "finding": "Dialect-lexeme retention, unlike filler retention, splits the stacks consistently across two clips and two lexemes.",
+    "table": {
+      "firered": {
+        "kan_ha_27_8s": "retained 看哈",
+        "shua_sa_zi_139s": "retained 耍啥子"
+      },
+      "qwen_1_7b": {
+        "kan_ha_27_8s": "retained 看哈",
+        "shua_sa_zi_139s": "retained 耍啥子"
+      },
+      "vibevoice": {
+        "kan_ha_27_8s": "normalized to 看一下",
+        "shua_sa_zi_139s": "rendered 刷啥子"
+      },
+      "qwen_0_6b": {
+        "kan_ha_27_8s": "not run",
+        "shua_sa_zi_139s": "rendered 刷啥子"
+      }
+    },
+    "caveat": "刷 and 耍 are near-homophones, so this is dialect-lexeme recognition and cannot be separated from ordinary homophone error on two examples. Two lexemes cannot rank Chinese varieties."
+  },
+  "limits": [
+    "One clip for the prompt comparison, one supplementary clip, one register.",
+    "No independently verified ground truth; the comparison stacks are not confirmed-correct transcripts, and a filler all four miss is invisible to this method.",
+    "Two 8-bit checkpoints and one private API path only. Other quantizations, the public path under batching, and other families untested."
+  ]
+}

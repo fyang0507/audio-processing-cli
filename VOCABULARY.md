@@ -210,7 +210,10 @@ and a backend that cannot meet one is not a conforming backend:
 - **No synthesized bounds.** A timing field absent from the backend stays absent.
 - **Abstentions survive to the output.**
 - **Normalization at the adapter boundary.** No model-specific object travels past
-  it, and a backend's default-filled field is not a value. FireRed emits
+  it, no backend scaffolding survives it, and a backend's default-filled field is not a
+  value. Three verified instances, one per stack. Qwen's private batched API returns the
+  model's own scaffold inside its text — `language English<asr_text>` — which the public
+  path strips and an adapter on the batched path must strip too. FireRed emits
   `lang: null, lang_confidence: 0` on every sentence whether or not LID ran
   (`fireredasr2system.py:149-150`), so with LID off the adapter drops both rather
   than publish a zero that reads as a measured confidence. VibeVoice emits
@@ -239,7 +242,7 @@ can be refused as a timing or routing source. They are never requestable:
 | Capability | Why it exists | Why it is not requestable |
 | --- | --- | --- |
 | `container_bounds` | Records the processing container a stack used. | Not time evidence. Never promotable to any other `*_bounds`. |
-| `container_language` | Records a stack's single language label. | No output artifact needs it, and it disagreed across Qwen sizes on one clip, so it is not a routing oracle. |
+| `container_language` | Records a stack's single language label. | No output artifact needs it. On one Mandarin-majority clip `qwen-1.7b` reported English and `qwen-0.6b` reported Chinese, so it is not a routing oracle. It is read off the model's own output scaffold, not a separate detector. |
 
 Declared in the namespace but not implemented in v1:
 

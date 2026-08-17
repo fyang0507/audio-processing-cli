@@ -329,11 +329,14 @@ Exits 0 whether or not anything is provisioned:
     "asr":        {"backend": "qwen3-asr-1.7b-8bit", "environment": "mlx",
                    "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
                    "config": {"batch_size": 1, "clear_mlx_cache_after_every_batch": true,
-                              "language": null},
+                              "language": null,
+                              "api_path": "_generate_chunks_batched"},
+                   "adapter_strips": ["language <label><asr_text> scaffold"],
                    "selected_by": "stack",
                    "deterministic": true,
                    "determinism_tolerance_ms": 0.0,
-                   "determinism_basis": "sampler=make_sampler(temp=0.0), i.e. argmax decode (run_turn_attributed_mlx_asr.py:661); a decode-configuration citation, not a repeat-hash measurement"},
+                   "determinism_basis": "sampler=make_sampler(temp=0.0), i.e. argmax decode (run_turn_attributed_mlx_asr.py:661); back-to-back calls in one process produced byte-identical text, cross-process repetition untested",
+                   "determinism_record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
     "diarizer":   {"backend": "fluidaudio", "version": "0.15.5",
                    "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
                    "environment": "swift",
@@ -370,7 +373,8 @@ Exits 0 whether or not anything is provisioned:
     "container_bounds":   {"backend": "qwen3-asr-1.7b-8bit",
                            "note": "processing container extents; not time evidence"},
     "container_language": {"backend": "qwen3-asr-1.7b-8bit",
-                           "note": "single label; disagreed across Qwen sizes on one clip"}
+                           "note": "single label, read off the model's own output scaffold; on one Mandarin-majority clip 1.7B reported English and 0.6B reported Chinese",
+                           "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"}
   },
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "kind": "weights",
@@ -440,6 +444,23 @@ a run that passed the language hint `"Cantonese"`, while this plan passes
 `language: null` because the command did not. The MER figures in §1.5 therefore
 describe the hinted path, and this request is not it. §1.5 shows the flag that closes
 that gap.
+
+`api_path` is in the config for the same reason, and it is not a detail. Qwen has two
+decode entry points and they do not produce the same text: on identical input, weights,
+and greedy settings, the public `generate()` path and the private
+`_generate_chunks_batched` path agreed on **every word** and differed by **two Chinese
+commas**, at 242 versus 240 generated tokens. Lexical evidence therefore transfers
+between the paths and punctuation does not — and punctuation is what cue splitting
+breaks on, so a plan has to say which path ran. It also means the recorded evidence is
+split across both: the MER and timing figures come from the batched path, the
+dialect-lexeme observations from the public one.
+
+`adapter_strips` records a live instance of the adapter-normalization floor. The private
+batched API returns the model's own scaffold inside its text — the observed prefix is
+literally `language English<asr_text>` — where the public path strips it. An adapter on
+the batched path that forgets to do the same produces a transcript beginning with the
+scaffold. The `container_language` label above is read from that scaffold, which is why
+it exists as provenance at all.
 
 ### 1.2 What `run` does with packages absent
 
