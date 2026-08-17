@@ -114,48 +114,55 @@ capability, and an `observed` block of stage walls, peaks, and cardinalities. It
 restate the plan's `satisfaction`, `backend`, or `evidence` around each outcome — those are
 in the embedded plan, and repeating them is how two copies of one fact start to disagree.
 
-Planning is answered in two steps, and both require a stack and an input. Step one
-returns that stack's capability catalog — what is native, what an add-on would supply,
-what is impossible — together with what this particular file implies: how it will be
-partitioned, how many units that is, what the run will cost, and whether a failure leaves
-anything usable. Because step one is the only place a caller can decide step two, the
-catalog carries the context that decision needs and not just the `availability` enum:
-`cost` at stack and add-on scope in one shape so the pieces can be summed,
-what each addition costs to install and to run, where a recorded result says it is weak, and
-what a failure leaves behind. An `availability` value alone cannot distinguish a free add-on
-from one that pulls a second runtime, nor tell a caller whether native is good enough.
+Two questions, two commands, and no order between them. `audio transcribe capabilities
+--stack S --input F` answers what a stack can do with a file: the capability catalog, how the
+audio will be partitioned, what the run will cost, and whether a failure leaves anything
+usable. `audio transcribe plan --stack S --input F [--want ...]` resolves one request into the
+backends that will run, the packages to provision, and the shape of the output. Both require a
+stack and an input; neither reads media beyond a metadata probe; neither provisions anything.
 
-**Structure only where something dispatches on it.** The catalog carries three enums and two
+An earlier draft made both of these `plan`, distinguished by whether `--want` was present, and
+called them step one and step two. That was wrong twice: one command answered two different
+questions depending on an absent argument, and the numbering implied a sequence nothing
+enforced. An agent that knows what it needs goes straight to `plan`. On `plan`, an omitted
+`--want` means the floors-only request — a punctuated transcript and nothing optional — which
+is the same meaning the flag's absence has on `run`, not a request for the menu.
+
+Because `capabilities` is where a request gets chosen, it carries the context that choice needs
+and not just the `availability` enum: `cost` at stack and add-on scope, `timing_precision`
+where a capability is native but its accuracy is unmeasured, `failure_recovery`, and the
+languages the stack actually handles. An `availability` value alone cannot distinguish a free
+add-on from one that pulls a second runtime, nor tell a caller whether native is good enough.
+
+**Structure only where something dispatches on it.** The report carries three enums and two
 numbers — `availability`, `processing.unit`, `failure_recovery.partial_results`, the unit
 count, and `projected_seconds` — and says everything else in one sentence per capability.
 Citations are not payload: `model_tests/` paths belong in this repository's documents and will
 not exist in a shipped tool's output, so a sentence names the fixture in words ("on a
-30-minute sample") and the research record holds the artifact. Nested objects that no caller branches on are ceremony: they lengthen the
-payload, and in this document's own history they were repeatedly got subtly wrong. `cost`
-states a run that actually happened before it states a rate, in units a reader can hold —
-seconds and gibibytes against a named sample — because nobody should multiply an RTF by a
-duration to learn whether a job takes a minute or an hour.
+30-minute sample") and the research record holds the artifact. `cost` states a run that
+actually happened before it states a rate, in units a reader can hold — seconds and gibibytes
+against a named sample — because nobody should multiply an RTF by a duration to learn whether
+a job takes a minute or an hour.
 
 The sentences still have to do the work the retired objects were built to enforce: say what
 was measured and on what fixture, distinguish a run that **refuted** a property from one that
-merely never measured it, and state the consequence rather than the forensics. A plan is the opposite case and keeps its
-structure, because it is dispatched on rather than read: `roles` with revisions and
-configuration is audited provenance, and `satisfaction`, `outcome`, and `evidence` are
-asserted by tests.
+merely never measured it, and state the consequence rather than the forensics. A plan is the
+opposite case and keeps its structure, because it is dispatched on rather than read: `roles`
+with revisions and configuration is audited provenance, and `satisfaction`, `outcome`, and
+`evidence` are asserted by tests.
 
-The converse rule matters as much: a payload carries what a caller can act on, and nothing
-else. Justification belongs in this document and evidence forensics belong behind a
-`record` pointer. Anything constant for a `catalog_version` — the floors, for instance — is
-not printed, because a caller can neither opt in nor out of it and a version number already
-implies it.
-
-Step two takes a stack, an input, and requirements, and returns the resolved plan plus a
-`sample_output` block built
-by serializing a placeholder result through the same serializer `run` uses. The
-sample is generated, never hand-written, so output shape stays a pure function of
-the resolved capability set and no combination needs enumerating. It guarantees
-key sets, types, and which fields are absent; it does not predict cardinality,
+A plan also carries a `sample_output` block built by serializing a placeholder result through
+the same serializer `run` uses. The sample is generated, never hand-written, so output shape
+stays a pure function of the resolved capability set and no combination needs enumerating. It
+guarantees key sets, types, and which fields are absent; it does not predict cardinality,
 whether abstentions occur, or runtime degradation.
+
+**refusal** — a request the tool declines, always with a `fix`. `fix` is a runnable command
+wherever a configuration exists that would work, and a sentence naming the nearest available
+output where none does; a plausible command that fails again teaches a caller nothing. The two
+capability refusals additionally carry `available_on_stack` — every name the chosen stack
+accepts, split into native, requires-an-add-on, and impossible — because a caller who got
+`--want` wrong needs the menu for the stack it picked, not a second command to go find it.
 
 **policy** — the decisions the tool makes that no caller can change: abstain on ambiguous
 overlap, the three recorded turn thresholds and what happens below each, and whether anything
@@ -229,7 +236,7 @@ canonical-timeline floor exists to prevent.
 
 **failure_recovery** — a stack's declared answer to what a failure leaves behind:
 `partial_results` of `per_unit` or `none`, and whether it is `resumable`. It belongs in
-step one because it is a stack-choice input, not a run-time discovery. It is `none` on
+the `capabilities` report because it is a stack-choice input, not a run-time discovery. It is `none` on
 `vibevoice`, so on a long file the most likely failure lands on the one stack that cannot
 resume.
 
@@ -355,9 +362,8 @@ ordering, because a stack choice is a quality judgement the planner cannot make.
 4. Requirements the chosen stack cannot satisfy fail the request with exit 2
    before any model loads: `capability_unsatisfiable_on_stack` with a non-empty
    `allowed` when another stack could serve it, `capability_unsupported` with
-   `allowed: []` and a reason when none can. Step one reports the same facts as
-   `availability: impossible` without erroring, so discovery never costs a
-   failed command.
+   `allowed: []` and a reason when none can. `capabilities` reports the same facts as
+   `availability: impossible` without erroring, so discovery never costs a failed command.
 5. A role with more than one implementation may be pinned. `--vad` is the case
    that exists today: `silero-vad` is the default and FluidAudio ships a second
    Core ML implementation. `--diarizer` has one implementation and is therefore

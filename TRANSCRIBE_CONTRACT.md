@@ -54,9 +54,9 @@ field not listed for its code, or missing one that is, is a defect:
 | --- | --- | --- |
 | `stack_required` | 2 | `field`, `allowed`, `stacks` (id → one-line characterization) |
 | `input_required` | 2 | `field`, `note` |
-| `capability_unknown` | 2 | `field`, `provided`, `allowed`, `did_you_mean` when a near name exists |
+| `capability_unknown` | 2 | `field`, `provided`, `available_on_stack`, `did_you_mean` when a near name exists |
 | `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
-| `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty) |
+| `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty), `available_on_stack` |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
 | `pin_conflicts_with_native_capability` | 2 | `field`, `provided`, `allowed`, `capability` |
 | `timing_required_for_format` | 2 | `field`, `provided`, `requires_capability`, `found`, `note` |
@@ -65,12 +65,17 @@ field not listed for its code, or missing one that is, is a defect:
 | `backend_failed` | 1 | `role`, `backend`, `detail` |
 | `run_incomplete` | 4 | `role`, `backend`, `detail`, `coverage`, `output` |
 
-`allowed` means different things by code and is never a free-text field: the stack
-ids for `stack_required`, the capability namespace for `capability_unknown`, the
-stacks that could serve the request for `capability_unsatisfiable_on_stack`, and
-empty where switching stacks cannot help. `capability_unknown`
-covers a name that is not in the namespace at all, which is distinct from a name
-that is real but unsatisfiable here.
+`allowed` means different things by code and is never a free-text field: the stack ids for
+`stack_required`, the stacks that could serve the request for
+`capability_unsatisfiable_on_stack`, and empty where switching stacks cannot help.
+`capability_unknown` covers a name that is not in the namespace at all, which is distinct from
+a name that is real but unsatisfiable here.
+
+Both capability errors also carry **`available_on_stack`**, the full set of names this stack
+will accept, split into `native`, `requires_add_on`, and `impossible`. A caller who got the
+`--want` wrong needs to know what it can ask for *here*, not only which other stack would have
+worked, and the split says which of those choices are free. It makes the error self-sufficient:
+correcting a request should not require a second command to find the menu.
 
 Three unrelated things were previously all called `requires`. They are now
 `packages` (the plan's provisioning list), `requires_tool` (an external toolchain a
@@ -100,30 +105,42 @@ no hint, and the two Qwen sizes disagreed with each other on the same recording 
 run that way, which is an argument for stating the language you know and against
 trusting the label you get back.
 
-## Planning in two steps
+## Two questions, two commands
 
-`plan` answers progressively, matching the order the interface enforces. Neither
-form reads media beyond metadata, and neither provisions anything.
+Nothing sequences these. An earlier draft called them "step one" and "step two" and made both
+forms of `plan`, distinguished by whether `--want` was present — which meant `plan` answered
+two different questions depending on an absent argument, and implied an order the tool never
+enforced. An agent that already knows what it needs should go straight to a plan; an agent that
+does not needs somewhere to look. Those are different questions, so they are different
+commands, and neither is a gate on the other.
 
-### Step one — what can this stack do with this file?
+- `audio transcribe capabilities --stack S --input F` — what can this stack do with this file,
+  what would each addition cost, and what happens if the run dies.
+- `audio transcribe plan --stack S --input F [--want ...]` — resolve this exact request: the
+  backends that will run, the packages to provision, and the shape of the output.
 
-Both options are required. The capability catalog is a static property of the stack, but
-the processing detail is not: the backend reads the input's metadata, decides how it will
-partition the audio, and discloses that along with what the run will cost and whether a
-failure leaves anything usable. No media is decoded beyond a metadata probe and nothing
-is provisioned.
+Both require a stack and an input, neither reads media beyond a metadata probe, and neither
+provisions anything. With `--want` omitted, `plan` resolves the floors-only request — a
+punctuated transcript and nothing optional — which is a real request and the same meaning the
+flag's absence has on `run`. It is not a request for the menu.
+
+### `capabilities` — what can this stack do with this file?
+
+The capability catalog is a static property of the stack, but the processing detail is not: the
+backend reads the input's metadata, decides how it will partition the audio, and discloses that
+along with what the run will cost and whether a failure leaves anything usable.
 
 ```bash
-audio transcribe plan --stack firered --input field.wav
+audio transcribe capabilities --stack firered --input field.wav
 ```
 
-Step one is not an availability lookup. It is the only place an agent can decide
-step two, so it has to carry the context that decision needs: what the stack
+This is not an availability lookup. It is the only place an agent can find what it needs to
+choose a request, so it carries the context that choice needs: what the stack
 already produces and how precisely, what each add-on would cost in packages, time,
 and memory, and what a recorded run showed about quality. An agent that only learns
 `requires_add_on` cannot tell a free add-on from one that pulls a second runtime, and
 an agent that only learns `native` cannot tell whether native is *good enough* for
-what it is building. Both are step-two decisions, so both belong here.
+what it is building. Both are request decisions, so both belong here.
 
 The catalog uses its own axis, `availability`, because nothing has been requested
 yet and `satisfaction` is defined only for a requested capability:
@@ -217,7 +234,7 @@ aligner, so switching stacks for timing accuracy trades one unmeasured number fo
 and `vad` is the inverse case, where the add-on has a measured figure and the native stage
 has none.
 
-The plan in step two keeps its structure, because that document *is* dispatched on: `roles`
+A plan keeps its structure, because that document *is* dispatched on: `roles`
 with backends, revisions, and configuration is audited provenance, and `satisfaction`,
 `outcome`, and `evidence` are asserted by tests. A catalog is read to make a choice; a plan
 is read by a machine that has to reproduce a run.
@@ -228,8 +245,8 @@ argument that publishing them let them be audited and refused as a timing source
 earned the space: a caller can act on neither, the extents are not speech timing and are
 not published as any kind, and the label is not a detector. Removing them also removed a
 refusal code, since a capability that does not exist cannot be a capability that exists
-but cannot be asked for. Discovering that `token_lid` is `impossible` is what step one is
-for; *requesting* it is an error, not a field (see Refusals).
+but cannot be asked for. Discovering that `token_lid` is `impossible` is what `capabilities` is for; *requesting* it is
+an error, not a field (see Refusals).
 
 `roles` is one sentence rather than two arrays. FireRedLID is inside the stack but runs only
 when `lid` is requested, so listing it unconditionally would promise weights this request
@@ -245,7 +262,7 @@ capability at that granularity in v1 — see the retired `word_confidence` entry
 ran, defaulted to `null` and `0`; the adapter drops both rather than publishing a
 zero confidence that reads as measured.
 
-### Step two — what will this request produce?
+### `plan` — what will this request produce?
 
 Adds the resolved roles, the packages to provision, and a `sample_output` block.
 
@@ -414,12 +431,12 @@ overlap-permitting output. Whether it fills depends on the audio.
 `duration_seconds` is populated because `plan` reads container metadata rather than
 stubbing what it already knows. The value `1794.2` is illustrative — this document
 has no real `meeting.m4a` — and is deliberately not the 30-minute reference fixture behind
-step one's `cost.proved`, which describes a recorded run rather than this input.
+the `capabilities` report's `cost.proved`, which describes a recorded run rather than this input.
 
-There is no `measured` block here, and there was one. It restated step one's timing and
+There is no `measured` block here, and there was one. It restated the `capabilities` report's timing and
 memory figures inside every plan, which duplicated the one place those figures belong now
 that a plan cannot be reached without a stack and an input. The ASR stage dominates the cost
-on every stack, and step one's `cost.proved` already says what that stage did on a named
+on every stack, and the `capabilities` report's `cost.proved` already says what that stage did on a named
 sample.
 
 `api_path` is in the config for a reason that is not a detail. Qwen has two decode entry
@@ -819,7 +836,7 @@ turns on a stage the stack already contains rather than adding a package:
 
 Note `selected_by: "requirement:lid"` rather than
 `add_on_required_by:lid`. Nothing was added — the `lid` role is declared
-by the stack and named in step one's `roles` sentence as conditional. The five
+by the stack and named as conditional in the `capabilities` report's `roles` sentence. The five
 `selected_by` forms are `stack`, `requirement:<capability>`,
 `add_on_required_by:<capability>`, `floor:<floor>`, and `pin:<flag>`. `decode` is the
 one role that carries no `selected_by` at all, because it is unconditional; the field
@@ -920,7 +937,8 @@ audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want segment_times
 ```
 
 Exit 2, `code: "capability_unsatisfiable_on_stack"`, `capability: "segment_timestamps"`,
-`allowed: ["vibevoice", "firered"]`. Reported by `plan` as well as `run`, before
+`allowed: ["vibevoice", "firered"]`, plus `available_on_stack` listing everything Qwen would
+accept instead. Reported by `plan` as well as `run`, before
 anything loads, and the fix is actionable: switch stacks. Qwen's only time-like
 output is the processing container, and promoting that to a segment extent is the
 fabrication this code exists to prevent.
@@ -930,7 +948,8 @@ audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timing
 ```
 
 Exit 2, `code: "capability_unknown"`, `field: "--want"`, `provided: "word_timing"`,
-`allowed` listing the nine requestable names. A misspelling and an unsatisfiable
+`did_you_mean: "word_timestamps"`, and `available_on_stack` listing every name this stack
+accepts. A misspelling and an unsatisfiable
 requirement are different failures: this one has no `capability` field, because the
 name is not one.
 
@@ -951,8 +970,8 @@ audio transcribe plan --input meeting.m4a --stack firered --want token_lid
 Exit 2, `code: "capability_unsupported"`, `capability: "token_lid"`,
 `allowed: []`, `reason: "no_backend_declares"`. An impossible request is an error
 rather than a silently `unavailable` field, so an agent gets an explicit answer
-instead of assuming code-switching support implies per-token labels. Step one's
-catalog is where this is *discovered* without erroring.
+instead of assuming code-switching support implies per-token labels. `capabilities` is where
+this is *discovered* without erroring.
 
 ```bash
 audio transcribe plan --input meeting.m4a --stack vibevoice \
@@ -1074,7 +1093,7 @@ audio export --input meeting.partial.json --input meeting.rest.json \
 
 **On `vibevoice` none of this applies.** `failure_recovery.partial_results` is `none`
 there, because the stack is handed whole media in one call and has no partition to
-salvage. That is the sharpest reason step one reports the field: on a long file the
+salvage. That is the sharpest reason `capabilities` reports the field: on a long file the
 most likely failure — memory — lands on the one stack that cannot resume.
 
 ## 6. Teardown
@@ -1112,7 +1131,7 @@ Where each capability in the namespace is exercised above:
 | `segment_timestamps` | §2, §3, §5 | native on VibeVoice and FireRed; exit 2 `unsatisfiable_on_stack` on Qwen |
 | `word_timestamps` | §1.4, §2, §3 | derived on Qwen and VibeVoice, native on FireRed |
 | `lid` | §3 | native on FireRed only, with its inference cost and region granularity |
-| `token_lid` | step one, §5 | `impossible` in the catalog; exit 2 `unsupported` when requested |
+| `token_lid` | `capabilities`, §5 | `impossible` in the catalog; exit 2 `unsupported` when requested |
 
 All seven roles appear in a resolved plan: `decode` and `asr` in §1.1, §2 and §3;
 `diarizer` in §1.1; `vad` in §1.4 (`silero-vad`) and §3

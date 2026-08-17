@@ -112,7 +112,7 @@ missing at export.
 ### 1.1 Ask what the stack can do with this file
 
 ```bash
-audio transcribe plan --stack qwen-1.7b --input meeting.m4a
+audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a
 ```
 
 ```json
@@ -448,8 +448,8 @@ agent that cuts on speaker changes and needs fillers preserved.
 
 ### 2.1 Resolve the request
 
-Step one is omitted here for length; it takes the same shape as §1.1 with `vibevoice`'s
-own values.
+The `capabilities` report is omitted here for length; it takes the same shape as §1.1 with
+`vibevoice`'s own values.
 
 ```bash
 audio transcribe plan --input demo.mp4 --stack vibevoice \
@@ -893,15 +893,20 @@ Exit 2:
   "field": "--want",
   "provided": "word_timing",
   "did_you_mean": "word_timestamps",
-  "allowed": ["languages", "verbatim", "diarization", "overlapped_speech", "vad",
-              "word_timestamps", "segment_timestamps", "lid", "token_lid"],
+  "available_on_stack": {
+    "native": ["languages", "verbatim"],
+    "requires_add_on": ["diarization", "overlapped_speech", "vad", "word_timestamps"],
+    "impossible": ["segment_timestamps", "lid", "token_lid"]
+  },
   "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timestamps"
 }
 ```
 
-`did_you_mean` is the difference between an error an agent can act on and one it has to
-research. A misspelling is the most likely request error by far, and the eight names are
-close enough to each other that a caller reaching for the wrong one is not being careless.
+Two fields do the correcting. `did_you_mean` handles the likeliest case — a misspelling, and
+the nine names sit close enough together that reaching for the wrong one is not carelessness.
+`available_on_stack` handles the rest: whatever the caller meant, this is the whole set it can
+ask for on the stack it chose, split so the free ones are visible. Between them the error is
+self-sufficient; correcting a request should not need a second command to find the menu.
 
 ### 4.4 A real capability this stack cannot satisfy
 
@@ -916,13 +921,21 @@ Exit 2:
   "code": "capability_unsatisfiable_on_stack",
   "capability": "segment_timestamps",
   "allowed": ["vibevoice", "firered"],
+  "available_on_stack": {
+    "native": ["languages", "verbatim"],
+    "requires_add_on": ["diarization", "overlapped_speech", "vad", "word_timestamps"],
+    "impossible": ["segment_timestamps", "lid", "token_lid"]
+  },
   "fix": "audio transcribe plan --input meeting.m4a --stack firered --want segment_timestamps"
 }
 ```
 
-Distinct from 4.3: the name is real, so `did_you_mean` would be wrong and misleading. The
-correction is a different stack, and `fix` picks the one whose other properties are closest
-to what was asked for rather than the first in the list.
+Distinct from 4.3: the name is real, so `did_you_mean` would be wrong and misleading. Two
+corrections are on offer and the payload does not choose for you — `allowed` names the stacks
+that would satisfy this request, `available_on_stack` names what this stack would satisfy
+instead, and `fix` takes the first reading because a caller who asked for segment timing
+probably wants segment timing. The second reading is for the caller who cared more about the
+stack.
 
 ### 4.5 A capability nothing provides
 

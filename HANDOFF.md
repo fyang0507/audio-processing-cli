@@ -61,20 +61,22 @@ Keep three kinds of statement separate in code and documentation:
   planner select the ASR from capabilities, which made it decide quality it has
   no basis to judge. See [VOCABULARY.md](VOCABULARY.md) and
   [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md).
-- Make the plan answerable in two steps, and generate its sample output rather
-  than writing one. Step one is the only place a caller can decide step two, so its
-  catalog carries the context that decision needs, not just an `availability` enum:
-  the stack's determinism tolerance and measured resource envelope, whether it accepts
-  a language input, the packages/environment/tools/measured time and memory each
-  add-on costs, which capabilities share one add-on stage so a caller does not
-  triple-count a single diarizer run, and where a capability is native but its accuracy
-  is unmeasured. A stack alone returns that catalog; a
-  stack plus requirements returns the resolved plan and a `sample_output` built by
-  serializing a placeholder result through the same serializer `run` uses. Four
-  stacks against nine requestable capabilities is roughly 2,048 combinations, so a
-  hand-maintained example set would both rot and be infeasible; one generated path
-  covers all of them. A second, parallel sample-rendering path is the specific
-  mistake to avoid here.
+- Split the two questions into two commands, and generate the plan's sample output rather
+  than writing one. `audio transcribe capabilities --stack S --input F` answers what a stack
+  can do with a file — the catalog, how the audio partitions, what a run costs, whether a
+  failure leaves anything usable — and `audio transcribe plan` resolves one request. Nothing
+  sequences them: an agent that knows what it needs goes straight to `plan`, and an omitted
+  `--want` there means the floors-only request rather than a request for the menu. An earlier
+  draft made both of these `plan` and numbered them, which had one command answering two
+  questions depending on an absent argument and implied an order the tool never enforced.
+  Because `capabilities` is where a request gets chosen, it carries what that choice needs and
+  not just an `availability` enum: what each addition costs to install and to run, which
+  capabilities share one add-on stage, where a capability is native but its accuracy is
+  unmeasured, and what the languages actually are as against what is advertised. A plan carries
+  a `sample_output` built by serializing a placeholder result through the same serializer `run`
+  uses. Four stacks against nine capability names is roughly 2,048 combinations, so a
+  hand-maintained example set would both rot and be infeasible; one generated path covers all
+  of them. A second, parallel sample-rendering path is the specific mistake to avoid here.
 - Separate floors from choices. Six floors, none of them optional: punctuated and
   sentence-segmented text (so FireRed always runs FireRedPunc); punctuation at the
   sentence level only; the canonical source timeline; no synthesized bounds;
@@ -229,7 +231,7 @@ and experiment digest rather than the full findings file.
   language argument refuse it rather than ignoring it. The no-hint path remains
   unmeasured for accuracy.
 - FireRed reproduces text exactly but timestamps only to 1 ms, so
-  `determinism_tolerance_ms` is declared per backend and surfaced in step one. That
+  `determinism_tolerance_ms` is declared per backend and recorded in a plan's roles. That
   drift is a fraction of a video frame and irrelevant to subtitles; it is not
   irrelevant to a `word_id` keyed on a start time, so the Observation Store's identity
   scheme cannot key on one.
