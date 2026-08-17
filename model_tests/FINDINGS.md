@@ -74,7 +74,7 @@ Mac test.
 | | FireRedASR2-AED | VibeVoice-ASR |
 |---|---|---|
 | Output | `firered/FireRedASR2S/result_firered.json` | `vibevoice/VibeVoice/result_vibevoice_singlespeaker.json` |
-| Granularity | word-level timestamps + confidence, sentence-level LID | segment-level only, no word-level |
+| Granularity | word-level timestamps, sentence-level confidence and LID | segment-level only, no word-level |
 | Diarization | none | yes (single speaker correctly tagged) |
 
 Both handled the code-switching reasonably. VibeVoice got a semantically ambiguous
@@ -770,6 +770,42 @@ are a product default. ASR agreement and diarization do **not**
 validate personality, competence, deception, or hiring recommendations. Any
 evaluative construct needs separate consent, frozen human labels/rubric,
 fairness analysis, and human oversight.
+
+### Corrections (2026-08-17)
+
+Found while specifying the `transcribe` command against the recorded artifacts
+rather than against these summaries. Both corrections supersede the earlier
+statements wherever they appear here, in `DECISION_REPORT.md`, and in
+`EXPERIMENT_RESULTS.md`.
+
+- **FireRed emits no per-word confidence.** Round 1's granularity row said
+  "word-level timestamps + confidence". Every word object is exactly
+  `{start_ms, end_ms, text}` (`fireredasr2s/fireredasr2system.py:181-184`),
+  confirmed over 12,370 word tokens across all five recorded FireRed artifacts.
+  Confidence exists at *sentence* level as `asr_confidence`, non-null on every
+  sentence and ranging 0.158–0.997 on the recorded runs. The capability was part of
+  the case for FireRed as an audit route; that specific argument does not hold, while
+  its dialect-form, region-LID, native-word-time, and resource arguments are
+  unaffected.
+- **FireRedPunc emits punctuated sentences, not marks with bounds.** It returns
+  `punc_sentences` — punctuated sentence strings with sentence bounds
+  (`fireredpunc/punc.py:109-119`) — while `words` is built from the pre-punctuation
+  AED timestamps. Two consequences that were not recorded before: the punctuation
+  stage also **recases** text, because `RuleBaedTxtFix.fix` lowercases its input and
+  then re-capitalizes sentence starts and standalone `i`
+  (`fireredpunc/punc.py:349-382`), so sentence text and word text differ in case by
+  construction — 234 characters across the recorded artifacts. And the sentence text
+  is therefore not reconstructible from the word stream: the invariant that does hold
+  is that stripping punctuation and whitespace from a sentence's text yields exactly
+  the concatenation of its word texts, compared case-insensitively. Verified on all
+  five FireRed artifacts and on all 17 aligned segments of
+  `forced_aligner/result_hybrid_multispeaker.json`.
+
+Two smaller attributions corrected in the same pass, both from
+`results/2026-08-13-turn-attributed-fast-asr.json`: the MLX cache is cleared after
+every *batch* rather than every turn (the two coincide only at `batch_size: 1`), and
+every figure in that record's controlled A/B was produced with the language hint
+`"Cantonese"` rather than on the no-hint path.
 
 ### What remains unproven
 
