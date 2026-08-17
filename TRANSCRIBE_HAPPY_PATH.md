@@ -21,9 +21,8 @@ Three use cases, one per recommended stack row in
 Every value below is one of three things, and they are never mixed:
 
 - **Measured.** Traceable to a recorded artifact. All of these appear inside
-  `provenance.measured`, `capabilities[].measured_limit`, `capabilities[].observed_limit`,
-  package byte counts, revisions, and configuration. Every one is checkable against
-  `model_tests/`.
+  `cost.proved`, the `capabilities[].note` sentences, package byte counts, revisions, and
+  configuration. Every one is checkable against `model_tests/`.
 - **Illustrative.** Transcript text, speaker labels, timestamps, cue text, and input
   durations. These are made up. They are internally consistent — bounds are monotonic,
   words fall inside their segment, nothing exceeds the source duration — so the shapes
@@ -120,78 +119,47 @@ audio transcribe plan --stack qwen-1.7b --input meeting.m4a
   "catalog_version": 1,
   "stack": "qwen-1.7b",
   "family": "Qwen3-ASR",
-  "roles_included": ["asr"],
-  "roles_conditional": {},
   "environment": "mlx",
+  "roles": "asr only",
   "input": {"path": "meeting.m4a", "duration_seconds": 1794.2, "container": "m4a",
             "sample_rate_hz": 44100, "channels": 2},
   "processing": {
     "unit": "fixed_chunk",
-    "unit_rule": "180-second chunks when timing is not supplied externally; diarized turns instead when diarization is requested, in which case the count is not known until the diarizer runs",
     "unit_count": 10,
-    "unit_count_known_at_plan_time": true,
-    "batch_size": 1
+    "note": "180-second chunks, one at a time. Requesting diarization replaces them with the diarizer's turns, and that count is not known until the diarizer runs."
   },
   "failure_recovery": {
     "partial_results": "per_unit",
-    "resumable": true,
-    "resume_mechanism": "--range",
-    "note": "units are independent, so a failure leaves the completed ones usable; the global generation budget is the mechanism most likely to stop a long file early and it stops between units, not inside one"
+    "note": "Units are independent, so a failure leaves the finished ones usable and --range addresses the rest. The global generation budget is what most often stops a long file early, and it stops between units rather than inside one."
   },
   "cost": {
-    "proved": "54 s and 3.0 GiB peak to transcribe a 30-minute Cantonese interview on an M4 Max, batch 1 with the MLX cache cleared per batch and a Cantonese language hint",
+    "proved": "54 s and 3.0 GiB peak to transcribe a 30-minute Cantonese interview on an M4 Max, batch 1 with the MLX cache cleared per batch and a Cantonese language hint.",
     "projected_seconds": 53.6,
     "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"
   },
   "capabilities": {
-    "languages":         {"availability": "native",
-                          "advertised": "30 language labels; no dialect selector",
-                          "verified_here": ["Mandarin", "English", "Cantonese"],
-                          "hint_accepted": true,
-                          "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "the only accuracy figure is Cantonese, 33.56% mixed-token error on a 30-minute interview; the other advertised languages are untested here",
-                          "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"},
-    "verbatim":          {"availability": "native",
-                          "evidence": {"interface": "verified", "quality": "unmeasured"},
-                          "note": "does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words; filler recall unmeasured",
-                          "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
-    "diarization":       {"availability": "requires_add_on", "add_on": ["fluidaudio", "reconciler"],
-                          "produces": ["segments[].speaker", "turns[]"],
-                          "cost": {"proved": "15 s and 0.55 GiB peak on a 30-minute sample; RSS excludes memory held by system Core ML services",
-                                   "projected_seconds": 0.2,
-                                   "packages": ["fluidaudio", "speaker-diarization-coreml"],
-                                   "environment": "swift", "requires_tool": ["swift"],
-                                   "download_bytes": null,
-                                   "shares_stage_with": ["overlapped_speech"]},
-                          "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "95.42% participant-interval F1 on a 30-minute interview, but only 3 of 75 annotated speaker changes matched on a dense two-speaker conversation; strong on long turns, unsuitable where turns are short or overlapping",
-                          "record": "model_tests/benchmark/DIARIZATION.md"},
-    "overlapped_speech": {"availability": "requires_add_on", "add_on": ["fluidaudio"],
-                          "cost": {"shares_stage_with": ["diarization"]},
-                          "evidence": {"interface": "verified", "quality": "unmeasured"},
-                          "note": "without this, policy.overlap_detection is \"unavailable\" and an empty abstention ledger means undetected rather than absent"},
-    "vad":               {"availability": "requires_add_on", "add_on": ["silero-vad"],
-                          "cost": {"proved": "0.4 s and 0.11 GiB peak on a 150-second sample",
-                                   "projected_seconds": 4.5,
-                                   "packages": ["silero-vad"], "environment": "core",
-                                   "auto_fetch": true, "download_bytes": null,
-                                   "note": "hash-pinned single file that fetches itself, so it never returns exit 3"},
-                          "evidence": {"interface": "verified", "quality": "measured"},
-                          "measured_limit": "0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall; the gate over-includes, so it bounds activity and not speakers",
-                          "record": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
-    "word_timestamps":   {"availability": "requires_add_on", "add_on": ["qwen3-forcedaligner"],
-                          "cost": {"proved": "4.6 s on a 139-second sample, alignment only and excluding model load; peak unrecorded",
-                                   "projected_seconds": 59.7,
-                                   "packages": ["qwen3-forcedaligner"], "environment": "torch",
-                                   "download_bytes": null},
-                          "evidence": {"interface": "verified", "quality": "unmeasured"},
-                          "timing_precision": {"boundary_mae_ms": null,
-                                               "note": "never scored against hand-labelled boundaries, and neither is FireRed's native timing, so switching stacks for timing accuracy trades one unmeasured number for another"}},
+    "languages": {"availability": "native",
+                  "note": "Advertises 30 language labels and has no dialect selector; only Mandarin, English and Cantonese have actually been run here. The one accuracy figure is Cantonese at 33.56% mixed-token error on a 30-minute interview. Accepts a --language hint, which every recorded figure above was produced with; the label it returns without one is not a detector to route on.",
+                  "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"},
+    "verbatim": {"availability": "native",
+                 "note": "Does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words. Filler recall is unmeasured on every stack.",
+                 "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+    "diarization": {"availability": "requires_add_on",
+                    "note": "Adds FluidAudio and the reconciler, which need a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample, and that same run also serves overlapped_speech. Produces speaker labels on the text and the turn intervals together. Measured 95.42% participant-interval F1 on a 30-minute interview but matched only 3 of 75 annotated speaker changes on a dense two-speaker conversation — strong on long turns, unsuitable where turns are short or overlapping. RSS excludes memory held by system Core ML services.",
+                    "record": "model_tests/benchmark/DIARIZATION.md"},
+    "overlapped_speech": {"availability": "requires_add_on",
+                          "note": "Comes out of the same FluidAudio run as diarization, so asking for both costs one stage. Unmeasured. Without it, policy.overlap_detection reads \"unavailable\" and an empty abstention ledger means undetected rather than absent."},
+    "vad": {"availability": "requires_add_on",
+            "note": "Adds Silero, a hash-pinned file that fetches itself, so it never returns exit 3: 0.4 s and 0.11 GiB peak on a 150-second sample, about 5 s on this input. Measured 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall, so the gate over-includes — it bounds activity, not speakers.",
+            "record": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
+    "word_timestamps": {"availability": "requires_add_on",
+                        "note": "Adds Qwen3-ForcedAligner in the torch environment, so this request spans three: 4.6 s of alignment on a 139-second sample excluding model load, about a minute on this input. Never scored against hand-labelled boundaries, and neither is FireRed's native timing, so switching stacks for accuracy would trade one unmeasured number for another. Absent on any segment with no speech to align."},
     "segment_timestamps": {"availability": "impossible", "reason": "no_native_segment_extents",
-                          "note": "this stack emits no segment extents; the chunk boundaries it works in are not speech timing and are not published"},
-    "lid":               {"availability": "impossible", "reason": "no_backend_declares_on_stack",
-                          "note": "available on firered via its LID stage"},
-    "token_lid":         {"availability": "impossible", "reason": "no_backend_declares"}
+                           "note": "This stack emits no segment extents. The chunk boundaries it works in are not speech timing and are never published as any."},
+    "lid": {"availability": "impossible", "reason": "no_backend_declares_on_stack",
+            "note": "Available on firered, which runs a dedicated LID stage."},
+    "token_lid": {"availability": "impossible", "reason": "no_backend_declares",
+                  "note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them."}
   },
   "next": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want <capabilities>"
 }
@@ -199,14 +167,17 @@ audio transcribe plan --stack qwen-1.7b --input meeting.m4a
 
 Exit 0. Nothing was downloaded; only the input's container metadata was read.
 
-Every block above answers a question the caller has to decide: which languages the stack
-actually handles as against which it advertises, what it gives away free, what each
-addition costs to install and to run, where a measured result says the addition is weak,
-and what happens if the run dies. `cost.proved` is a run that actually happened, stated in
-units a reader can hold — seconds and gibibytes against a named sample — and
-`projected_seconds` is that rate applied to this input, so nobody re-derives it.
-`shares_stage_with` marks the three capabilities that come out of one diarizer run, so a
-caller adding costs does not count it three times.
+Every block above answers a question the caller has to decide, and answers it in prose
+wherever prose will do. Three enums and two numbers carry everything a program branches on —
+`availability`, `processing.unit`, `failure_recovery.partial_results`, the unit count, and
+`projected_seconds`. The rest is sentences, because no caller dispatches on a nested
+`evidence` object and a reader learns the same thing either way.
+
+`cost.proved` is a run that actually happened, in units a reader can hold: seconds and
+gibibytes against a named sample. `projected_seconds` applies that rate to this input so
+nobody re-derives it. Where two capabilities come out of one stage the sentence says so —
+`diarization` and `overlapped_speech` share a single FluidAudio run — which is the sort of
+thing a caller summing per-capability costs would otherwise double-count.
 
 ### 1.2 Resolve the request
 
@@ -268,14 +239,13 @@ audio transcribe plan --input meeting.m4a \
     "abstention_reasons": ["overlap", "raw_fragment", "short_turn"]
   },
   "capabilities": {
-    "diarization": {"satisfaction": "derived", "backend": "fluidaudio",
-                            "evidence": {"interface": "verified", "quality": "measured"},
-                            "note": "reconciled sample-exactly onto ASR text; anonymous labels only",
-                            "measured_limit": "on the 149.9 s CantoMap conversation with 75 annotated speaker changes this diarizer preset matched 3; not validated for rapid backchannels, interruptions, or dense overlap",
-                            "record": "model_tests/benchmark/DIARIZATION.md"},
-    "word_timestamps":         {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
-                            "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "note": "boundary MAE/P95 unlabeled; absent on any segment with no speech to align"}
+    "diarization":     {"satisfaction": "derived", "backend": "fluidaudio",
+                        "evidence": {"interface": "verified", "quality": "measured"},
+                        "note": "Anonymous labels reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. This preset matched 3 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap.",
+                        "record": "model_tests/benchmark/DIARIZATION.md"},
+    "word_timestamps": {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
+                        "evidence": {"interface": "verified", "quality": "unmeasured"},
+                        "note": "Boundary error against labels is unmeasured, and absent on any segment with no speech to align."}
   },
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "kind": "weights",
@@ -559,17 +529,16 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
     "abstention_reasons": []
   },
   "capabilities": {
-    "verbatim":            {"satisfaction": "native",
-                            "evidence": {"interface": "verified", "quality": "refuted"},
-                            "interface_basis": "emits disfluencies rather than cleaning them: 28 filler hits on the 139.284 s probe, the highest of the four stacks",
-                            "observed_limit": "dialect form normalized twice: 看哈 to 看一下 on the 27.8 s probe and 刷啥子 for 耍啥子 on the 139.284 s probe, both retained by firered",
-                            "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
-    "diarization": {"satisfaction": "native",
-                            "evidence": {"interface": "verified", "quality": "measured"},
-                            "measured_limit": "on the 149.9 s CantoMap conversation with 75 annotated speaker changes this stack matched 39; not validated for rapid backchannels, interruptions, or dense overlap",
-                            "record": "model_tests/benchmark/DIARIZATION.md"},
-    "segment_timestamps":      {"satisfaction": "native",
-                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
+    "verbatim":           {"satisfaction": "native",
+                           "evidence": {"interface": "verified", "quality": "refuted"},
+                           "note": "Emits disfluencies rather than cleaning them — 28 filler hits on the probe, the highest of the four stacks — but a recorded run refuted dialect preservation twice: 看哈 became 看一下 and 耍啥子 became 刷啥子, both retained by firered.",
+                           "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+    "diarization":        {"satisfaction": "native",
+                           "evidence": {"interface": "verified", "quality": "measured"},
+                           "note": "Native speaker labels and segment bounds; turns group adjacent same-speaker segments, so no bound is synthesized. Matched 39 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap.",
+                           "record": "model_tests/benchmark/DIARIZATION.md"},
+    "segment_timestamps": {"satisfaction": "native",
+                           "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "word_timestamps":         {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
                             "note": "boundary MAE/P95 unlabeled; absent on any segment with no speech to align"}
@@ -799,16 +768,13 @@ audio transcribe plan --input field.wav --stack firered \
   "capabilities": {
     "verbatim":        {"satisfaction": "native",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
-                        "interface_basis": "emits disfluencies rather than cleaning them: 24 filler hits on the 139.284 s probe",
-                        "note": "retained 看哈 on the 27.8 s probe and 耍啥子 on the 139.284 s probe; two lexemes cannot rank varieties"},
-    "word_timestamps":     {"satisfaction": "native",
+                        "note": "Emits disfluencies rather than cleaning them — 24 filler hits on the probe — and retained the dialect form on both probed clips; two lexemes cannot rank varieties."},
+    "word_timestamps": {"satisfaction": "native",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
-                        "timing_precision": {"repeat_drift_ms": 1.0, "boundary_mae_ms": null,
-                                             "note": "monotonic in both the 30- and 60-minute runs; accuracy against hand-labelled boundaries is unmeasured"}},
-    "vad":   {"satisfaction": "native", "stage": "FireRedVAD",
+                        "note": "Monotonic across the 30- and 60-minute runs, but accuracy against hand-labelled boundaries is unmeasured."},
+    "vad":             {"satisfaction": "native", "stage": "FireRedVAD",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
-                        "alternative": {"add_on": ["silero-vad"],
-                                        "note": "the Silero path has a measured 0.8505 frame-level F1 where this stage has none; --vad selects it"}},
+                        "note": "No measured accuracy for this stage; --vad silero-vad substitutes a path that has a measured 0.8505 frame-level F1."},
     "segment_timestamps":  {"satisfaction": "native",
                         "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "lid": {"satisfaction": "native", "stage": "FireRedLID",

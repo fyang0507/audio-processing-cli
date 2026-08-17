@@ -112,15 +112,26 @@ partitioned, how many units that is, what the run will cost, and whether a failu
 anything usable. Because step one is the only place a caller can decide step two, the
 catalog carries the context that decision needs and not just the `availability` enum:
 `cost` at stack and add-on scope in one shape so the pieces can be summed,
-`shares_stage_with` where several capabilities come from one add-on run, `timing_precision`
-where a capability is native but its accuracy is unmeasured, and `failure_recovery`. An
-`availability` value alone cannot distinguish a free add-on from one that pulls a second
-runtime, nor tell a caller whether native is good enough.
+what each addition costs to install and to run, where a recorded result says it is weak, and
+what a failure leaves behind. An `availability` value alone cannot distinguish a free add-on
+from one that pulls a second runtime, nor tell a caller whether native is good enough.
 
-`cost` states a run that actually happened before it states a rate: `proved` carries seconds
-and gibibytes against a named sample in units a reader can hold, and `projected_seconds`
-applies that to the input in hand. A caller should not have to multiply an RTF by a duration
-to find out whether a job takes a minute or an hour.
+**Structure only where something dispatches on it.** The catalog carries three enums and two
+numbers — `availability`, `processing.unit`, `failure_recovery.partial_results`, the unit
+count, and `projected_seconds` — and says everything else in a sentence per capability plus a
+`record` pointer. Nested objects that no caller branches on are ceremony: they lengthen the
+payload, and in this document's own history they were repeatedly got subtly wrong. `cost`
+states a run that actually happened before it states a rate, in units a reader can hold —
+seconds and gibibytes against a named sample — because nobody should multiply an RTF by a
+duration to learn whether a job takes a minute or an hour.
+
+The sentences still have to do the work the retired objects were built to enforce: say what
+was measured and on what fixture, distinguish a run that **refuted** a property from one that
+merely never measured it, and state the consequence rather than the forensics, leaving the
+fixture and the configuration behind `record`. A plan is the opposite case and keeps its
+structure, because it is dispatched on rather than read: `roles` with revisions and
+configuration is audited provenance, and `satisfaction`, `outcome`, and `evidence` are
+asserted by tests.
 
 The converse rule matters as much: a payload carries what a caller can act on, and nothing
 else. Justification belongs in this document and evidence forensics belong behind a
@@ -166,16 +177,15 @@ within a millisecond.
 All of that is **provenance, not a decision input**, and it lives in the executed plan's
 `roles` rather than in the step-one catalog. Its only consumer is an auditor asking whether
 two artifacts should be byte-comparable. It is specifically *not* the answer to "do I need
-an aligner for accurate timing" — that is `timing_precision`, which reports boundary error
-against labels, and reproducibility is not accuracy. Conflating the two is easy and was
-done here once.
+an aligner for accurate timing" — that is boundary error against labels, which the catalog
+states in prose and which is unmeasured on every path here. Reproducibility is not accuracy;
+conflating the two is easy and was done here once.
 
 **language input** — a hint passed *to* an ASR, distinct from every language
 capability, which is an output. Keep the two apart in naming: `--language` is an input
 that constrains a decode; `lid` and `token_lid`
 are outputs that report one. A stack declares whether it accepts an input in its
-`languages` capability's `hint_accepted` flag, and passing the flag where it is not
-accepted is an error
+`languages` capability, and passing the flag where it is not accepted is an error
 rather than a silently ignored argument. This is the only caller-settable model input
 in v1.
 
@@ -288,7 +298,7 @@ because they come out of one stage and neither is useful alone.
 
 | Capability | Meaning | Why it is its own name |
 | --- | --- | --- |
-| `languages` | Which languages the stack handles, separated into what it advertises and what a recorded run here actually exercised. | The first stack-choice question and the one most easily answered with a marketing number. Advertised counts are 30, 50+, and 100+; the set verified locally is Mandarin, English, and Cantonese on every stack. Carries `hint_accepted`, which is the only part of the old `language_input` block a caller could act on. |
+| `languages` | Which languages the stack handles, separating what it advertises from what a recorded run here actually exercised, and whether it takes a `--language` hint. | The first stack-choice question and the one most easily answered with a marketing number. Advertised counts are 30, 50+, and 100+; the set verified locally is Mandarin, English, and Cantonese on every stack. |
 | `verbatim` | The stack **can produce** verbatim text: it emits what it heard, disfluencies included, rather than a cleaned rendering. How faithfully it does so is the quality axis, not this one. | Interface verified on all four stacks — 24 to 28 filler hits on one probe, none of them cleaning and none of them complete. No backend exposes a verbatim switch and nothing in v1 cleans, so requesting this asserts an interface rather than selecting a mode, and the plan answers for fidelity separately: `quality: "refuted"` on the two stacks a recorded run caught normalizing a dialect form. |
 | `diarization` | Anonymous speaker labels on transcript text **and** the speaker turn intervals, as `segments[].speaker` and `turns[]`. | One request, because there is no use for either half alone: intervals without text say "three people spoke" and never who said what, and text-without-intervals is not even purchasable, since punctuated text is a floor. Both fall out of one diarizer run, so splitting them would price one stage twice. Whether the labels were native or reconciled from a diarizer is provenance, not a separate request. |
 | `overlapped_speech` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
@@ -467,9 +477,15 @@ provisioning history can still locate everything.
   `overlapped_speech`, `vad`, `word_timestamps`, `segment_timestamps`, `lid`, `token_lid`. The old names drew a method/outcome
   distinction that reads well in a design document and creates a private dialect
   everywhere else. Where the standard term is ambiguous, qualify it rather than invent.
-- **language_input** — folded into the `languages` capability as `hint_accepted`. A block
-  saying a stack accepts a language hint, without saying which languages it handles, gave
-  a caller nothing to act on.
+- **language_input** — folded into the `languages` capability. A block saying a stack accepts
+  a language hint, without saying which languages it handles, gave a caller nothing to act on.
+- **add_on_cost**, **stage_cost**, **measured_envelope**, **timing_precision**,
+  **alternative**, **interface_basis**, **measured_limit**, **observed_limit**,
+  **shares_stage_with**, **produces**, **roles_included**, **roles_conditional** — catalog
+  fields collapsed into one `note` sentence per capability. Each existed to hold a string or a
+  null that no caller dispatched on. `measured_limit` and `observed_limit` survive as a
+  *writing rule* rather than as keys: the sentence must distinguish a refuted property from an
+  unmeasured one.
 - **container_bounds**, **container_language**, **provenance_only** — removed outright, not
   renamed. They published a stack's internal chunk extents and its own language guess on
   the theory that auditability justified the space. A caller can act on neither, and their
