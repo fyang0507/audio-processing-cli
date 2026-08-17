@@ -56,7 +56,7 @@ Keep three kinds of statement separate in code and documentation:
   arrive natively, none of which is derivable from a requirement list. The
   planner then derives add-ons mechanically: `word_timestamps` on a stack without
   native word timing forces the aligner, `diarization` on a stack without
-  native speaker structure forces a diarizer and the reconciler. No default
+  native speaker structure forces a diarizer. No default
   stack, no preference scalar, no tie-break ordering — an earlier draft had the
   planner select the ASR from capabilities, which made it decide quality it has
   no basis to judge. See [VOCABULARY.md](VOCABULARY.md) and

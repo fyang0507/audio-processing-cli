@@ -116,7 +116,6 @@ audio transcribe plan --stack qwen-1.7b --input meeting.m4a
 
 ```json
 {
-  "catalog_version": 1,
   "stack": "qwen-1.7b",
   "family": "Qwen3-ASR",
   "environment": "mlx",
@@ -134,24 +133,23 @@ audio transcribe plan --stack qwen-1.7b --input meeting.m4a
   },
   "cost": {
     "proved": "54 s and 3.0 GiB peak to transcribe a 30-minute Cantonese interview on an M4 Max, batch 1 with the MLX cache cleared per batch and a Cantonese language hint.",
-    "projected_seconds": 53.6,
-    "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"
+    "projected_seconds": 53.6
   },
   "capabilities": {
     "languages": {"availability": "native",
-                  "note": "Advertises 30 language labels and has no dialect selector; only Mandarin, English and Cantonese have actually been run here. The one accuracy figure is Cantonese at 33.56% mixed-token error on a 30-minute interview. Accepts a --language hint, which every recorded figure above was produced with; the label it returns without one is not a detector to route on.",
-                  "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"},
+                  "note": "Advertises 30 language labels and has no dialect selector; only Mandarin, English and Cantonese have actually been run here. The one accuracy figure is Cantonese at 33.56% mixed-token error on a 30-minute interview. Accepts a --language hint, which every recorded figure above was produced with; the label it returns without one is not a detector to route on."
+                  },
     "verbatim": {"availability": "native",
-                 "note": "Does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words. Filler recall is unmeasured on every stack.",
-                 "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+                 "note": "Does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words. Filler recall is unmeasured on every stack."
+                 },
     "diarization": {"availability": "requires_add_on",
-                    "note": "Adds FluidAudio and the reconciler, which need a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample, and that same run also serves overlapped_speech. Produces speaker labels on the text and the turn intervals together. Measured 95.42% participant-interval F1 on a 30-minute interview but matched only 3 of 75 annotated speaker changes on a dense two-speaker conversation — strong on long turns, unsuitable where turns are short or overlapping. RSS excludes memory held by system Core ML services.",
-                    "record": "model_tests/benchmark/DIARIZATION.md"},
+                    "note": "Adds FluidAudio, which needs a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample, and that same run also serves overlapped_speech. Produces speaker labels on the text and the turn intervals together, mapped onto the transcript by an exact partition of the timeline so no span is transcribed twice and no gap is invented. Measured 95.42% participant-interval F1 on a 30-minute interview but matched only 3 of 75 annotated speaker changes on a dense two-speaker conversation — strong on long turns, unsuitable where turns are short or overlapping. RSS excludes memory held by system Core ML services."
+                    },
     "overlapped_speech": {"availability": "requires_add_on",
-                          "note": "Comes out of the same FluidAudio run as diarization, so asking for both costs one stage. Unmeasured. Without it, policy.overlap_detection reads \"unavailable\" and an empty abstention ledger means undetected rather than absent."},
+                          "note": "Comes out of the same FluidAudio run as diarization, so asking for both costs one stage. Unmeasured. Without it nothing in the plan detects overlap, so an empty abstention ledger means undetected rather than absent."},
     "vad": {"availability": "requires_add_on",
-            "note": "Adds Silero, a hash-pinned file that fetches itself, so it never returns exit 3: 0.4 s and 0.11 GiB peak on a 150-second sample, about 5 s on this input. Measured 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall, so the gate over-includes — it bounds activity, not speakers.",
-            "record": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
+            "note": "Adds Silero, a hash-pinned file that fetches itself, so it never returns exit 3: 0.4 s and 0.11 GiB peak on a 150-second sample, about 5 s on this input. Measured 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall, so the gate over-includes — it bounds activity, not speakers."
+            },
     "word_timestamps": {"availability": "requires_add_on",
                         "note": "Adds Qwen3-ForcedAligner in the torch environment, so this request spans three: 4.6 s of alignment on a 139-second sample excluding model load, about a minute on this input. Never scored against hand-labelled boundaries, and neither is FireRed's native timing, so switching stacks for accuracy would trade one unmeasured number for another. Absent on any segment with no speech to align."},
     "segment_timestamps": {"availability": "impossible", "reason": "no_native_segment_extents",
@@ -190,10 +188,6 @@ audio transcribe plan --input meeting.m4a \
 
 ```json
 {
-  "plan_version": 1,
-  "request": {"input": "meeting.m4a", "stack": "qwen-1.7b",
-              "want": ["diarization", "word_timestamps"],
-              "language": "Cantonese"},
   "roles": {
     "decode":     {"backend": "ffmpeg",
                    "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
@@ -204,9 +198,6 @@ audio transcribe plan --input meeting.m4a \
                               "min_segment_duration": 0.0, "output": "regular",
                               "threshold": 0.6, "num_speakers": 2},
                    "config_note": "every cited diarization measurement used a known two-speaker prior; num_speakers must be supplied or the measured_limit figures do not apply",
-                   "selected_by": "add_on_required_by:diarization"},
-    "reconciler": {"backend": "sample-exact-turn-partition",
-                   "config": {"partition": "sample_exact"},
                    "selected_by": "add_on_required_by:diarization"},
     "asr":        {"backend": "qwen3-asr-1.7b-8bit", "environment": "mlx",
                    "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
@@ -223,26 +214,16 @@ audio transcribe plan --input meeting.m4a \
                    "selected_by": "add_on_required_by:word_timestamps"}
   },
   "execution": {
-    "stage_order": ["decode", "diarizer", "reconciler", "asr", "aligner"],
+    "stage_order": ["decode", "diarizer", "asr", "aligner"],
     "residency": "one_model_stage_at_a_time",
     "environments_spanned": ["swift", "mlx", "torch"],
     "note": "stages run strictly sequentially and no two model stages are resident together; wall time adds across stages, peak memory does not, and the per-stage peaks below must not be summed"
   },
-  "policy": {
-    "policy_version": 1,
-    "overlap": "abstain",
-    "overlap_detection": "fluidaudio",
-    "raw_fragment_min_ms": 250,
-    "accepted_turn_min_ms": 500,
-    "same_label_merge_max_ms": 300,
-    "below_threshold": "abstain",
-    "abstention_reasons": ["overlap", "raw_fragment", "short_turn"]
-  },
   "capabilities": {
     "diarization":     {"satisfaction": "derived", "backend": "fluidaudio",
                         "evidence": {"interface": "verified", "quality": "measured"},
-                        "note": "Anonymous labels reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. This preset matched 3 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap.",
-                        "record": "model_tests/benchmark/DIARIZATION.md"},
+                        "note": "Anonymous labels reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. This preset matched 3 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap."
+                        },
     "word_timestamps": {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
                         "note": "Boundary error against labels is unmeasured, and absent on any segment with no speech to align."}
@@ -259,18 +240,6 @@ audio transcribe plan --input meeting.m4a \
   ],
   "total_known_download_bytes": 2463307541,
   "unsized_packages": ["fluidaudio", "speaker-diarization-coreml", "qwen3-forcedaligner"],
-  "measured": {
-    "reference_run": "spice-30min-canonical-mix",
-    "fixture_duration_seconds": 1800.0,
-    "hardware": "apple-m4-max-64gib",
-    "config": "batch 1; MLX cache cleared after every batch, 195 clear observations over 195 accepted turns; language hint \"Cantonese\"",
-    "asr_stage_wall_seconds": 53.77,
-    "diarizer_stage_wall_seconds": 14.74,
-    "peak_rss_bytes": 3241689088,
-    "end_to_end_wall_seconds": null,
-    "end_to_end_note": "never measured for 1.7B with the aligner in the chain; the record's 69.16 s arithmetic sum covers diarizer plus ASR only, borrows its diarization stage from a separate 0.6B run, and carries measured_end_to_end: false",
-    "record": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"
-  },
   "warnings": [],
   "sample_output": {
     "sample": true,
@@ -403,10 +372,7 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
     {"abstention_id": "ab_1", "reason": "short_turn", "start": 118.44, "end": 118.79}
   ],
   "provenance": {
-    "plan_version": 1,
-    "request": {"input": "meeting.m4a", "stack": "qwen-1.7b",
-                "want": ["diarization", "word_timestamps"],
-                "language": "Cantonese"},
+    "stack": "qwen-1.7b",
     "capabilities": {
       "diarization": {"satisfaction": "derived", "outcome": "produced",
                               "backend": "fluidaudio",
@@ -416,9 +382,9 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
                               "evidence": {"interface": "verified", "quality": "unmeasured"}}
     },
     "observed": {
-      "stage_wall_seconds": {"decode": 3.91, "diarizer": 14.68, "reconciler": 0.21,
+      "stage_wall_seconds": {"decode": 3.91, "diarizer": 14.68,
                              "asr": 54.02, "aligner": 46.77},
-      "total_wall_seconds": 119.59,
+      "total_wall_seconds": 119.38,
       "peak_rss_bytes_by_stage": {"diarizer": 588251136, "asr": 3243020288,
                                   "aligner": 2104492032},
       "peak_rss_bytes": 3243020288,
@@ -427,7 +393,7 @@ otherwise byte-identical to the plan above plus one `outcome` per capability:
       "turns": 2,
       "abstentions": 2
     },
-    "elided": "roles, floors, execution, policy, packages, measured, and warnings are byte-identical to the plan in 1.2"
+    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 1.2"
   }
 }
 ```
@@ -493,10 +459,6 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
 
 ```json
 {
-  "plan_version": 1,
-  "request": {"input": "demo.mp4", "stack": "vibevoice",
-              "want": ["verbatim", "diarization", "segment_timestamps", "word_timestamps"],
-              "language": null},
   "roles": {
     "decode":  {"backend": "ffmpeg",
                 "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
@@ -521,22 +483,15 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
     "environments_spanned": ["torch"],
     "note": "both model stages share the torch environment and are still not resident together; VibeVoice and the aligner have never been measured co-resident and this plan does not do so"
   },
-  "policy": {
-    "policy_version": 1,
-    "overlap": "abstain",
-    "overlap_detection": "unavailable",
-    "overlap_detection_note": "no backend in this plan detects overlap, so an empty abstention ledger means undetected, not absent",
-    "abstention_reasons": []
-  },
   "capabilities": {
     "verbatim":           {"satisfaction": "native",
                            "evidence": {"interface": "verified", "quality": "refuted"},
-                           "note": "Emits disfluencies rather than cleaning them — 28 filler hits on the probe, the highest of the four stacks — but a recorded run refuted dialect preservation twice: 看哈 became 看一下 and 耍啥子 became 刷啥子, both retained by firered.",
-                           "record": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+                           "note": "Emits disfluencies rather than cleaning them — 28 filler hits on the probe, the highest of the four stacks — but a recorded run refuted dialect preservation twice: 看哈 became 看一下 and 耍啥子 became 刷啥子, both retained by firered."
+                           },
     "diarization":        {"satisfaction": "native",
                            "evidence": {"interface": "verified", "quality": "measured"},
-                           "note": "Native speaker labels and segment bounds; turns group adjacent same-speaker segments, so no bound is synthesized. Matched 39 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap.",
-                           "record": "model_tests/benchmark/DIARIZATION.md"},
+                           "note": "Native speaker labels and segment bounds; turns group adjacent same-speaker segments, so no bound is synthesized. Matched 39 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap."
+                           },
     "segment_timestamps": {"satisfaction": "native",
                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "word_timestamps":         {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
@@ -551,16 +506,6 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
   ],
   "total_known_download_bytes": 0,
   "unsized_packages": ["vibevoice-asr-7b"],
-  "measured": {
-    "reference_run": "spice-30min-participant",
-    "fixture_duration_seconds": 1800.0,
-    "hardware": "apple-m4-max-64gib",
-    "config": "mps, bfloat16, sdpa, seed 1234, logits_to_keep patch applied",
-    "generation_seconds": 851.1,
-    "rtf_generation": 0.4728,
-    "peak_mps_live_bytes": 21770457600,
-    "record": "model_tests/benchmark/results/2026-08-12-evidence.json"
-  },
   "warnings": [
     {"code": "measured_peak_exceeds_target", "blocking": false,
      "detail": "measured 20.28 GiB live MPS allocation on spice-30min-participant; a strict 16 GiB MPS cap OOMs at model load, measured on a 27.8 s probe, while an 18 GiB cap passed that probe"}
@@ -586,8 +531,8 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
 
 Exit 0. `qwen3-forcedaligner` is already `provisioned: true` from §1, so
 `total_known_download_bytes` is 0 and only VibeVoice needs pulling. `abstentions` is an
-empty array rather than absent: it is a floor artifact, and `policy.abstention_reasons`
-being empty is what says it cannot fill on this plan.
+empty array rather than absent: it is a floor artifact, and the plan's warning that nothing
+here detects overlap is what says it cannot fill.
 
 ### 2.2 Provision and run
 
@@ -642,10 +587,7 @@ Exit 0. `demo.transcript.json`:
   ],
   "abstentions": [],
   "provenance": {
-    "plan_version": 1,
-    "request": {"input": "demo.mp4", "stack": "vibevoice",
-                "want": ["verbatim", "diarization", "segment_timestamps", "word_timestamps"],
-                "language": null},
+    "stack": "vibevoice",
     "capabilities": {
       "verbatim":            {"satisfaction": "native", "outcome": "produced",
                               "evidence": {"interface": "verified", "quality": "refuted"}},
@@ -668,7 +610,7 @@ Exit 0. `demo.transcript.json`:
       "segments_without_words": 1,
       "abstentions": 0
     },
-    "elided": "roles, floors, execution, policy, packages, measured, and warnings are byte-identical to the plan in 2.1"
+    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 2.1"
   }
 }
 ```
@@ -725,11 +667,6 @@ audio transcribe plan --input field.wav --stack firered \
 
 ```json
 {
-  "plan_version": 1,
-  "request": {"input": "field.wav", "stack": "firered",
-              "want": ["verbatim", "word_timestamps", "vad", "segment_timestamps",
-                       "lid"],
-              "language": null},
   "roles": {
     "decode":     {"backend": "ffmpeg",
                    "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
@@ -758,13 +695,6 @@ audio transcribe plan --input field.wav --stack firered \
     "environments_spanned": ["torch"],
     "note": "four model stages in one environment, none resident together"
   },
-  "policy": {
-    "policy_version": 1,
-    "overlap": "abstain",
-    "overlap_detection": "unavailable",
-    "overlap_detection_note": "no backend in this plan detects overlap, so an empty abstention ledger means undetected, not absent",
-    "abstention_reasons": []
-  },
   "capabilities": {
     "verbatim":        {"satisfaction": "native",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
@@ -787,17 +717,6 @@ audio transcribe plan --input field.wav --stack firered \
   ],
   "total_known_download_bytes": 0,
   "unsized_packages": ["firered-asr2s"],
-  "measured": {
-    "reference_run": "spice-30min-participant",
-    "fixture_duration_seconds": 1800.0,
-    "hardware": "apple-m4-max-64gib",
-    "config": "cpu, float32, lid off, asr and punc batch size 4",
-    "end_to_end_seconds": 665.26,
-    "rtf_end_to_end": 0.3696,
-    "peak_rss_bytes": 9789620224,
-    "note": "measured with LID off; this plan includes LID, which on a separate 139.284 s probe raised inference from 84.24 s to 162.09 s",
-    "record": "model_tests/benchmark_runs/firered_lidoff_batch4_spice30m_participant.json"
-  },
   "warnings": [
     {"code": "measured_config_differs_from_plan", "blocking": false,
      "detail": "the measured block above was recorded with lid off while this plan runs it; expect roughly double the inference time and no measured memory figure for the LID-on path"}
@@ -867,11 +786,7 @@ Exit 0. `field.transcript.json`:
   ],
   "abstentions": [],
   "provenance": {
-    "plan_version": 1,
-    "request": {"input": "field.wav", "stack": "firered",
-                "want": ["verbatim", "word_timestamps", "vad", "segment_timestamps",
-                         "lid"],
-                "language": null},
+    "stack": "firered",
     "capabilities": {
       "verbatim":        {"satisfaction": "native", "outcome": "produced",
                           "evidence": {"interface": "verified", "quality": "unmeasured"}},
@@ -899,7 +814,7 @@ Exit 0. `field.transcript.json`:
       "punctuation_invariant_checked": true,
       "punctuation_invariant_note": "each segment's text, stripped of punctuation and whitespace, equalled the case-insensitive concatenation of its word texts"
     },
-    "elided": "roles, floors, execution, policy, packages, measured, and warnings are byte-identical to the plan in 3.1"
+    "elided": "roles, execution, packages, and warnings are byte-identical to the plan in 3.1"
   }
 }
 ```

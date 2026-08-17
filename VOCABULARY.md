@@ -24,9 +24,16 @@ required decision, because it fixes transcript quality, language and dialect
 behavior, and which capabilities arrive natively. None of that is derivable from
 a requirement list.
 
-**role** — a functional slot in a pipeline. The enumeration is fixed and small:
-`decode`, `vad`, `diarizer`, `reconciler`, `asr`, `aligner`, `punctuator`,
-`lid`. This is what Issue #1 §4.3 and §5 call a "component".
+**role** — a functional slot filled by a *provisioned* backend. The enumeration is fixed and
+small: `decode`, `vad`, `diarizer`, `asr`, `aligner`, `punctuator`, `lid`. This is what
+Issue #1 §4.3 and §5 call a "component".
+
+Deterministic glue is not a role. Reconciling diarizer turns onto ASR text is real work with
+a real guarantee — an exact partition of the timeline, so no span is transcribed twice and no
+gap is invented — but it has no package, no revision, no environment, and no measurable cost,
+so listing it beside four models implied a fifth model that does not exist. It is stated in
+the `diarization` capability's note instead. `decode` stays a role because ffmpeg is an
+external binary with a configuration that changes the audio every later stage sees.
 
 **backend** — an adapter that fills exactly one role and normalizes its output
 to the schema. Issue #1 §8's `ASRBackend` is the role's interface; a backend is
@@ -37,7 +44,7 @@ model-specific object past it.
 natively by the chosen stack. Add-ons are derived mechanically, never chosen by
 preference: `word_timestamps` on a stack without native word timing forces the
 aligner, `diarization` on a stack without native speaker structure forces
-a diarizer and the reconciler.
+a diarizer.
 
 **package** — the provisionable unit: pinned weights, the environment they target,
 and any toolchain build. One package may supply several backends. `firered`
@@ -118,8 +125,10 @@ from one that pulls a second runtime, nor tell a caller whether native is good e
 
 **Structure only where something dispatches on it.** The catalog carries three enums and two
 numbers — `availability`, `processing.unit`, `failure_recovery.partial_results`, the unit
-count, and `projected_seconds` — and says everything else in a sentence per capability plus a
-`record` pointer. Nested objects that no caller branches on are ceremony: they lengthen the
+count, and `projected_seconds` — and says everything else in one sentence per capability.
+Citations are not payload: `model_tests/` paths belong in this repository's documents and will
+not exist in a shipped tool's output, so a sentence names the fixture in words ("on a
+30-minute sample") and the research record holds the artifact. Nested objects that no caller branches on are ceremony: they lengthen the
 payload, and in this document's own history they were repeatedly got subtly wrong. `cost`
 states a run that actually happened before it states a rate, in units a reader can hold —
 seconds and gibibytes against a named sample — because nobody should multiply an RTF by a
@@ -127,8 +136,7 @@ duration to learn whether a job takes a minute or an hour.
 
 The sentences still have to do the work the retired objects were built to enforce: say what
 was measured and on what fixture, distinguish a run that **refuted** a property from one that
-merely never measured it, and state the consequence rather than the forensics, leaving the
-fixture and the configuration behind `record`. A plan is the opposite case and keeps its
+merely never measured it, and state the consequence rather than the forensics. A plan is the opposite case and keeps its
 structure, because it is dispatched on rather than read: `roles` with revisions and
 configuration is audited provenance, and `satisfaction`, `outcome`, and `evidence` are
 asserted by tests.
@@ -147,20 +155,27 @@ the resolved capability set and no combination needs enumerating. It guarantees
 key sets, types, and which fields are absent; it does not predict cardinality,
 whether abstentions occur, or runtime degradation.
 
-**policy** — the genuine choices applied regardless of which backend runs: abstain
-on ambiguous overlap, the recorded turn thresholds and what happens below each of
-them, and whether anything in this plan can detect overlap at all. Emitted in the
-plan alongside the `floors` array, and not caller-selectable in v1. Each threshold
-is named separately; collapsing them into one `min_turn_ms` silently picks one of
-three recorded values.
+**policy** — the decisions the tool makes that no caller can change: abstain on ambiguous
+overlap, the three recorded turn thresholds and what happens below each, and whether anything
+in a plan can detect overlap at all. Recorded here and in the research record, and **not
+printed**, on the same reasoning as the floors: a caller cannot select any of it, so putting it
+in every plan invited a reader to mistake it for a set of settings, and the thresholds are
+fixed by the tool version rather than by the request.
 
-Policy holds only what could legitimately have been decided otherwise. Two things
-therefore do **not** belong in it: a floor, because a floor is not a choice and
-encoding one as a boolean makes an invariant read like a setting; and anything
-already determined by the request, because that would create a second source of
-truth. Rendering is the second case — it is the `verbatim` capability, so `policy`
-carries no rendering field. In v1 the capability's absence does not mean clean,
-because nothing cleans; it means the plan was not asked to answer for text
+The one part a caller must not miss is a trap, so it is surfaced where it is actionable rather
+than buried in a block: when nothing in a plan detects overlap, an empty abstention ledger
+means *undetected*, not *absent*. That is a plan warning and a line in the
+`overlapped_speech` catalog note.
+
+Each threshold is still named separately wherever it is written down. Collapsing
+`raw_fragment_min_ms`, `accepted_turn_min_ms`, and `same_label_merge_max_ms` into one
+`min_turn_ms` silently picks one of three recorded values, which is a defect this project made
+once already.
+
+Two things were never policy and are worth keeping out of it: a floor, because a floor is not a
+choice; and anything already fixed by the request, which would create a second source of truth.
+Rendering is the second case — it is the `verbatim` capability. Note that in v1 its absence does
+not mean clean, because nothing cleans; it means the plan was not asked to answer for text
 fidelity.
 
 A backend whose inference is not deterministic runs at a fixed internal seed so a run is
@@ -234,8 +249,7 @@ Floors are not capabilities. A caller never opts into them and never opts out, a
 backend that cannot meet one is not a conforming backend. They are therefore **not printed
 in any payload**: they are constant for a schema version, a caller cannot act on them, and
 an array of six invariant names in every plan is decoration. They live here, and in the
-test suite as assertions. That is also the point of keeping them distinct from `policy` —
-encoding an invariant as a field makes it look like a setting.
+test suite as assertions. Encoding an invariant as a field would make it look like a setting.
 
 - **Punctuated, sentence-segmented text.** Nothing downstream wants raw text —
   not a reader, not an LLM, not a cue splitter that needs sentence boundaries.
@@ -355,7 +369,7 @@ render them alike.
 | --- | --- | --- | --- |
 | `languages` | native | native | native |
 | `verbatim` | native | native | native |
-| `diarization` | + `fluidaudio` + reconciler | native | + `fluidaudio` + reconciler |
+| `diarization` | + `fluidaudio` | native | + `fluidaudio` |
 | `overlapped_speech` | + `fluidaudio` | + `fluidaudio` | + `fluidaudio` |
 | `vad` | + `silero-vad` | + `silero-vad` | native |
 | `segment_timestamps` | exit 2: unsatisfiable_on_stack | native | native |
@@ -364,7 +378,7 @@ render them alike.
 | `token_lid` | exit 2: unsupported | exit 2: unsupported | exit 2: unsupported |
 
 Four cell forms, and a test parametrized over this table must accept exactly these:
-`native`; `native (<stage>)`; `+ <package>` or `+ <package> + <role>`; and
+`native`; `native (<stage>)`; `+ <package>`; and
 `exit 2: <code>`. `native (<stage>)` is not an add-on. FireRedLID ships inside the
 `firered` package and fills the `lid` role the stack already declares, so requesting
 `lid` adds nothing to the plan the stack did not already contain — it
@@ -501,6 +515,17 @@ provisioning history can still locate everything.
 
 ## Versioning
 
-The output schema and the plan carry versions so consumers can detect
-incompatibility. Stacks are named, not versioned: a different model size is a
-different stack id. `enhance --profile transcription@3` keeps its own versioning.
+Only the durable artifact is versioned. A result document carries `schema_version`, because it
+is saved, re-read, and passed to `export` long after the run. A plan and a catalog carry no
+version: they are answers to a command, and the tool version that printed them is what a
+consumer would need anyway. Three version fields on three documents implied three independent
+compatibility surfaces where there is one.
+
+A plan also does not echo the request back. The caller just typed it, `source.path` records the
+input, and the requested capabilities are the keys of the `capabilities` block — so a `request`
+field restated three things the document already contained. What a saved result does need, and
+could not otherwise state plainly, is which stack produced it, so `provenance.stack` carries
+that one value.
+
+Stacks are named, not versioned: a different model size is a different stack id.
+`enhance --profile transcription@3` keeps its own versioning.
