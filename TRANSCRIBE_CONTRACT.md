@@ -18,6 +18,12 @@ Two decisions shape every sequence below:
   derivable from a requirement list. Omitting it lists the stacks rather than
   guessing.
 
+`--want` is optional. Omitting it requests nothing beyond the floors, which is a
+legitimate and useful request: a punctuated, sentence-segmented transcript on the
+canonical timeline with an abstention ledger and no optional capability at all. It is not
+a shorthand for "everything" — that would provision a diarizer and an aligner nobody
+asked for — and it is not an error.
+
 Both deviate from Issue #1 §2.1, which writes bare `audio transcribe meeting.m4a`
 as the simplest command. The deviation is deliberate.
 
@@ -354,6 +360,11 @@ Exits 0 whether or not anything is provisioned:
   "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
              "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
              "adapter_normalization"],
+  "execution": {
+    "stage_order": ["decode", "diarizer", "reconciler", "asr"],
+    "residency": "one_model_stage_at_a_time",
+    "note": "stages run strictly sequentially and no two model stages are resident together; wall time adds across stages, peak memory does not, and the per-stage peaks below must not be summed"
+  },
   "policy": {
     "policy_version": 1,
     "overlap": "abstain",
@@ -463,6 +474,17 @@ literally `language English<asr_text>` — where the public path strips it. An a
 the batched path that forgets to do the same produces a transcript beginning with the
 scaffold. The `container_language` label above is read from that scaffold, which is why
 it exists as provenance at all.
+
+`execution` states what every recorded figure in this document already assumed and no
+earlier draft declared. The orchestrator that produced the end-to-end interview
+measurement ran *strictly sequential fresh subprocesses*, and its record says in as many
+words that the stages did not overlap. Publishing per-stage memory peaks without
+declaring that is how a reader ends up summing them. Two consequences worth stating
+outright: a request spanning all three provisioned environments costs the sum of the
+stage walls and the maximum of the stage peaks, not the sum of both; and strict
+sequencing is load-bearing for the memory story rather than an implementation detail,
+because `vibevoice` at 20.28 GiB and the aligner have never been measured resident at
+the same time and nothing here should imply they can be.
 
 ### 1.2 What `run` does with packages absent
 

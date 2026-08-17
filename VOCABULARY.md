@@ -164,6 +164,15 @@ are outputs that report one. A stack declares whether it accepts an input in its
 rather than a silently ignored argument. This is the only caller-settable model input
 in v1.
 
+**execution** — the plan's statement of stage order and model residency. Stages run
+strictly sequentially and no two model stages are resident at once, so a request costs
+the sum of the stage walls and the maximum of the stage peaks. This is declared rather
+than left implicit because every recorded figure was produced by strictly sequential
+fresh subprocesses whose record states that the stages did not overlap; per-stage memory
+peaks published without it invite summing. It is also what keeps the largest stack's
+memory claim honest, since VibeVoice and the aligner have never been measured resident
+together.
+
 **abstention** — a recorded refusal to assert, carrying an interval and a
 reason. Abstentions must survive to the output.
 
