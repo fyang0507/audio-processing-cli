@@ -60,11 +60,14 @@ The last two are named for completeness and are the two result keys this documen
 on segment speaker rather than on turn intervals. `TRANSCRIBE_CONTRACT.md` §1.4 is where
 they are requested.
 
-Two conventions they share. Ids are positional and stable *within* one result document
-(`seg_0`, `w_0`, `turn_0`, `ab_0`), extending the `segment_id`/`abstention_id` convention
-the contract's `sample_output` already shows. Whether an id must also be stable *across*
-runs of the same input is open and deliberately not claimed here: FireRed reproduces
-timestamps only to 1 ms, so an id keyed on a start time could not be.
+Ids are positional and **document-scoped** (`seg_0`, `w_0`, `turn_0`, `ab_0`), extending
+the `segment_id`/`abstention_id` convention the contract's `sample_output` already shows.
+They are deliberately *not* stable across runs, and nothing should be built on the
+assumption that they are: the CLI offers no way to re-run the same input under the same
+parameterization for a comparable result, so cross-run identity would be a guarantee with
+no caller. The practical consequence is that merging two result documents — a partial run
+plus its resumed remainder — means re-numbering, which is why `export` accepts several
+transcripts in timeline order rather than expecting a consumer to splice JSON.
 
 Everything a capability was not requested for is **absent**, not null. That is the
 anti-fabrication guarantee, and it is why §1's segments carry no `start`/`end`.
@@ -101,10 +104,10 @@ Goal: a speaker-attributed transcript of a 30-minute interview, plus subtitles. 
 timing is required for the subtitles, so it is requested up front rather than discovered
 missing at export.
 
-### 1.1 Ask what the stack can do
+### 1.1 Ask what the stack can do with this file
 
 ```bash
-audio transcribe plan --stack qwen-1.7b
+audio transcribe plan --stack qwen-1.7b --input meeting.m4a
 ```
 
 ```json
@@ -115,6 +118,25 @@ audio transcribe plan --stack qwen-1.7b
   "roles_included": ["asr"],
   "roles_conditional": {},
   "environment": "mlx",
+  "input": {"path": "meeting.m4a", "duration_seconds": 1794.2, "container": "m4a",
+            "sample_rate_hz": 44100, "channels": 2},
+  "processing": {
+    "unit": "fixed_chunk",
+    "unit_rule": "180-second chunks when timing is not supplied externally; diarized turns instead when speaker_attribution is requested, in which case the count is not known until the diarizer runs",
+    "unit_count": 10,
+    "unit_count_known_at_plan_time": true,
+    "batch_size": 1,
+    "projected_wall_seconds": 53.6,
+    "projection_basis": "1794.2 s at the measured ASR-stage RTF of 0.0299",
+    "projected_peak_bytes": 3241689088,
+    "projection_note": "peak is dominated by model weights and one chunk of activations, so it does not grow with total duration"
+  },
+  "failure_recovery": {
+    "partial_results": "per_unit",
+    "resumable": true,
+    "resume_mechanism": "--range",
+    "note": "units are independent, so a failure leaves the completed ones usable; the global generation budget is the mechanism most likely to stop a long file early and it stops between units, not inside one"
+  },
   "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
              "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
              "adapter_normalization"],
@@ -207,7 +229,7 @@ Exit 0. Nothing was downloaded and no media was read.
 ### 1.2 Resolve the request
 
 ```bash
-audio transcribe plan meeting.m4a \
+audio transcribe plan --input meeting.m4a \
   --stack qwen-1.7b \
   --want speaker_attribution,word_bounds \
   --language Cantonese
@@ -389,7 +411,7 @@ Exit 0.
 ### 1.4 Run
 
 ```bash
-audio transcribe run meeting.m4a \
+audio transcribe run --input meeting.m4a \
   --stack qwen-1.7b \
   --want speaker_attribution,word_bounds \
   --language Cantonese \
@@ -472,7 +494,7 @@ checkable rather than asserted.
 ### 1.5 Export subtitles
 
 ```bash
-audio export meeting.timed.json --format srt -o meeting.srt
+audio export --input meeting.timed.json --format srt -o meeting.srt
 ```
 
 ```json
@@ -520,7 +542,7 @@ Step one is omitted here for length; it takes the same shape as §1.1 with `vibe
 own values.
 
 ```bash
-audio transcribe plan demo.mp4 --stack vibevoice \
+audio transcribe plan --input demo.mp4 --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds
 ```
 
@@ -629,7 +651,7 @@ being empty is what says it cannot fill on this plan.
 ```bash
 audio packages pull --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds
-audio transcribe run demo.mp4 --stack vibevoice \
+audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds \
   --format json -o demo.transcript.json
 ```
@@ -720,7 +742,7 @@ not run on a segment with no speech to align. So `words` is absent on some segme
 ### 2.3 Export subtitles with speaker voice tags
 
 ```bash
-audio export demo.transcript.json --format vtt -o demo.vtt
+audio export --input demo.transcript.json --format vtt -o demo.vtt
 ```
 
 Exit 0. `demo.vtt`:
@@ -750,7 +772,7 @@ add-ons and the plan pulls one package.
 ### 3.1 Resolve and run
 
 ```bash
-audio transcribe plan field.wav --stack firered \
+audio transcribe plan --input field.wav --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds,region_language
 ```
 
@@ -863,7 +885,7 @@ speaker output and `speaker_attribution` was not requested.
 ```bash
 audio packages pull --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds,region_language
-audio transcribe run field.wav --stack firered \
+audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds,region_language \
   --format json -o field.transcript.json
 ```
@@ -953,7 +975,7 @@ non-punctuation token of every segment, which is what the
 ### 3.2 Export
 
 ```bash
-audio export field.transcript.json --format srt -o field.srt
+audio export --input field.transcript.json --format srt -o field.srt
 ```
 
 Exit 0. `field.srt`:

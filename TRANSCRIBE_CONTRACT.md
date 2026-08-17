@@ -13,10 +13,12 @@ Two decisions shape every sequence below:
   side effects, different output shapes, and different exit-code contracts:
   `plan` never reports a provisioning failure, it *is* the provisioning report.
   Only commands that select backends need the split, so `export` has none.
-- **`--stack` is required.** The stack fixes transcript quality, language and
-  dialect behavior, and which capabilities arrive natively; none of that is
-  derivable from a requirement list. Omitting it lists the stacks rather than
-  guessing.
+- **`--stack` and `--input` are both required, on `plan` as well as `run`.** The stack
+  fixes transcript quality, language and dialect behavior, and which capabilities arrive
+  natively. The input fixes the processing detail — how the audio is partitioned into
+  units, how many there are, what the run will cost, and whether a failure is
+  recoverable — and none of that is a static property of the stack. Omitting either
+  fails with what was missing.
 
 `--want` is optional. Omitting it requests nothing beyond the floors, which is a
 legitimate and useful request: a punctuated, sentence-segmented transcript on the
@@ -24,15 +26,22 @@ canonical timeline with an abstention ledger and no optional capability at all. 
 a shorthand for "everything" — that would provision a diarizer and an aligner nobody
 asked for — and it is not an error.
 
+There is no batch surface. One invocation takes one input; whether the backend then
+segments that input and batches the pieces is its own business, but it is *disclosed* in
+the plan rather than hidden, because the partition determines both the cost and the
+failure mode. A caller with a directory of interviews loops. A caller with a three-hour
+file learns from the plan how it will be cut up and what happens if a piece fails.
+
 Both deviate from Issue #1 §2.1, which writes bare `audio transcribe meeting.m4a`
 as the simplest command. The deviation is deliberate.
 
 | Exit | Meaning |
 | --- | --- |
 | 0 | Success. |
-| 1 | Runtime or backend failure. Partial results are not written. Distinct from a principled abstention, which is a successful run. |
-| 2 | Request or validation error: missing stack, unknown capability, a capability the chosen stack cannot satisfy, an option the stack does not accept, a pin that conflicts with a requirement, absent word timing on export. |
-| 3 | A required package is not provisioned. Only `run` can return this. |
+| 1 | Runtime or backend failure with nothing salvageable. No result is written. Distinct from a principled abstention, which is a successful run. |
+| 2 | Request or validation error: missing stack or input, unknown capability, a capability the chosen stack cannot satisfy, an option the stack does not accept, a pin that conflicts with a requirement, absent word timing on export. |
+| 3 | A required package is not provisioned, or a provisioned one failed its integrity check. Only `run` can return these. |
+| 4 | Incomplete: some units were transcribed and some were not. A partial result **is** written, with a coverage ledger and a resume command. Only `run` can return this, and only on a stack whose work is partitioned. |
 
 Every error payload carries `code` and `fix`. The remaining fields are fixed per
 code, and this table is the contract — a payload with a field not listed for its
@@ -41,6 +50,7 @@ code, or missing one that is, is a defect:
 | Code | Exit | Fields beyond `code` and `fix` |
 | --- | --- | --- |
 | `stack_required` | 2 | `field`, `allowed`, `stacks` (id → one-line characterization) |
+| `input_required` | 2 | `field`, `note` |
 | `capability_unknown` | 2 | `field`, `provided`, `allowed` |
 | `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty) |
@@ -49,7 +59,9 @@ code, or missing one that is, is a defect:
 | `pin_conflicts_with_native_capability` | 2 | `field`, `provided`, `allowed`, `capability` |
 | `timing_required_for_format` | 2 | `field`, `provided`, `requires_capability`, `found`, `note` |
 | `packages_not_provisioned` | 3 | `missing`, `total_known_download_bytes`, `unsized_packages` |
+| `package_integrity_failed` | 3 | `failed` (package, check, expected, actual) |
 | `backend_failed` | 1 | `role`, `backend`, `detail` |
+| `run_incomplete` | 4 | `role`, `backend`, `detail`, `coverage`, `output` |
 
 `allowed` means different things by code and is never a free-text field: the stack
 ids for `stack_required`, the capability namespace for `capability_unknown`, the
@@ -91,13 +103,16 @@ trusting the label you get back.
 `plan` answers progressively, matching the order the interface enforces. Neither
 form reads media beyond metadata, and neither provisions anything.
 
-### Step one — what can this stack do?
+### Step one — what can this stack do with this file?
 
-No input file required; this is a static property of the stack, answerable before
-any media exists.
+Both options are required. The capability catalog is a static property of the stack, but
+the processing detail is not: the backend reads the input's metadata, decides how it will
+partition the audio, and discloses that along with what the run will cost and whether a
+failure leaves anything usable. No media is decoded beyond a metadata probe and nothing
+is provisioned.
 
 ```bash
-audio transcribe plan --stack firered
+audio transcribe plan --stack firered --input field.wav
 ```
 
 Step one is not an availability lookup. It is the only place an agent can decide
@@ -119,6 +134,25 @@ yet and `satisfaction` is defined only for a requested capability:
   "roles_included": ["vad", "asr", "punctuator"],
   "roles_conditional": {"lid": "region_language"},
   "environment": "torch",
+  "input": {"path": "field.wav", "duration_seconds": 27.8, "container": "wav",
+            "sample_rate_hz": 48000, "channels": 1},
+  "processing": {
+    "unit": "vad_region",
+    "unit_rule": "FireRedVAD segments the audio and every later stage runs per region, batched four at a time",
+    "unit_count": null,
+    "unit_count_known_at_plan_time": false,
+    "unit_count_note": "the count is a function of the audio's speech activity, which requires running the VAD; a recorded 30-minute channel produced 55 regions and 571 sentences",
+    "projected_wall_seconds": 10.3,
+    "projection_basis": "27.8 s at the measured end-to-end RTF of 0.3696, LID off",
+    "projected_peak_bytes": 9789620224,
+    "projection_note": "peak is dominated by model weights, not duration, so it does not scale down with a shorter input"
+  },
+  "failure_recovery": {
+    "partial_results": "per_unit",
+    "resumable": true,
+    "resume_mechanism": "--range",
+    "note": "regions are independent, so a failure part-way leaves the completed regions usable and the remainder addressable by time range"
+  },
   "floors": ["punctuated_sentence_segmented_text", "punctuation_is_sentence_level",
              "canonical_timeline", "no_synthesized_bounds", "abstentions_survive",
              "adapter_normalization"],
@@ -201,7 +235,20 @@ yet and `satisfaction` is defined only for a requested capability:
 }
 ```
 
-Four things in that document exist purely so step two can be decided without
+`processing` and `failure_recovery` are why `--input` is required rather than optional.
+Neither is derivable from the stack: the unit a stack works in is a stack property, but
+how many units *this* file yields, what it will cost, and whether a failure is survivable
+are properties of the pair. `unit_count_known_at_plan_time: false` is the honest answer
+wherever the partition depends on content the plan has not decoded — VAD regions here,
+diarized turns on a Qwen plan that requests `speaker_attribution` — and it is stated
+rather than guessed, because a fabricated count is worse than an absent one.
+
+`failure_recovery` varies by stack and is the field to read before committing to a long
+file. It is `per_unit` here and on Qwen; it is **`none` on `vibevoice`**, which is handed
+whole media in a single `generate` call, so there is no partition to salvage and a failure
+at minute forty of a forty-one-minute run yields nothing. See §5.1.
+
+Four more things in that document exist purely so step two can be decided without
 running anything.
 
 `determinism` tells an agent what its timing is worth. FireRed's 1.0 ms repeat drift
@@ -319,7 +366,7 @@ Fast long-form transcript with anonymous speaker attribution.
 ### 1.1 Plan before committing to anything
 
 ```bash
-audio transcribe plan meeting.m4a \
+audio transcribe plan --input meeting.m4a \
   --stack qwen-1.7b \
   --want speaker_attribution
 ```
@@ -489,7 +536,7 @@ the same time and nothing here should imply they can be.
 ### 1.2 What `run` does with packages absent
 
 ```bash
-audio transcribe run meeting.m4a --stack qwen-1.7b --want speaker_attribution
+audio transcribe run --input meeting.m4a --stack qwen-1.7b --want speaker_attribution
 ```
 
 Exit 3. Nothing computed, nothing downloaded, stderr:
@@ -514,9 +561,9 @@ Exit 3. Nothing computed, nothing downloaded, stderr:
 audio packages pull --stack qwen-1.7b --want speaker_attribution
 audio packages verify
 audio packages list
-audio transcribe run meeting.m4a --stack qwen-1.7b --want speaker_attribution \
+audio transcribe run --input meeting.m4a --stack qwen-1.7b --want speaker_attribution \
   --format md
-audio transcribe run meeting.m4a --stack qwen-1.7b --want speaker_attribution \
+audio transcribe run --input meeting.m4a --stack qwen-1.7b --want speaker_attribution \
   --format json -o meeting.transcript.json
 ```
 
@@ -530,11 +577,11 @@ Qwen has no native word timing, so `word_bounds` forces the aligner and its
 `torch` environment. One request then spans all three provisioned environments.
 
 ```bash
-audio transcribe plan meeting.m4a --stack qwen-1.7b \
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
   --want speaker_attribution,word_bounds,turn_bounds,overlap_intervals,speech_bounds
 audio packages pull --stack qwen-1.7b \
   --want speaker_attribution,word_bounds,turn_bounds,overlap_intervals,speech_bounds
-audio transcribe run meeting.m4a --stack qwen-1.7b \
+audio transcribe run --input meeting.m4a --stack qwen-1.7b \
   --want speaker_attribution,word_bounds,turn_bounds,overlap_intervals,speech_bounds \
   --format json -o meeting.timed.json
 ```
@@ -598,7 +645,7 @@ without it this exits 3:
 
 ```bash
 audio packages pull --stack qwen-0.6b --want speaker_attribution
-audio transcribe run meeting.m4a --stack qwen-0.6b --want speaker_attribution \
+audio transcribe run --input meeting.m4a --stack qwen-0.6b --want speaker_attribution \
   --language Cantonese --format md
 ```
 
@@ -629,7 +676,7 @@ Verbatim-oriented text with native anonymous speaker structure and word
 intervals for an editing agent.
 
 ```bash
-audio transcribe plan demo.mp4 --stack vibevoice \
+audio transcribe plan --input demo.mp4 --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds
 ```
 
@@ -707,7 +754,7 @@ processing container to record.
 audio packages pull --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds
 audio packages verify
-audio transcribe run demo.mp4 --stack vibevoice \
+audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,speaker_attribution,segment_bounds,word_bounds \
   --format json -o demo.transcript.json
 ```
@@ -758,7 +805,7 @@ The only stack with native word timing, native speech bounds, and a region langu
 label.
 
 ```bash
-audio transcribe plan field.wav --stack firered \
+audio transcribe plan --input field.wav --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds
 ```
 
@@ -812,7 +859,7 @@ scheme has to know which.
 audio packages pull --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds
 audio packages verify
-audio transcribe run field.wav --stack firered \
+audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_bounds,speech_bounds,segment_bounds \
   --format json -o field.transcript.json
 ```
@@ -857,10 +904,10 @@ consumer reading per-sentence `lang` as per-sentence detection would be reading
 variation that was never measured.
 
 ```bash
-audio transcribe plan field.wav --stack firered \
+audio transcribe plan --input field.wav --stack firered \
   --want verbatim,word_bounds,region_language
 audio packages pull --stack firered --want verbatim,word_bounds,region_language
-audio transcribe run field.wav --stack firered \
+audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_bounds,region_language --format json -o field.lid.json
 ```
 
@@ -899,7 +946,7 @@ nothing earlier in §3 provisioned a diarizer:
 ```bash
 audio packages pull --stack firered \
   --want verbatim,word_bounds,speaker_attribution,overlap_intervals
-audio transcribe run interview.wav --stack firered \
+audio transcribe run --input interview.wav --stack firered \
   --want verbatim,word_bounds,speaker_attribution,overlap_intervals \
   --format json -o interview.firered.json
 ```
@@ -909,18 +956,18 @@ audio transcribe run interview.wav --stack firered \
 Deterministic post-processing. No stack, no packages, no `plan`/`run` split.
 
 ```bash
-audio export meeting.timed.json --format srt -o meeting.srt
-audio export meeting.timed.json --format vtt -o meeting.vtt
-audio export meeting.transcript.json --format md
-audio export meeting.transcript.json --format txt
-audio export meeting.transcript.json --format jsonl
+audio export --input meeting.timed.json --format srt -o meeting.srt
+audio export --input meeting.timed.json --format vtt -o meeting.vtt
+audio export --input meeting.transcript.json --format md
+audio export --input meeting.transcript.json --format txt
+audio export --input meeting.transcript.json --format jsonl
 ```
 
 Subtitle formats require word timing and refuse without it.
 `meeting.transcript.json` from §1.3 has none, so:
 
 ```bash
-audio export meeting.transcript.json --format srt
+audio export --input meeting.transcript.json --format srt
 ```
 
 Exit 2, stderr:
@@ -933,7 +980,7 @@ Exit 2, stderr:
   "requires_capability": "word_bounds",
   "found": ["container_bounds"],
   "note": "container bounds are processing extents, not cue timing",
-  "fix": "audio transcribe run meeting.m4a --stack qwen-1.7b --want speaker_attribution,word_bounds --format json -o meeting.timed.json"
+  "fix": "audio transcribe run --input meeting.m4a --stack qwen-1.7b --want speaker_attribution,word_bounds --format json -o meeting.timed.json"
 }
 ```
 
@@ -963,7 +1010,7 @@ claimed broadcast-acceptable.
 ## 5. Refusals
 
 ```bash
-audio transcribe run meeting.m4a --want speaker_attribution
+audio transcribe run --input meeting.m4a --want speaker_attribution
 ```
 
 Exit 2, `code: "stack_required"`, `field: "--stack"`, `allowed` listing the four
@@ -971,7 +1018,16 @@ stack ids, and `stacks` mapping each to a one-line characterization plus a point
 the decision report.
 
 ```bash
-audio transcribe plan meeting.m4a --stack qwen-1.7b --want segment_bounds
+audio transcribe plan --stack qwen-1.7b --want speaker_attribution
+```
+
+Exit 2, `code: "input_required"`, `field: "--input"`, and a `note` saying why a stack
+alone cannot be planned: the partition, the unit count, the projected cost, and whether a
+failure is recoverable are all properties of the input. Reported by `plan`, not only by
+`run`, because `plan` is the command whose whole job is to answer those questions.
+
+```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want segment_bounds
 ```
 
 Exit 2, `code: "capability_unsatisfiable_on_stack"`, `capability: "segment_bounds"`,
@@ -981,7 +1037,7 @@ output is the processing container, and promoting that to a segment extent is th
 fabrication this code exists to prevent.
 
 ```bash
-audio transcribe plan meeting.m4a --stack qwen-1.7b --want word_timing
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timing
 ```
 
 Exit 2, `code: "capability_unknown"`, `field: "--want"`, `provided: "word_timing"`,
@@ -990,7 +1046,7 @@ requirement are different failures: this one has no `capability` field, because 
 name is not one.
 
 ```bash
-audio transcribe plan demo.mp4 --stack vibevoice --want verbatim --language Cantonese
+audio transcribe plan --input demo.mp4 --stack vibevoice --want verbatim --language Cantonese
 ```
 
 Exit 2, `code: "option_unsupported_on_stack"`, `field: "--language"`,
@@ -1000,7 +1056,7 @@ flag that does nothing — which would let a caller believe it had constrained a
 it had not touched.
 
 ```bash
-audio transcribe plan meeting.m4a --stack firered --want token_language
+audio transcribe plan --input meeting.m4a --stack firered --want token_language
 ```
 
 Exit 2, `code: "capability_unsupported"`, `capability: "token_language"`,
@@ -1010,7 +1066,7 @@ instead of assuming code-switching support implies per-token labels. Step one's
 catalog is where this is *discovered* without erroring.
 
 ```bash
-audio transcribe plan meeting.m4a --stack qwen-1.7b --want container_bounds
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want container_bounds
 ```
 
 Exit 2, `code: "capability_not_requestable"`, `capability: "container_bounds"`,
@@ -1019,7 +1075,7 @@ so the caller can pick the granularity it actually wanted. The pair is present i
 the output as provenance; what it cannot be is a request.
 
 ```bash
-audio transcribe plan meeting.m4a --stack vibevoice \
+audio transcribe plan --input meeting.m4a --stack vibevoice \
   --want speaker_attribution --diarizer fluidaudio
 ```
 
@@ -1044,6 +1100,102 @@ Exit 1, and no result is written. This must stay distinguishable from an abstent
 which is a *successful* run that declines to assert something: exit 0, a result, and
 a ledger entry. Collapsing the two would make a crash and a principled refusal look
 identical to a caller.
+
+A corrupt package is a third thing again — provisioned, but not usable:
+
+```json
+{
+  "code": "package_integrity_failed",
+  "failed": [
+    {"package": "qwen3-forcedaligner", "check": "weight_digest",
+     "expected": "9f2c1d…", "actual": "4be0a7…"}
+  ],
+  "fix": "audio packages pull --repair qwen3-forcedaligner"
+}
+```
+
+Exit 3, and nothing loads. `run` does not hash multi-gigabyte weights on every
+invocation; it checks presence and the registry, so this surfaces either from an explicit
+`audio packages verify` or from the cheap check catching a size or revision mismatch. A
+corruption subtle enough to pass the cheap check fails at model load instead, which is
+`backend_failed` at exit 1 with `fix` pointing at `audio packages verify` — the same
+condition, found later, reported as what it looked like from where it was found.
+
+### 5.1 Incomplete runs
+
+Long-form transcription has partial-completion mechanisms that are real and recorded, not
+hypothetical. Two are visible in the harness today:
+
+- **The Qwen path carries a global generation budget** and stops when it runs out, keeping
+  the turns it finished. The recorded runner tracks `input_turns`, `processed_turns`, and
+  `unprocessed_turns`, and every recorded run has `unprocessed_turns: []` — but the
+  60-minute stress run consumed 10,169 of 16,384 tokens, so at that token rate the budget
+  exhausts somewhere near **1.6 hours** of comparable material. A three-hour interview
+  runs into this before it runs into anything else.
+- **VibeVoice has a single generation cap** and a `hit_max_new_tokens` detector, applied to
+  one `generate` call over the whole file. Recorded runs set it between 1,024 and 16,384
+  depending on fixture. Hitting it truncates the transcript.
+
+Add out-of-memory to those — the product-demo route measured 20.28 GiB live MPS on thirty
+minutes and OOMs at model load under a strict 16 GiB cap — and interruption, and a failure
+in any one stage of a five-stage chain.
+
+**What a partial run must leave behind.** On a stack whose work is partitioned, an
+incomplete run writes its result and exits 4 rather than throwing the work away:
+
+```json
+{
+  "code": "run_incomplete",
+  "role": "asr",
+  "backend": "qwen3-asr-1.7b-8bit",
+  "detail": "global generation budget exhausted after 148 of 195 turns",
+  "coverage": {
+    "covered_through_seconds": 1402.88,
+    "covered_fraction": 0.782,
+    "covered_intervals": [[0.0, 1402.88]],
+    "missing_intervals": [[1402.88, 1794.2]],
+    "units_total": 195,
+    "units_completed": 148
+  },
+  "output": "meeting.partial.json",
+  "fix": "audio transcribe run --input meeting.m4a --stack qwen-1.7b --want speaker_attribution,word_bounds --language Cantonese --range 1402.88: -o meeting.rest.json"
+}
+```
+
+Four properties that matter more than the shape.
+
+`covered_through_seconds` is the end of the longest **contiguous prefix** that is fully
+transcribed, which is the number an agent can act on without reasoning about gaps. It is
+not the same as "the last unit that finished": the recorded runner processes turns in
+duration-bucketed order and restores chronological order afterwards, so completion is not
+contiguous in time. `covered_intervals` and `missing_intervals` therefore carry the exact
+truth, and a resume that only honours the watermark is correct but may redo work the
+ledger shows was already done.
+
+`--range <start>[:<end>]` is the resume mechanism, and it exists so the agent does **not**
+clip the audio. Clipping shifts the timeline, which means every bound in the second result
+would need re-offsetting by hand before the two could be merged — arithmetic on
+timestamps, performed by a consumer, which is exactly what the canonical-timeline floor
+exists to prevent. With `--range`, bounds in the second result are already on the original
+timeline and merging is concatenation.
+
+The partial result is a **conforming result document** with `complete: false` and the same
+`coverage` block, so every floor still holds inside it: no synthesized bounds, abstentions
+survive, punctuation invariant intact for the units that ran. It is not a debug dump.
+
+Ids are document-scoped, so merging two results means re-numbering. `export` accepts
+several transcripts in timeline order and re-ids as it goes, which covers the subtitle
+case without anyone hand-editing JSON:
+
+```bash
+audio export --input meeting.partial.json --input meeting.rest.json \
+  --format srt -o meeting.srt
+```
+
+**On `vibevoice` none of this applies.** `failure_recovery.partial_results` is `none`
+there, because the stack is handed whole media in one call and has no partition to
+salvage. That is the sharpest reason step one reports the field: on a long file the
+most likely failure — memory — lands on the one stack that cannot resume.
 
 ## 6. Teardown
 

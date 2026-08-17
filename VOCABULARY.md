@@ -164,6 +164,33 @@ are outputs that report one. A stack declares whether it accepts an input in its
 rather than a silently ignored argument. This is the only caller-settable model input
 in v1.
 
+**unit** — the piece of audio a stack actually works on, and the granularity at which a
+run can be partial. Qwen works in diarized turns when speaker structure is requested and
+in fixed chunks otherwise; FireRed works in VAD regions; VibeVoice is handed whole media
+in a single call and therefore has exactly one unit. The unit is a stack property, but
+*how many* units a given file yields is a property of the pair, which is why an input is
+required to plan. Where the count depends on content the plan has not decoded, it is
+reported absent rather than guessed.
+
+**coverage** — which parts of the source a result actually covers, carried by any run that
+did not finish. It holds a `covered_through_seconds` watermark — the end of the longest
+contiguous transcribed prefix, the one number a caller can act on without reasoning about
+gaps — plus explicit `covered_intervals` and `missing_intervals`, because completion is not
+necessarily contiguous in time: the recorded Qwen runner processes turns in
+duration-bucketed order and restores chronological order afterwards.
+
+**resume** — finishing a partial run without redoing it, via `--range <start>[:<end>]` on
+the original input. Ranges rather than pre-clipped audio, because clipping shifts the
+timeline and would force a consumer to re-offset every bound by hand before merging, which
+is arithmetic on timestamps performed outside the tool and precisely what the
+canonical-timeline floor exists to prevent.
+
+**failure_recovery** — a stack's declared answer to what a failure leaves behind:
+`partial_results` of `per_unit` or `none`, and whether it is `resumable`. It belongs in
+step one because it is a stack-choice input, not a run-time discovery. It is `none` on
+`vibevoice`, so on a long file the most likely failure lands on the one stack that cannot
+resume.
+
 **execution** — the plan's statement of stage order and model residency. Stages run
 strictly sequentially and no two model stages are resident at once, so a request costs
 the sum of the stage walls and the maximum of the stage peaks. This is declared rather
@@ -275,8 +302,11 @@ The caller chooses a stack, then states requirements. The planner derives the
 add-ons. There is no default stack, no preference scalar, and no tie-break
 ordering, because a stack choice is a quality judgement the planner cannot make.
 
-1. `--stack` is required. Omitting it fails with the stack list rather than
-   guessing.
+1. `--stack` and `--input` are both required, on `plan` as well as `run`. Omitting the
+   stack fails with the stack list rather than guessing; omitting the input fails because
+   the partition, the unit count, the projected cost, and the recoverability of a failure
+   are all properties of the pair. There is no batch surface: one invocation, one input,
+   with any internal segmentation disclosed in the plan rather than hidden.
 2. Requirements the stack satisfies natively cost nothing.
 3. Requirements the stack cannot satisfy natively force specific add-ons.
 4. Requirements the chosen stack cannot satisfy fail the request with exit 2
