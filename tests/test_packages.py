@@ -99,12 +99,12 @@ class FakeFetcher(pkg.Fetcher):
     def cached_revisions(self) -> set[str]:
         return set(self.already_cached)
 
-    def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
+    def hf_snapshot(self, repo: str, revision: str) -> Path:
         self.snapshots.append((repo, revision))
         target = self.hub / repo.replace("/", "--") / revision
         target.mkdir(parents=True, exist_ok=True)
         (target / "model.safetensors").write_bytes(b"w" * 2048)
-        return target, revision not in self.already_cached
+        return target
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Deletes the fake snapshot directories this fetcher created, and reports their size."""
@@ -179,7 +179,7 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
     """The failure mode this state machine exists for: exit 3 must still fire afterwards."""
 
     class ExplodingFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
+        def hf_snapshot(self, repo: str, revision: str) -> Path:
             raise pkg.ProvisioningError("download_failed", "network went away")
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
@@ -202,7 +202,7 @@ def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
     calls = {"n": 0}
 
     class FlakyFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
+        def hf_snapshot(self, repo: str, revision: str) -> Path:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise pkg.ProvisioningError("download_failed", "first attempt died")
@@ -530,3 +530,40 @@ def test_path_says_where_weights_actually_live(provisioner) -> None:
     assert "Hugging Face cache" in report["weights"]["location"]
     assert report["models"]["exists"] is False
     assert "silero-vad" in report["models"]["holds"]
+
+
+def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
+    """An interrupted pull leaves a partly-published snapshot; the retry must still own it.
+
+    `snapshot_download` publishes files as they land, so a cache scan on the second attempt
+    reports the revision as present. Re-deciding there would classify this root's own 16 GiB
+    as somebody else's and teardown would refuse to reclaim it.
+    """
+    revision = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
+
+    class InterruptedThenCachedFetcher(FakeFetcher):
+        """Fails the first attempt, and afterwards reports the revision as cached."""
+
+        def hf_snapshot(self, repo: str, revision_: str) -> Path:
+            path = super().hf_snapshot(repo, revision_)
+            if not self.already_cached:
+                self.already_cached = {revision_}   # the partial snapshot is now visible
+                raise pkg.ProvisioningError("download_failed", "interrupted mid-download")
+            return path
+
+    fetcher = InterruptedThenCachedFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    selection = pkg.select(["qwen3-asr-1.7b-8bit"])
+
+    with pytest.raises(pkg.ProvisioningError):
+        provisioner.pull(selection)
+    assert pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
+        "hub_revisions_pre_existing"] == []
+
+    provisioner.pull(selection)
+    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]
+    assert materialized["hub_revisions"] == [revision], (
+        "the retry disowned the download the first attempt started"
+    )
+    assert materialized["hub_revisions_pre_existing"] == []
+    assert provisioner.purge(dry_run=True)["would_remove"]["hub_revisions"] == [revision]

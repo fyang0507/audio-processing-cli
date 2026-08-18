@@ -211,15 +211,8 @@ class Fetcher:
             return set()
         return {revision.commit_hash for repo in cache.repos for revision in repo.revisions}
 
-    def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
-        """Materialize a revision. Returns its path and whether *this* call downloaded it.
-
-        The second value is the whole point. Weights live in the shared Hub cache rather than
-        under the provisioning root, so a revision may already be present — put there by
-        another tool, by an earlier experiment, or by a different provisioning root. Recording
-        that we "materialized" it would licence a later `purge` to delete somebody else's
-        weights, which is what the first version of this did.
-        """
+    def hf_snapshot(self, repo: str, revision: str) -> Path:
+        """Materialize a revision into the shared Hub cache, resuming a partial download."""
         try:
             from huggingface_hub import snapshot_download
         except ImportError as exc:  # noqa: BLE001 - reported, not swallowed
@@ -229,9 +222,7 @@ class Fetcher:
                 missing_tool="huggingface_hub",
                 fix="uv pip install huggingface_hub",
             ) from exc
-        already_present = revision in self.cached_revisions()
-        path = Path(snapshot_download(repo, revision=revision))
-        return path, not already_present
+        return Path(snapshot_download(repo, revision=revision))
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Delete exactly these revisions from the Hub cache. Returns what went, and its size.
@@ -511,6 +502,10 @@ class Provisioner:
 
     def pull(self, selection: list[Package]) -> dict:
         document = load_registry()
+        # Read the cache once, before anything downloads. Everything after this point works
+        # from that snapshot, so a revision fetched by this pull is never mistaken for one that
+        # was already there.
+        cached = self.fetcher.cached_revisions()
         pulled: list[dict] = []
         created: list[str] = []
         warnings: list[dict] = []
@@ -526,15 +521,20 @@ class Provisioner:
             if self.ensure_environment(package.environment, document):
                 created.append(package.environment)
 
+            previous = document["packages"].get(package.id, {})
+            pre_existing = self._pre_existing_revisions(package, previous, cached)
             entry = {
                 "state": "pulling", "environment": package.environment, "kind": package.kind,
                 "source": package.source, "license_declared": package.license_declared,
                 "license_reviewed": package.license_reviewed, "pulled_utc": _now(),
+                # Decided before any bytes move, and carried across a retry: see
+                # _pre_existing_revisions for why re-deciding would be wrong.
+                "hub_revisions_pre_existing": sorted(pre_existing),
             }
             document["packages"][package.id] = entry
             save_registry(document)
 
-            materialized = self._materialize(package, document)
+            materialized = self._materialize(package, document, pre_existing)
             entry["materialized"] = materialized
             entry["state"] = "ready"
             document["packages"][package.id] = entry
@@ -582,7 +582,28 @@ class Provisioner:
             "warnings": warnings,
         }
 
-    def _materialize(self, package: Package, document: dict) -> dict:
+    @staticmethod
+    def _pre_existing_revisions(package: Package, previous: dict,
+                                cached: set[str]) -> set[str]:
+        """Which of this package's revisions the Hub cache held before this root wanted them.
+
+        Two rules, and the second is the subtle one:
+
+        - A revision already in the shared cache is not ours to delete later, whoever put it
+          there — another tool, another provisioning root, or an earlier experiment.
+        - **A retry must not re-decide.** `snapshot_download` publishes a snapshot directory as
+          files land, so an interrupted 16 GiB pull leaves a revision that a later cache scan
+          reports as present. Asking again would classify this root's own partly-finished
+          download as somebody else's, and teardown would then refuse to reclaim 16 GiB it did
+          in fact fetch. The first attempt's answer is the truthful one, so it is recorded in
+          the `pulling` entry and reused.
+        """
+        if "hub_revisions_pre_existing" in previous:
+            return set(previous["hub_revisions_pre_existing"])
+        return {revision for revision in _source_revisions(package) if revision in cached}
+
+    def _materialize(self, package: Package, document: dict,
+                     pre_existing: set[str]) -> dict:
         kind = package.source["type"]
         if kind == "url":
             # The filename is manifest data, not derived: the shipped Silero backend resolves
@@ -596,13 +617,14 @@ class Provisioner:
 
         if kind == "huggingface":
             revision = package.source["revision"]
-            snapshot, downloaded = self.fetcher.hf_snapshot(package.source["repo"], revision)
+            snapshot = self.fetcher.hf_snapshot(package.source["repo"], revision)
             result = {
                 "path": str(snapshot), "bytes": _tree_bytes(snapshot),
                 "revision": revision, "digest_verified": True,
-                # Only what this pull actually fetched is ours to delete later.
-                "hub_revisions": [revision] if downloaded else [],
-                "hub_revisions_pre_existing": [] if downloaded else [revision],
+                # Only what this pull fetched is ours to delete later, decided before the
+                # download rather than after it — see _pre_existing_revisions.
+                "hub_revisions": [] if revision in pre_existing else [revision],
+                "hub_revisions_pre_existing": sorted(pre_existing),
             }
             result.update(self._checkout_and_install(package))
             return result
@@ -611,19 +633,19 @@ class Provisioner:
             snapshots = {}
             total = 0
             ours: list[str] = []
-            theirs: list[str] = []
             for repo in package.source["repos"]:
-                snapshot, downloaded = self.fetcher.hf_snapshot(repo["repo"], repo["revision"])
+                snapshot = self.fetcher.hf_snapshot(repo["repo"], repo["revision"])
                 snapshots[repo["repo"]] = str(snapshot)
                 total += _tree_bytes(snapshot)
-                (ours if downloaded else theirs).append(repo["revision"])
+                if repo["revision"] not in pre_existing:
+                    ours.append(repo["revision"])
             result = {
                 "paths": snapshots, "bytes": total, "digest_verified": True,
                 # Plural, because this package spans four repositories. A single `revision`
                 # key would have to pick one of them, and the receipt promises the revisions
                 # a pull materialized.
                 "revisions": [repo["revision"] for repo in package.source["repos"]],
-                "hub_revisions": ours, "hub_revisions_pre_existing": theirs,
+                "hub_revisions": ours, "hub_revisions_pre_existing": sorted(pre_existing),
             }
             result.update(self._checkout_and_install(package))
             return result
@@ -1072,6 +1094,16 @@ def _patched_files(patch: Path, checkout: Path) -> list[Path]:
                 target = target[2:]
             touched.append(checkout / target)
     return touched
+
+
+def _source_revisions(package: Package) -> list[str]:
+    """Every Hub revision a package pins, whether it names one or four."""
+    source = package.source
+    if source["type"] == "huggingface":
+        return [source["revision"]]
+    if source["type"] == "huggingface_multi":
+        return [repo["revision"] for repo in source["repos"]]
+    return []
 
 
 def _locations(materialized: dict) -> list[Path]:

@@ -37,8 +37,9 @@ a missing tool will block a request. All three are read-only and safe to run at 
 Two fields in that output are worth knowing in advance. `doctor` marks an environment
 `provisional: true` when a future change might move its packages elsewhere — it is a note about
 the roadmap, changes nothing about any command, and is not a warning. And `path`'s `models`
-entry covers hash-pinned single-file artifacts only (currently just `silero-vad`); it is often
-absent, which is not evidence that a pull failed.
+entry covers hash-pinned single-file artifacts only — currently just `silero-vad`. It reports
+`exists: false` until one is pulled, which is the normal state and not evidence that anything
+failed; `path` also prints a `weights` block saying where the large files really go.
 
 ## Translate the request into package ids
 
@@ -90,6 +91,14 @@ aligner. Prefer explicit ids when the user's request is narrow and the differenc
 audio packages pull vibevoice-asr-7b qwen3-forcedaligner
 ```
 
+**Expect this to take a long time, and expect silence.** These are multi-gigabyte downloads
+plus a dependency install: on a fast connection the small `mlx` packages take a minute or two,
+`firered-asr2s` around five, and `vibevoice-asr-7b` longer still — the pair above moves roughly
+17 GiB. That routinely exceeds a tool's default command timeout, so **run a pull in the
+background and poll it** rather than in the foreground. A long quiet stretch is a download in
+progress, not a hang; do not kill and restart it, and do not delete anything to "clean up" —
+re-running the identical `pull` resumes a partial download and finishes it.
+
 Progress goes to stderr; stdout is a JSON receipt naming each package, the environments
 created, the bytes this pull added as `pulled_known_bytes`, and any warnings. Each package
 reports either a `revision` or — for `firered-asr2s`, which spans four repositories — a
@@ -123,7 +132,7 @@ and do not describe a declared license as a cleared one.
 ```bash
 audio packages remove vibevoice-asr-7b   # one package
 audio packages purge --dry-run           # what a full teardown would free
-audio packages purge                     # everything this tool provisioned
+audio packages purge                     # this root's packages and environments
 ```
 
 An environment is deleted exactly when its last package goes; the report names what was kept
@@ -133,16 +142,26 @@ registry, so it finds everything even in a session that never ran `pull`.
 **Read the teardown report before believing what it freed.** Weights are in the shared Hugging
 Face cache, so teardown reaches outside the root, and it draws one line: a revision **this root
 downloaded** is deleted, while a revision that was **already cached** when this root pulled it
-is kept and listed under `hub_revisions_retained`. That is why a `purge` can legitimately report
-freeing far less than the packages' sizes — someone else's copy was already there. Run
-`purge --dry-run` first; it prints `would_remove.hub_revisions` against
-`would_keep.hub_revisions` so you can see the split before anything goes.
+is kept. That is why a `purge` can legitimately report freeing far less than the packages'
+sizes — someone else's copy was already there. Run `purge --dry-run` first to see the split
+before anything goes.
 
-One case that line does not cover: if two roots each pulled a revision, the one that downloaded
-it owns it, and purging that root removes weights the other still expects. The other root's
-`audio packages verify` will then report `package_integrity_failed`, and
-`audio packages pull --repair PACKAGE` restores it. If you are provisioning a throwaway root
-beside a populated cache, prefer `remove` for the packages you added over a blanket `purge`.
+Three field names describe that one keep-side fact, at three moments: a `pull` receipt calls it
+`hub_revisions_pre_existing`, `purge --dry-run` calls it `would_keep.hub_revisions`, and a
+teardown report calls it `hub_revisions_retained`. They are the same revisions. Alongside them a
+teardown reports `hub_revisions_deleted` (what it actually removed) and
+`hub_revisions_not_found` (recorded as ours, but already gone from the cache — no longer
+reclaimable, and not an error).
+
+**`purge` is how you dispose of a root**, including a throwaway one beside a populated cache —
+that is exactly the case the retention rule makes safe. `remove` empties a root only package by
+package and leaves the registry and any still-referenced environment behind, so it is the wrong
+tool for "give this root back". Do not finish the job by deleting directories yourself.
+
+One case the retention line does not cover: if two roots each *downloaded* a revision, the first
+one owns it, so purging that root removes weights the second still expects. The second root's
+`audio packages verify` then reports `package_integrity_failed`, and
+`audio packages pull --repair PACKAGE` restores it.
 
 ## Exit codes
 
