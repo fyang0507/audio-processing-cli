@@ -64,6 +64,10 @@ succeed — the pins are what make the recorded measurements mean anything.
 
 ## Skills
 
-[`auto-enhancement`](.agents/skills/auto-enhancement/SKILL.md) covers `inspect` and `enhance`.
-[`model-packages`](.agents/skills/model-packages/SKILL.md) covers `doctor` and `audio packages`.
-Read the relevant one before driving those commands.
+[`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the one skill, and it ships in the source
+distribution so it travels with the CLI. It is written for an agent *using* the tool on someone's
+audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one
+task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or
+installation. Two rules keep it that way. Anything `--help` already states stays out of it, and
+backend internals stay out too — how the models are partitioned into runtimes belongs in
+[ENVIRONMENTS.md](ENVIRONMENTS.md), where a developer will look for it.

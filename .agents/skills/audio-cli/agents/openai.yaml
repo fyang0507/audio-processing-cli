@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audio CLI"
+  short_description: "Diagnose, clean up, and prepare local audio"
+  default_prompt: "Use $audio-cli to find out what is wrong with this recording's audio, fix it, and tell me what actually changed."

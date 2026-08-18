@@ -177,8 +177,9 @@ segments would each become if passed straight through. Backend
 capability declarations and the planner come next, then `audio packages`
 provisioning and its registry, then the four stacks behind adapters, then
 `export`. Model results are normalized at the adapter boundary; model-specific
-objects do not travel past it. The associated agent skill is worth writing only once the
-command contract is executable, and its references should be the decision report
+objects do not travel past it. The transcription know-how belongs in the existing
+[`audio-cli`](.agents/skills/audio-cli/SKILL.md) skill rather than a second one, and it is worth
+writing only once the command contract is executable; its references should be the decision report
 and experiment digest rather than the full findings file.
 
 ## Acceptance and open evidence

@@ -168,8 +168,8 @@ The report demonstrates deterministic profile conformance. Perceptual preference
 uv run --extra dev pytest
 ```
 
-Two repository-local agent skills. [`auto-enhancement`](.agents/skills/auto-enhancement/SKILL.md)
-covers `inspect` and `enhance`; [`model-packages`](.agents/skills/model-packages/SKILL.md)
-covers `doctor` and `audio packages`, which provision the weights and runtimes a
-transcription stack needs. Detailed command and decision context lives in each skill's
-`references/` directory.
+One agent skill travels with the CLI in the source distribution.
+[`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix
+or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix,
+provision transcription models, install the command — and holds only what `--help` cannot say, which
+is the judgment, the report semantics, and the limits worth admitting to a user.
