@@ -311,7 +311,16 @@ code read it as one.
 
 The fix is to record whether *this pull* actually fetched the revision. Teardown deletes only
 what it downloaded, reports the rest as `hub_revisions_retained`, and `purge --dry-run` prints
-the split before anything goes. One case remains: if two roots each pulled a revision, the first
+the split before anything goes.
+
+**Where that decision happens is load-bearing, and the obvious placement is wrong.** Asking the
+cache at download time — inside the fetcher, which reads cleaner — breaks on a retry:
+`snapshot_download` publishes a snapshot directory as files land, so an interrupted 16 GiB pull
+leaves a revision that the next scan reports as present, and the second attempt would classify
+this root's own partial download as somebody else's. Teardown would then refuse to reclaim
+16 GiB it did fetch, which is the first bug's mirror image. So the cache is read **once per
+`pull`, before anything downloads**, the answer is written into the `pulling` entry, and a retry
+reuses it rather than re-deciding. Do not move that check back into the fetcher. One case remains: if two roots each pulled a revision, the first
 one downloaded it and owns it, so purging that root strands the other. That now surfaces as
 `package_integrity_failed` on the other root's `verify` — with `pull --repair` as the fix —
 rather than as a stack that fails mid-run, because `verify` checks the materialized paths still
