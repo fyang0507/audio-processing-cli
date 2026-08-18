@@ -1,0 +1,4 @@
+interface:
+  display_name: "Model Packages"
+  short_description: "Provision and verify transcription model packages"
+  default_prompt: "Use $model-packages to check what is provisioned, pull what this request needs, and verify it."

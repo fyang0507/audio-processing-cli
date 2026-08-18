@@ -168,4 +168,8 @@ The report demonstrates deterministic profile conformance. Perceptual preference
 uv run --extra dev pytest
 ```
 
-The repository-local agent skill is at [`.agents/skills/auto-enhancement/SKILL.md`](.agents/skills/auto-enhancement/SKILL.md). Detailed command and decision context lives in its [`references/`](.agents/skills/auto-enhancement/references/) directory.
+Two repository-local agent skills. [`auto-enhancement`](.agents/skills/auto-enhancement/SKILL.md)
+covers `inspect` and `enhance`; [`model-packages`](.agents/skills/model-packages/SKILL.md)
+covers `doctor` and `audio packages`, which provision the weights and runtimes a
+transcription stack needs. Detailed command and decision context lives in each skill's
+`references/` directory.

@@ -35,6 +35,7 @@ packages = ["src/audio_cli"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/.agents/skills/auto-enhancement",
+  "/.agents/skills/model-packages",
   "/src",
   "/tests",
   "/LICENSE",
