@@ -204,6 +204,11 @@ def validate() -> list[str]:
                 problems.append(f"{package.id}: {role!r} is not a role")
         if package.kind not in {"weights", "toolchain"}:
             problems.append(f"{package.id}: unexpected kind {package.kind!r}")
+        if package.source.get("type") == "url" and not package.source.get("filename"):
+            problems.append(
+                f"{package.id}: a url source must declare the filename it materializes as, or "
+                "pull and the backend that reads it will disagree"
+            )
         if package.source.get("type") == "huggingface_multi":
             declared = sum(repo.get("bytes") or 0 for repo in package.source["repos"])
             if package.bytes != declared:

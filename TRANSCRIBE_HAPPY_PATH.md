@@ -1079,9 +1079,10 @@ audio packages remove vibevoice-asr-7b
   "removed": ["vibevoice-asr-7b"],
   "environments_removed": ["torch-vibevoice"],
   "environments_removed_reason": "no other provisioned package targets torch-vibevoice",
-  "environments_kept": ["mlx", "torch-firered", "swift"],
-  "environments_kept_reason": "qwen3-asr-1.7b-8bit and qwen3-forcedaligner still need mlx; firered-asr2s still needs torch-firered; fluidaudio still needs swift",
+  "environments_kept": ["mlx", "swift", "torch-firered"],
+  "environments_kept_reason": "qwen3-asr-1.7b-8bit, qwen3-forcedaligner still need mlx; fluidaudio, speaker-diarization-coreml still need swift; firered-asr2s still needs torch-firered",
   "hub_revisions_deleted": ["d0c9efdb8d614685062c04425d91e01b6f37d944"],
+  "hub_revisions_not_found": [],
   "hub_cache_note": "only revisions this tool recorded as materialized here were deleted; the Hugging Face cache may be shared with other tools",
   "reclaimed_bytes": 17349559904
 }
@@ -1091,6 +1092,12 @@ Reference counting cuts both ways here, which is the point of showing it: `torch
 held exactly one package and dies with it, while `mlx` survives because the aligner and the
 ASR checkpoint are still provisioned there. The count is derived from the package table each
 time rather than stored, so it cannot drift out of agreement with what is actually on disk.
+
+`reclaimed_bytes` is measured, not projected. Most of it is a Hub revision rather than anything
+under the root, so `remove` deletes exactly the commit hashes the registry recorded — by hash,
+through the Hub cache's own revision-scoped deletion, leaving any sibling revision of the same
+repository alone. A revision the cache no longer holds appears in `hub_revisions_not_found`
+rather than being counted as freed.
 
 ```bash
 audio packages purge --dry-run
@@ -1108,6 +1115,14 @@ audio packages purge --dry-run
   "unsized_packages": ["fluidaudio"],
   "untouched": ["user media", "transcript and subtitle outputs"]
 }
+```
+
+`--dry-run` projects from the registry, so it reports `reclaimable_known_bytes` and names what
+it could not size. The real `purge` reports `reclaimed_bytes`, which is what the filesystem and
+the Hub cache actually gave back. The two are related and deliberately not the same field.
+
+```json
+{"note": "the real run's shape follows the same keys, with reclaimed_bytes in place of the projection"}
 ```
 
 ```bash

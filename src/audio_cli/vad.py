@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -11,6 +10,8 @@ from typing import Protocol
 
 import numpy as np
 import onnxruntime as ort
+
+from .paths import models_dir
 
 MODEL_VERSION = "silero-vad-6.2.1"
 MODEL_URL = (
@@ -58,15 +59,8 @@ class VadDetector(Protocol):
 
 
 def _cache_root() -> Path:
-    override = os.environ.get("AUDIO_PROCESSING_MODEL_CACHE")
-    if override:
-        return Path(override).expanduser()
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    if xdg:
-        return Path(xdg).expanduser() / "audio-processing-cli" / "models"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Caches" / "audio-processing-cli" / "models"
-    return Path.home() / ".cache" / "audio-processing-cli" / "models"
+    """The models directory under the one provisioning root. See paths.py."""
+    return models_dir()
 
 
 def _sha256(path: Path) -> str:

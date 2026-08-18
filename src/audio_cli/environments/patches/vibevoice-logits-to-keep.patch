@@ -1,0 +1,38 @@
+diff --git a/vibevoice/modular/modeling_vibevoice_asr.py b/vibevoice/modular/modeling_vibevoice_asr.py
+index 4663d3f..f47a616 100644
+--- a/vibevoice/modular/modeling_vibevoice_asr.py
++++ b/vibevoice/modular/modeling_vibevoice_asr.py
+@@ -351,6 +351,7 @@ class VibeVoiceASRForConditionalGeneration(VibeVoiceASRPreTrainedModel, Generati
+         output_hidden_states: Optional[bool] = None,
+         return_dict: Optional[bool] = None,
+         cache_position: Optional[torch.LongTensor] = None,
++        logits_to_keep: Union[int, torch.Tensor] = 0,
+         # Speech-specific arguments
+         speech_tensors: Optional[torch.FloatTensor] = None,
+         speech_masks: Optional[torch.BoolTensor] = None,
+@@ -396,7 +397,17 @@ class VibeVoiceASRForConditionalGeneration(VibeVoiceASRPreTrainedModel, Generati
+         )
+ 
+         hidden_states = outputs[0] if not return_dict else outputs.last_hidden_state
+-        logits = self.lm_head(hidden_states)
++        # Generation only consumes the final prompt logit. Exposing this argument lets
++        # Transformers request that one position instead of projecting the full prompt.
++        # Training keeps the complete sequence so the shifted-label loss is unchanged.
++        if labels is not None:
++            logits_to_keep = 0
++        slice_indices = (
++            slice(-logits_to_keep, None)
++            if isinstance(logits_to_keep, int)
++            else logits_to_keep
++        )
++        logits = self.lm_head(hidden_states[:, slice_indices, :])
+ 
+         loss = None
+         if labels is not None:
+@@ -519,4 +530,4 @@ __all__ = [
+     "VibeVoiceASRPreTrainedModel",
+     "VibeVoiceASRModel",
+     "VibeVoiceASRForConditionalGeneration",
+-]
+\ No newline at end of file
++]

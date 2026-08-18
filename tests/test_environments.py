@@ -217,6 +217,9 @@ def test_silero_digest_matches_the_shipped_backend() -> None:
     silero = env.packages()["silero-vad"]
     assert silero.source["sha256"] == vad.MODEL_SHA256
     assert silero.source["version"] in vad.MODEL_VERSION
+    # The filename too: pull writes it and the backend reads it, so a mismatch means two
+    # copies on disk and a re-download on first use. This is what caught that.
+    assert silero.source["filename"] == vad.MODEL_FILENAME
     assert silero.auto_fetch, "silero-vad is the one package that may auto-fetch"
     cached = Path(vad._cache_root()) / vad.MODEL_FILENAME
     if cached.is_file():

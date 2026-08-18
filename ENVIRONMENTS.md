@@ -233,6 +233,16 @@ disagree with it.
 
 **`purge` reads the registry, reports reclaimable bytes, and touches no media or output.**
 
+**A teardown reports what it actually freed.** Two things follow, and the first was got wrong
+before it was got right. Most of the bytes are not under the root at all — they are Hub
+revisions — so `remove` and `purge` delete exactly the revisions the registry records, by
+commit hash, through the Hub cache's own revision-scoped deletion. A sibling revision of the
+same repository is not ours to touch. And `reclaimed_bytes` is *measured before deleting*
+rather than read off the registry, because the first version summed recorded sizes while
+deleting nothing from the cache, and so reported 2.47 GB reclaimed while freeing about 400 MB
+of virtual environment. Revisions the cache no longer holds are reported as
+`hub_revisions_not_found`, not as deleted.
+
 ## `verify`
 
 Four checks, all cheap, none loading weights:
@@ -274,10 +284,27 @@ evidence.
 contained in one place: the transport chooses an executable per environment, and every
 environment's stage speaks the same JSON.
 
-## What is still open
+## What running it actually caught
 
-- **`audio packages` and `audio doctor` are not implemented.** The data and the mechanism they
-  need exist and are validated; the commands are not written.
+`audio packages` and `audio doctor` are implemented, and the lifecycle is tested against a
+fabricated root with both external surfaces injected. The tests were green before the first
+real `pull` ran, and the real run still found two defects a fake could not:
+
+- **`pull` wrote the Silero artifact under a different name than the backend reads.** The
+  filename was derived from the version (`6.2.1.onnx`) while `vad.py` resolves
+  `silero-vad-6.2.1.onnx`, so provisioning left two copies and the backend re-downloaded on
+  first use. The filename is manifest data now, and a test ties it to `vad.MODEL_FILENAME`.
+  The fake fetcher wrote wherever it was told, so the corruption test had been passing for the
+  wrong reason.
+- **`purge` overstated what it freed**, above.
+
+A third, milder one: the `swift` environment never got a registry entry, because it has no
+interpreter to create — so `purge` could not name it and could not reclaim it.
+
+Worth stating plainly: an injected-surface test suite checks the rules, and every defect the
+real run found was in the *boundary* the fakes stood in for. Both kinds are needed.
+
+## What is still open
 - **The VibeVoice re-measurement decision**, above. It is the only thing standing between four
   provisioned environments and three.
 - **`fluidaudio` remains unsized.** It is a build product; `pull` records its size once, and
