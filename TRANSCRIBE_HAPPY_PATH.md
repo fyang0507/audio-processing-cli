@@ -94,7 +94,8 @@ audio doctor
   "memory": {"physical_bytes": 68719476736, "available_bytes": 41234567168},
   "disk": {"root": "/Users/you/Library/Caches/audio-processing-cli",
            "available_bytes": 402653184000},
-  "environments": {"core": "ready", "mlx": "absent", "torch": "absent", "swift": "absent"},
+  "environments": {"core": "ready", "mlx": "absent", "torch-firered": "absent",
+                   "torch-vibevoice": "absent", "swift": "absent"},
   "packages": {"provisioned": [], "count": 0},
   "warnings": []
 }
@@ -210,14 +211,14 @@ audio transcribe plan --input meeting.m4a \
                    "deterministic": true,
                    "determinism_tolerance_ms": 0.0,
                    "determinism_basis": "argmax decode; back-to-back calls in one process produced byte-identical text, cross-process repetition untested"},
-    "aligner":    {"backend": "qwen3-forcedaligner", "environment": "torch",
+    "aligner":    {"backend": "qwen3-forcedaligner", "environment": "mlx",
                    "config": {"scope": "all_segments"},
                    "selected_by": "add_on_required_by:word_timestamps"}
   },
   "execution": {
     "stage_order": ["decode", "diarizer", "asr", "aligner"],
     "residency": "one_model_stage_at_a_time",
-    "environments_spanned": ["swift", "mlx", "torch"],
+    "environments_spanned": ["swift", "mlx"],
     "note": "stages run strictly sequentially and no two model stages are resident together; wall time adds across stages, peak memory does not, and the per-stage peaks below must not be summed"
   },
   "capabilities": {
@@ -236,7 +237,7 @@ audio transcribe plan --input meeting.m4a \
      "requires_tool": ["swift"], "bytes": null, "provisioned": false},
     {"package": "speaker-diarization-coreml", "environment": "swift", "kind": "weights",
      "bytes": null, "provisioned": false},
-    {"package": "qwen3-forcedaligner", "environment": "torch", "kind": "weights",
+    {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
      "bytes": null, "provisioned": false}
   ],
   "total_known_download_bytes": 2463307541,
@@ -285,10 +286,10 @@ Progress goes to stderr; stdout is the receipt:
      "built": true, "product_runs": true},
     {"package": "speaker-diarization-coreml", "environment": "swift",
      "bytes": 84279296, "digest_verified": true, "license": "CC-BY-4.0"},
-    {"package": "qwen3-forcedaligner", "environment": "torch",
+    {"package": "qwen3-forcedaligner", "environment": "mlx",
      "bytes": 1932735283, "digest_verified": true}
   ],
-  "environments_created": ["mlx", "swift", "torch"],
+  "environments_created": ["mlx", "swift"],
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
   "reclaimable_bytes": 4480322120,
@@ -315,7 +316,7 @@ audio packages verify
     {"package": "speaker-diarization-coreml", "digest": "ok"},
     {"package": "qwen3-forcedaligner", "digest": "ok"}
   ],
-  "environments": {"mlx": "ok", "swift": "ok", "torch": "ok"},
+  "environments": {"mlx": "ok", "swift": "ok"},
   "mlx_audio_private_api_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_matches_expected": true,
   "failed": []
@@ -461,7 +462,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
   "roles": {
     "decode":  {"backend": "ffmpeg",
                 "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
-    "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch",
+    "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch-vibevoice",
                 "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
                 "source_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
                 "patch": "vibevoice-logits-to-keep",
@@ -472,14 +473,14 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "determinism_basis": "three seeded repeats shared one normalized-output hash; text decode is do_sample=False",
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
-    "aligner": {"backend": "qwen3-forcedaligner", "environment": "torch",
+    "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "config": {"scope": "all_segments"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
   "execution": {
     "stage_order": ["decode", "asr", "aligner"],
     "residency": "one_model_stage_at_a_time",
-    "environments_spanned": ["torch"],
+    "environments_spanned": ["mlx", "torch-vibevoice"],
     "note": "both model stages share the torch environment and are still not resident together; VibeVoice and the aligner have never been measured co-resident and this plan does not do so"
   },
   "capabilities": {
@@ -498,9 +499,9 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                             "note": "boundary MAE/P95 unlabeled; absent on any segment with no speech to align"}
   },
   "packages": [
-    {"package": "vibevoice-asr-7b", "environment": "torch", "kind": "weights",
+    {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "kind": "weights",
      "bytes": null, "provisioned": false},
-    {"package": "qwen3-forcedaligner", "environment": "torch", "kind": "weights",
+    {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
      "bytes": null, "provisioned": true}
   ],
   "total_known_download_bytes": 0,
@@ -658,21 +659,21 @@ audio transcribe plan --input field.wav --stack firered \
   "roles": {
     "decode":     {"backend": "ffmpeg",
                    "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
-    "vad":        {"backend": "firered-vad", "environment": "torch",
+    "vad":        {"backend": "firered-vad", "environment": "torch-firered",
                    "selected_by": "stack"},
-    "lid":        {"backend": "firered-lid", "environment": "torch",
+    "lid":        {"backend": "firered-lid", "environment": "torch-firered",
                    "config": {"batch_size": 4},
                    "selected_by": "requirement:lid",
                    "granularity": "vad_region",
                    "cost_note": "162.09 s with LID versus 84.24 s without, on the 139.284 s probe"},
-    "asr":        {"backend": "firered-asr2-aed", "environment": "torch",
+    "asr":        {"backend": "firered-asr2-aed", "environment": "torch-firered",
                    "config": {"device": "cpu", "dtype": "float32", "batch_size": 4,
                               "return_timestamp": true},
                    "selected_by": "stack",
                    "deterministic": true,
                    "determinism_tolerance_ms": 1.0,
                    "determinism_basis": "exact-repeat 60-minute fixture: both halves' text sequences equal the standalone 30-minute run, maximum rebased timestamp drift 1.0 ms within a declared 2.0 ms tolerance; normalized segments are therefore not byte-equal"},
-    "punctuator": {"backend": "firered-punc", "environment": "torch",
+    "punctuator": {"backend": "firered-punc", "environment": "torch-firered",
                    "config": {"batch_size": 4},
                    "selected_by": "floor:punctuated_sentence_segmented_text",
                    "recases_text": true}
@@ -680,7 +681,7 @@ audio transcribe plan --input field.wav --stack firered \
   "execution": {
     "stage_order": ["decode", "vad", "lid", "asr", "punctuator"],
     "residency": "one_model_stage_at_a_time",
-    "environments_spanned": ["torch"],
+    "environments_spanned": ["torch-firered"],
     "note": "four model stages in one environment, none resident together"
   },
   "capabilities": {
@@ -700,7 +701,7 @@ audio transcribe plan --input field.wav --stack firered \
                         "note": "one label per VAD region, copied onto every sentence in that region; per-sentence variation would be fabricated"}
   },
   "packages": [
-    {"package": "firered-asr2s", "environment": "torch", "kind": "weights",
+    {"package": "firered-asr2s", "environment": "torch-firered", "kind": "weights",
      "bytes": null, "provisioned": false, "includes_lid_weights": true}
   ],
   "total_known_download_bytes": 0,
@@ -1031,23 +1032,43 @@ audio packages list
 {
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "packages": [
-    {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "bytes": 2463307541,
-     "license": "unreviewed", "used_by_stacks": ["qwen-1.7b"]},
+    {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "bytes": 2467859030,
+     "license_declared": "apache-2.0", "license_reviewed": false,
+     "used_by_stacks": ["qwen-1.7b"]},
     {"package": "fluidaudio", "environment": "swift", "bytes": null,
-     "license": "Apache-2.0", "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
-    {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 84279296,
-     "license": "CC-BY-4.0", "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
-    {"package": "qwen3-forcedaligner", "environment": "torch", "bytes": 1932735283,
-     "license": "unreviewed", "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"]},
-    {"package": "vibevoice-asr-7b", "environment": "torch", "bytes": 18253611008,
-     "license": "unreviewed", "used_by_stacks": ["vibevoice"]},
-    {"package": "firered-asr2s", "environment": "torch", "bytes": 9878424576,
-     "license": "unreviewed", "used_by_stacks": ["firered"]}
+     "license_declared": "apache-2.0", "license_reviewed": true,
+     "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
+    {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 129243647,
+     "license_declared": "cc-by-4.0", "license_reviewed": true,
+     "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
+    {"package": "qwen3-forcedaligner", "environment": "mlx", "bytes": 1276475979,
+     "license_declared": "apache-2.0", "license_reviewed": false,
+     "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"]},
+    {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "bytes": 17349559904,
+     "license_declared": "mit", "license_reviewed": false,
+     "used_by_stacks": ["vibevoice"]},
+    {"package": "firered-asr2s", "environment": "torch-firered", "bytes": 9583893873,
+     "license_declared": "apache-2.0", "license_reviewed": false,
+     "used_by_stacks": ["firered"]}
   ],
-  "environments": {"mlx": "ready", "torch": "ready", "swift": "ready"},
-  "total_bytes": 32612357704
+  "environments": {"mlx": "ready", "torch-firered": "ready", "torch-vibevoice": "ready",
+                   "swift": "ready"},
+  "total_known_bytes": 30807032433,
+  "unsized_packages": ["fluidaudio"]
 }
 ```
+
+Every byte count here is real, read from the Hub at the revision each package pins.
+`fluidaudio` is the one that stays `null`: it is a build product, so its size depends on the
+toolchain that produced it, and `pull` records the measured value afterwards. `total_known_bytes`
+is named for what it is, because a total that silently omitted an unsized package would
+understate the disk a `purge` reclaims.
+
+`license` became two fields. `license_declared` is what the model card says at the pinned
+revision; `license_reviewed` is whether anyone read the terms. Only FluidAudio and
+`speaker-diarization-coreml` were read (`model_tests/benchmark/DIARIZATION.md`). One field
+could not tell "nobody looked" apart from "the card says apache-2.0 and nobody checked what
+that obliges", and a scraped string must not read as a clearance.
 
 ```bash
 audio packages remove vibevoice-asr-7b
@@ -1056,13 +1077,20 @@ audio packages remove vibevoice-asr-7b
 ```json
 {
   "removed": ["vibevoice-asr-7b"],
-  "environments_kept": ["torch"],
-  "environments_kept_reason": "qwen3-forcedaligner and firered-asr2s still need torch",
+  "environments_removed": ["torch-vibevoice"],
+  "environments_removed_reason": "no other provisioned package targets torch-vibevoice",
+  "environments_kept": ["mlx", "torch-firered", "swift"],
+  "environments_kept_reason": "qwen3-asr-1.7b-8bit and qwen3-forcedaligner still need mlx; firered-asr2s still needs torch-firered; fluidaudio still needs swift",
   "hub_revisions_deleted": ["d0c9efdb8d614685062c04425d91e01b6f37d944"],
   "hub_cache_note": "only revisions this tool recorded as materialized here were deleted; the Hugging Face cache may be shared with other tools",
-  "reclaimed_bytes": 18253611008
+  "reclaimed_bytes": 17349559904
 }
 ```
+
+Reference counting cuts both ways here, which is the point of showing it: `torch-vibevoice`
+held exactly one package and dies with it, while `mlx` survives because the aligner and the
+ASR checkpoint are still provisioned there. The count is derived from the package table each
+time rather than stored, so it cannot drift out of agreement with what is actually on disk.
 
 ```bash
 audio packages purge --dry-run
@@ -1073,10 +1101,11 @@ audio packages purge --dry-run
   "would_remove": {
     "packages": ["qwen3-asr-1.7b-8bit", "fluidaudio", "speaker-diarization-coreml",
                  "qwen3-forcedaligner", "firered-asr2s"],
-    "environments": ["mlx", "torch", "swift"],
+    "environments": ["mlx", "torch-firered", "swift"],
     "root": "/Users/you/Library/Caches/audio-processing-cli"
   },
-  "reclaimable_bytes": 14358746696,
+  "reclaimable_known_bytes": 13457472529,
+  "unsized_packages": ["fluidaudio"],
   "untouched": ["user media", "transcript and subtitle outputs"]
 }
 ```

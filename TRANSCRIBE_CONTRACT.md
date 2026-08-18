@@ -149,7 +149,7 @@ yet and `satisfaction` is defined only for a requested capability:
 {
   "stack": "firered",
   "family": "FireRedASR2S",
-  "environment": "torch",
+  "environment": "torch-firered",
   "roles": "vad, asr and punctuator always; lid as well when lid is requested",
   "input": {"path": "field.wav", "duration_seconds": 27.8, "container": "wav",
             "sample_rate_hz": 48000, "channels": 1},
@@ -459,7 +459,7 @@ earlier draft declared. The orchestrator that produced the end-to-end interview
 measurement ran *strictly sequential fresh subprocesses*, and its record says in as many
 words that the stages did not overlap. Publishing per-stage memory peaks without
 declaring that is how a reader ends up summing them. Two consequences worth stating
-outright: a request spanning all three provisioned environments costs the sum of the
+outright: a request spanning several provisioned environments costs the sum of the
 stage walls and the maximum of the stage peaks, not the sum of both; and strict
 sequencing is load-bearing for the memory story rather than an implementation detail,
 because `vibevoice` at 20.28 GiB and the aligner have never been measured resident at
@@ -505,8 +505,19 @@ person or a role.
 
 ### 1.4 Adding timing, and what it costs
 
-Qwen has no native word timing, so `word_timestamps` forces the aligner and its
-`torch` environment. One request then spans all three provisioned environments.
+Qwen has no native word timing, so `word_timestamps` forces the aligner. It does **not** force
+another environment: the aligner runs in `mlx`, the same environment the ASR is already in, so
+the cost is 1.19 GiB of weights and one more stage rather than a second runtime. The request
+spans `mlx` and `swift`.
+
+That was not true when this document was written, and it is worth saying why it changed. The
+aligner was measured through `qwen-asr`, a PyTorch package, and the same alignment is available
+from `mlx-audio` — the library the Qwen stacks already pin. Rerunning the recorded case through
+it produced identical token text on all 246 aligned tokens
+(`model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json`), so the move costs no
+transcript change; bounds agree to a median of 0 s with a P95 of 80 ms, and boundary accuracy
+is unmeasured against labels on both paths, which is the same caveat `evidence.quality` already
+carries. [ENVIRONMENTS.md](ENVIRONMENTS.md) holds the layout.
 
 ```bash
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
@@ -533,7 +544,7 @@ the one package that auto-fetches:
                            "min_speech_ms": 100, "min_silence_ms": 300,
                            "speech_pad_ms": 120},
                 "selected_by": "add_on_required_by:vad"},
-    "aligner": {"backend": "qwen3-forcedaligner", "environment": "torch",
+    "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "config": {"scope": "all_segments"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -547,7 +558,7 @@ the one package that auto-fetches:
     {"package": "silero-vad", "environment": "core", "kind": "weights",
      "bytes": null, "provisioned": true, "auto_fetch": true,
      "note": "hash-pinned single file; fetched on first use, so it never returns exit 3"},
-    {"package": "qwen3-forcedaligner", "environment": "torch", "kind": "weights",
+    {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
      "bytes": null, "provisioned": false}
   ]
 }
@@ -622,7 +633,7 @@ fields that differ from §1.1** — the envelope, `packages`, and
   "roles": {
     "decode":  {"backend": "ffmpeg",
                 "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
-    "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch",
+    "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch-vibevoice",
                 "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
                 "source_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
                 "patch": "vibevoice-logits-to-keep",
@@ -633,7 +644,7 @@ fields that differ from §1.1** — the envelope, `packages`, and
                 "determinism_basis": "three seeded repeats shared one normalized-output hash; text decode is do_sample=False (run_vibevoice.py:267)",
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
-    "aligner": {"backend": "qwen3-forcedaligner", "environment": "torch",
+    "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "config": {"scope": "all_segments"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -728,16 +739,16 @@ from inside the stack rather than as an add-on. Abridged to `roles` and `executi
   "roles": {
     "decode":     {"backend": "ffmpeg",
                    "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
-    "vad":        {"backend": "firered-vad", "environment": "torch",
+    "vad":        {"backend": "firered-vad", "environment": "torch-firered",
                    "selected_by": "stack"},
-    "asr":        {"backend": "firered-asr2-aed", "environment": "torch",
+    "asr":        {"backend": "firered-asr2-aed", "environment": "torch-firered",
                    "config": {"device": "cpu", "dtype": "float32", "batch_size": 4,
                               "return_timestamp": true},
                    "selected_by": "stack",
                    "deterministic": true,
                    "determinism_tolerance_ms": 1.0,
                    "determinism_basis": "exact-repeat 60-minute fixture: both halves' text sequences equal the standalone 30-minute run, maximum rebased timestamp drift 1.0 ms within a declared 2.0 ms tolerance; normalized segments are therefore not byte-equal"},
-    "punctuator": {"backend": "firered-punc", "environment": "torch",
+    "punctuator": {"backend": "firered-punc", "environment": "torch-firered",
                    "config": {"batch_size": 4},
                    "selected_by": "floor:punctuated_sentence_segmented_text",
                    "recases_text": true}
@@ -820,7 +831,7 @@ turns on a stage the stack already contains rather than adding a package:
 ```json
 {
   "roles": {
-    "lid": {"backend": "firered-lid", "environment": "torch",
+    "lid": {"backend": "firered-lid", "environment": "torch-firered",
             "config": {"batch_size": 4},
             "selected_by": "requirement:lid",
             "granularity": "vad_region",

@@ -76,12 +76,16 @@ you recognise a settled question when you meet one.
    `src/audio_cli/` currently has no abstraction for this; `vad.py` is the only backend-shaped
    file and it predates the vocabulary.
 2. **Stage orchestration.** Stages run strictly sequentially with one model resident at a
-   time. How you enforce that across three environments — subprocesses, a worker protocol,
-   something else — is undecided. Note that the recorded evidence used *fresh subprocesses*,
-   so if you choose in-process loading you are outside what was measured.
-3. **The environment layout, concretely.** Three provisioned environments plus core is the
-   floor. `registry.json`, reference-counted `remove`, `purge` reading the registry. The
-   schema of that registry is unspecified.
+   time. The transport is settled — one fresh subprocess per stage against the environment's
+   own interpreter, JSON in and JSON out, residency enforced by process exit
+   ([ENVIRONMENTS.md](ENVIRONMENTS.md)) — which also makes the adapter-normalization floor
+   structural, since no model object can cross a process boundary. What remains is the
+   orchestration above it: stage order, the observed-cost accounting, and the ledger.
+3. ~~**The environment layout, concretely.**~~ **Done** in issue
+   [#11](https://github.com/fyang0507/audio-processing-cli/issues/11): four provisioned
+   environments derived by resolver rather than asserted, hash-pinned locks that ship in the
+   wheel, and the registry schema with its crash-safety rule. `audio packages` itself is not
+   implemented.
 4. **Partial results and resume.** Exit 4 writes a result with a coverage ledger. How work
    units are tracked, and where the watermark comes from when completion is non-contiguous,
    is design. The recorded runner processes turns in duration-bucketed order, so completion is
@@ -92,17 +96,24 @@ you recognise a settled question when you meet one.
 6. **Word and segment identity.** Ids are document-scoped and explicitly not stable across
    runs. If the Observation Store later needs run-stable identity it cannot key on a
    timestamp, because FireRed reproduces timestamps only to 1 ms.
-7. **Where the stack table lives.** Capability availability, costs, and notes are currently
-   prose in two documents. They have to become data somewhere, and that data is what the
-   `capabilities` command serialises. Deciding its shape is the first real design decision.
+7. **Where the stack table lives.** Half of it now exists:
+   `src/audio_cli/environments/manifest.json` holds the package and environment columns —
+   sources, revisions, real byte counts, declared licenses, roles, stacks — behind a reader
+   whose `packages_for(stack, roles)` is the seam. The capability columns are still prose in
+   two documents: availability, satisfaction, evidence, and the notes. Those are yours, and the
+   rule is one table with two owners, not two tables.
 
 ## Risks, worst first
 
-- **The `torch` environment may not resolve.** VibeVoice's pinned transformers,
-  `qwen-asr`, and FireRed's requirements have **never been installed together**. If they
-  conflict, three provisioned environments becomes four and the plan's
-  `environments_spanned` changes. Resolve this before designing around three. It is the
-  cheapest experiment here and the most likely to invalidate a layout.
+- ~~**The `torch` environment may not resolve.**~~ **Resolved, and it did not.** VibeVoice,
+  `qwen-asr`, and FireRed cannot share an environment: ten of fifteen candidate groupings
+  conflict and all ten conflict on `transformers`
+  (`model_tests/benchmark/results/2026-08-17-environment-partition.json`). Four provisioned
+  environments, and the partition is unique. The probe also turned up more than it was asked:
+  the forced aligner runs in `mlx` token-identically, so a Qwen request needs no PyTorch at
+  all, while FireRed cannot leave PyTorch because `mlx-audio` has no punctuator and
+  punctuation is a floor. See [ENVIRONMENTS.md](ENVIRONMENTS.md); issue
+  [#11](https://github.com/fyang0507/audio-processing-cli/issues/11).
 - **`vibevoice` cannot resume.** It is handed whole media in a single `generate` call, so a
   failure at minute forty of a forty-one-minute run yields nothing. It is also the stack most
   likely to fail, having measured 20.28 GiB live MPS on thirty minutes and OOMed under a
@@ -135,18 +146,23 @@ rather than assuming a value.
   is not recall.
 - Cross-process determinism for the Qwen batched path. Within one process, back-to-back calls
   were byte-identical; across processes, untested.
-- Package byte sizes for everything except the two Qwen checkpoints and the Core ML model.
-  `unsized_packages` exists because of this.
-- Licenses for every package except FluidAudio's SDK (Apache-2.0) and
-  `speaker-diarization-coreml` (CC-BY-4.0). Everything else reports `unreviewed`.
+- ~~Package byte sizes~~ — **closed.** Every package now carries a real count read from the
+  Hub at its pinned revision; `fluidaudio` alone stays unsized, because it is a build product.
+  Several of the figures these documents quoted were wrong, not merely illustrative.
+- ~~Licenses~~ — **partly closed.** Every package now records the license its card declares at
+  the pinned revision. `license_declared` and `license_reviewed` are separate fields, because a
+  card is not a review, and only FluidAudio and `speaker-diarization-coreml` were actually
+  read.
 - Any accuracy figure outside Cantonese, on any stack.
 
 ## Suggested sequence, and why
 
 Risk sits earliest in the schema, so the order is not arbitrary.
 
-1. **Resolve the `torch` environment question experimentally.** One `uv` resolution attempt.
-   It can invalidate the environment layout, so it comes before anything that assumes it.
+1. ~~**Resolve the `torch` environment question experimentally.**~~ **Done.** It does not
+   resolve; the layout is in [ENVIRONMENTS.md](ENVIRONMENTS.md). Cost of skipping it would
+   have been real: the aligner turned out to belong in a different environment than the spec
+   assumed, which changes what half the plans in these documents print.
 2. **The normalized result schema and the adapter contract.** Everything downstream is shaped
    by it, and it is where fabrication becomes possible. Build the anti-fabrication assertions
    at the same time, not after.

@@ -1,0 +1,52 @@
+# Environment: torch-vibevoice
+#
+# PyTorch for the `vibevoice` stack alone. It is its own environment because VibeVoice caps
+# transformers below 5.0.0 while FireRed pins it at exactly 5.1.0 and mlx-audio requires
+# >=5.5.0 — three mutually exclusive ranges across four packages. The resolver's messages for
+# all ten conflicting groupings are in
+# model_tests/benchmark/results/2026-08-17-environment-partition.json.
+#
+# Serves the packages: vibevoice-asr-7b.
+#
+# **This environment is provisional.** mlx-audio 0.4.5 implements VibeVoice-ASR, and
+# mlx-community publishes converted weights, so this stack can run in `mlx` with no added
+# dependencies at all. It does not yet, because the MLX path is not output-equivalent: on the
+# recorded CantoMap fixture it produced 47 segments where torch produced 49, shifted some
+# orthography to traditional characters, and labelled one non-speech interval differently
+# (model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json). Adopting it replaces
+# every recorded VibeVoice figure, so it waits on re-measurement rather than on a lock change.
+# When that lands, this file and its lock are deleted, not edited.
+#
+# The forced aligner is deliberately *not* here, though the recorded pipeline ran it in the
+# same PyTorch environment. Its MLX implementation is token-identical to the recorded torch
+# output across all 246 aligned tokens, so it moved to `mlx`.
+#
+# Citation: model_tests/vibevoice/VibeVoice/pyproject.toml [project].dependencies at checkout
+# 94da20d. Server and UI extras — gradio, aiortc, uvicorn, fastapi, pydub, requests — are
+# dropped: the recorded runner imports the model directly and never serves. The as-built venv
+# resolved to torch 2.13.0, transformers 4.57.6, diffusers 0.39.0.
+#
+# The VibeVoice package itself is not listed: it is a pinned source checkout with the tracked
+# `logits_to_keep` patch applied, installed with --no-deps.
+#
+# Python: 3.12.12, the as-built version.
+# Upstream declares most of these unpinned. Left that way, the resolver picks whatever is
+# newest today — numpy 2.5.2 and librosa 1.0.0 rather than the 2.4.6 and 0.11.0 that ran —
+# and the lock stops describing the environment the figures came from. So each is pinned to
+# its as-built version, read from dist-info under
+# model_tests/vibevoice/VibeVoice/.venv/lib/python3.12/site-packages. Upstream's own ranges
+# are kept alongside where they are narrower than the pin is.
+transformers==4.57.6        # upstream range: >=4.51.3,<5.0.0
+torch==2.13.0
+accelerate==1.14.0
+diffusers==0.39.0
+librosa==0.11.0
+numpy==2.4.6
+scipy==1.18.0
+soundfile==0.14.0
+llvmlite>=0.40.0
+numba>=0.57.0
+tqdm
+ml-collections
+absl-py
+av

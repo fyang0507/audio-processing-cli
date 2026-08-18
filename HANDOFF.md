@@ -150,9 +150,9 @@ Word-level timing is required output, not a nice-to-have, because the subtitle
 artifact depends on it: container bounds give one cue per processing container and
 diarizer turns averaged 9.2 seconds on the 30-minute fixture against a ≤7-second
 subtitle convention. Only `word_timestamps` supports real cues. Qwen and VibeVoice
-need the aligner for it, so one request can span all three provisioned
-environments; FireRed is the only stack that produces subtitle-grade timing
-natively.
+need the aligner for it; on a Qwen stack that is free of any extra runtime, because the aligner
+now runs in `mlx` alongside the ASR ([ENVIRONMENTS.md](ENVIRONMENTS.md)). FireRed is the only
+stack that produces subtitle-grade timing natively.
 
 Subtitle generation itself lives in `export`, which is deterministic
 post-processing with no packages and no `plan`/`run` split. It fails closed when
