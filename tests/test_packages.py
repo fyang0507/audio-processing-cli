@@ -12,6 +12,7 @@ exercised by the provisioning probes in `model_tests/benchmark/` and recorded th
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -88,17 +89,22 @@ class FakeToolchain(pkg.Toolchain):
 class FakeFetcher(pkg.Fetcher):
     """Writes a plausible snapshot instead of downloading one."""
 
-    def __init__(self, tmp_path: Path, *, corrupt: bool = False) -> None:
+    def __init__(self, tmp_path: Path, *, corrupt: bool = False,
+                 already_cached: tuple[str, ...] = ()) -> None:
         self.hub = tmp_path / "hub"
         self.corrupt = corrupt
+        self.already_cached = set(already_cached)
         self.snapshots: list[tuple[str, str]] = []
 
-    def hf_snapshot(self, repo: str, revision: str) -> Path:
+    def cached_revisions(self) -> set[str]:
+        return set(self.already_cached)
+
+    def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
         self.snapshots.append((repo, revision))
         target = self.hub / repo.replace("/", "--") / revision
         target.mkdir(parents=True, exist_ok=True)
         (target / "model.safetensors").write_bytes(b"w" * 2048)
-        return target
+        return target, revision not in self.already_cached
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Deletes the fake snapshot directories this fetcher created, and reports their size."""
@@ -173,7 +179,7 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
     """The failure mode this state machine exists for: exit 3 must still fire afterwards."""
 
     class ExplodingFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
             raise pkg.ProvisioningError("download_failed", "network went away")
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
@@ -196,7 +202,7 @@ def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
     calls = {"n": 0}
 
     class FlakyFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise pkg.ProvisioningError("download_failed", "first attempt died")
@@ -235,7 +241,7 @@ def test_remove_reports_hub_revisions_and_never_claims_to_own_the_cache(provisio
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     report = provisioner.remove(["vibevoice-asr-7b"])
     assert report["hub_revisions_deleted"] == ["d0c9efdb8d614685062c04425d91e01b6f37d944"]
-    assert "may be shared with other tools" in report["hub_cache_note"]
+    assert "shared Hugging Face cache" in report["hub_cache_note"]
 
 
 def test_remove_deletes_the_checkout_and_the_revision_it_materialized(provisioner) -> None:
@@ -431,3 +437,96 @@ def test_the_patch_ships_inside_the_package() -> None:
     patch = env.HERE / "patches" / "vibevoice-logits-to-keep.patch"
     assert patch.is_file()
     assert "modeling_vibevoice_asr.py" in patch.read_text()
+
+
+# --------------------------------------------------------------------------------------
+# The shared Hugging Face cache
+# --------------------------------------------------------------------------------------
+
+ALIGNER_REVISION = "0e1a68e91d815300c7c9754b2a7639378b23db15"
+FIRERED_REVISIONS = (
+    "2304afed56eacfee6256dee5937ed22ffa0b64ec", "1bb4d285c8456429385d9c0810300df4297bc11b",
+    "e448fd967f44182a1c323cc30f5d89f2400c28da", "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+)
+
+
+def test_a_pre_existing_revision_is_never_deleted_by_teardown(tmp_path) -> None:
+    """Weights live in a shared cache, so "materialized here" cannot mean "ours to delete".
+
+    The failure this prevents: pull a package whose revision another tool already cached, then
+    purge, and the other tool's weights are gone. It was real — a scratch root recorded a
+    three-week-old revision as its own and offered it to `purge`.
+    """
+    fetcher = FakeFetcher(tmp_path, already_cached=(ALIGNER_REVISION,))
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    receipt = provisioner.pull(pkg.select(["qwen3-forcedaligner"]))
+
+    assert receipt["pulled"][0]["hub_revisions_pre_existing"] == [ALIGNER_REVISION]
+    materialized = pkg.load_registry()["packages"]["qwen3-forcedaligner"]["materialized"]
+    assert materialized["hub_revisions"] == []
+    assert materialized["hub_revisions_pre_existing"] == [ALIGNER_REVISION]
+
+    dry = provisioner.purge(dry_run=True)
+    assert dry["would_remove"]["hub_revisions"] == []
+    assert dry["would_keep"]["hub_revisions"] == [ALIGNER_REVISION]
+
+    done = provisioner.purge(dry_run=False)
+    assert done["hub_revisions_deleted"] == []
+    assert done["hub_revisions_retained"] == [ALIGNER_REVISION]
+    snapshot = tmp_path / "hub" / "mlx-community--Qwen3-ForcedAligner-0.6B-8bit" / ALIGNER_REVISION
+    assert snapshot.is_dir(), "purge deleted a revision it did not download"
+
+
+def test_remove_keeps_pre_existing_revisions_and_deletes_its_own(tmp_path) -> None:
+    """A multi-repo package where some revisions were cached and some were not."""
+    fetcher = FakeFetcher(tmp_path, already_cached=FIRERED_REVISIONS[:2])
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["firered-asr2s"]))
+
+    report = provisioner.remove(["firered-asr2s"])
+    assert set(report["hub_revisions_deleted"]) == set(FIRERED_REVISIONS[2:])
+    assert set(report["hub_revisions_retained"]) == set(FIRERED_REVISIONS[:2])
+    assert "not this root's to delete" in report["hub_revisions_retained_reason"]
+    for revision in FIRERED_REVISIONS[:2]:
+        assert list((tmp_path / "hub").glob(f"*/{revision}")), f"{revision} was deleted"
+
+
+def test_a_multi_repo_receipt_names_every_revision_it_materialized(provisioner) -> None:
+    """The receipt promises the revisions pulled, and this package spans four repositories."""
+    receipt = provisioner.pull(pkg.select(["firered-asr2s"]))["pulled"][0]
+    assert set(receipt["revisions"]) == set(FIRERED_REVISIONS)
+    assert "revision" not in receipt, "a four-repo package cannot have one revision"
+
+
+def test_verify_flags_weights_another_root_deleted(provisioner, tmp_path) -> None:
+    """The residual shared-cache risk must fail loudly rather than at run time."""
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert provisioner.verify()["failed"] == []
+
+    snapshot = Path(
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+    shutil.rmtree(snapshot)
+
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert failure[0]["fix"] == "audio packages pull --repair qwen3-asr-1.7b-8bit"
+
+
+def test_pull_receipt_bytes_are_named_for_this_pull_not_the_total(provisioner) -> None:
+    """The figure legitimately goes down between pulls, so it must not read as cumulative."""
+    first = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    second = provisioner.pull(pkg.select(["qwen3-asr-0.6b-8bit"]))
+    # The old name invited reading a per-pull figure as a running total, and it is not one:
+    # each receipt covers only its own packages, while `list` accumulates.
+    assert "reclaimable_known_bytes" not in first
+    assert first["pulled_known_bytes"] == second["pulled_known_bytes"]  # one package each
+    assert pkg.list_report()["total_known_bytes"] == (
+        first["pulled_known_bytes"] + second["pulled_known_bytes"])
+
+
+def test_path_says_where_weights_actually_live(provisioner) -> None:
+    """A reader who assumes the root holds the weights concludes a 17 GiB pull did nothing."""
+    report = pkg.path_report()
+    assert "Hugging Face cache" in report["weights"]["location"]
+    assert report["models"]["exists"] is False
+    assert "silero-vad" in report["models"]["holds"]

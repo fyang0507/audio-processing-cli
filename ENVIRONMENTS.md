@@ -301,6 +301,22 @@ real `pull` ran, and the real run still found two defects a fake could not:
 A third, milder one: the `swift` environment never got a registry entry, because it has no
 interpreter to create — so `purge` could not name it and could not reclaim it.
 
+Then a fourth, found by giving an agent nothing but the skill file and watching it work, and it
+was the worst of them: **teardown would delete weights this tool never downloaded.** Weights live
+in the shared Hub cache, so `snapshot_download` on an already-cached revision returns
+immediately — and the registry recorded it as "materialized here" anyway. The agent's scratch
+root, minutes old, offered a three-week-old aligner checkpoint to `purge`; it declined to run it
+and said why. "Materialized here" was never a statement about ownership of the bytes, and the
+code read it as one.
+
+The fix is to record whether *this pull* actually fetched the revision. Teardown deletes only
+what it downloaded, reports the rest as `hub_revisions_retained`, and `purge --dry-run` prints
+the split before anything goes. One case remains: if two roots each pulled a revision, the first
+one downloaded it and owns it, so purging that root strands the other. That now surfaces as
+`package_integrity_failed` on the other root's `verify` — with `pull --repair` as the fix —
+rather than as a stack that fails mid-run, because `verify` checks the materialized paths still
+exist.
+
 Worth stating plainly: an injected-surface test suite checks the rules, and every defect the
 real run found was in the *boundary* the fakes stood in for. Both kinds are needed.
 

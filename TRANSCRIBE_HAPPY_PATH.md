@@ -292,7 +292,7 @@ Progress goes to stderr; stdout is the receipt:
   "environments_created": ["mlx", "swift"],
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
-  "reclaimable_bytes": 4480322120,
+  "pulled_known_bytes": 4480322120,
   "warnings": [
     {"code": "license_unreviewed", "blocking": false,
      "detail": "qwen3-asr-1.7b-8bit and qwen3-forcedaligner report license: \"unreviewed\"; only the FluidAudio SDK (Apache-2.0) and speaker-diarization-coreml (CC-BY-4.0) are recorded"}
@@ -300,9 +300,14 @@ Progress goes to stderr; stdout is the receipt:
 }
 ```
 
-Exit 0. The byte counts for the three previously unsized packages are **illustrative** —
-they are the numbers a real `pull` would record and the reason `unsized_packages` exists
-in the plan.
+Exit 0. `pulled_known_bytes` covers the packages in *this* pull and nothing else. It was called
+`reclaimable_bytes`, which read as a running total and is not one — the figure legitimately goes
+down on a second, smaller pull. `audio packages list` reports the cumulative
+`total_known_bytes`.
+
+A package whose revision the shared Hugging Face cache already holds is not downloaded again. It
+reports `hub_revisions_pre_existing` in place of a fetch, and teardown will not delete it: see
+§5.
 
 ```bash
 audio packages verify

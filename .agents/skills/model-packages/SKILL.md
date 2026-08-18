@@ -10,8 +10,18 @@ downloads weights, creates an environment, applies a patch, or builds a Swift pr
 transcription request never triggers any of them — it fails with exit 3 and prints the `pull`
 line that would fix it. Never work around that by fetching weights yourself.
 
-Use the installed entry point. `uv run audio ...` is for an uninstalled development checkout
-only; see [references/setup.md](../auto-enhancement/references/setup.md) if `audio` is missing.
+Invoke it as `audio ...` when installed. In a development checkout it is not installed — check
+with `command -v audio`, and fall back to `uv run audio ...` from the repository root. If
+neither works, install with `uv tool install .` from the checkout, or
+`uv tool install "git+https://github.com/fyang0507/audio-processing-cli.git"` without one.
+
+**Everything provisioned lives under one root**, printed by `audio packages path` and
+`audio doctor`. It defaults to a per-platform cache directory and is overridden by the
+`AUDIO_PROCESSING_MODEL_CACHE` environment variable — set that to put the environments and the
+registry on another disk. Weights are the exception and the thing most likely to confuse you:
+they live in the **shared Hugging Face cache**, not under the root, so a root holding a couple
+of gigabytes after a 17 GiB pull is normal. Trust the per-package `location` from
+`audio packages path`, not the root's size.
 
 ## Start by looking
 
@@ -23,6 +33,12 @@ audio packages path           # resolved root and per-package locations
 
 `doctor` is the first command on an unfamiliar machine, and the only one that tells you whether
 a missing tool will block a request. All three are read-only and safe to run at any time.
+
+Two fields in that output are worth knowing in advance. `doctor` marks an environment
+`provisional: true` when a future change might move its packages elsewhere — it is a note about
+the roadmap, changes nothing about any command, and is not a warning. And `path`'s `models`
+entry covers hash-pinned single-file artifacts only (currently just `silero-vad`); it is often
+absent, which is not evidence that a pull failed.
 
 ## Translate the request into package ids
 
@@ -58,6 +74,11 @@ Two things to read off that table rather than guess:
 `silero-vad` is the only package that fetches itself on first use, because it is small and
 hash-pinned. Everything else fails closed.
 
+The two VAD entries are not a choice you make at provisioning time. FireRed brings its own, so
+a FireRed request needs `firered-asr2s` and nothing else; `silero-vad` is the add-on for stacks
+that have no native VAD, and it arrives by itself when one is used. Pulling it alongside
+`firered-asr2s` is harmless but pointless.
+
 `--stack` accepts `qwen-1.7b`, `qwen-0.6b`, `vibevoice`, `firered`. It over-provisions
 deliberately: it pulls every package that stack *can* use, including diarization and the
 aligner. Prefer explicit ids when the user's request is narrow and the difference is gigabytes.
@@ -69,8 +90,11 @@ aligner. Prefer explicit ids when the user's request is narrow and the differenc
 audio packages pull vibevoice-asr-7b qwen3-forcedaligner
 ```
 
-Progress goes to stderr; stdout is a JSON receipt naming each package, the revision pulled,
-the environments created, and any warnings. Then confirm:
+Progress goes to stderr; stdout is a JSON receipt naming each package, the environments
+created, the bytes this pull added as `pulled_known_bytes`, and any warnings. Each package
+reports either a `revision` or — for `firered-asr2s`, which spans four repositories — a
+`revisions` list. A package already present in the shared cache reports
+`hub_revisions_pre_existing` instead of being downloaded again. Then confirm:
 
 ```bash
 audio packages verify
@@ -78,12 +102,17 @@ audio packages verify
 
 `verify` re-checks artifact digests, that each environment still matches its locked dependency
 set, that patches are still applied, and the pinned private API the Qwen timing figures depend
-on. It exits **3** if anything failed and names a `fix` for each. `--repair` re-syncs a drifted
-environment from its lock:
+on. It exits **3** if anything failed and names a `fix` for each.
+
+`--repair` exists on both commands, and they fix different things:
 
 ```bash
-audio packages verify --repair
+audio packages verify --repair            # re-sync a drifted environment from its lock
+audio packages pull --repair PACKAGE      # re-materialize a package the registry calls ready
 ```
+
+Use `pull --repair` for `package_integrity_failed` — a digest that changed, or weights that
+disappeared from the shared cache. Use `verify --repair` when the failure names an environment.
 
 Expect `license_unreviewed` in `pull` warnings. It is non-blocking and it means the license a
 model card declares has not been reviewed by a human. Report it; do not treat it as an error,
@@ -98,10 +127,22 @@ audio packages purge                     # everything this tool provisioned
 ```
 
 An environment is deleted exactly when its last package goes; the report names what was kept
-and why. Both commands delete only the Hub revisions this tool recorded as materialized here,
-leave other revisions of the same repository alone, and never touch user media or transcript
-output. `purge` works from the registry, so it finds everything even in a session that never
-ran `pull`.
+and why. Neither command touches user media or transcript output, and `purge` works from the
+registry, so it finds everything even in a session that never ran `pull`.
+
+**Read the teardown report before believing what it freed.** Weights are in the shared Hugging
+Face cache, so teardown reaches outside the root, and it draws one line: a revision **this root
+downloaded** is deleted, while a revision that was **already cached** when this root pulled it
+is kept and listed under `hub_revisions_retained`. That is why a `purge` can legitimately report
+freeing far less than the packages' sizes — someone else's copy was already there. Run
+`purge --dry-run` first; it prints `would_remove.hub_revisions` against
+`would_keep.hub_revisions` so you can see the split before anything goes.
+
+One case that line does not cover: if two roots each pulled a revision, the one that downloaded
+it owns it, and purging that root removes weights the other still expects. The other root's
+`audio packages verify` will then report `package_integrity_failed`, and
+`audio packages pull --repair PACKAGE` restores it. If you are provisioning a throwaway root
+beside a populated cache, prefer `remove` for the packages you added over a blanket `purge`.
 
 ## Exit codes
 
@@ -124,9 +165,14 @@ Every error is JSON on stderr with a `code`, a `detail`, and usually a `fix`. Pr
   `doctor` says so and those two fail with `requires_tool: ["swift"]`; every other package still
   provisions. Report the blocked capability rather than substituting a different diarizer.
 - A crashed or interrupted `pull` leaves the package not-ready, which still reads as absent.
-  Re-run the same `pull` to finish it; do not clean up by hand.
-- Report the numbers the commands print. Do not add up per-package sizes yourself when a
-  payload already gives a total, and say when something is unsized rather than omitting it.
+  Re-run the same `pull` to finish it; do not clean up by hand. "By hand" means deleting
+  environment directories or cache blobs yourself — `remove` and `purge` are the supported
+  verbs, and they are the only things that keep the registry honest about what is gone.
+- Report the numbers the commands print, and use the right one: `pulled_known_bytes` covers
+  only the packages in that `pull`, `total_known_bytes` from `list` is cumulative, and
+  `reclaimed_bytes` from a teardown is measured after the fact and includes environment
+  directories, so it will not match either. Say when something is unsized rather than omitting
+  it — `fluidaudio` always is, because it is a build product.
 - Purge before uninstalling the tool, or the provisioning root outlives the only thing that
   knows how to describe it.
 
@@ -135,3 +181,6 @@ Every error is JSON on stderr with a `code`, a `detail`, and usually a `fix`. Pr
 - Read [references/environments.md](references/environments.md) when you need to explain *why*
   a request spans the environments it does, or when a user asks whether two stacks could share
   one runtime. It is background, not a command guide.
+- Installing or repairing the `audio` command itself is covered by the sibling
+  auto-enhancement skill's [setup reference](../auto-enhancement/references/setup.md). Read it
+  only if `audio` is missing and `uv run audio` is not an option.

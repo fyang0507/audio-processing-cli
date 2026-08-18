@@ -40,8 +40,9 @@ from .environments import Environment, ManifestError, Package, environments, pac
 REGISTRY_SCHEMA_VERSION = 1
 
 HUB_CACHE_NOTE = (
-    "only revisions this tool recorded as materialized here were deleted; the Hugging Face "
-    "cache may be shared with other tools"
+    "weights live in the shared Hugging Face cache, not under this root. Only revisions this "
+    "pull actually downloaded were deleted; a revision that was already cached is retained, "
+    "because it may belong to another tool, another provisioning root, or an earlier experiment"
 )
 UNTOUCHED = ["user media", "transcript and subtitle outputs"]
 
@@ -198,7 +199,27 @@ class Toolchain:
 class Fetcher:
     """Downloads. Hub weights stay in the Hugging Face cache; the registry records revisions."""
 
-    def hf_snapshot(self, repo: str, revision: str) -> Path:
+    def cached_revisions(self) -> set[str]:
+        """Revisions the Hub cache already holds, whoever put them there."""
+        try:
+            from huggingface_hub import scan_cache_dir
+        except ImportError:
+            return set()
+        try:
+            cache = scan_cache_dir()
+        except Exception:  # noqa: BLE001 - an unreadable cache holds nothing we can claim
+            return set()
+        return {revision.commit_hash for repo in cache.repos for revision in repo.revisions}
+
+    def hf_snapshot(self, repo: str, revision: str) -> tuple[Path, bool]:
+        """Materialize a revision. Returns its path and whether *this* call downloaded it.
+
+        The second value is the whole point. Weights live in the shared Hub cache rather than
+        under the provisioning root, so a revision may already be present — put there by
+        another tool, by an earlier experiment, or by a different provisioning root. Recording
+        that we "materialized" it would licence a later `purge` to delete somebody else's
+        weights, which is what the first version of this did.
+        """
         try:
             from huggingface_hub import snapshot_download
         except ImportError as exc:  # noqa: BLE001 - reported, not swallowed
@@ -208,7 +229,9 @@ class Fetcher:
                 missing_tool="huggingface_hub",
                 fix="uv pip install huggingface_hub",
             ) from exc
-        return Path(snapshot_download(repo, revision=revision))
+        already_present = revision in self.cached_revisions()
+        path = Path(snapshot_download(repo, revision=revision))
+        return path, not already_present
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Delete exactly these revisions from the Hub cache. Returns what went, and its size.
@@ -371,7 +394,19 @@ def path_report() -> dict:
     return {
         "root": str(paths.root()),
         "registry": str(paths.registry_path()),
-        "models": str(paths.models_dir()),
+        # Most of the bytes are not under the root, and a reader who assumes they are concludes
+        # that a 17 GiB pull silently did nothing. Say where weights actually land, and say what
+        # the models directory is for rather than printing a path that is often absent.
+        "weights": {
+            "location": "the Hugging Face cache, shared with other tools",
+            "note": "per-package `location` below is authoritative; the registry records the "
+                    "revisions this root materialized there",
+        },
+        "models": {
+            "path": str(paths.models_dir()),
+            "exists": paths.models_dir().exists(),
+            "holds": "hash-pinned single-file artifacts only, currently silero-vad",
+        },
         "environments": {
             name: {"path": str(paths.env_dir(name)),
                    "python": str(paths.env_python(name)) if environment.has_interpreter else None,
@@ -507,10 +542,17 @@ class Provisioner:
 
             receipt = {"package": package.id, "environment": package.environment,
                        "bytes": materialized.get("bytes")}
-            for key in ("revision", "digest_verified", "built", "product_runs",
+            for key in ("revision", "revisions", "digest_verified", "built", "product_runs",
                         "patches_applied"):
                 if key in materialized:
                     receipt[key] = materialized[key]
+            if materialized.get("hub_revisions_pre_existing"):
+                receipt["hub_revisions_pre_existing"] = \
+                    materialized["hub_revisions_pre_existing"]
+                receipt["pre_existing_note"] = (
+                    "already in the Hugging Face cache; not downloaded, and teardown here will "
+                    "not delete it"
+                )
             pulled.append(receipt)
 
         unreviewed = sorted(p.id for p in selection if not p.license_reviewed)
@@ -519,9 +561,10 @@ class Provisioner:
                 "code": "license_unreviewed", "blocking": False,
                 "packages": unreviewed,
                 "detail": (
-                    f"{', '.join(unreviewed)} report a license their model card declares but "
-                    "nobody has reviewed. A declared license is evidence that one exists, not "
-                    "a redistribution clearance."
+                    f"{', '.join(unreviewed)} "
+                    f"{'reports' if len(unreviewed) == 1 else 'report'} a license their model "
+                    "card declares but nobody has reviewed. A declared license is evidence "
+                    "that one exists, not a redistribution clearance."
                 ),
             })
 
@@ -531,7 +574,10 @@ class Provisioner:
             "environments_created": sorted(set(created)),
             "root": str(paths.root()),
             "registry": str(paths.registry_path()),
-            "reclaimable_known_bytes": known,
+            # This pull's packages only. `audio packages list` reports the cumulative total;
+            # naming both `reclaimable` invited reading one as the other, and this figure
+            # legitimately goes down between pulls.
+            "pulled_known_bytes": known,
             "unsized_packages": unsized,
             "warnings": warnings,
         }
@@ -549,25 +595,36 @@ class Provisioner:
                     "digest_verified": True}
 
         if kind == "huggingface":
-            snapshot = self.fetcher.hf_snapshot(package.source["repo"],
-                                               package.source["revision"])
-            result = {"path": str(snapshot), "bytes": _tree_bytes(snapshot),
-                      "revision": package.source["revision"],
-                      "hub_revisions": [package.source["revision"]], "digest_verified": True}
+            revision = package.source["revision"]
+            snapshot, downloaded = self.fetcher.hf_snapshot(package.source["repo"], revision)
+            result = {
+                "path": str(snapshot), "bytes": _tree_bytes(snapshot),
+                "revision": revision, "digest_verified": True,
+                # Only what this pull actually fetched is ours to delete later.
+                "hub_revisions": [revision] if downloaded else [],
+                "hub_revisions_pre_existing": [] if downloaded else [revision],
+            }
             result.update(self._checkout_and_install(package))
             return result
 
         if kind == "huggingface_multi":
             snapshots = {}
             total = 0
-            revisions = []
+            ours: list[str] = []
+            theirs: list[str] = []
             for repo in package.source["repos"]:
-                snapshot = self.fetcher.hf_snapshot(repo["repo"], repo["revision"])
+                snapshot, downloaded = self.fetcher.hf_snapshot(repo["repo"], repo["revision"])
                 snapshots[repo["repo"]] = str(snapshot)
                 total += _tree_bytes(snapshot)
-                revisions.append(repo["revision"])
-            result = {"paths": snapshots, "bytes": total, "hub_revisions": revisions,
-                      "digest_verified": True}
+                (ours if downloaded else theirs).append(repo["revision"])
+            result = {
+                "paths": snapshots, "bytes": total, "digest_verified": True,
+                # Plural, because this package spans four repositories. A single `revision`
+                # key would have to pick one of them, and the receipt promises the revisions
+                # a pull materialized.
+                "revisions": [repo["revision"] for repo in package.source["repos"]],
+                "hub_revisions": ours, "hub_revisions_pre_existing": theirs,
+            }
             result.update(self._checkout_and_install(package))
             return result
 
@@ -676,6 +733,20 @@ class Provisioner:
                 record["product_runs"] = materialized["product_runs"]
                 record["patches_applied"] = materialized.get("patches_applied", [])
             else:
+                locations = [Path(p) for p in (
+                    [materialized["path"]] if materialized.get("path")
+                    else list((materialized.get("paths") or {}).values()))]
+                gone = [str(location) for location in locations if not location.exists()]
+                if gone:
+                    # The shared-cache consequence: another root's purge, or a manual cache
+                    # clear, can take weights out from under a root that still calls them
+                    # ready. Better an exit 3 with a fix than a stack that fails mid-run.
+                    failed.append({
+                        "package": identifier, "code": "package_integrity_failed",
+                        "detail": f"materialized path(s) no longer exist: {', '.join(gone)}",
+                        "fix": f"audio packages pull --repair {identifier}",
+                    })
+                    continue
                 record["digest"] = "ok" if materialized.get("digest_verified") else "unverified"
 
             digests = materialized.get("patched_file_digests") or {}
@@ -752,6 +823,7 @@ class Provisioner:
         document = load_registry()
         removed: list[str] = []
         hub_revisions: list[str] = []
+        retained: list[str] = []
         local_freed = 0
 
         for identifier in package_ids:
@@ -763,6 +835,7 @@ class Provisioner:
                 )
             materialized = entry.get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
+            retained.extend(materialized.get("hub_revisions_pre_existing", []))
             # Measured before deleting, not read off the registry: what a teardown reports as
             # reclaimed has to be what the filesystem actually gave back.
             for location in _locations(materialized):
@@ -781,9 +854,15 @@ class Provisioner:
             "environments_kept": kept,
             "hub_revisions_deleted": deleted,
             "hub_revisions_not_found": sorted(set(hub_revisions) - set(deleted)),
+            "hub_revisions_retained": sorted(set(retained)),
             "hub_cache_note": HUB_CACHE_NOTE,
             "reclaimed_bytes": hub_freed + local_freed,
         }
+        if retained:
+            report["hub_revisions_retained_reason"] = (
+                "already in the Hugging Face cache before this root pulled them, so they are "
+                "not this root's to delete"
+            )
         if dropped:
             report["environments_removed_reason"] = (
                 f"no other provisioned package targets {', '.join(dropped)}")
@@ -818,19 +897,33 @@ class Provisioner:
             [packages()[i] for i in package_ids if i in packages()], document)
 
         if dry_run:
+            deletable, keeping = [], []
+            for identifier in package_ids:
+                materialized = document["packages"][identifier].get("materialized", {})
+                deletable.extend(materialized.get("hub_revisions", []))
+                keeping.extend(materialized.get("hub_revisions_pre_existing", []))
             return {
                 "would_remove": {"packages": package_ids, "environments": environment_names,
-                                 "root": str(paths.root())},
+                                 "root": str(paths.root()),
+                                 "hub_revisions": sorted(set(deletable))},
+                "would_keep": {"hub_revisions": sorted(set(keeping))},
+                "hub_cache_note": HUB_CACHE_NOTE,
                 "reclaimable_known_bytes": known,
+                "reclaimable_note": (
+                    "projected from the registry, and it counts weights this root downloaded "
+                    "plus what is under the root; a retained revision is not included"
+                ),
                 "unsized_packages": unsized,
                 "untouched": UNTOUCHED,
             }
 
         hub_revisions: list[str] = []
+        retained: list[str] = []
         local_freed = 0
         for identifier in package_ids:
             materialized = document["packages"][identifier].get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
+            retained.extend(materialized.get("hub_revisions_pre_existing", []))
             for location in _locations(materialized):
                 local_freed += _tree_bytes(location) if location.exists() else 0
                 _delete(location)
@@ -845,6 +938,7 @@ class Provisioner:
             "removed": {"packages": package_ids, "environments": environment_names},
             "hub_revisions_deleted": deleted,
             "hub_revisions_not_found": sorted(set(hub_revisions) - set(deleted)),
+            "hub_revisions_retained": sorted(set(retained)),
             "hub_cache_note": HUB_CACHE_NOTE,
             "reclaimed_bytes": hub_freed + local_freed,
             "unsized_packages": unsized,
