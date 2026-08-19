@@ -483,14 +483,14 @@ Exit 3. Nothing computed, nothing downloaded, stderr:
   ],
   "total_known_download_bytes": 2463307541,
   "unsized_packages": ["fluidaudio", "speaker-diarization-coreml"],
-  "fix": "audio packages pull --stack qwen-1.7b --want diarization"
+  "fix": "audio packages pull --stack qwen-1.7b"
 }
 ```
 
 ### 1.3 Provision, verify, execute
 
 ```bash
-audio packages pull --stack qwen-1.7b --want diarization
+audio packages pull --stack qwen-1.7b
 audio packages verify
 audio packages list
 audio transcribe run --input meeting.m4a --stack qwen-1.7b --want diarization \
@@ -522,8 +522,7 @@ carries. [ENVIRONMENTS.md](ENVIRONMENTS.md) holds the layout.
 ```bash
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps,overlapped_speech,vad
-audio packages pull --stack qwen-1.7b \
-  --want diarization,word_timestamps,overlapped_speech,vad
+audio packages pull --stack qwen-1.7b
 audio transcribe run --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps,overlapped_speech,vad \
   --format json -o meeting.timed.json
@@ -587,7 +586,7 @@ single implementation with a pin reserved for later ones.
 without it this exits 3:
 
 ```bash
-audio packages pull --stack qwen-0.6b --want diarization
+audio packages pull --stack qwen-0.6b
 audio transcribe run --input meeting.m4a --stack qwen-0.6b --want diarization \
   --language Cantonese --format md
 ```
@@ -672,8 +671,7 @@ fields that differ from §1.1** — the envelope, `packages`, and
 ```
 
 ```bash
-audio packages pull --stack vibevoice \
-  --want verbatim,diarization,segment_timestamps,word_timestamps
+audio packages pull --stack vibevoice
 audio packages verify
 audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,diarization,segment_timestamps,word_timestamps \
@@ -770,17 +768,18 @@ have had to either overclaim that or discard a real result; a downstream `word_i
 scheme has to know which.
 
 ```bash
-audio packages pull --stack firered \
-  --want verbatim,word_timestamps,vad,segment_timestamps
+audio packages pull --stack firered
 audio packages verify
 audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_timestamps,vad,segment_timestamps \
   --format json -o field.transcript.json
 ```
 
-The LID weights are fetched only when `lid` is in the plan, so this
-request provisions less than the full package. Neither figure is recorded in a
-tracked artifact — the only tracked source is a pre-harness "~9.2 GB" note that
+`firered-asr2s` is one package pinning four repositories and `pull` materializes all of
+them, LID weights included, whatever the plan asked for: narrowing a pull to the roles a
+plan actually uses is what `--want` is reserved for, and `pull` refuses that flag today
+rather than appearing to honour it. Neither the whole-package figure nor a narrowed one is
+recorded in a tracked artifact — the only tracked source is a pre-harness "~9.2 GB" note that
 its own document marks as history rather than decision evidence — so both appear
 as `approximate, unrecorded` until per-artifact sizes are recorded the way the
 MLX runs record `weight_bytes`.
@@ -820,7 +819,7 @@ variation that was never measured.
 ```bash
 audio transcribe plan --input field.wav --stack firered \
   --want verbatim,word_timestamps,lid
-audio packages pull --stack firered --want verbatim,word_timestamps,lid
+audio packages pull --stack firered
 audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_timestamps,lid --format json -o field.lid.json
 ```
@@ -858,8 +857,7 @@ is on Qwen. Note the `pull` — entering at this section without it exits 3, sin
 nothing earlier in §3 provisioned a diarizer:
 
 ```bash
-audio packages pull --stack firered \
-  --want verbatim,word_timestamps,diarization,overlapped_speech
+audio packages pull --stack firered
 audio transcribe run --input interview.wav --stack firered \
   --want verbatim,word_timestamps,diarization,overlapped_speech \
   --format json -o interview.firered.json

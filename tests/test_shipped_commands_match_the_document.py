@@ -178,6 +178,10 @@ VERIFY_CONDITIONAL = {
     # Absence is meaningful: set when the interpreter yields no verdict, so that
     # `matches_expected: null` cannot read as a passing check.
     "mlx_audio_private_api_error",
+    # Only a package spanning several repositories emits the plural, and §1.3's stack has none:
+    # `firered-asr2s` is the one, and it belongs to §3. The singular `revision` beside it *is*
+    # published, so the claim itself is documented -- this exempts its four-repo spelling.
+    "verified[].revisions[]",
 }
 
 

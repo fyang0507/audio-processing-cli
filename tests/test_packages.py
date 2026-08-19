@@ -11,8 +11,10 @@ exercised by the provisioning probes in `model_tests/benchmark/` and recorded th
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -89,21 +91,35 @@ class FakeToolchain(pkg.Toolchain):
 class FakeFetcher(pkg.Fetcher):
     """Writes a plausible snapshot instead of downloading one."""
 
+    WEIGHTS = b"w" * 2048
+
     def __init__(self, tmp_path: Path, *, corrupt: bool = False,
                  already_cached: tuple[str, ...] = ()) -> None:
         self.hub = tmp_path / "hub"
         self.corrupt = corrupt
         self.already_cached = set(already_cached)
         self.snapshots: list[tuple[str, str]] = []
+        self.forced: list[tuple[str, str]] = []
 
     def cached_revisions(self) -> set[str]:
         return set(self.already_cached)
 
-    def hf_snapshot(self, repo: str, revision: str) -> Path:
+    def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
+        """Faithful about the one behaviour `--repair` turns on.
+
+        `snapshot_download` returns a revision the cache already holds as it stands — corrupt or
+        not — and only `force_download` re-fetches its files. A fake that always rewrote them
+        would make a broken repair pass.
+        """
         self.snapshots.append((repo, revision))
+        if force:
+            self.forced.append((repo, revision))
         target = self.hub / repo.replace("/", "--") / revision
+        weights = target / "model.safetensors"
+        if weights.is_file() and not force:
+            return target
         target.mkdir(parents=True, exist_ok=True)
-        (target / "model.safetensors").write_bytes(b"w" * 2048)
+        weights.write_bytes(self.WEIGHTS)
         return target
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
@@ -179,7 +195,7 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
     """The failure mode this state machine exists for: exit 3 must still fire afterwards."""
 
     class ExplodingFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
             raise pkg.ProvisioningError("download_failed", "network went away")
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
@@ -202,11 +218,11 @@ def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
     calls = {"n": 0}
 
     class FlakyFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise pkg.ProvisioningError("download_failed", "first attempt died")
-            return super().hf_snapshot(repo, revision)
+            return super().hf_snapshot(repo, revision, force=force)
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FlakyFetcher(tmp_path))
     with pytest.raises(pkg.ProvisioningError):
@@ -544,8 +560,8 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
     class InterruptedThenCachedFetcher(FakeFetcher):
         """Fails the first attempt, and afterwards reports the revision as cached."""
 
-        def hf_snapshot(self, repo: str, revision_: str) -> Path:
-            path = super().hf_snapshot(repo, revision_)
+        def hf_snapshot(self, repo: str, revision_: str, *, force: bool = False) -> Path:
+            path = super().hf_snapshot(repo, revision_, force=force)
             if not self.already_cached:
                 self.already_cached = {revision_}   # the partial snapshot is now visible
                 raise pkg.ProvisioningError("download_failed", "interrupted mid-download")
@@ -567,3 +583,353 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
     )
     assert materialized["hub_revisions_pre_existing"] == []
     assert provisioner.purge(dry_run=True)["would_remove"]["hub_revisions"] == [revision]
+
+
+# --------------------------------------------------------------------------------------
+# What `pull` and `verify` used to claim: a digest nobody took, a repair nobody wired, and
+# work nobody needed
+# --------------------------------------------------------------------------------------
+
+QWEN_REPO = "mlx-community/Qwen3-ASR-1.7B-8bit"
+QWEN_REVISION = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
+
+
+@pytest.fixture
+def the_fake_download_satisfies_the_pin(monkeypatch):
+    """Make the fake `url` download match its manifest pin, so a *passing* digest exists.
+
+    The real artifact is 2.3 MB and hash-pinned, and the fake writes ten bytes, so under a fake
+    fetcher the only reachable outcome for `silero-vad` is a failed digest. The claim under test
+    here is the passing one — `digest: "ok"` has to be earned by a package that has a hash, and
+    withheld from every package that does not.
+    """
+    catalog = dict(env.packages())
+    silero = catalog["silero-vad"]
+    catalog["silero-vad"] = replace(
+        silero,
+        source={**silero.source, "sha256": hashlib.sha256(b"onnx-bytes").hexdigest()},
+    )
+    monkeypatch.setattr(pkg, "packages", lambda: catalog)
+    return catalog
+
+
+def test_verify_earns_the_word_digest_instead_of_borrowing_it(
+    provisioner, the_fake_download_satisfies_the_pin
+) -> None:
+    """`digest: "ok"` used to mean "the path exists" for every package but one.
+
+    `_materialize` set `digest_verified: True` on both Hub kinds, where the manifest pins a
+    revision and carries no `sha256` to hash a snapshot against. So `verify` reported a digest
+    check it never ran, and its `"unverified"` branch was unreachable for everything this code
+    can pull. What a Hub package can honestly report is the revision.
+    """
+    provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit", "firered-asr2s"]))
+
+    for identifier in ("qwen3-asr-1.7b-8bit", "firered-asr2s"):
+        materialized = pkg.load_registry()["packages"][identifier]["materialized"]
+        assert "digest_verified" not in materialized, (
+            f"{identifier} recorded a digest claim; nothing hashed it"
+        )
+
+    report = provisioner.verify()
+    assert report["failed"] == []
+    entries = {entry["package"]: entry for entry in report["verified"]}
+
+    # Hashed against a manifest pin, which one package has.
+    assert entries["silero-vad"] == {"package": "silero-vad", "digest": "ok"}
+    # Revision pinned, contents not hashed — and told apart by which key is present.
+    assert entries["qwen3-asr-1.7b-8bit"] == {
+        "package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
+    assert set(entries["firered-asr2s"]["revisions"]) == set(FIRERED_REVISIONS)
+    assert "digest" not in entries["firered-asr2s"]
+
+    # And the earned claim is still a measurement: break the bytes and it goes away.
+    Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]).write_bytes(
+        b"tampered")
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+
+
+def test_a_stale_digest_claim_in_the_registry_is_not_republished(provisioner) -> None:
+    """A root provisioned before this fix carries the fabrication in `registry.json`.
+
+    `verify` reads the registry, so forwarding `digest_verified` would let the claim survive the
+    upgrade that removed it. The revision is what gets reported either way.
+    """
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    document = pkg.load_registry()
+    document["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["digest_verified"] = True
+    pkg.save_registry(document)
+
+    entry = next(item for item in provisioner.verify()["verified"]
+                 if item["package"] == "qwen3-asr-1.7b-8bit")
+    assert entry == {"package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
+
+
+def test_pull_skips_what_the_registry_already_calls_ready(provisioner) -> None:
+    """Measured before this fix: a second pull of a ready package re-did all of the work."""
+    first = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert first["skipped"] == []
+    assert provisioner.fetcher.snapshots == [(QWEN_REPO, QWEN_REVISION)]
+
+    second = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert second["pulled"] == []
+    assert second["skipped"] == ["qwen3-asr-1.7b-8bit"]
+    assert second["environments_created"] == []
+    # Nothing was added, so nothing is claimed to have been.
+    assert second["pulled_known_bytes"] == 0
+    assert "--repair" in second["skipped_reason"]
+    assert provisioner.fetcher.snapshots == [(QWEN_REPO, QWEN_REVISION)], (
+        "the second pull re-materialized a package that was already ready"
+    )
+
+
+def test_a_ready_package_is_never_reopened_as_pulling(provisioner, monkeypatch) -> None:
+    """The cost of a pointless re-pull is not the time. It is this.
+
+    `pull` writes `state: "pulling"` before any bytes move, which is what makes a crashed pull
+    read as absent. Re-running it over a healthy package therefore downgrades that package for as
+    long as the work takes, and an interrupt leaves it downgraded.
+    """
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+
+    states: list[str | None] = []
+    real_save = pkg.save_registry
+
+    def spy(document: dict) -> None:
+        states.append(document["packages"].get("qwen3-asr-1.7b-8bit", {}).get("state"))
+        real_save(document)
+
+    monkeypatch.setattr(pkg, "save_registry", spy)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert states == [], (
+        f"a no-op pull rewrote the registry, states {states}: a ready package must not be "
+        "reopened as `pulling`"
+    )
+
+
+def test_repair_re_downloads_a_hub_snapshot_a_re_pull_would_keep(tmp_path) -> None:
+    """`--repair` was declared, documented, named in four `fix` strings, and never read.
+
+    Wiring it to re-run `_materialize` is not enough by itself: `snapshot_download` returns a
+    revision the cache already holds as it stands, so without `force_download` a repair of a
+    corrupt snapshot reports success having moved no bytes.
+    """
+    fetcher = FakeFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    weights = Path(
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"]
+    ) / "model.safetensors"
+    weights.write_bytes(b"bit rot")
+
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert weights.read_bytes() == b"bit rot", "a plain re-pull is not a repair"
+    assert fetcher.forced == []
+
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]), repair=True)
+    assert fetcher.forced == [(QWEN_REPO, QWEN_REVISION)]
+    assert weights.read_bytes() == FakeFetcher.WEIGHTS
+
+
+def test_repair_replaces_a_checkout_rather_than_patching_what_is_there(provisioner) -> None:
+    """`verify`'s `patch_not_applied` fix names `pull --repair`, so it has to actually repair."""
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    patched = checkout / "vibevoice" / "modular" / "modeling_vibevoice_asr.py"
+    patched.write_text("original\n")
+    stray = checkout / "left-behind-by-a-half-finished-pull.txt"
+    stray.write_text("x")
+    assert [item["code"] for item in provisioner.verify()["failed"]] == ["patch_not_applied"]
+
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]), repair=True)
+    assert provisioner.verify()["failed"] == []
+    assert not stray.exists(), "the checkout was patched in place rather than replaced"
+
+
+def test_repair_discards_the_swift_checkout_before_rebuilding(provisioner) -> None:
+    """A rebuild in place trusts the tree whose state is what `--repair` was called about."""
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    checkout = paths.checkout_dir("swift", "fluidaudio")
+    stray = checkout / "half-applied.txt"
+    stray.write_text("x")
+
+    provisioner.pull(pkg.select(["fluidaudio"]), repair=True)
+    assert not stray.exists()
+    assert (checkout / ".build" / "product").is_file()
+
+
+def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> None:
+    """The one place `--repair` does nothing, and the reason it does not have to.
+
+    `url_file` re-hashes what is on disk against the manifest pin and downloads again unless it
+    matches, so a match is already the strongest re-materialization available. This runs the real
+    fetcher, not the fake, because the claim is about that code path: a matching file returns
+    without touching the network at all.
+    """
+    import urllib.request
+
+    target = paths.models_dir() / "already-correct.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"onnx-bytes")
+
+    def explode(*args, **kwargs):  # noqa: ANN002, ANN003 - a tripwire, never called
+        raise AssertionError("url_file went to the network for a file that matches its pin")
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = explode
+    try:
+        resolved = pkg.Fetcher().url_file(
+            "https://example.invalid/x.onnx", hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+    finally:
+        urllib.request.urlopen = original
+    assert resolved == target
+
+    # And it is a check, not a shortcut: a file that does not match is re-fetched.
+    target.write_bytes(b"corrupt")
+    with pytest.raises(AssertionError, match="went to the network"):
+        urllib.request.urlopen = explode
+        try:
+            pkg.Fetcher().url_file(
+                "https://example.invalid/x.onnx",
+                hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+        finally:
+            urllib.request.urlopen = original
+
+
+def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
+    """Measured before this fix: `pull --stack qwen-1.7b` with no `swift` left `ready` empty.
+
+    `select` sorts by package id, `fluidaudio` sorts first, and `pull` raised on it — so a machine
+    without a Swift toolchain got none of the ASR weights it could have had. §0 of
+    TRANSCRIBE_HAPPY_PATH.md promises the opposite.
+    """
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    receipt = provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
+
+    pulled = [entry["package"] for entry in receipt["pulled"]]
+    assert "qwen3-asr-1.7b-8bit" in pulled and "qwen3-forcedaligner" in pulled
+    assert "fluidaudio" not in pulled
+
+    blocked = next(item for item in receipt["warnings"]
+                   if item["code"] == "toolchain_missing")
+    assert blocked["blocking"] is True
+    assert blocked["packages"] == ["fluidaudio"]
+    assert blocked["requires_tool"] == ["swift"]
+    assert "qwen-1.7b" in blocked["detail"]
+
+    document = pkg.load_registry()
+    assert pkg.is_ready(document, "qwen3-asr-1.7b-8bit")
+    assert "fluidaudio" not in document["packages"], "a blocked package left a registry entry"
+    # A blocked package provisioned nothing, so it claims no license and no bytes.
+    licenses = next(item for item in receipt["warnings"]
+                    if item["code"] == "license_unreviewed")
+    assert "fluidaudio" not in licenses["packages"]
+    assert receipt["pulled_known_bytes"] > 0
+
+
+def test_naming_a_toolchain_blocked_package_is_still_exit_three(tmp_path) -> None:
+    """The asymmetry: a stack is a superset guess, a named package is an instruction."""
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["fluidaudio"]))
+    assert caught.value.code == "toolchain_missing"
+    assert caught.value.exit_code == 3
+    assert caught.value.payload["requires_tool"] == ["swift"]
+
+    # And a stack in which nothing at all was provisionable is exit 3 too, because there is no
+    # partial success to report. No shipped stack is one package wide, so the selection is
+    # constructed rather than selected.
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["fluidaudio"]), stack="qwen-1.7b")
+    assert caught.value.exit_code == 3
+
+
+def test_teardown_never_deletes_a_sibling_of_the_models_directory(tmp_path) -> None:
+    """`str(models_dir) in path` is a substring test where a prefix test was meant.
+
+    Point the Hub cache at `<root>/models_hub` — one plausible `HF_HOME` — and every snapshot
+    under it tests positive, so `_locations` hands the shared cache to `_delete`. The revision
+    below was in the cache before this root wanted it, which is exactly the case teardown
+    promises to retain.
+    """
+    class HubBesideModels(FakeFetcher):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.hub = Path(str(paths.models_dir()) + "_hub")
+
+    fetcher = HubBesideModels(tmp_path, already_cached=(QWEN_REVISION,))
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "silero-vad"]))
+
+    snapshot = Path(
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+    artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
+    assert str(paths.models_dir()) in str(snapshot), "the fixture no longer sets the trap"
+
+    report = provisioner.remove(["qwen3-asr-1.7b-8bit", "silero-vad"])
+    assert report["hub_revisions_retained"] == [QWEN_REVISION]
+    assert snapshot.is_dir(), "teardown deleted a directory inside the shared Hugging Face cache"
+    # The true positive still holds, or the fix would be "delete nothing".
+    assert not artifact.exists(), "the artifact this root wrote under models/ was not reclaimed"
+
+
+def test_want_is_refused_rather_than_accepted_and_ignored(capsys) -> None:
+    """`--want` reached no code that could honour it. TRANSCRIBE_HAPPY_PATH.md §4.6 on why."""
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "want_not_implemented"
+    assert error["field"] == "--want"
+    assert error["provided"] == "diarization"
+    assert error["fix"] == "audio packages pull --stack qwen-1.7b"
+    assert pkg.load_registry()["packages"] == {}, "the refused command provisioned something"
+
+    # Without --stack it is still the older refusal, whose fix no longer suggests --want either.
+    assert main(["packages", "pull", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "stack_required"
+    assert "--want" not in error["fix"]
+
+
+def test_a_stack_beside_named_packages_is_a_conflict_not_a_precedence(capsys) -> None:
+    """`select` returned early on package ids and dropped `--stack` silently."""
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.select(["silero-vad"], stack="qwen-1.7b")
+    assert caught.value.code == "stack_conflicts_with_named_packages"
+    assert caught.value.exit_code == 2
+    assert caught.value.payload["stack"] == "qwen-1.7b"
+    assert caught.value.payload["packages"] == ["silero-vad"]
+    assert caught.value.payload["fix"] == "audio packages pull silero-vad"
+
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "silero-vad"]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == \
+        "stack_conflicts_with_named_packages"
+
+
+def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys) -> None:
+    """The wiring the flags were missing: `--repair` was parsed and read by nothing.
+
+    `--stack` has to reach `pull` as well, because it is what decides whether a toolchain-blocked
+    package is a warning or an exit 3.
+    """
+    seen: dict[str, object] = {}
+
+    class Recorder:
+        def pull(self, selection, *, repair: bool = False, stack: str | None = None) -> dict:
+            seen.update(packages=[package.id for package in selection], repair=repair,
+                        stack=stack)
+            return {"pulled": [], "skipped": [], "warnings": []}
+
+    monkeypatch.setattr("audio_cli.cli.Provisioner", Recorder)
+
+    assert main(["packages", "pull", "--repair", "silero-vad"]) == 0
+    capsys.readouterr()
+    assert seen == {"packages": ["silero-vad"], "repair": True, "stack": None}
+
+    assert main(["packages", "pull", "--stack", "firered"]) == 0
+    capsys.readouterr()
+    assert seen["stack"] == "firered"
+    assert seen["repair"] is False
+    assert seen["packages"] == ["firered-asr2s", "fluidaudio", "speaker-diarization-coreml"]
