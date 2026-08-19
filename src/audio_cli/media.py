@@ -402,13 +402,18 @@ def temporary_output_path(output: Path) -> Iterator[Path]:
 
 
 def atomic_write_json(path: Path, payload: dict[str, object]) -> None:
+    """Written through a sibling and renamed, so a report is never observed half-written.
+
+    Deliberately a plain `open` rather than `mkstemp`. `mkstemp` creates 0600 and `os.replace`
+    carries that mode onto the destination, so a report arrived stricter than the render it
+    describes -- 0600 beside an 0644 wav, under the same umask, for no reason a reader could act
+    on. Everything else this tool publishes honours the umask, including `save_registry`, which
+    reached the same conclusion by writing the same way.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, raw = tempfile.mkstemp(
-        prefix=f".{path.name}-", suffix=".tmp", dir=path.parent
-    )
-    temp = Path(raw)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with temp.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True, ensure_ascii=False)
             handle.write("\n")
         os.replace(temp, path)
