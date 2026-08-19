@@ -11,17 +11,32 @@ stack and states requirements, plus its associated agent skill.
   Their contract and usage are in [README.md](README.md); do not regress the
   deterministic, render-from-original enhancement flow.
 - `audio packages` and `audio doctor` are implemented, over the four provisioned
-  environments in [ENVIRONMENTS.md](ENVIRONMENTS.md). Their tests run entirely on a
-  `FakeToolchain` and `FakeFetcher`, so the real Hub, `uv venv`, digest, and Swift-build
-  paths are unexercised, and nothing is provisioned on any machine yet.
-- An audit of that layer found eight defects and all eight are fixed on
-  `fix/cli-provisioning-bugs`. The two worth remembering as *kinds* of mistake, because both
-  survived review by looking finished: `pull` recorded `digest_verified: true` for every Hub
-  package and hashed none of them, so `verify` reported a check it never ran; and `--repair`
-  was declared, documented, and named in four `fix` strings while being read by no code at
-  all. A flag that parses is not a flag that works, and a payload key is a claim about work
-  someone has to have done. `pull` is now idempotent, tolerates a toolchain-blocked package
-  when a *stack* selected it, and refuses `--want` rather than ignoring it.
+  environments in [ENVIRONMENTS.md](ENVIRONMENTS.md). The suite runs on a `FakeToolchain` and
+  `FakeFetcher`, but the real paths are no longer unexercised: all four environments have been
+  built from their hash-pinned locks and `verify` reports each `ok` against its own, a forced
+  repair moved 1,101,647,163 measured bytes over the network for a 1,010,773,761-byte package,
+  the Swift product builds and launches, and the `mlx-audio` private-API guard matches its pin
+  with `signature_ok: true`. `torch-firered` resolves to transformers 5.1.0 and
+  `torch-vibevoice` to 4.57.6, so the partition is installed rather than inferred.
+- An audit of the CLI found **fifteen** defects and all fifteen are fixed on
+  `fix/cli-provisioning-bugs` — ten in provisioning, five in the enhancement engine and its
+  documents. The kinds of mistake worth remembering, because each survived review by looking
+  finished:
+  - **A claim nobody earned.** `pull` recorded `digest_verified: true` for every Hub package and
+    hashed none of them; the manifest carries no `sha256` for a Hub source, so there was nothing
+    to hash against. `verify` reported a check it never ran, and its honest `unverified` branch
+    was unreachable.
+  - **A flag that parses is not a flag that works.** `--repair` was declared, documented, and
+    named in four `fix` strings while being read by no code at all. A mutation scan then
+    neutralized all 20 flag branches and found six more the suite could not see.
+  - **A parameter that decided nothing.** `vad_min_silence_ms` declared 300 ms while a second
+    hard-coded merge required 540; two thresholds answering one question can only disagree.
+  - **A bound the media does not have.** A resampler rounding up let a speech region end after
+    the end of the file, which then made a treatment extension negative.
+  - **A recorded failure that changed no outcome.** A Swift build whose product could not launch
+    reported `product_runs: false` and exited 0 with an empty `warnings`.
+  `pull` is now idempotent, tolerates a toolchain-blocked package when a *stack* selected it,
+  refuses `--want` rather than ignoring it, and refuses a build whose product will not run.
 - Two things that sweep surfaced and did **not** settle, both about `verify`. A moved
   `mlx-audio` private API is reported and never reaches `failed`, so `verify` exits 0 while
   saying `mlx_audio_private_api_matches_expected: false` — the guard the recorded Qwen timings

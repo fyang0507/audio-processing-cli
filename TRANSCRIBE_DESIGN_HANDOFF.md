@@ -85,11 +85,17 @@ you recognise a settled question when you meet one.
    [#11](https://github.com/fyang0507/audio-processing-cli/issues/11): four provisioned
    environments derived by resolver rather than asserted, hash-pinned locks that ship in the
    wheel, and the registry schema with its crash-safety rule. `audio packages`
-   (`list`/`path`/`pull`/`verify`/`remove`/`purge`) and `audio doctor` are implemented too, but
-   only against fakes: every test in `tests/test_packages.py` runs on a `FakeToolchain` and a
-   `FakeFetcher` in an isolated root, so no real Hub download, `uv venv` creation, digest check,
-   or Swift build has been exercised. `pull --want` is accepted and inert until the planner
-   lands, so `--stack` over-provisions ([#12](https://github.com/fyang0507/audio-processing-cli/issues/12)).
+   (`list`/`path`/`pull`/`verify`/`remove`/`purge`) and `audio doctor` are implemented, and the
+   real paths behind them are exercised: all four environments built from their locks and
+   verified `ok` against each, a forced repair with 1,101,647,163 measured bytes over the wire,
+   the Swift product built and launched, and the `mlx-audio` private-API guard matching its pin.
+   The suite still runs on a `FakeToolchain` and `FakeFetcher` in an isolated root, so treat a
+   green suite as covering the rules and not the integration — the integration evidence is in
+   `fix/cli-provisioning-bugs`. `pull --want` is now **refused** rather than accepted and
+   ignored, until the planner lands
+   ([#12](https://github.com/fyang0507/audio-processing-cli/issues/12)); `--stack` still
+   over-provisions, and now tolerates a package whose toolchain is missing instead of aborting
+   the whole pull.
 4. **Partial results and resume.** Exit 4 writes a result with a coverage ledger. How work
    units are tracked, and where the watermark comes from when completion is non-contiguous,
    is design. The recorded runner processes turns in duration-bucketed order, so completion is
