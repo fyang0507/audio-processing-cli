@@ -31,6 +31,12 @@ it lives. All three are read-only.
 are created and removed with the packages that need them. A `provisional` marker on one is a note
 about a possible future change, not a warning, and it changes nothing about any command.
 
+Read two fields there, not one. The `state` is the registry's own record — `ready` means this root
+provisioned the environment, not that anything in it can run — and `blocked_by_missing_tool` beside
+it is the usability half: a non-empty list names a tool the environment needs that is off `PATH`. An
+environment can honestly be `ready` with a blocked tool, because a stack pull provisions what needs
+no toolchain and reports what it skipped. `verify` is what turns the pair into one verdict.
+
 ## Translate a request into package ids
 
 Someone names a stack — `qwen-1.7b`, `qwen-0.6b`, `vibevoice`, or `firered` — and what they want
@@ -92,6 +98,29 @@ and only the speech-activity model has one; the others report the `revision` the
 the pin is recorded and the weights are present, not that anything was hashed. Never summarize a
 `revision` entry as "digest verified".
 
+`verify` also states one verdict per provisioned environment, and `drifted` is the only one this
+command can repair:
+
+| Verdict | Means | Your move |
+| --- | --- | --- |
+| `ok` | every check that applies to it passed | continue |
+| `drifted` | its installed set no longer matches its lock | `verify --repair`; until then the drift sits in `failed` and the command exits 3 |
+| `blocked` | a tool it requires is off `PATH`, so nothing in it can run whatever the registry holds | report the missing tool; no `audio` command installs one |
+| `absent` | this root has not provisioned it | pull the packages that need it |
+
+`blocked` is the one to slow down on, because it does **not** fail the command: nothing provisioned
+is broken and there is no `fix` to name, so `verify` exits 0 while reporting an environment that can
+execute nothing. Reading the exit code alone there tells someone a capability is available on a
+machine that cannot run it. The pinned private-API guard is the same shape — its
+`mlx_audio_private_api_matches_expected` can come back `false`, or `null` where no verdict was
+reachable, with the command still exiting 0, and a `null` is not a pass.
+
+One package builds rather than downloads, and its build can fail late. A Swift product that compiles
+but will not launch is refused at exit **3** with `package_build_unusable`; the registry entry stays
+`pulling`, so `list` reports it not ready and nothing treats it as available. The `fix` is a
+`pull --repair` on that package. `product_runs: true` in the receipt is the only version of that
+package that counts — do not report a diarizer as provisioned without it.
+
 Expect `license_unreviewed` among a pull's warnings. It is non-blocking, and it means nobody has read
 the license the model card declares. Report it, and never describe a declared license as a cleared
 one.
@@ -147,7 +176,7 @@ tool, or the provisioning root outlives the only thing that knows how to describ
 | --- | --- | --- |
 | 0 | done | continue |
 | 2 | the request was wrong — an unknown package or stack, a package that was never provisioned, or an argument the command cannot honour (`--want`; `--stack` beside package ids) | run the `fix` the payload names; for a bad name the error usually carries an `allowed` list |
-| 3 | provisioning is incomplete or broken — a failed integrity check, a missing tool, a failed verify | run the `fix` the payload names, verbatim |
+| 3 | provisioning is incomplete or broken — a failed integrity check, a missing tool for a package named by id, a build whose product will not run, a drifted environment | run the `fix` the payload names, verbatim |
 
 An absent toolchain blocks only the packages that need it — `doctor` says so, those packages report
 `requires_tool`, and everything else still provisions. Report the blocked capability rather than

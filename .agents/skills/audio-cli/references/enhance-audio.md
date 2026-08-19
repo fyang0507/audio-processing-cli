@@ -104,4 +104,11 @@ a machine-readable remedy. The refusals worth recognizing:
   for the case the person asks for by name.
 - **output would overwrite the input**, or an output path is missing for a real render. Both protect
   the canonical original.
+- **the output or the report already exists.** Nothing is replaced unless the person asked for it,
+  and the message names the flag that does. `inspect` checks its report destination before it
+  decodes anything, so this refusal costs a retry rather than the analysis.
+- **the audio is too short to have a loudness measurement.** Integrated loudness is gated in 400 ms
+  blocks, so a clip shorter than one has none however loud it is. The refusal quotes the true peak
+  that proves the signal is not silent and names the stage to skip. Relay it that way: reporting a
+  short clip as silent is the wrong answer this message exists to prevent.
 - **an invalid adjustment file**, which is its own lane — see [targeted-fixes.md](targeted-fixes.md).
