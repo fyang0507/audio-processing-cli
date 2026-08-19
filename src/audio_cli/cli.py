@@ -6,7 +6,16 @@ import sys
 from pathlib import Path
 
 from .adjustments import AdjustmentError, load_adjustments
+from .environments import ManifestError
 from .media import MediaError, media_summary, probe_media
+from .packages import (
+    Provisioner,
+    ProvisioningError,
+    doctor,
+    list_report,
+    path_report,
+    select,
+)
 from .pipeline import (
     EnhancementPipeline,
     PipelineError,
@@ -65,6 +74,56 @@ def _parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="Replace an existing output/report only after the new render verifies successfully.",
+    )
+
+    subparsers.add_parser(
+        "doctor",
+        help="Report tool, toolchain, platform, and provisioning state.",
+    )
+
+    packages_parser = subparsers.add_parser(
+        "packages",
+        help="Provision, verify, and remove model packages and their environments.",
+    )
+    package_commands = packages_parser.add_subparsers(dest="packages_command", required=True)
+
+    package_commands.add_parser("list", help="What is provisioned, and what it occupies.")
+    package_commands.add_parser("path", help="Resolved root and per-package locations.")
+
+    pull_parser = package_commands.add_parser(
+        "pull",
+        help="Download weights, create environments, apply patches, build products.",
+    )
+    pull_parser.add_argument("packages", nargs="*", help="Package ids; or use --stack.")
+    pull_parser.add_argument("--stack", help="Provision what this stack can use.")
+    pull_parser.add_argument(
+        "--want",
+        help="Capabilities, for symmetry with transcribe. Reserved until the planner lands.",
+    )
+    pull_parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="Re-materialize the named packages even if the registry calls them ready.",
+    )
+
+    verify_parser = package_commands.add_parser(
+        "verify",
+        help="Re-check digests, environment locks, the pinned private API, and patches.",
+    )
+    verify_parser.add_argument(
+        "--repair", action="store_true", help="Re-sync a drifted environment from its lock."
+    )
+
+    remove_parser = package_commands.add_parser(
+        "remove", help="Remove packages; an environment goes when its last package does."
+    )
+    remove_parser.add_argument("packages", nargs="+")
+
+    purge_parser = package_commands.add_parser(
+        "purge", help="Remove everything this tool provisioned, from the registry."
+    )
+    purge_parser.add_argument(
+        "--dry-run", action="store_true", help="Report reclaimable bytes and remove nothing."
     )
     return parser
 
@@ -151,6 +210,45 @@ def _run_enhance(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_doctor(_args: argparse.Namespace) -> int:
+    _print_json(doctor())
+    return 0
+
+
+def _run_packages(args: argparse.Namespace) -> int:
+    command = args.packages_command
+    if command == "list":
+        _print_json(list_report())
+        return 0
+    if command == "path":
+        _print_json(path_report())
+        return 0
+
+    provisioner = Provisioner()
+    if command == "pull":
+        if args.want and not args.stack:
+            raise ProvisioningError(
+                "stack_required", "--want needs --stack: capabilities are resolved per stack",
+                exit_code=2, fix="audio packages pull --stack <stack> --want <capabilities>",
+            )
+        selection = select(args.packages, stack=args.stack)
+        _print_json(provisioner.pull(selection))
+        return 0
+    if command == "verify":
+        report = provisioner.verify(repair=args.repair)
+        _print_json(report)
+        # A failed check is the whole point of verify, so it must not exit 0.
+        return 3 if report["failed"] else 0
+    if command == "remove":
+        _print_json(provisioner.remove(args.packages))
+        return 0
+    if command == "purge":
+        _print_json(provisioner.purge(dry_run=args.dry_run))
+        return 0
+    raise ProvisioningError("unknown_command", f"unknown packages command {command!r}",
+                            exit_code=2)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -159,7 +257,19 @@ def main(argv: list[str] | None = None) -> int:
             return _run_inspect(args)
         if args.command == "enhance":
             return _run_enhance(args)
+        if args.command == "doctor":
+            return _run_doctor(args)
+        if args.command == "packages":
+            return _run_packages(args)
         parser.error(f"Unknown command: {args.command}")
+    except ProvisioningError as exc:
+        _print_json({"error": exc.as_dict()}, stream=sys.stderr)
+        return exc.exit_code
+    except ManifestError as exc:
+        _print_json(
+            {"error": {"code": "manifest_invalid", "detail": str(exc)}}, stream=sys.stderr
+        )
+        return 2
     except AdjustmentError as exc:
         _print_json(
             {"error": exc.as_dict()},

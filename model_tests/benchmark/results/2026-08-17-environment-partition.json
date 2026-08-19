@@ -1,0 +1,378 @@
+{
+  "probe": "environment-partition",
+  "question": "What is the smallest set of provisioned Python environments the transcription packages can be grouped into, given their declared dependencies?",
+  "generated_utc": "2026-08-18T00:37:09+00:00",
+  "runner": "model_tests/benchmark/run_env_partition_probe.py",
+  "requirements_sha256": "a7123c120718fc1dbf1f1b6d97ad682686f12ddc5462540c904929bb0e537209",
+  "resolver": {
+    "uv": "uv 0.9.7 (0adb44480 2025-10-30)",
+    "matrix_python_version": "3.12",
+    "platform": "Darwin 25.5.0 arm64",
+    "installed_anything": false
+  },
+  "requirements": {
+    "qwen3-asr-8bit": {
+      "environment_as_built": "/tmp/mlxprobe-venv",
+      "python_as_built": "3.13.9",
+      "serves_packages": [
+        "qwen3-asr-1.7b-8bit",
+        "qwen3-asr-0.6b-8bit"
+      ],
+      "citation": "installed dist-info in /tmp/mlxprobe-venv/lib/python3.13/site-packages: mlx 0.32.0, mlx_audio 0.4.5, mlx_lm 0.31.3, transformers 5.12.1, huggingface_hub 1.27.0, sentencepiece 0.2.2 (the [stt] extra); no torch. The interpreter path is recorded in model_tests/benchmark/results/2026-08-16-qwen-capabilities.json.",
+      "requirements": [
+        "mlx==0.32.0",
+        "mlx-audio[stt]==0.4.5"
+      ]
+    },
+    "firered-asr2s": {
+      "environment_as_built": "model_tests/firered/FireRedASR2S/.venv",
+      "python_as_built": "3.12.12",
+      "serves_packages": [
+        "firered-asr2s"
+      ],
+      "citation": "model_tests/firered/FireRedASR2S/pyproject.toml on a clean checkout at 4e7d9aa, which matches the as-built venv (torch 2.10.0, transformers 5.1.0, huggingface_hub 1.27.0, numpy 2.4.2). Its requirements.txt disagrees — torch==2.1.0+cu118, transformers==4.51.3 against a CUDA index — and cannot be what ran on Apple Silicon, so it is not used here. kaldi_native_fbank is added because fireredasr2s/fireredlid/data/feat.py:7 imports it and pyproject.toml does not declare it; 1.22.3 is the as-built version.",
+      "requirements": [
+        "torch==2.10.0",
+        "torchaudio==2.10.0",
+        "transformers==5.1.0",
+        "numpy==2.4.2",
+        "cn2an==0.5.23",
+        "kaldiio==2.18.1",
+        "kaldi_native_fbank==1.22.3",
+        "sentencepiece==0.2.1",
+        "soundfile==0.13.1",
+        "textgrid==1.6.1"
+      ]
+    },
+    "qwen3-forcedaligner": {
+      "environment_as_built": "model_tests/forced_aligner/.venv",
+      "python_as_built": "3.12.12",
+      "serves_packages": [
+        "qwen3-forcedaligner"
+      ],
+      "citation": "model_tests/forced_aligner/test_single_speaker.py:4 imports Qwen3ForcedAligner from qwen_asr, and qwen_asr-0.0.6.dist-info/METADATA pins transformers==4.57.6 and accelerate==1.12.0.",
+      "requirements": [
+        "qwen-asr==0.0.6",
+        "torch",
+        "soundfile"
+      ]
+    },
+    "vibevoice-asr-7b": {
+      "environment_as_built": "model_tests/vibevoice/VibeVoice/.venv",
+      "python_as_built": "3.12.12",
+      "serves_packages": [
+        "vibevoice-asr-7b"
+      ],
+      "citation": "model_tests/vibevoice/VibeVoice/pyproject.toml [project].dependencies at checkout 94da20d, which caps transformers below 5.0.0. Server and UI extras (gradio, aiortc, uvicorn, fastapi, pydub, requests) are dropped: the recorded runner imports the model directly and never serves. The as-built venv resolved to transformers 4.57.6, torch 2.13.0, diffusers 0.39.0.",
+      "requirements": [
+        "transformers>=4.51.3,<5.0.0",
+        "torch",
+        "accelerate",
+        "diffusers",
+        "librosa",
+        "llvmlite>=0.40.0",
+        "numba>=0.57.0",
+        "numpy",
+        "scipy",
+        "tqdm",
+        "ml-collections",
+        "absl-py",
+        "av"
+      ]
+    }
+  },
+  "non_python_packages": {
+    "fluidaudio": "Swift toolchain build; no interpreter. FluidAudio 0.15.5 at 19600a48.",
+    "speaker-diarization-coreml": "Core ML model package pulled alongside the Swift product.",
+    "silero-vad": "Runs in the tool's own environment on onnxruntime; nothing to provision."
+  },
+  "matrix": [
+    {
+      "packages": [
+        "firered-asr2s"
+      ],
+      "python_version": "3.12",
+      "resolves": true,
+      "input_sha256": "bbf16ce32067d6aecee26c437b67edf3325e06fe9c1386a2ed1d2043e659e7b3",
+      "resolved_package_count": 45,
+      "key_pins": {
+        "huggingface-hub": "1.27.0",
+        "kaldi-native-fbank": "1.22.3",
+        "numpy": "2.4.2",
+        "sentencepiece": "0.2.1",
+        "tokenizers": "0.22.2",
+        "torch": "2.10.0",
+        "torchaudio": "2.10.0",
+        "transformers": "5.1.0"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/firered-asr2s.py3.12.txt",
+        "sha256": "352642779082fbbd6cb0ee5ef36a9a53924c7640b3b7232fdc66a5476d48d6c6"
+      }
+    },
+    {
+      "packages": [
+        "qwen3-asr-8bit"
+      ],
+      "python_version": "3.12",
+      "resolves": true,
+      "input_sha256": "2eae5ae0e649e10c02cb0653a3c73fd2c007e5c83990838dfb3d0386f7884743",
+      "resolved_package_count": 40,
+      "key_pins": {
+        "huggingface-hub": "1.27.0",
+        "mlx": "0.32.0",
+        "mlx-audio": "0.4.5",
+        "mlx-lm": "0.31.3",
+        "numpy": "2.5.2",
+        "scipy": "1.18.0",
+        "sentencepiece": "0.2.2",
+        "tokenizers": "0.22.2",
+        "transformers": "5.12.1"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/qwen3-asr-8bit.py3.12.txt",
+        "sha256": "36b93c3cfd9b73a90ce1bdfca2d6060b3b69aa4ff2655957fbb18bed94a3bf91"
+      }
+    },
+    {
+      "packages": [
+        "qwen3-forcedaligner"
+      ],
+      "python_version": "3.12",
+      "resolves": true,
+      "input_sha256": "f48cf4e7e356ee31d76e91b7fa1af971d1c660a034b25f4f65120f1d84699ebf",
+      "resolved_package_count": 91,
+      "key_pins": {
+        "accelerate": "1.12.0",
+        "huggingface-hub": "0.36.2",
+        "librosa": "1.0.0",
+        "llvmlite": "0.49.0",
+        "numba": "0.67.0",
+        "numpy": "2.5.2",
+        "qwen-asr": "0.0.6",
+        "scipy": "1.18.0",
+        "tokenizers": "0.22.2",
+        "torch": "2.13.0",
+        "transformers": "4.57.6"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/qwen3-forcedaligner.py3.12.txt",
+        "sha256": "d58bf0c9dbadfe52edd3c946ebe226055c490385e9138369b3ee3691c848eba9"
+      }
+    },
+    {
+      "packages": [
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": true,
+      "input_sha256": "47f57e0d0704b5179a0209bed500ffdb413136d414ec0b42e595b2a5d455b92c",
+      "resolved_package_count": 55,
+      "key_pins": {
+        "accelerate": "1.14.0",
+        "diffusers": "0.39.0",
+        "huggingface-hub": "0.36.2",
+        "librosa": "1.0.0",
+        "llvmlite": "0.49.0",
+        "numba": "0.67.0",
+        "numpy": "2.5.2",
+        "scipy": "1.18.0",
+        "tokenizers": "0.22.2",
+        "torch": "2.13.0",
+        "transformers": "4.57.6"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/vibevoice-asr-7b.py3.12.txt",
+        "sha256": "5d58524d1022d925ede0e392706001c5dc70ae2806b226af25ab39bdda36a816"
+      }
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-asr-8bit"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "6771a6d464f437d04d0184594a577111bd0dd10489150799c93c6d3ce081a7e7",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because mlx-audio==0.4.5 depends on transformers>=5.5.0,<5.13.0 and you\n      require transformers==5.1.0, we can conclude that your requirements and\n      mlx-audio[stt]==0.4.5 are incompatible.\n      And because you require mlx-audio[stt]==0.4.5, we can conclude that your\n      requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-forcedaligner"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "1bb9f6e7f90a2938d0bfe5194ea39e2d588a0a4e4deae7977f4c60f2ff544162",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because qwen-asr==0.0.6 depends on transformers==4.57.6 and you\n      require transformers==5.1.0, we can conclude that your requirements and\n      qwen-asr==0.0.6 are incompatible.\n      And because you require qwen-asr==0.0.6, we can conclude that your\n      requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "71622cf60ad07285869acee813882fcd09f43af8cbbf90064a8012b30ca4881f",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because you require transformers==5.1.0 and transformers>=4.51.3,<5.0.0,\n      we can conclude that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "qwen3-asr-8bit",
+        "qwen3-forcedaligner"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "156ee0ae4e3b8748b4458338c550f5ba9398ff4e08161a7c6d9a5b1447cfc618",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because mlx-audio==0.4.5 depends on transformers>=5.5.0,<5.13.0 and\n      qwen-asr==0.0.6 depends on transformers==4.57.6, we can conclude that\n      qwen-asr==0.0.6 and mlx-audio[stt]==0.4.5 are incompatible.\n      And because you require mlx-audio[stt]==0.4.5 and qwen-asr==0.0.6, we\n      can conclude that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "qwen3-asr-8bit",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "043eef9e26bad443ca56bc16bba8cb7ee54ea1792d51d2de3fc859013576db36",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because mlx-audio==0.4.5 depends on transformers>=5.5.0,<5.13.0 and\n      you require mlx-audio[stt]==0.4.5, we can conclude that you require\n      transformers>=5.5.0,<5.13.0.\n      And because you require transformers>=4.51.3,<5.0.0, we can conclude\n      that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "qwen3-forcedaligner",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": true,
+      "input_sha256": "06836186f90de97e2ef0fa168dedb9367d401ea94007cb11b0d1e5f37b1746ce",
+      "resolved_package_count": 96,
+      "key_pins": {
+        "accelerate": "1.12.0",
+        "diffusers": "0.39.0",
+        "huggingface-hub": "0.36.2",
+        "librosa": "1.0.0",
+        "llvmlite": "0.49.0",
+        "numba": "0.67.0",
+        "numpy": "2.5.2",
+        "qwen-asr": "0.0.6",
+        "scipy": "1.18.0",
+        "tokenizers": "0.22.2",
+        "torch": "2.13.0",
+        "transformers": "4.57.6"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/qwen3-forcedaligner+vibevoice-asr-7b.py3.12.txt",
+        "sha256": "e3edaa3af26731766aab6c4be89f8cae77a161463829ff9c98ddaa299d6afdc7"
+      }
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-asr-8bit",
+        "qwen3-forcedaligner"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "ffd147ad12b9da5875c787fc26be5a2f68536f92b81ec21dbd28a64e9daf9fa8",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because mlx-audio==0.4.5 depends on transformers>=5.5.0,<5.13.0 and you\n      require transformers==5.1.0, we can conclude that your requirements and\n      mlx-audio[stt]==0.4.5 are incompatible.\n      And because you require mlx-audio[stt]==0.4.5, we can conclude that your\n      requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-asr-8bit",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "69d44e87072694a3b320c2140ed2bd2599890533e0f6af08376200e82269ab15",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because you require transformers==5.1.0 and transformers>=4.51.3,<5.0.0,\n      we can conclude that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-forcedaligner",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "049ddb895941b0547eb83ff8f24c485b386e3add3f534df7542bff89c211201f",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because you require transformers==5.1.0 and transformers>=4.51.3,<5.0.0,\n      we can conclude that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "qwen3-asr-8bit",
+        "qwen3-forcedaligner",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "1989afe18904c188ed002d10c9ab10e4dffc4a3c829cfac576d1e669f614ab8d",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because mlx-audio==0.4.5 depends on transformers>=5.5.0,<5.13.0 and\n      you require mlx-audio[stt]==0.4.5, we can conclude that you require\n      transformers>=5.5.0,<5.13.0.\n      And because you require transformers>=4.51.3,<5.0.0, we can conclude\n      that your requirements are unsatisfiable."
+    },
+    {
+      "packages": [
+        "firered-asr2s",
+        "qwen3-asr-8bit",
+        "qwen3-forcedaligner",
+        "vibevoice-asr-7b"
+      ],
+      "python_version": "3.12",
+      "resolves": false,
+      "input_sha256": "42378b38f38d5128ce0fe4c73175c72d970dfaee2823b29f7ddcd8fb33296165",
+      "resolver_message": "× No solution found when resolving dependencies:\n  ╰─▶ Because you require transformers==5.1.0 and transformers>=4.51.3,<5.0.0,\n      we can conclude that your requirements are unsatisfiable."
+    }
+  ],
+  "as_built_python_checks": [
+    {
+      "packages": [
+        "qwen3-asr-8bit"
+      ],
+      "python_version": "3.13",
+      "resolves": true,
+      "input_sha256": "2eae5ae0e649e10c02cb0653a3c73fd2c007e5c83990838dfb3d0386f7884743",
+      "resolved_package_count": 40,
+      "key_pins": {
+        "huggingface-hub": "1.27.0",
+        "mlx": "0.32.0",
+        "mlx-audio": "0.4.5",
+        "mlx-lm": "0.31.3",
+        "numpy": "2.5.2",
+        "scipy": "1.18.0",
+        "sentencepiece": "0.2.2",
+        "tokenizers": "0.22.2",
+        "transformers": "5.12.1"
+      },
+      "resolved_set": {
+        "path": "model_tests/benchmark_runs/env_partition/qwen3-asr-8bit.py3.13.txt",
+        "sha256": "ae5549dc29e9a4d5c3b9b7cfcdd16d899283f824d08043a68359e8dad42acd2a"
+      }
+    }
+  ],
+  "minimal_python_partition": [
+    [
+      "firered-asr2s"
+    ],
+    [
+      "qwen3-asr-8bit"
+    ],
+    [
+      "qwen3-forcedaligner",
+      "vibevoice-asr-7b"
+    ]
+  ],
+  "minimal_python_partition_is_unique": true,
+  "minimal_python_partition_alternatives": [],
+  "conflict_axis": {
+    "groups_tested": 15,
+    "groups_conflicting": 10,
+    "conflicts_naming_transformers": 10,
+    "resolved_transformers_per_package": {
+      "firered-asr2s": "5.1.0",
+      "qwen3-asr-8bit": "5.12.1",
+      "qwen3-forcedaligner": "4.57.6",
+      "vibevoice-asr-7b": "4.57.6"
+    },
+    "note": "Every conflicting group's resolver message names transformers. No conflict here is about torch, numpy, or a platform wheel."
+  },
+  "provisioned_environment_count": 4,
+  "provisioned_environment_note": "Python environments from the partition, plus `swift`, which has no interpreter. `core` is the tool's own environment and is not provisioned."
+}

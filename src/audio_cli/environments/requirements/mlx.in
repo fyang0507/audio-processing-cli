@@ -1,0 +1,27 @@
+# Environment: mlx
+#
+# The MLX runtime. Deliberately torch-free: nothing here imports PyTorch, and adding it would
+# put a multi-gigabyte dependency into the environment the fast long-form path runs in.
+#
+# Serves the packages: qwen3-asr-1.7b-8bit, qwen3-asr-0.6b-8bit, qwen3-forcedaligner-8bit.
+#
+# Citation for every pin below: the as-built probe environment that produced every recorded
+# Qwen figure — dist-info under /tmp/mlxprobe-venv/lib/python3.13/site-packages, whose
+# interpreter path is recorded in
+# model_tests/benchmark/results/2026-08-16-qwen-capabilities.json. It held mlx 0.32.0,
+# mlx-audio 0.4.5, mlx-lm 0.31.3, transformers 5.12.1, huggingface_hub 1.27.0,
+# sentencepiece 0.2.2, and no torch.
+#
+# The [stt] extra is what pulls sentencepiece, which the as-built environment had.
+#
+# mlx-audio is pinned exactly, not floored. Its private batched decode path is guarded by a
+# source hash (sha256 c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250 over
+# mlx_audio/stt/models/qwen3_asr/qwen3_asr.py), verified to match on an environment built
+# from this file. An upgrade is a breaking change, not a bump.
+#
+# Python: 3.13.9 — the version the recorded Qwen runs used. The resolution is identical at
+# 3.12 (see model_tests/benchmark/results/2026-08-17-environment-partition.json,
+# as_built_python_checks), so this pin preserves the measured interpreter rather than
+# satisfying a dependency.
+mlx==0.32.0
+mlx-audio[stt]==0.4.5

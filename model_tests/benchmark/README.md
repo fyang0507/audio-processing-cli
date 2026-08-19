@@ -83,6 +83,49 @@ between turns is the measured resource-aware configuration. Its controlled
 same-turn A/B prefers Qwen 1.7B for transcript quality and speed while retaining
 0.6B as the smallest and fastest option.
 
+## Provisioning probes
+
+Three runners answer environment-layout questions rather than model-quality ones. They belong
+here because the same evidence rule applies: a layout claim cites a resolver run or a recorded
+artifact, never a summary.
+
+`run_env_partition_probe.py` derives the minimal set of provisioned Python environments by
+resolving **every** grouping of the dependency-contributing packages with `uv`, installing
+nothing. It reports whether the minimum is unique, so a layout cannot rest on an undocumented
+choice between equally small alternatives. Re-run it whenever an upstream pin moves:
+
+```bash
+python model_tests/benchmark/run_env_partition_probe.py \
+  --output model_tests/benchmark/results/2026-08-17-environment-partition.json \
+  --raw-dir model_tests/benchmark_runs/env_partition
+```
+
+`run_mlx_forced_aligner_probe.py` and `run_mlx_vibevoice_probe.py` ask whether `mlx-audio`'s
+implementations can replace their PyTorch counterparts, by rerunning a recorded case and
+diffing against its artifact. Both need a provisioned `mlx` environment and its interpreter:
+
+```bash
+uv venv --python 3.13 /tmp/envs/mlx
+uv pip sync --python /tmp/envs/mlx/bin/python src/audio_cli/environments/locks/mlx.txt
+
+/tmp/envs/mlx/bin/python model_tests/benchmark/run_mlx_forced_aligner_probe.py \
+  --output model_tests/benchmark_runs/mlx_forced_aligner_probe.json
+
+/tmp/envs/mlx/bin/python model_tests/benchmark/run_mlx_vibevoice_probe.py \
+  --recorded model_tests/benchmark_runs/vibe_mps_bf16_logitskeep_cantomap150s.json \
+  --output model_tests/benchmark_runs/mlx_vibevoice_probe_cantomap150s.json
+```
+
+The VibeVoice probe verifies the recorded fixture's sha256 before loading anything and takes
+`--model-repo` so the bf16 checkpoint can separate an implementation difference from a
+quantization one. Neither probe is a speed comparison: the recorded runs used different
+precision and a different framework, and their memory counters have different scopes.
+`summarize_mlx_collapse_probes.py` compacts all of it into the tracked result.
+
+Conclusions live in [ENVIRONMENTS.md](../../ENVIRONMENTS.md), with the compact evidence in
+`results/2026-08-17-environment-partition.json` and
+`results/2026-08-17-mlx-collapse-probes.json`.
+
 ## Runners
 
 Run VibeVoice with the virtual environment in its local source checkout. Keep

@@ -1,0 +1,185 @@
+{
+  "probe_set": "mlx-collapse",
+  "question": "mlx-audio 0.4.5 ships MLX implementations of the forced aligner, FireRed's AED, and VibeVoice-ASR. Which of the PyTorch environments can that remove?",
+  "runners": [
+    "model_tests/benchmark/run_mlx_forced_aligner_probe.py",
+    "model_tests/benchmark/run_mlx_vibevoice_probe.py"
+  ],
+  "environment": {
+    "python": "3.13.9",
+    "platform": "Darwin 25.5.0 arm64",
+    "packages": {
+      "mlx": "0.32.0",
+      "mlx-audio": "0.4.5",
+      "mlx-lm": "0.31.3",
+      "transformers": "5.12.1",
+      "huggingface-hub": "1.27.0",
+      "numpy": "2.5.2"
+    },
+    "torch_installed": false
+  },
+  "verdicts": {
+    "qwen3-forcedaligner": "equivalent",
+    "vibevoice-asr-7b": "not_equivalent",
+    "firered-asr2s": "blocked_no_mlx_punctuator"
+  },
+  "forced_aligner": {
+    "verdict": "equivalent",
+    "mlx": {
+      "repo": "mlx-community/Qwen3-ForcedAligner-0.6B-8bit",
+      "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
+      "quantization": "8-bit"
+    },
+    "torch": {
+      "repo": "Qwen/Qwen3-ForcedAligner-0.6B",
+      "revision": "c7cbfc2048c462b0d63a45797104fc9db3ad62b7",
+      "precision": "float32 on cpu"
+    },
+    "fixture": {
+      "audio": "model_tests/forced_aligner/sample2_multispeaker.wav",
+      "sample_rate": 16000,
+      "duration_seconds": 139.28,
+      "segment_source": "model_tests/vibevoice/VibeVoice/result_vibevoice_multispeaker.json",
+      "segments": 19
+    },
+    "segments": {
+      "mlx": 17,
+      "torch": 17
+    },
+    "token_sequences_identical": 19,
+    "token_sequences_differing": 0,
+    "token_count_mismatches": 0,
+    "bound_deltas": {
+      "start": {
+        "count": 246,
+        "mean_s": 0.0146,
+        "median_s": 0.0,
+        "p95_s": 0.08,
+        "max_s": 1.2,
+        "label": "abs(mlx.start - torch.start) over aligned tokens"
+      },
+      "end": {
+        "count": 246,
+        "mean_s": 0.0133,
+        "median_s": 0.0,
+        "p95_s": 0.08,
+        "max_s": 1.6,
+        "label": "abs(mlx.end - torch.end) over aligned tokens"
+      },
+      "note": "Deltas are between two implementations at different precisions (8-bit MLX vs fp32 torch), not against labeled boundaries. Neither side is ground truth: boundary MAE against labels is unmeasured on every path in this repository."
+    },
+    "punctuation_invariant_violations": [],
+    "align_seconds": {
+      "mlx_8bit": 2.01,
+      "torch_fp32_cpu": 4.638253211975098
+    },
+    "reading": "Every one of the 246 aligned tokens carries the same text on both paths, all 17 word-bearing segments match token for token, both non-speech segments stay wordless, and the punctuation invariant holds. Bounds agree at a median of 0 with a tail: P95 80 ms, max 1.6 s, concentrated in long English filler-heavy segments. Neither path is scored against labels, so the tail is a difference rather than an error, and it is the cost of the move."
+  },
+  "vibevoice": {
+    "verdict": "not_equivalent",
+    "fixture": {
+      "audio": "/Users/fredy/Documents/fred-projects/audio-processing-cli/model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio.wav",
+      "sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+      "duration_seconds": 149.9
+    },
+    "segment_counts": {
+      "mlx_8bit": 47,
+      "mlx_bf16": 47,
+      "torch_bf16": 49
+    },
+    "mlx_precisions_agree_on_text": true,
+    "segments_with_identical_text_vs_torch": 5,
+    "speaker_labels": {
+      "mlx": [
+        "0",
+        "1"
+      ],
+      "torch": [
+        "0",
+        "1"
+      ]
+    },
+    "coverage": {
+      "mlx_last_segment_end_s": 149.9,
+      "duration_s": 149.9,
+      "mlx_last_end_ratio": 1.0,
+      "note": "A last end far below the duration means the decode stopped early; that is the exit-4 case, not a quality result."
+    },
+    "generate_seconds": {
+      "mlx_8bit": 56.276,
+      "mlx_bf16": 275.139,
+      "torch_bf16": 79.66642491705716
+    },
+    "peak_memory_bytes": {
+      "mlx_8bit": 12432177476,
+      "mlx_bf16": 20744684200,
+      "torch_bf16_mps_current": 20840765952,
+      "note": "MLX and PyTorch MPS counters have different scopes. Each figure is comparable to others from the same counter and must not be differenced across them."
+    },
+    "differences_observed": [
+      "47 MLX segments against 49 torch segments on identical audio, with full coverage on both sides (last end == duration), so this is different segmentation rather than a truncated decode.",
+      "Orthography shifts to traditional forms in places: 大樹/係/邊/間 where torch emitted 大树/系/边/间.",
+      "At least one lexical difference: torch '蓝印车站' against MLX '男人車站'.",
+      "Non-speech event tags disagree on the same interval: torch '[Silence]' against MLX '[Human Sounds]'."
+    ],
+    "reading": "8-bit and bf16 MLX produce identical text on all 47 segments, so the divergence from torch is the implementation and not quantization. MLX 8-bit is the only attractive MLX configuration: 12.4 GB peak and 56 s where torch peaked at 20.8 GB and took 80 s, while MLX bf16 costs 20.7 GB and 275 s for the same text. That makes the memory case real — the spec's warning that 16 GiB is unvalidated is about the 20 GB torch path — but adopting MLX replaces every recorded VibeVoice figure, so it is a re-measurement decision rather than a lock change.",
+    "speaker_absence": "Both paths withhold a speaker on non-speech segments rather than inventing one: torch's post-processing emits speaker_id null, and mlx-audio omits the key entirely. The raw VibeVoice 'Speaker: \"N/A\"' the adapter floor names is visible before post-processing, in model_tests/vibevoice/VibeVoice/result_vibevoice_multispeaker.json."
+  },
+  "firered": {
+    "verdict": "blocked_no_mlx_punctuator",
+    "reading": "mlx-audio's fireredasr2 module is the AED only — Conformer encoder, transformer decoder, beam search — and mlx-audio ships no punctuation restoration model anywhere (every 'punc' hit in the package is TTS text normalization). mlx-community publishes FireRedASR2-AED-mlx and nothing for FireRedPunc, FireRedLID, or FireRedVAD. Punctuated text is a floor, not a capability, so a FireRed stack without FireRedPunc is not a conforming backend: its PyTorch environment survives. Moving only the AED would split one stack across two environments, which is worse than not moving it.",
+    "third_party_conversions_not_evaluated": [
+      "42ailab/FireRedPunc-ONNX",
+      "aufklarer/FireRedLID-887M-MLX-8bit",
+      "tardigrade-doc/FireRedVAD_onnx",
+      "illitan/FireRedVAD-CoreML"
+    ],
+    "note": "An ONNX FireRedPunc would run in `core`, which already carries onnxruntime for Silero VAD. It is recorded as an option, not a plan: none of these conversions has been run here, and their equivalence to the recorded FireRedPunc output is unmeasured."
+  },
+  "mlx_audio_inventory": {
+    "note": "Read from the provisioned mlx environment, for the record rather than as a plan. Nothing below is measured here.",
+    "stt_models_relevant": [
+      "qwen3_asr",
+      "qwen3_forced_aligner",
+      "fireredasr2",
+      "vibevoice_asr"
+    ],
+    "vad_models": [
+      "silero_vad",
+      "fsmn",
+      "smart_turn",
+      "sortformer"
+    ],
+    "lid_models": [
+      "ecapa_tdnn",
+      "wav2vec2"
+    ],
+    "worth_knowing": "sortformer is a diarization model, so the `swift` environment has an MLX candidate too. FluidAudio was chosen on measured evidence in model_tests/benchmark/DIARIZATION.md; replacing it would need the same comparison rerun, and none of it is done."
+  },
+  "raw_artifacts": [
+    {
+      "path": "model_tests/benchmark_runs/mlx_forced_aligner_probe.json",
+      "present": true,
+      "sha256": "2bb169c58dddd2356de38c5604910c88b27672b297e000c7fdcf24e45a596c2a",
+      "bytes": 36817
+    },
+    {
+      "path": "model_tests/benchmark_runs/mlx_vibevoice_probe_cantomap150s.json",
+      "present": true,
+      "sha256": "a2ad5ab0de212b3a199b1680f35207a5060075aa7ddbcd00ef6cba058d2ac58d",
+      "bytes": 11888
+    },
+    {
+      "path": "model_tests/benchmark_runs/mlx_vibevoice_probe_cantomap150s_bf16.json",
+      "present": true,
+      "sha256": "591e6aeaf14afb4d8f4e0e0471d58cffe78981a2e44a15f3d1875c6d4c49d27d",
+      "bytes": 11890
+    },
+    {
+      "path": "model_tests/benchmark_runs/vibe_mps_bf16_logitskeep_cantomap150s.json",
+      "present": true,
+      "sha256": "b266e689cafd42f6772f750dad20bfec2da658354db04d8a826f6275273eb387",
+      "bytes": 101115
+    }
+  ]
+}

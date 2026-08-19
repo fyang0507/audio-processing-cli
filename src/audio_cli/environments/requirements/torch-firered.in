@@ -1,0 +1,37 @@
+# Environment: torch-firered
+#
+# PyTorch for the `firered` stack alone. It is its own environment because FireRed pins
+# transformers exactly at 5.1.0, which no other package here can accept: mlx-audio 0.4.5
+# requires >=5.5.0,<5.13.0 and VibeVoice requires >=4.51.3,<5.0.0. The resolver's own
+# messages for all ten conflicting groupings are recorded in
+# model_tests/benchmark/results/2026-08-17-environment-partition.json.
+#
+# Serves the packages: firered-asr2s (which supplies the vad, lid, asr, and punctuator roles).
+#
+# Citation: model_tests/firered/FireRedASR2S/pyproject.toml on a clean checkout at 4e7d9aa,
+# which matches the as-built venv that produced every recorded FireRed figure.
+#
+# Do not lock from that checkout's requirements.txt. It pins torch==2.1.0+cu118 and
+# transformers==4.51.3 against a CUDA index, cannot be what ran on Apple Silicon, and
+# disagrees with both the pyproject and the installed environment. Upstream ships two
+# contradictory dependency files; only one of them describes the recorded runs.
+#
+# kaldi_native_fbank is here because fireredasr2s/fireredlid/data/feat.py:7 imports it and
+# **no** upstream dependency list declares it — pyproject.toml omits it entirely. Without it
+# the LID stage fails at import time on an otherwise correctly provisioned environment.
+# 1.22.3 is the as-built version.
+#
+# The FireRedASR2S package itself is not listed: it is a pinned source checkout installed
+# with --no-deps, so this file holds only its third-party dependencies.
+#
+# Python: 3.12.12, the as-built version.
+torch==2.10.0
+torchaudio==2.10.0
+transformers==5.1.0
+numpy==2.4.2
+cn2an==0.5.23
+kaldiio==2.18.1
+kaldi_native_fbank==1.22.3
+sentencepiece==0.2.1
+soundfile==0.13.1
+textgrid==1.6.1
