@@ -31,6 +31,12 @@ it lives. All three are read-only.
 are created and removed with the packages that need them. A `provisional` marker on one is a note
 about a possible future change, not a warning, and it changes nothing about any command.
 
+Read two fields there, not one. The `state` is the registry's own record — `ready` means this root
+provisioned the environment, not that anything in it can run — and `blocked_by_missing_tool` beside
+it is the usability half: a non-empty list names a tool the environment needs that is off `PATH`. An
+environment can honestly be `ready` with a blocked tool, because a stack pull provisions what needs
+no toolchain and reports what it skipped. `verify` is what turns the pair into one verdict.
+
 ## Translate a request into package ids
 
 Someone names a stack — `qwen-1.7b`, `qwen-0.6b`, `vibevoice`, or `firered` — and what they want
@@ -59,8 +65,10 @@ Three things to read off that table rather than guess:
 
 Selecting by stack deliberately over-provisions: it takes every package that stack *can* use,
 diarizer and aligner included. Prefer explicit ids when the request is narrow and the difference is
-gigabytes. Capability-based selection is reserved and does not narrow anything yet, so it cannot be
-used to trim a download today.
+gigabytes. Capability-based selection cannot trim a download today, and `pull` **refuses `--want`**
+with exit 2 rather than accepting a flag it would ignore. Pass a stack or a list of ids, never both:
+that is a conflict, also exit 2, because a stack is a guess about what might be needed and a list of
+ids is an instruction.
 
 ## Expect a pull to be long, and silent
 
@@ -74,11 +82,44 @@ it. Progress goes to stderr; stdout is a JSON receipt whose `pulled_known_bytes`
 *this* pull added, and whose `hub_revisions_pre_existing` names what was already cached and therefore
 not downloaded again.
 
+Re-running a finished `pull` is cheap and safe: anything already provisioned comes back under
+`skipped` and is not touched, so the receipt for a second run lists no packages and no bytes. Read
+`skipped` as "already there", never as "failed". Forcing the work anyway is `--repair PACKAGE`, and
+that is not something to reach for routinely — it re-downloads.
+
 Then confirm with `audio packages verify`. It exits **3** if any check fails and names a `fix` for
 each failure. Two different repairs exist and the failure tells you which: a package whose files
 changed or vanished is re-materialized with `pull --repair PACKAGE`, while a failure naming a runtime
 environment is re-synced with `verify --repair`. Read the `fix` from the payload instead of choosing
 from memory.
+
+Quote what a passing entry actually says. `digest: "ok"` means the bytes were hashed against a pin,
+and only the speech-activity model has one; the others report the `revision` they pinned, which says
+the pin is recorded and the weights are present, not that anything was hashed. Never summarize a
+`revision` entry as "digest verified".
+
+`verify` also states one verdict per provisioned environment, and `drifted` is the only one this
+command can repair:
+
+| Verdict | Means | Your move |
+| --- | --- | --- |
+| `ok` | every check that applies to it passed | continue |
+| `drifted` | its installed set no longer matches its lock | `verify --repair`; until then the drift sits in `failed` and the command exits 3 |
+| `blocked` | a tool it requires is off `PATH`, so nothing in it can run whatever the registry holds | report the missing tool; no `audio` command installs one |
+| `absent` | this root has not provisioned it | pull the packages that need it |
+
+`blocked` is the one to slow down on, because it does **not** fail the command: nothing provisioned
+is broken and there is no `fix` to name, so `verify` exits 0 while reporting an environment that can
+execute nothing. Reading the exit code alone there tells someone a capability is available on a
+machine that cannot run it. The pinned private-API guard is the same shape — its
+`mlx_audio_private_api_matches_expected` can come back `false`, or `null` where no verdict was
+reachable, with the command still exiting 0, and a `null` is not a pass.
+
+One package builds rather than downloads, and its build can fail late. A Swift product that compiles
+but will not launch is refused at exit **3** with `package_build_unusable`; the registry entry stays
+`pulling`, so `list` reports it not ready and nothing treats it as available. The `fix` is a
+`pull --repair` on that package. `product_runs: true` in the receipt is the only version of that
+package that counts — do not report a diarizer as provisioned without it.
 
 Expect `license_unreviewed` among a pull's warnings. It is non-blocking, and it means nobody has read
 the license the model card declares. Report it, and never describe a declared license as a cleared
@@ -110,6 +151,10 @@ Three readings that trip people up:
 go when their last package does, and the report names what was kept and why. Neither touches media or
 transcript output.
 
+`remove` is all-or-nothing across the names you give it: one that was never provisioned refuses the
+whole command with exit 2 and deletes nothing, so a typo costs a retry rather than gigabytes. Read
+`removed` for what actually went; it never names a package the command left alone.
+
 Because weights sit in that shared cache, teardown draws one line: a revision **this machine's root
 downloaded** is deleted, and a revision that was **already there** when it was pulled is retained,
 since it may belong to another tool or an earlier experiment. That is why a purge can legitimately
@@ -130,9 +175,15 @@ tool, or the provisioning root outlives the only thing that knows how to describ
 | Code | Meaning | What to do |
 | --- | --- | --- |
 | 0 | done | continue |
-| 2 | the request was wrong — an unknown package or stack, a package that was never provisioned | correct the name; the error usually carries an `allowed` list |
-| 3 | provisioning is incomplete or broken — a failed integrity check, a missing tool, a failed verify | run the `fix` the payload names, verbatim |
+| 2 | the request was wrong — an unknown package or stack, a package that was never provisioned, or an argument the command cannot honour (`--want`; `--stack` beside package ids) | run the `fix` the payload names; for a bad name the error usually carries an `allowed` list |
+| 3 | provisioning is incomplete or broken — a failed integrity check, a missing tool for a package named by id, a build whose product will not run, a drifted environment | run the `fix` the payload names, verbatim |
 
 An absent toolchain blocks only the packages that need it — `doctor` says so, those packages report
 `requires_tool`, and everything else still provisions. Report the blocked capability rather than
 substituting something else for it.
+
+That cuts two ways, deliberately. `pull --stack S` on a machine missing a toolchain exits **0**,
+provisions everything it can, and names what it could not in a `warnings` entry carrying
+`blocking: true` — so check `warnings` on a successful pull, not only the exit code. Naming that
+package on the command line instead exits **3**, because skipping something asked for by name would
+be worse than refusing it.

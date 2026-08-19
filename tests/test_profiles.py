@@ -13,7 +13,7 @@ def test_profiles_version_the_complete_fixed_order() -> None:
     assert PROFILES["product-demo"].source_balance_enabled is True
     assert PROFILES["transcription"].source_balance_enabled is False
     for profile in PROFILES.values():
-        assert profile.version == "3"
+        assert profile.version == "4"
         assert profile.speech_transition_placement == "outside"
         assert profile.as_dict()["processing_order"] == list(STAGE_ORDER)
 

@@ -156,6 +156,12 @@ def decode_audio(path: Path, *, sample_rate: int = 48_000) -> tuple[np.ndarray, 
     return samples.reshape((-1, channels)), sample_rate
 
 
+def _wav_duration_ms(path: Path) -> float:
+    """Duration of a wav this tool wrote, read through the header rather than the samples."""
+    rate, data = wavfile.read(path, mmap=True)
+    return len(data) / float(rate) * 1000.0
+
+
 def write_float_wav(path: Path, samples: np.ndarray, sample_rate: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     wavfile.write(path, sample_rate, np.asarray(samples, dtype=np.float32))
@@ -225,7 +231,21 @@ def render_loudness_normalized(
 ) -> dict[str, object]:
     required = ("input_i", "input_lra", "input_tp", "input_thresh")
     if any(not math.isfinite(measurement.get(key, math.nan)) for key in required):
-        raise MediaError("Cannot normalize silent or non-finite audio")
+        # Two different conditions, and reporting them as one sent anyone with a short clip
+        # looking for silence that was not there. A finite true peak is the evidence that the
+        # signal exists: integrated loudness is gated in 400 ms blocks (EBU R128), so anything
+        # shorter has no measurable value however loud it is, while true silence has no finite
+        # peak either.
+        peak = measurement.get("input_tp", math.nan)
+        if math.isfinite(peak):
+            raise MediaError(
+                f"Cannot normalize {_wav_duration_ms(source_wav):.0f} ms of audio: integrated "
+                f"loudness is measured over 400 ms gating blocks (EBU R128), so a shorter input "
+                f"has none however loud it is. This input peaks at {peak:.2f} dBTP, so it is not "
+                f"silent -- it is too short to measure. Enhance a longer excerpt, or skip "
+                f"program-loudness with --skip program-loudness."
+            )
+        raise MediaError("Cannot normalize silent audio: it has no measurable level or peak")
     gain_db = target_lufs - measurement["input_i"]
     limiter_amplitude = 10.0 ** (target_true_peak / 20.0)
     iterations: list[dict[str, float]] = []
@@ -402,13 +422,18 @@ def temporary_output_path(output: Path) -> Iterator[Path]:
 
 
 def atomic_write_json(path: Path, payload: dict[str, object]) -> None:
+    """Written through a sibling and renamed, so a report is never observed half-written.
+
+    Deliberately a plain `open` rather than `mkstemp`. `mkstemp` creates 0600 and `os.replace`
+    carries that mode onto the destination, so a report arrived stricter than the render it
+    describes -- 0600 beside an 0644 wav, under the same umask, for no reason a reader could act
+    on. Everything else this tool publishes honours the umask, including `save_registry`, which
+    reached the same conclusion by writing the same way.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, raw = tempfile.mkstemp(
-        prefix=f".{path.name}-", suffix=".tmp", dir=path.parent
-    )
-    temp = Path(raw)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with temp.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True, ensure_ascii=False)
             handle.write("\n")
         os.replace(temp, path)

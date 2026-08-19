@@ -1,6 +1,6 @@
 # Agent handoff
 
-Updated 2026-08-16. This repository currently has a production-oriented audio
+Updated 2026-08-18. This repository currently has a production-oriented audio
 enhancement CLI and a completed ASR research/distillation phase. The next phase
 is to turn the ASR decisions into a transcription CLI where the caller picks a
 stack and states requirements, plus its associated agent skill.
@@ -10,9 +10,50 @@ stack and states requirements, plus its associated agent skill.
 - `audio inspect` and `audio enhance` are implemented under `src/audio_cli/`.
   Their contract and usage are in [README.md](README.md); do not regress the
   deterministic, render-from-original enhancement flow.
+- `audio packages` and `audio doctor` are implemented, over the four provisioned
+  environments in [ENVIRONMENTS.md](ENVIRONMENTS.md). The suite runs on a `FakeToolchain` and
+  `FakeFetcher`, but the real paths are no longer unexercised: all four environments have been
+  built from their hash-pinned locks and `verify` reports each `ok` against its own, a forced
+  repair moved 1,101,647,163 measured bytes over the network for a 1,010,773,761-byte package,
+  the Swift product builds and launches, and the `mlx-audio` private-API guard matches its pin
+  with `signature_ok: true`. `torch-firered` resolves to transformers 5.1.0 and
+  `torch-vibevoice` to 4.57.6, so the partition is installed rather than inferred.
+- An audit of the CLI found **fifteen** defects and all fifteen are fixed on
+  `fix/cli-provisioning-bugs` — ten in provisioning, five in the enhancement engine and its
+  documents. The kinds of mistake worth remembering, because each survived review by looking
+  finished:
+  - **A claim nobody earned.** `pull` recorded `digest_verified: true` for every Hub package and
+    hashed none of them; the manifest carries no `sha256` for a Hub source, so there was nothing
+    to hash against. `verify` reported a check it never ran, and its honest `unverified` branch
+    was unreachable.
+  - **A flag that parses is not a flag that works.** `--repair` was declared, documented, and
+    named in four `fix` strings while being read by no code at all. A mutation scan then
+    neutralized all 20 flag branches and found six more the suite could not see.
+  - **A parameter that decided nothing.** `vad_min_silence_ms` declared 300 ms while a second
+    hard-coded merge required 540; two thresholds answering one question can only disagree.
+  - **A bound the media does not have.** A resampler rounding up let a speech region end after
+    the end of the file, which then made a treatment extension negative.
+  - **A recorded failure that changed no outcome.** A Swift build whose product could not launch
+    reported `product_runs: false` and exited 0 with an empty `warnings`.
+  `pull` is now idempotent, tolerates a toolchain-blocked package when a *stack* selected it,
+  refuses `--want` rather than ignoring it, and refuses a build whose product will not run.
+- Two things that sweep surfaced and did **not** settle, both about `verify`. A moved
+  `mlx-audio` private API is reported and never reaches `failed`, so `verify` exits 0 while
+  saying `mlx_audio_private_api_matches_expected: false` — the guard the recorded Qwen timings
+  depend on cannot fail the command. And a `blocked` environment is likewise exit 0, which is
+  deliberate and documented. Whether the first should join the second or become an exit-3 check
+  is a contract decision; there is no `audio` command that would fix it, so its `fix` would be a
+  sentence.
+- The suite's doubles are now held to one rule, learned twice: **a double must be able to
+  represent the state a repair produces.** `FakeToolchain` could not stop being drifted and
+  `FakeFetcher` would rewrite a snapshot unasked, and each made a repair test pass without the
+  repair running. A flag-mutation scan over every `repair`/`force`/`dry_run`/`allow_*` branch in
+  the command surfaces is the cheap way to find the rest; it found six unasserted branches on
+  first run, all now covered.
 - ASR research for [Issue #2](https://github.com/fyang0507/audio-processing-cli/issues/2)
-  is on branch `codex/asr-benchmark-field-guide` in
-  [draft PR #8](https://github.com/fyang0507/audio-processing-cli/pull/8).
+  landed on `main` in [#8](https://github.com/fyang0507/audio-processing-cli/pull/8), and the
+  `transcribe` specification plus the provisioning layer landed in
+  [#15](https://github.com/fyang0507/audio-processing-cli/pull/15).
 - The benchmark harness, manifests, compact results, and controlled research
   record live under `model_tests/`. Raw media, downloaded model weights, and
   local run directories are intentionally ignored.
@@ -254,7 +295,7 @@ and experiment digest rather than the full findings file.
 ## Working commands
 
 ```bash
-git switch codex/asr-benchmark-field-guide
+git switch main
 uv sync --extra dev
 uv run --extra dev pytest
 ```

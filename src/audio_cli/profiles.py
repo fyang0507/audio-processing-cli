@@ -67,7 +67,7 @@ class Profile:
 PROFILES: dict[str, Profile] = {
     "transcription": Profile(
         name="transcription",
-        version="3",
+        version="4",
         channel_balance_enabled=True,
         channel_no_op_db=1.5,
         channel_max_correction_db=6.0,
@@ -97,7 +97,7 @@ PROFILES: dict[str, Profile] = {
     ),
     "product-demo": Profile(
         name="product-demo",
-        version="3",
+        version="4",
         channel_balance_enabled=True,
         channel_no_op_db=1.5,
         channel_max_correction_db=6.0,

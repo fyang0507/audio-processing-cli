@@ -7,12 +7,19 @@ digest verification, and every payload shape the spec documents publish.
 
 The one thing a fake cannot check is whether the real `uv` and Hub calls work. Those are
 exercised by the provisioning probes in `model_tests/benchmark/` and recorded there.
+
+What a fake here *must* be able to represent is the state a repair produces. Both doubles below
+say so at the point where it matters, because both were wrong about it once: a double that always
+rewrites a snapshot, or that can never stop being drifted, turns a repair test green without the
+repair ever running.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -31,13 +38,26 @@ def isolated_root(tmp_path, monkeypatch):
 
 
 class FakeToolchain(pkg.Toolchain):
-    """Records what would have been run, and pretends it succeeded."""
+    """Records what would have been run, and pretends it succeeded.
 
-    def __init__(self, *, missing: tuple[str, ...] = (), drift: dict | None = None) -> None:
+    Drift is *clearable state*, which is the one thing this double has to get right. `uv pip
+    sync` is convergent — it makes an environment equal to its lock (ENVIRONMENTS.md) — so an
+    environment that has just been recreated cannot still be drifted. This applied `drift`
+    unconditionally and never cleared it, which made a repaired environment unrepresentable: the
+    only way to observe `ok` was to swap in a second toolchain, and a test doing that never
+    executes `verify`'s repair branch at all. Same standard as `FakeFetcher.hf_snapshot` below,
+    for the same reason: a double that cannot represent the state a repair produces makes a
+    broken repair pass.
+    """
+
+    def __init__(self, *, missing: tuple[str, ...] = (), drift: dict | None = None,
+                 private_api_hash: str | None = None) -> None:
         self.calls: list[list[str]] = []
         self.missing = set(missing)
-        self._drift = drift or {}
+        self._drift = dict(drift or {})
         self.created: list[str] = []
+        self._synced: set[str] = set()
+        self.private_api_hash = private_api_hash
 
     def which(self, tool: str) -> str | None:
         return None if tool in self.missing else f"/usr/bin/{tool}"
@@ -50,17 +70,30 @@ class FakeToolchain(pkg.Toolchain):
             stdout = ""
             stderr = ""
 
+        # Opt-in, because the default has to keep yielding *no* verdict: that is the path
+        # `mlx_audio_private_api_error` covers, and the exemption for it in
+        # tests/test_shipped_commands_match_the_document.py has to stay reachable. The only
+        # `-c` invocation in the tool is the private-API probe.
+        if self.private_api_hash is not None and list(args)[1:2] == ["-c"]:
+            guards = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}
+            Result.stdout = json.dumps({
+                "sha256": self.private_api_hash,
+                "params": sorted(guards["signature"]["required_parameters"]),
+            })
         return Result()
 
     def create_environment(self, environment, target: Path) -> None:
         self.created.append(environment.name)
         (target / "bin").mkdir(parents=True, exist_ok=True)
         (target / "bin" / "python").write_text("#!/bin/sh\n")
+        # Re-syncing from the lock is what removes drift, so this is where it goes.
+        self._synced.add(environment.name)
 
     def frozen_packages(self, environment_python: Path) -> dict[str, str]:
         name = environment_python.parent.parent.name
         installed = pkg._locked_versions(env.environments()[name])
-        installed.update(self._drift)
+        if name not in self._synced:
+            installed.update(self._drift)
         return installed
 
     def clone(self, repo: str, commit: str, target: Path) -> None:
@@ -82,12 +115,14 @@ class FakeToolchain(pkg.Toolchain):
         (checkout / ".build").mkdir(parents=True, exist_ok=True)
         (checkout / ".build" / "product").write_bytes(b"x" * 1024)
 
-    def swift_product_runs(self, checkout: Path) -> bool:
+    def swift_product_runs(self, checkout: Path, product: str) -> bool:
         return True
 
 
 class FakeFetcher(pkg.Fetcher):
     """Writes a plausible snapshot instead of downloading one."""
+
+    WEIGHTS = b"w" * 2048
 
     def __init__(self, tmp_path: Path, *, corrupt: bool = False,
                  already_cached: tuple[str, ...] = ()) -> None:
@@ -95,15 +130,27 @@ class FakeFetcher(pkg.Fetcher):
         self.corrupt = corrupt
         self.already_cached = set(already_cached)
         self.snapshots: list[tuple[str, str]] = []
+        self.forced: list[tuple[str, str]] = []
 
     def cached_revisions(self) -> set[str]:
         return set(self.already_cached)
 
-    def hf_snapshot(self, repo: str, revision: str) -> Path:
+    def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
+        """Faithful about the one behaviour `--repair` turns on.
+
+        `snapshot_download` returns a revision the cache already holds as it stands — corrupt or
+        not — and only `force_download` re-fetches its files. A fake that always rewrote them
+        would make a broken repair pass.
+        """
         self.snapshots.append((repo, revision))
+        if force:
+            self.forced.append((repo, revision))
         target = self.hub / repo.replace("/", "--") / revision
+        weights = target / "model.safetensors"
+        if weights.is_file() and not force:
+            return target
         target.mkdir(parents=True, exist_ok=True)
-        (target / "model.safetensors").write_bytes(b"w" * 2048)
+        weights.write_bytes(self.WEIGHTS)
         return target
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
@@ -179,7 +226,7 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
     """The failure mode this state machine exists for: exit 3 must still fire afterwards."""
 
     class ExplodingFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
             raise pkg.ProvisioningError("download_failed", "network went away")
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
@@ -202,11 +249,11 @@ def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
     calls = {"n": 0}
 
     class FlakyFetcher(FakeFetcher):
-        def hf_snapshot(self, repo: str, revision: str) -> Path:
+        def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise pkg.ProvisioningError("download_failed", "first attempt died")
-            return super().hf_snapshot(repo, revision)
+            return super().hf_snapshot(repo, revision, force=force)
 
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FlakyFetcher(tmp_path))
     with pytest.raises(pkg.ProvisioningError):
@@ -317,21 +364,37 @@ def test_verify_reports_a_reverted_patch(provisioner) -> None:
 
 
 def test_verify_reports_a_drifted_environment_and_repairs_it(tmp_path) -> None:
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
-    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    """One provisioner, drifted before and `ok` after, with evidence the repair path ran.
 
-    drifted = pkg.Provisioner(
-        toolchain=FakeToolchain(drift={"mlx": "0.31.0"}),
-        fetcher=FakeFetcher(tmp_path),
-    )
-    report = drifted.verify()
+    This used to assert the second half against a *different* toolchain, which reports `ok` with
+    or without the flag — so `repair=True` was decorative and `verify`'s `if drift and repair`
+    branch never executed. Note `"mlx"` here is the pip package whose lock pins 0.32.0, not the
+    environment that happens to share its name.
+    """
+    pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).pull(
+        pkg.select(["qwen3-asr-1.7b-8bit"]))
+
+    toolchain = FakeToolchain(drift={"mlx": "0.31.0"})
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+
+    report = provisioner.verify()
     assert report["environments"]["mlx"] == "drifted"
     assert report["failed"][0]["code"] == "environment_drifted"
     assert report["failed"][0]["examples"]["mlx"] == {"locked": "0.32.0", "installed": "0.31.0"}
     assert report["failed"][0]["fix"] == "audio packages verify --repair"
+    # Reported, not repaired: the flag is what re-syncs, so without it the state persists and a
+    # second look says the same thing rather than the report having consumed it.
+    assert toolchain.created == [], "verify without --repair re-synced an environment"
+    assert provisioner.verify()["environments"]["mlx"] == "drifted"
 
-    repaired = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
-    assert repaired.verify(repair=True)["environments"]["mlx"] == "ok"
+    repaired = provisioner.verify(repair=True)
+    assert repaired["environments"]["mlx"] == "ok"
+    assert repaired["failed"] == []
+    assert toolchain.created == ["mlx"], (
+        "the environment was never re-synced, so nothing repaired the drift"
+    )
+    # And it stayed repaired, which is what distinguishes a re-sync from a suppressed report.
+    assert provisioner.verify()["environments"]["mlx"] == "ok"
 
 
 def test_verify_reports_a_corrupted_single_file_artifact(tmp_path) -> None:
@@ -544,8 +607,8 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
     class InterruptedThenCachedFetcher(FakeFetcher):
         """Fails the first attempt, and afterwards reports the revision as cached."""
 
-        def hf_snapshot(self, repo: str, revision_: str) -> Path:
-            path = super().hf_snapshot(repo, revision_)
+        def hf_snapshot(self, repo: str, revision_: str, *, force: bool = False) -> Path:
+            path = super().hf_snapshot(repo, revision_, force=force)
             if not self.already_cached:
                 self.already_cached = {revision_}   # the partial snapshot is now visible
                 raise pkg.ProvisioningError("download_failed", "interrupted mid-download")
@@ -567,3 +630,689 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
     )
     assert materialized["hub_revisions_pre_existing"] == []
     assert provisioner.purge(dry_run=True)["would_remove"]["hub_revisions"] == [revision]
+
+
+# --------------------------------------------------------------------------------------
+# What `pull` and `verify` used to claim: a digest nobody took, a repair nobody wired, and
+# work nobody needed
+# --------------------------------------------------------------------------------------
+
+QWEN_REPO = "mlx-community/Qwen3-ASR-1.7B-8bit"
+QWEN_REVISION = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
+
+
+@pytest.fixture
+def the_fake_download_satisfies_the_pin(monkeypatch):
+    """Make the fake `url` download match its manifest pin, so a *passing* digest exists.
+
+    The real artifact is 2.3 MB and hash-pinned, and the fake writes ten bytes, so under a fake
+    fetcher the only reachable outcome for `silero-vad` is a failed digest. The claim under test
+    here is the passing one — `digest: "ok"` has to be earned by a package that has a hash, and
+    withheld from every package that does not.
+    """
+    catalog = dict(env.packages())
+    silero = catalog["silero-vad"]
+    catalog["silero-vad"] = replace(
+        silero,
+        source={**silero.source, "sha256": hashlib.sha256(b"onnx-bytes").hexdigest()},
+    )
+    monkeypatch.setattr(pkg, "packages", lambda: catalog)
+    return catalog
+
+
+def test_verify_earns_the_word_digest_instead_of_borrowing_it(
+    provisioner, the_fake_download_satisfies_the_pin
+) -> None:
+    """`digest: "ok"` used to mean "the path exists" for every package but one.
+
+    `_materialize` set `digest_verified: True` on both Hub kinds, where the manifest pins a
+    revision and carries no `sha256` to hash a snapshot against. So `verify` reported a digest
+    check it never ran, and its `"unverified"` branch was unreachable for everything this code
+    can pull. What a Hub package can honestly report is the revision.
+    """
+    provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit", "firered-asr2s"]))
+
+    for identifier in ("qwen3-asr-1.7b-8bit", "firered-asr2s"):
+        materialized = pkg.load_registry()["packages"][identifier]["materialized"]
+        assert "digest_verified" not in materialized, (
+            f"{identifier} recorded a digest claim; nothing hashed it"
+        )
+
+    report = provisioner.verify()
+    assert report["failed"] == []
+    entries = {entry["package"]: entry for entry in report["verified"]}
+
+    # Hashed against a manifest pin, which one package has.
+    assert entries["silero-vad"] == {"package": "silero-vad", "digest": "ok"}
+    # Revision pinned, contents not hashed — and told apart by which key is present.
+    assert entries["qwen3-asr-1.7b-8bit"] == {
+        "package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
+    assert set(entries["firered-asr2s"]["revisions"]) == set(FIRERED_REVISIONS)
+    assert "digest" not in entries["firered-asr2s"]
+
+    # And the earned claim is still a measurement: break the bytes and it goes away.
+    Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]).write_bytes(
+        b"tampered")
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+
+
+def test_a_stale_digest_claim_in_the_registry_is_not_republished(provisioner) -> None:
+    """A root provisioned before this fix carries the fabrication in `registry.json`.
+
+    `verify` reads the registry, so forwarding `digest_verified` would let the claim survive the
+    upgrade that removed it. The revision is what gets reported either way.
+    """
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    document = pkg.load_registry()
+    document["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["digest_verified"] = True
+    pkg.save_registry(document)
+
+    entry = next(item for item in provisioner.verify()["verified"]
+                 if item["package"] == "qwen3-asr-1.7b-8bit")
+    assert entry == {"package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
+
+
+def test_pull_skips_what_the_registry_already_calls_ready(provisioner) -> None:
+    """Measured before this fix: a second pull of a ready package re-did all of the work."""
+    first = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert first["skipped"] == []
+    assert provisioner.fetcher.snapshots == [(QWEN_REPO, QWEN_REVISION)]
+
+    second = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert second["pulled"] == []
+    assert second["skipped"] == ["qwen3-asr-1.7b-8bit"]
+    assert second["environments_created"] == []
+    # Nothing was added, so nothing is claimed to have been.
+    assert second["pulled_known_bytes"] == 0
+    assert "--repair" in second["skipped_reason"]
+    assert provisioner.fetcher.snapshots == [(QWEN_REPO, QWEN_REVISION)], (
+        "the second pull re-materialized a package that was already ready"
+    )
+
+
+def test_a_ready_package_is_never_reopened_as_pulling(provisioner, monkeypatch) -> None:
+    """The cost of a pointless re-pull is not the time. It is this.
+
+    `pull` writes `state: "pulling"` before any bytes move, which is what makes a crashed pull
+    read as absent. Re-running it over a healthy package therefore downgrades that package for as
+    long as the work takes, and an interrupt leaves it downgraded.
+    """
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+
+    states: list[str | None] = []
+    real_save = pkg.save_registry
+
+    def spy(document: dict) -> None:
+        states.append(document["packages"].get("qwen3-asr-1.7b-8bit", {}).get("state"))
+        real_save(document)
+
+    monkeypatch.setattr(pkg, "save_registry", spy)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert states == [], (
+        f"a no-op pull rewrote the registry, states {states}: a ready package must not be "
+        "reopened as `pulling`"
+    )
+
+
+def test_repair_re_downloads_a_hub_snapshot_a_re_pull_would_keep(tmp_path) -> None:
+    """`--repair` was declared, documented, named in four `fix` strings, and never read.
+
+    Wiring it to re-run `_materialize` is not enough by itself: `snapshot_download` returns a
+    revision the cache already holds as it stands, so without `force_download` a repair of a
+    corrupt snapshot reports success having moved no bytes.
+    """
+    fetcher = FakeFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    weights = Path(
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"]
+    ) / "model.safetensors"
+    weights.write_bytes(b"bit rot")
+
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    assert weights.read_bytes() == b"bit rot", "a plain re-pull is not a repair"
+    assert fetcher.forced == []
+
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]), repair=True)
+    assert fetcher.forced == [(QWEN_REPO, QWEN_REVISION)]
+    assert weights.read_bytes() == FakeFetcher.WEIGHTS
+
+
+def test_repair_replaces_a_checkout_rather_than_patching_what_is_there(provisioner) -> None:
+    """`verify`'s `patch_not_applied` fix names `pull --repair`, so it has to actually repair."""
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    patched = checkout / "vibevoice" / "modular" / "modeling_vibevoice_asr.py"
+    patched.write_text("original\n")
+    stray = checkout / "left-behind-by-a-half-finished-pull.txt"
+    stray.write_text("x")
+    assert [item["code"] for item in provisioner.verify()["failed"]] == ["patch_not_applied"]
+
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]), repair=True)
+    assert provisioner.verify()["failed"] == []
+    assert not stray.exists(), "the checkout was patched in place rather than replaced"
+
+
+def test_repair_discards_the_swift_checkout_before_rebuilding(provisioner) -> None:
+    """A rebuild in place trusts the tree whose state is what `--repair` was called about."""
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    checkout = paths.checkout_dir("swift", "fluidaudio")
+    stray = checkout / "half-applied.txt"
+    stray.write_text("x")
+
+    provisioner.pull(pkg.select(["fluidaudio"]), repair=True)
+    assert not stray.exists()
+    assert (checkout / ".build" / "product").is_file()
+
+
+def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> None:
+    """The one place `--repair` does nothing, and the reason it does not have to.
+
+    `url_file` re-hashes what is on disk against the manifest pin and downloads again unless it
+    matches, so a match is already the strongest re-materialization available. This runs the real
+    fetcher, not the fake, because the claim is about that code path: a matching file returns
+    without touching the network at all.
+    """
+    import urllib.request
+
+    target = paths.models_dir() / "already-correct.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"onnx-bytes")
+
+    def explode(*args, **kwargs):  # noqa: ANN002, ANN003 - a tripwire, never called
+        raise AssertionError("url_file went to the network for a file that matches its pin")
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = explode
+    try:
+        resolved = pkg.Fetcher().url_file(
+            "https://example.invalid/x.onnx", hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+    finally:
+        urllib.request.urlopen = original
+    assert resolved == target
+
+    # And it is a check, not a shortcut: a file that does not match is re-fetched.
+    target.write_bytes(b"corrupt")
+    with pytest.raises(AssertionError, match="went to the network"):
+        urllib.request.urlopen = explode
+        try:
+            pkg.Fetcher().url_file(
+                "https://example.invalid/x.onnx",
+                hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+        finally:
+            urllib.request.urlopen = original
+
+
+def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
+    """Measured before this fix: `pull --stack qwen-1.7b` with no `swift` left `ready` empty.
+
+    `select` sorts by package id, `fluidaudio` sorts first, and `pull` raised on it — so a machine
+    without a Swift toolchain got none of the ASR weights it could have had. §0 of
+    TRANSCRIBE_HAPPY_PATH.md promises the opposite.
+    """
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    receipt = provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
+
+    pulled = [entry["package"] for entry in receipt["pulled"]]
+    assert "qwen3-asr-1.7b-8bit" in pulled and "qwen3-forcedaligner" in pulled
+    assert "fluidaudio" not in pulled
+
+    blocked = next(item for item in receipt["warnings"]
+                   if item["code"] == "toolchain_missing")
+    assert blocked["blocking"] is True
+    assert blocked["packages"] == ["fluidaudio"]
+    assert blocked["requires_tool"] == ["swift"]
+    assert "qwen-1.7b" in blocked["detail"]
+
+    document = pkg.load_registry()
+    assert pkg.is_ready(document, "qwen3-asr-1.7b-8bit")
+    assert "fluidaudio" not in document["packages"], "a blocked package left a registry entry"
+    # A blocked package provisioned nothing, so it claims no license and no bytes.
+    licenses = next(item for item in receipt["warnings"]
+                    if item["code"] == "license_unreviewed")
+    assert "fluidaudio" not in licenses["packages"]
+    assert receipt["pulled_known_bytes"] > 0
+
+
+def test_naming_a_toolchain_blocked_package_is_still_exit_three(tmp_path) -> None:
+    """The asymmetry: a stack is a superset guess, a named package is an instruction.
+
+    Named *beside a package that did provision*, so this cannot pass by way of the
+    nothing-was-provisionable rule below — the refusal has to come from the naming.
+    """
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "fluidaudio"]))
+    assert caught.value.code == "toolchain_missing"
+    assert caught.value.exit_code == 3
+    assert caught.value.payload["package"] == "fluidaudio"
+    assert caught.value.payload["requires_tool"] == ["swift"]
+    # What it did provision before refusing stays provisioned, as after any interrupted pull.
+    assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
+
+    # Order does not soften it either: blocked first is the case that used to abort a stack.
+    with pytest.raises(pkg.ProvisioningError):
+        provisioner.pull(pkg.select(["fluidaudio", "qwen3-asr-0.6b-8bit"]))
+    assert "qwen3-asr-0.6b-8bit" not in pkg.load_registry()["packages"]
+
+    # And a stack in which nothing at all was provisionable is exit 3 too, because there is no
+    # partial success to report. No shipped stack is one package wide, so the selection is
+    # constructed rather than selected.
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["fluidaudio"]), stack="qwen-1.7b")
+    assert caught.value.exit_code == 3
+
+
+def test_teardown_never_deletes_a_sibling_of_the_models_directory(tmp_path) -> None:
+    """`str(models_dir) in path` is a substring test where a prefix test was meant.
+
+    Point the Hub cache at `<root>/models_hub` — one plausible `HF_HOME` — and every snapshot
+    under it tests positive, so `_locations` hands the shared cache to `_delete`. The revision
+    below was in the cache before this root wanted it, which is exactly the case teardown
+    promises to retain.
+    """
+    class HubBesideModels(FakeFetcher):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.hub = Path(str(paths.models_dir()) + "_hub")
+
+    fetcher = HubBesideModels(tmp_path, already_cached=(QWEN_REVISION,))
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "silero-vad"]))
+
+    snapshot = Path(
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+    artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
+    assert str(paths.models_dir()) in str(snapshot), "the fixture no longer sets the trap"
+
+    report = provisioner.remove(["qwen3-asr-1.7b-8bit", "silero-vad"])
+    assert report["hub_revisions_retained"] == [QWEN_REVISION]
+    assert snapshot.is_dir(), "teardown deleted a directory inside the shared Hugging Face cache"
+    # The true positive still holds, or the fix would be "delete nothing".
+    assert not artifact.exists(), "the artifact this root wrote under models/ was not reclaimed"
+
+
+def test_want_is_refused_rather_than_accepted_and_ignored(capsys) -> None:
+    """`--want` reached no code that could honour it. TRANSCRIBE_HAPPY_PATH.md §4.6 on why."""
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "want_not_implemented"
+    assert error["field"] == "--want"
+    assert error["provided"] == "diarization"
+    assert error["fix"] == "audio packages pull --stack qwen-1.7b"
+    assert pkg.load_registry()["packages"] == {}, "the refused command provisioned something"
+
+    # Without --stack it is still the older refusal, whose fix no longer suggests --want either.
+    assert main(["packages", "pull", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "stack_required"
+    assert "--want" not in error["fix"]
+
+
+def test_a_stack_beside_named_packages_is_a_conflict_not_a_precedence(capsys) -> None:
+    """`select` returned early on package ids and dropped `--stack` silently."""
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.select(["silero-vad"], stack="qwen-1.7b")
+    assert caught.value.code == "stack_conflicts_with_named_packages"
+    assert caught.value.exit_code == 2
+    assert caught.value.payload["stack"] == "qwen-1.7b"
+    assert caught.value.payload["packages"] == ["silero-vad"]
+    assert caught.value.payload["fix"] == "audio packages pull silero-vad"
+
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "silero-vad"]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == \
+        "stack_conflicts_with_named_packages"
+
+
+def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys) -> None:
+    """The wiring the flags were missing: `--repair` was parsed and read by nothing.
+
+    `--stack` has to reach `pull` as well, because it is what decides whether a toolchain-blocked
+    package is a warning or an exit 3.
+    """
+    seen: dict[str, object] = {}
+
+    class Recorder:
+        def pull(self, selection, *, repair: bool = False, stack: str | None = None) -> dict:
+            seen.update(packages=[package.id for package in selection], repair=repair,
+                        stack=stack)
+            return {"pulled": [], "skipped": [], "warnings": []}
+
+    monkeypatch.setattr("audio_cli.cli.Provisioner", Recorder)
+
+    assert main(["packages", "pull", "--repair", "silero-vad"]) == 0
+    capsys.readouterr()
+    assert seen == {"packages": ["silero-vad"], "repair": True, "stack": None}
+
+    assert main(["packages", "pull", "--stack", "firered"]) == 0
+    capsys.readouterr()
+    assert seen["stack"] == "firered"
+    assert seen["repair"] is False
+    assert seen["packages"] == ["firered-asr2s", "fluidaudio", "speaker-diarization-coreml"]
+
+
+def test_verify_does_not_call_an_environment_ok_when_its_toolchain_is_absent(
+    tmp_path, the_fake_download_satisfies_the_pin
+) -> None:
+    """A state that only became reachable once a stack pull stopped aborting on a blocked package.
+
+    `speaker-diarization-coreml` needs no toolchain of its own, so it lands in `swift` and marks
+    that environment `ready` while `fluidaudio` stays blocked. Nothing in it can run: this tool
+    launches the built product through `swift run`. A caller dispatching on `swift: "ok"` would
+    conclude diarization is available on a machine that cannot do it.
+    """
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
+    assert pkg.load_registry()["environments"]["swift"]["state"] == "ready", (
+        "the fixture no longer reaches the state under test"
+    )
+
+    report = provisioner.verify()
+    assert report["environments"]["swift"] == "blocked"
+    assert report["environments"]["mlx"] == "ok"
+    # Exit 0, deliberately: `verify` exits 3 on `failed`, and this is not a broken check. The
+    # missing package is one `list` reports as absent, and no `audio` command installs Swift.
+    assert report["failed"] == []
+
+    # And it is a claim about the toolchain, not about the root: the same registry verifies `ok`
+    # once `swift` is back, with nothing re-pulled.
+    restored = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
+    assert restored.verify()["environments"]["swift"] == "ok"
+
+
+def test_a_blocked_environment_outranks_the_checks_it_would_prevent(tmp_path) -> None:
+    """`blocked` replaces a verdict, and only a verdict.
+
+    An environment nobody has provisioned stays `absent` — that is not a claim of usability and
+    it is what `pull` acts on. The word replaces `ok` and `drifted`, which are statements about
+    checks that passed or failed, and it outranks them because a repair that needs the missing
+    tool is not a repair a caller can run.
+    """
+    absent_root = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    assert absent_root.verify()["environments"]["swift"] == "absent"
+
+    absent_root.pull(pkg.select(["speaker-diarization-coreml"]))
+    assert absent_root.verify()["environments"]["swift"] == "blocked"
+
+
+def test_vocabulary_names_every_environment_state_verify_can_emit() -> None:
+    """VOCABULARY.md is the naming contract, so a new enum member cannot land unregistered.
+
+    Derived from the source rather than listed by hand: a member added to `verify` without a
+    line in the contract fails the first assertion, and one added to both without the backticked
+    spelling fails the second.
+    """
+    import re
+
+    emitted = set(re.findall(r'environment_states\[name\] = "(\w+)"',
+                             Path(pkg.__file__).read_text()))
+    assert emitted == {"absent", "ok", "drifted", "blocked"}, (
+        f"verify emits environment states {sorted(emitted)}; register the new one in "
+        "VOCABULARY.md and add it here"
+    )
+    vocabulary = (Path(__file__).resolve().parents[1] / "VOCABULARY.md").read_text()
+    for state in sorted(emitted):
+        assert f"`{state}`" in vocabulary, f"VOCABULARY.md does not name the {state!r} state"
+
+
+def test_remove_validates_every_name_before_deleting_anything(provisioner) -> None:
+    """One fat-fingered name used to cost a good package's bytes.
+
+    The assertions that matter are on the filesystem. The registry is the half that looked
+    correct — it rolled back with the raise, which is precisely how this hid: `is_ready` alone
+    reports `True` both before and after the fix, and the bytes are gone in only one of them.
+    """
+    provisioner.pull(pkg.select(["silero-vad", "vibevoice-asr-7b"]))
+    document = pkg.load_registry()
+    artifact = Path(document["packages"]["silero-vad"]["materialized"]["path"])
+    snapshot = Path(document["packages"]["vibevoice-asr-7b"]["materialized"]["path"])
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    assert artifact.is_file() and snapshot.is_dir() and checkout.is_dir()
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.remove(["silero-vad", "vibevoice-asr-7b", "not-a-package"])
+    assert caught.value.code == "package_not_provisioned"
+    assert caught.value.exit_code == 2
+
+    # All three kinds of location a package can hold, none of them touched.
+    assert artifact.is_file(), "a pinned artifact was deleted before the list was validated"
+    assert checkout.is_dir(), "a source checkout was deleted before the list was validated"
+    assert snapshot.is_dir(), "a Hub revision was deleted before the list was validated"
+    assert pkg.is_ready(pkg.load_registry(), "silero-vad")
+    assert pkg.is_ready(pkg.load_registry(), "vibevoice-asr-7b")
+
+    # And the refusal is not a disabled teardown: the same names without the typo still work.
+    provisioner.remove(["silero-vad", "vibevoice-asr-7b"])
+    assert not artifact.exists() and not checkout.exists() and not snapshot.exists()
+    assert pkg.load_registry()["packages"] == {}
+
+
+def test_remove_names_only_what_it_removed(provisioner) -> None:
+    """`removed` is accumulated inside the loop, so it must not be able to name a survivor."""
+    provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit"]))
+
+    with pytest.raises(pkg.ProvisioningError):
+        provisioner.remove(["qwen3-asr-1.7b-8bit", "not-a-package"])
+    assert sorted(pkg.load_registry()["packages"]) == ["qwen3-asr-1.7b-8bit", "silero-vad"]
+
+    # A name given twice is removed once and reported once, rather than raising on the second
+    # pass over an entry the first pass already dropped.
+    report = provisioner.remove(["silero-vad", "silero-vad"])
+    assert report["removed"] == ["silero-vad"]
+    assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
+
+
+def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(tmp_path) -> None:
+    """The narrower half of the same defect, and the reason each entry is saved as it goes.
+
+    A shared Hub cache can fail or vanish mid-teardown. With one write at the end, that failure
+    rolled back the registry after every local file had already been deleted — every package
+    named still `ready`, nothing behind any of them. This is the only way to reach that window
+    now that unknown names are refused up front, so it is worth an injected failure.
+    """
+    class HostileCache(FakeFetcher):
+        def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
+            raise OSError("the shared cache went away mid-teardown")
+
+    for teardown in ("remove", "purge"):
+        provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
+                                      fetcher=HostileCache(tmp_path / teardown))
+        provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit"]))
+        artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
+
+        with pytest.raises(OSError):
+            if teardown == "remove":
+                provisioner.remove(["silero-vad", "qwen3-asr-1.7b-8bit"])
+            else:
+                provisioner.purge(dry_run=False)
+
+        assert not artifact.exists(), f"{teardown} did not delete the local artifact"
+        assert pkg.load_registry()["packages"] == {}, (
+            f"{teardown} left a package reading as ready with its bytes already deleted"
+        )
+
+
+def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_path) -> None:
+    """The guard's *passing* verdict was unreachable: every test only ever observed `None`.
+
+    A fake interpreter that never answers exercises the no-verdict path and nothing else, so a
+    regression that stopped comparing — or compared against the wrong value — would have looked
+    exactly like a clean run. §1.3 publishes `matches_expected: true`, so something has to be able
+    to produce it. Found while scanning for the vacuous-flag shape; it is the same family.
+    """
+    expected = {guard["kind"]: guard
+                for guard in env.environments()["mlx"].guards}["source_hash"]["sha256"]
+
+    answering = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash=expected),
+                                fetcher=FakeFetcher(tmp_path))
+    answering.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    report = answering.verify()
+    assert report["mlx_audio_private_api_source_hash"] == expected
+    assert report["mlx_audio_private_api_matches_expected"] is True
+    assert report["mlx_audio_private_api_signature_ok"] is True
+    assert "mlx_audio_private_api_error" not in report
+
+    # And it is a comparison rather than an echo: a source file that moved fails it, with both
+    # values published so a reader can see why.
+    moved = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash="0" * 64),
+                            fetcher=FakeFetcher(tmp_path))
+    report = moved.verify()
+    assert report["mlx_audio_private_api_source_hash"] == "0" * 64
+    assert report["mlx_audio_private_api_matches_expected"] is False
+    assert report["mlx_audio_private_api_expected_source_hash"] == expected
+    # Stated, not fixed: a moved private API is reported and does not reach `failed`, so `verify`
+    # still exits 0. Whether it should is a contract decision, recorded in HANDOFF.md.
+    assert report["failed"] == []
+
+
+def test_repair_forces_every_repository_of_a_multi_repo_package(tmp_path) -> None:
+    """A repair that forced only the first of four repositories would leave the rot in place.
+
+    The single-repo test cannot see this: `huggingface` and `huggingface_multi` pass `force`
+    through separate code, and a mutation scan showed nothing asserted the second one.
+    """
+    fetcher = FakeFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["firered-asr2s"]))
+    snapshots = pkg.load_registry()["packages"]["firered-asr2s"]["materialized"]["paths"]
+    weights = [Path(location) / "model.safetensors" for location in snapshots.values()]
+    assert len(weights) == 4
+    for artifact in weights:
+        artifact.write_bytes(b"bit rot")
+
+    provisioner.pull(pkg.select(["firered-asr2s"]), repair=True)
+    assert {revision for _, revision in fetcher.forced} == set(FIRERED_REVISIONS)
+    assert all(artifact.read_bytes() == FakeFetcher.WEIGHTS for artifact in weights), (
+        "a repair left at least one of the four repositories unfetched"
+    )
+
+
+def test_the_cli_hands_repair_and_dry_run_to_verify_and_purge(monkeypatch, capsys) -> None:
+    """The rest of the flag wiring, for the same reason `--repair` on `pull` needed it.
+
+    `--dry-run` is the one where a dropped argument is destructive: a caller asking what a purge
+    would reclaim would have it reclaimed.
+    """
+    seen: dict[str, object] = {}
+
+    class Recorder:
+        def verify(self, *, repair: bool = False) -> dict:
+            seen["verify_repair"] = repair
+            return {"verified": [], "environments": {}, "failed": []}
+
+        def purge(self, *, dry_run: bool) -> dict:
+            seen["purge_dry_run"] = dry_run
+            return {"removed": {}}
+
+    monkeypatch.setattr("audio_cli.cli.Provisioner", Recorder)
+    for argv, key, expected in (
+        (["packages", "verify"], "verify_repair", False),
+        (["packages", "verify", "--repair"], "verify_repair", True),
+        (["packages", "purge"], "purge_dry_run", False),
+        (["packages", "purge", "--dry-run"], "purge_dry_run", True),
+    ):
+        assert main(argv) == 0
+        capsys.readouterr()
+        assert seen[key] is expected, f"{' '.join(argv)} reached the provisioner as {seen[key]!r}"
+
+
+def test_every_built_package_pins_the_product_it_has_to_launch() -> None:
+    """The defect this catches: the executable's name living in a runner instead of the manifest.
+
+    `swift_product_runs` ran `swift run ... fluidaudio` while Package.swift at the pinned commit
+    declares `.executable(name: "fluidaudiocli")`, so the check answered "no executable product
+    named 'fluidaudio'" on a perfectly good build and could never return True. Pinning the name
+    beside the commit makes it reviewable when the commit moves.
+    """
+    built = {identifier: package for identifier, package in env.packages().items()
+             if package.source["type"] == "git+build"}
+    assert built, "no git+build package, so this invariant has nothing to hold"
+    for identifier, package in built.items():
+        assert package.source.get("product"), (
+            f"{identifier} is built from source but names no product to launch"
+        )
+
+
+def test_the_pinned_product_name_is_the_one_launched(tmp_path) -> None:
+    """A pinned name that the runner ignores would be decoration."""
+    launched: list[str] = []
+
+    class Recording(FakeToolchain):
+        def swift_product_runs(self, checkout: Path, product: str) -> bool:
+            launched.append(product)
+            return True
+
+    provisioner = pkg.Provisioner(toolchain=Recording(), fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    assert launched == [env.packages()["fluidaudio"].source["product"]]
+
+
+def test_a_build_whose_product_cannot_run_is_not_a_provisioned_package(tmp_path) -> None:
+    """The defect this catches: `product_runs: false` recorded and then ignored.
+
+    `pull` returned exit 0 with an empty `warnings`, `verify` reported `failed: []`, and the
+    environment read `ok`, while the one thing the package exists for was impossible.
+    """
+    class Broken(FakeToolchain):
+        def swift_product_runs(self, checkout: Path, product: str) -> bool:
+            return False
+
+    provisioner = pkg.Provisioner(toolchain=Broken(), fetcher=FakeFetcher(tmp_path))
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["fluidaudio"]))
+    assert caught.value.code == "package_build_unusable"
+    assert caught.value.exit_code == 3
+    assert caught.value.payload["product"] == "fluidaudiocli"
+    assert caught.value.payload["fix"] == "audio packages pull --repair fluidaudio"
+    # Fails closed: the entry never reaches `ready`, so `list` and `run` both call it absent.
+    assert not pkg.is_ready(pkg.load_registry(), "fluidaudio")
+
+
+def test_verify_fails_a_registry_that_recorded_an_unusable_build(tmp_path) -> None:
+    """Reachable from a registry written before `pull` started refusing this."""
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+
+    document = pkg.load_registry()
+    document["packages"]["fluidaudio"]["materialized"]["product_runs"] = False
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    failure = [entry for entry in report["failed"] if entry["package"] == "fluidaudio"]
+    assert failure, "verify passed a package whose product does not run"
+    assert failure[0]["code"] == "package_build_unusable"
+    assert failure[0]["fix"] == "audio packages pull --repair fluidaudio"
+    assert not [v for v in report["verified"] if v["package"] == "fluidaudio"], (
+        "the same package was both verified and failed"
+    )
+
+
+def test_the_real_toolchain_launches_the_product_it_was_given(tmp_path) -> None:
+    """The assertion that would have caught the original defect, and the one above does not.
+
+    A double that replaces `swift_product_runs` only proves `_materialize` passes the pinned name;
+    the bug was inside the method, which ignored its surroundings and ran a literal. So this
+    exercises the real body and overrides `run` alone.
+    """
+    commands: list[list[str]] = []
+
+    class RecordingRun(pkg.Toolchain):
+        def run(self, args, *, cwd=None, timeout=3600):
+            commands.append(list(args))
+
+            class Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return Result()
+
+    assert RecordingRun().swift_product_runs(tmp_path, "fluidaudiocli") is True
+    assert commands == [["swift", "run", "-c", "release", "fluidaudiocli", "--help"]], (
+        f"the product argument did not reach the command: {commands}"
+    )

@@ -496,10 +496,46 @@ Rules:
   whether tracked patches are applied, and that the Swift product runs.
 
 Lifecycle: `audio packages list | pull | verify | remove | purge | path`. `pull`
-accepts package ids, or the same `--stack` and `--want` arguments `transcribe`
-takes so the provisioning set comes from the plan rather than from memorized ids.
-`path` prints the resolved root and per-package locations so a session with no
-provisioning history can still locate everything.
+accepts package ids **or** `--stack`, never both, and it does not accept `--want`:
+narrowing a stack to the capabilities a plan actually uses belongs to the planner
+(#12), so until that exists a stack provisions every package it can use and the flag
+is refused rather than accepted and ignored. `path` prints the resolved root and
+per-package locations so a session with no provisioning history can still locate
+everything.
+
+### States, and which command publishes which
+
+Two enumerations, and they are not the same enumeration. Conflating them is what let an
+unusable environment read as a working one.
+
+**Registry state**, recorded in `registry.json` and republished verbatim by `doctor`,
+`packages list`, and `packages path`. A package is `pulling` then `ready`; an environment is
+`creating` then `ready`; either is **absent** by having no entry at all. Intent is written
+before any bytes move, so a crashed `pull` is nameable, and anything not `ready` counts as
+absent to a run and as reclaimable to `purge`.
+
+**Verify verdict**, published only by `packages verify`, one per provisioned environment:
+
+| Verdict | Means |
+| --- | --- |
+| `ok` | every check that applies to this environment passed. |
+| `drifted` | its installed set differs from its lock. Repairable: `verify --repair` re-syncs it. |
+| `blocked` | a tool in its `requires_tool` is not on `PATH`, so nothing in it can run whatever the registry holds. Not repairable by this tool — installing a toolchain is not something `audio` does. |
+| `absent` | this root has not provisioned it. |
+
+`blocked` exists because the two enumerations answer different questions and only the second
+one is a claim about usability. A stack pull provisions the packages that need no toolchain and
+reports the blocked one, so `swift` can legitimately be `ready` in the registry while holding
+nothing that can execute — `doctor` says so by publishing `blocked_by_missing_tool` beside the
+state, and a bare `ok` from `verify` cannot. The word is the one this tool already uses for the
+condition, in `doctor`'s `blocked_by_missing_tool` and in a pull warning's `blocking: true`; it
+is not a new concept, only a missing spelling.
+
+A registry-state field is **not** restated as `blocked`. It reports what the registry holds,
+which is a different and still-useful fact, and three commands publish it — rewriting one of
+them would leave the other two disagreeing while nothing published the registry's own field.
+Which tool is missing is static per environment (`requires_tool` is manifest data), so `verify`
+keeps a flat enum a caller can switch on rather than an object restating it.
 
 ## Retired and reserved words
 

@@ -87,22 +87,58 @@ audio doctor
 
 ```json
 {
-  "tool": {"name": "audio-processing-cli", "version": "0.4.0",
+  "tool": {"version": "0.1.0", "python": "3.12.12",
            "path": "/Users/you/.local/bin/audio"},
-  "platform": {"os": "macOS 26.5.2", "arch": "arm64", "hw_model": "Mac16,5"},
-  "external_tools": {"ffmpeg": "8.0", "ffprobe": "8.0", "uv": "0.9.7", "swift": "6.2"},
-  "memory": {"physical_bytes": 68719476736, "available_bytes": 41234567168},
-  "disk": {"root": "/Users/you/Library/Caches/audio-processing-cli",
-           "available_bytes": 402653184000},
-  "environments": {"core": "ready", "mlx": "absent", "torch-firered": "absent",
-                   "torch-vibevoice": "absent", "swift": "absent"},
-  "packages": {"provisioned": [], "count": 0},
-  "warnings": []
+  "platform": {"system": "Darwin", "release": "25.5.0", "machine": "arm64"},
+  "tools": {
+    "ffmpeg": {"path": "/opt/homebrew/bin/ffmpeg", "present": true},
+    "ffprobe": {"path": "/opt/homebrew/bin/ffprobe", "present": true},
+    "git": {"path": "/opt/homebrew/bin/git", "present": true},
+    "huggingface_hub": {"path": null, "present": true},
+    "swift": {"path": "/usr/bin/swift", "present": true},
+    "uv": {"path": "/Users/you/.local/bin/uv", "present": true}
+  },
+  "memory": {"total_bytes": 68719476736, "available_bytes": 30585126912,
+             "note": "Host-wide counters; not process-attributable and not summable with per-stage peaks."},
+  "disk": {"total_bytes": 994662584320, "free_bytes": 107730939904},
+  "root": "/Users/you/Library/Caches/audio-processing-cli",
+  "root_exists": true,
+  "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
+  "environments": {
+    "mlx": {"state": "absent", "python": "3.13.9", "requires_tool": [],
+            "provisional": false, "blocked_by_missing_tool": []},
+    "swift": {"state": "absent", "python": null, "requires_tool": ["swift"],
+              "provisional": false, "blocked_by_missing_tool": []},
+    "torch-firered": {"state": "absent", "python": "3.12.12", "requires_tool": [],
+                      "provisional": false, "blocked_by_missing_tool": []},
+    "torch-vibevoice": {"state": "absent", "python": "3.12.12", "requires_tool": [],
+                        "provisional": true, "blocked_by_missing_tool": []}
+  },
+  "packages": {
+    "firered-asr2s": "absent", "fluidaudio": "absent",
+    "qwen3-asr-0.6b-8bit": "absent", "qwen3-asr-1.7b-8bit": "absent",
+    "qwen3-forcedaligner": "absent", "silero-vad": "absent",
+    "speaker-diarization-coreml": "absent", "vibevoice-asr-7b": "absent"
+  },
+  "note": "An absent swift blocks only the packages that need it; it is reported rather than fatal."
 }
 ```
 
-Exit 0. `swift` present here; absent it would be reported and non-fatal, blocking only
-the packages that need it.
+Exit 0, and unlike every other block in this document this one is **real output**, not a mock —
+`doctor` is implemented, so its shape is checked against a live run by
+`tests/test_shipped_commands_match_the_document.py` rather than maintained by eye — as are the
+`packages list` block in §5 and the `packages verify` block in §1.3, the other two commands that
+ship. Values remain illustrative: paths, versions, and the memory and disk counters are this
+machine's.
+
+`swift` is present here. Absent, it would report `present: false` and appear in the
+`blocked_by_missing_tool` list of the `swift` environment — reported rather than fatal, blocking
+only the packages that need it. That per-environment list is why there is no top-level
+`warnings` array: a blocked environment says so where a caller is already looking.
+
+`environments` reports the four *provisioned* environments and not `core`, which is the CLI's own
+and always present. `packages` is a state per package rather than a count, because a caller
+deciding whether to `pull` needs to know *which* are absent, not how many.
 
 ## 1. Fast long-form transcription — interview
 
@@ -269,33 +305,44 @@ segments carry no `start`/`end` — in the sample above or in the real result be
 ### 1.3 Provision
 
 ```bash
-audio packages pull --stack qwen-1.7b \
-  --want diarization,word_timestamps
+audio packages pull --stack qwen-1.7b
 ```
+
+`pull` takes a stack or a list of package ids, and no `--want`: narrowing a stack to the
+capabilities actually requested is the planner's job, so passing it is refused rather than
+ignored — see the two refusals at the end of this section. A stack therefore provisions every
+package it can use, `silero-vad` included.
 
 Progress goes to stderr; stdout is the receipt:
 
 ```json
 {
   "pulled": [
+    {"package": "fluidaudio", "environment": "swift",
+     "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
+     "bytes": 471203840, "built": true, "product_runs": true},
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx",
      "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
-     "bytes": 2463307541, "digest_verified": true},
-    {"package": "fluidaudio", "environment": "swift", "version": "0.15.5",
-     "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
-     "built": true, "product_runs": true},
-    {"package": "speaker-diarization-coreml", "environment": "swift",
-     "bytes": 84279296, "digest_verified": true, "license": "CC-BY-4.0"},
+     "bytes": 2467859030},
     {"package": "qwen3-forcedaligner", "environment": "mlx",
-     "bytes": 1932735283, "digest_verified": true}
+     "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
+     "bytes": 1276475979},
+    {"package": "silero-vad", "environment": "core",
+     "bytes": 2327524, "digest_verified": true},
+    {"package": "speaker-diarization-coreml", "environment": "swift",
+     "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+     "bytes": 129243647}
   ],
+  "skipped": [],
   "environments_created": ["mlx", "swift"],
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
-  "pulled_known_bytes": 4480322120,
+  "pulled_known_bytes": 4347110020,
+  "unsized_packages": [],
   "warnings": [
     {"code": "license_unreviewed", "blocking": false,
-     "detail": "qwen3-asr-1.7b-8bit and qwen3-forcedaligner report license: \"unreviewed\"; only the FluidAudio SDK (Apache-2.0) and speaker-diarization-coreml (CC-BY-4.0) are recorded"}
+     "packages": ["qwen3-asr-1.7b-8bit", "qwen3-forcedaligner"],
+     "detail": "qwen3-asr-1.7b-8bit, qwen3-forcedaligner report a license their model card declares but nobody has reviewed. A declared license is evidence that one exists, not a redistribution clearance."}
   ]
 }
 ```
@@ -305,9 +352,42 @@ Exit 0. `pulled_known_bytes` covers the packages in *this* pull and nothing else
 down on a second, smaller pull. `audio packages list` reports the cumulative
 `total_known_bytes`.
 
+`digest_verified` appears on exactly one entry, and that is the point of it. `silero-vad` is
+pinned by content hash, so materializing it hashes the file against the manifest. The Hub packages
+are pinned by `revision`; there is no hash in the manifest to compare a snapshot against, so they
+report the revision they materialized and claim no digest. Every Hub entry used to carry
+`digest_verified: true` for a check no code performed.
+
+Run the same line twice and the second run does nothing: a package the registry already calls
+`ready` is listed under `skipped`, contributes no bytes, and is not touched — in particular it is
+not reopened as `pulling`, which an interrupt would leave behind as a downgraded install.
+`pull --repair <package>` is how a caller asks for the work anyway; it re-materializes rather than
+trusting what is on disk, which for a Hub snapshot means re-downloading it and for a checkout means
+discarding and re-cloning it.
+
 A package whose revision the shared Hugging Face cache already holds is not downloaded again. It
 reports `hub_revisions_pre_existing` in place of a fetch, and teardown will not delete it: see
 §5.
+
+On a machine with no Swift toolchain this same command exits 0 having provisioned everything else,
+and reports what it could not:
+
+```json
+{
+  "warnings": [
+    {"code": "toolchain_missing", "blocking": true,
+     "packages": ["fluidaudio"], "requires_tool": ["swift"],
+     "detail": "fluidaudio needs swift, which is not on PATH, so it was not provisioned; the rest of stack qwen-1.7b was. Install the toolchain and pull it by name."}
+  ]
+}
+```
+
+That is a `warnings` entry, not an error payload, which is what §0's promise about an absent
+`swift` — "reported rather than fatal, blocking only the packages that need it" — actually
+requires. `blocking: true` distinguishes it from `license_unreviewed`: something a caller asked
+for is absent. Exit 3 is reserved for two cases: a stack where *nothing* was provisionable, and a
+package named explicitly. Naming `fluidaudio` on the command line is an instruction, and skipping
+an instruction quietly is worse than refusing it.
 
 ```bash
 audio packages verify
@@ -316,19 +396,91 @@ audio packages verify
 ```json
 {
   "verified": [
-    {"package": "qwen3-asr-1.7b-8bit", "digest": "ok"},
     {"package": "fluidaudio", "product_runs": true, "patches_applied": []},
-    {"package": "speaker-diarization-coreml", "digest": "ok"},
-    {"package": "qwen3-forcedaligner", "digest": "ok"}
+    {"package": "qwen3-asr-1.7b-8bit", "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"},
+    {"package": "qwen3-forcedaligner", "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15"},
+    {"package": "silero-vad", "digest": "ok"},
+    {"package": "speaker-diarization-coreml", "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594"}
   ],
-  "environments": {"mlx": "ok", "swift": "ok"},
+  "environments": {"mlx": "ok", "swift": "ok", "torch-firered": "absent",
+                   "torch-vibevoice": "absent"},
+  "mlx_audio_private_api_target": "mlx_audio/stt/models/qwen3_asr/qwen3_asr.py",
+  "mlx_audio_private_api_expected_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_matches_expected": true,
+  "mlx_audio_private_api_signature_ok": true,
   "failed": []
 }
 ```
 
-Exit 0.
+Exit 0. On the Swift-less machine above, the same command instead reports:
+
+```json
+{
+  "environments": {"mlx": "ok", "swift": "blocked", "torch-firered": "absent",
+                   "torch-vibevoice": "absent"}
+}
+```
+
+`blocked` rather than `ok`, and still exit 0. `speaker-diarization-coreml` needs no toolchain of
+its own, so it provisioned and left the `swift` environment `ready` in the registry — while
+nothing in that environment can run, because the built product is launched through `swift run`.
+`ok` there would tell a caller diarization is available on a machine that cannot do it. It is not
+a `failed` entry either: nothing provisioned is broken, the gap is a package `list` already
+reports as absent, and no `audio` command installs a toolchain for a `fix` to name. The registry
+state stays `ready` in `doctor` and `list`, which report what the registry holds and publish
+`blocked_by_missing_tool` beside it; only `verify` states a verdict, so only `verify` needed the
+fourth word. VOCABULARY.md has the two enumerations.
+
+Which key an entry carries *is* the claim, and the two are not the same claim. `digest: "ok"`
+means the bytes on disk were hashed and match the manifest's pin. `revision` means that revision is
+pinned and its snapshot is present — the pin is recorded and checkable, the contents were not
+hashed, and there is nothing to hash them against. The absent key is the honest report; a
+`digest_verified: false` beside a `revision` would confess a check that was never designed rather
+than state the one that was. A four-repository package reports `revisions` for the same reason the
+receipt does: no one of them is *the* revision.
+
+`verify` reports every provisioned environment, not only the ones this pull touched, so the
+two `torch` environments appear as `absent` rather than being omitted — an environment missing from
+the map would be indistinguishable from one nobody has looked at. The private-API hash is published
+alongside the value it is compared against, because `matches_expected: true` on its own is a claim
+a reader cannot check.
+
+Two ways of asking for a pull are refused, both exit 2, and both are refusals of a *silently
+ignored argument* rather than of an unsupported idea:
+
+```bash
+audio packages pull --stack qwen-1.7b --want diarization,word_timestamps
+```
+
+```json
+{
+  "code": "want_not_implemented",
+  "field": "--want",
+  "provided": "diarization,word_timestamps",
+  "detail": "capabilities cannot narrow a pull yet: resolving them to packages is the planner's job, so --stack qwen-1.7b provisions every package it can use",
+  "fix": "audio packages pull --stack qwen-1.7b"
+}
+```
+
+```bash
+audio packages pull --stack qwen-1.7b silero-vad
+```
+
+```json
+{
+  "code": "stack_conflicts_with_named_packages",
+  "stack": "qwen-1.7b",
+  "packages": ["silero-vad"],
+  "detail": "--stack qwen-1.7b was passed alongside named packages; a stack selects every package it can use and named ids select exactly those, so one of the two has to go",
+  "fix": "audio packages pull silero-vad"
+}
+```
+
+`--want` was accepted and dropped on the floor until this pass, and so was `--stack` beside a list
+of ids. Both are the failure §4.6 names for `transcribe`: a caller would believe it had constrained
+a 4 GiB download it never touched. The `fix` keeps the argument that was an instruction and drops
+the one that was a guess.
 
 ### 1.4 Run
 
@@ -542,8 +694,7 @@ here detects overlap is what says it cannot fill.
 ### 2.2 Provision and run
 
 ```bash
-audio packages pull --stack vibevoice \
-  --want verbatim,diarization,segment_timestamps,word_timestamps
+audio packages pull --stack vibevoice
 audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,diarization,segment_timestamps,word_timestamps \
   --format json -o demo.transcript.json
@@ -736,8 +887,7 @@ Exit 0. Segments carry no `speaker` key in the sample or the result: FireRed has
 speaker output and `diarization` was not requested.
 
 ```bash
-audio packages pull --stack firered \
-  --want verbatim,word_timestamps,vad,segment_timestamps,lid
+audio packages pull --stack firered
 audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_timestamps,vad,segment_timestamps,lid \
   --format json -o field.transcript.json
@@ -1016,7 +1166,7 @@ pin to select among. Pins choose between implementations of a role that exists.
 
 | Code | Exit | Trigger | What `fix` says |
 | --- | --- | --- | --- |
-| `packages_not_provisioned` | 3 | `run` before `pull` | The exact `audio packages pull` line for this stack and want set |
+| `packages_not_provisioned` | 3 | `run` before `pull` | The `audio packages pull --stack` line for this stack — every package it can use, since narrowing a pull to a want set is reserved for the planner |
 | `package_integrity_failed` | 3 | a digest, size, or revision mismatch on something already provisioned | `audio packages pull --repair <package>` |
 | `timing_required_for_format` | 2 | `export --format srt` on a transcript with no word timing | The `transcribe run` line that would produce timing, with `word_timestamps` added |
 | `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing |
@@ -1026,6 +1176,10 @@ The last row is the honest exception. Everything above it has a correction the t
 compute; a crash does not, so `fix` proposes rather than instructs, and the payload says
 which `role` and `backend` failed so a caller can tell a memory ceiling from a missing
 toolchain.
+
+Two further refusals belong to `audio packages pull` rather than to `transcribe`, and §1.3
+publishes both: `want_not_implemented` and `stack_conflicts_with_named_packages`, each exit 2 and
+each a refusal of an argument that used to be accepted and ignored.
 
 ## 5. Teardown
 
@@ -1038,22 +1192,22 @@ audio packages list
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "bytes": 2467859030,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b"]},
     {"package": "fluidaudio", "environment": "swift", "bytes": null,
-     "license_declared": "apache-2.0", "license_reviewed": true,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
     {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 129243647,
-     "license_declared": "cc-by-4.0", "license_reviewed": true,
+     "state": "ready", "license_declared": "cc-by-4.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
     {"package": "qwen3-forcedaligner", "environment": "mlx", "bytes": 1276475979,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"]},
     {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "bytes": 17349559904,
-     "license_declared": "mit", "license_reviewed": false,
+     "state": "ready", "license_declared": "mit", "license_reviewed": false,
      "used_by_stacks": ["vibevoice"]},
     {"package": "firered-asr2s", "environment": "torch-firered", "bytes": 9583893873,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["firered"]}
   ],
   "environments": {"mlx": "ready", "torch-firered": "ready", "torch-vibevoice": "ready",
@@ -1092,6 +1246,11 @@ audio packages remove vibevoice-asr-7b
   "reclaimed_bytes": 17349559904
 }
 ```
+
+`remove` takes several names, and it is all-or-nothing: every name is resolved against the
+registry before anything is deleted, so a typo among four ids costs nothing but the retry. It used
+to delete as it went and then roll the registry back, which left a package whose bytes were gone
+still reading as `ready`.
 
 Reference counting cuts both ways here, which is the point of showing it: `torch-vibevoice`
 held exactly one package and dies with it, while `mlx` survives because the aligner and the

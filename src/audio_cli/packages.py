@@ -189,8 +189,16 @@ class Toolchain:
             raise ProvisioningError("swift_build_failed",
                                     f"swift build failed: {built.stderr.strip()[-600:]}")
 
-    def swift_product_runs(self, checkout: Path) -> bool:
-        result = self.run(["swift", "run", "-c", "release", "fluidaudio", "--help"],
+    def swift_product_runs(self, checkout: Path, product: str) -> bool:
+        """Whether the built executable actually launches.
+
+        The product name is pinned in the manifest rather than written here. It was `fluidaudio`
+        in this call, and `Package.swift` declares `.executable(name: "fluidaudiocli")` -- so
+        `swift run` answered `no executable product named 'fluidaudio'` on a perfectly good build
+        and this check could never return True. A name that lives beside the commit it belongs to
+        is reviewable when the commit moves; a literal buried in a runner is not.
+        """
+        result = self.run(["swift", "run", "-c", "release", product, "--help"],
                           cwd=checkout, timeout=600)
         return result.returncode == 0
 
@@ -211,8 +219,14 @@ class Fetcher:
             return set()
         return {revision.commit_hash for repo in cache.repos for revision in repo.revisions}
 
-    def hf_snapshot(self, repo: str, revision: str) -> Path:
-        """Materialize a revision into the shared Hub cache, resuming a partial download."""
+    def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
+        """Materialize a revision into the shared Hub cache, resuming a partial download.
+
+        `force` re-downloads what the cache already holds, and it is what makes `pull --repair`
+        mean anything for a Hub package: without it `snapshot_download` sees the revision present
+        and returns the snapshot unchanged, so a repair of a corrupt snapshot would report success
+        having moved no bytes.
+        """
         try:
             from huggingface_hub import snapshot_download
         except ImportError as exc:  # noqa: BLE001 - reported, not swallowed
@@ -222,7 +236,7 @@ class Fetcher:
                 missing_tool="huggingface_hub",
                 fix="uv pip install huggingface_hub",
             ) from exc
-        return Path(snapshot_download(repo, revision=revision))
+        return Path(snapshot_download(repo, revision=revision, force_download=force))
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Delete exactly these revisions from the Hub cache. Returns what went, and its size.
@@ -353,8 +367,21 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
     `pull --stack S --want ...` is meant to take its set from a plan. Until the planner exists
     (#12), a stack selects every package that lists it, which over-provisions rather than
     under-provisions — the failure that would matter here is a missing package at run time.
+
+    The two forms are alternatives rather than layers, so passing both is refused instead of
+    resolved by precedence. This function used to return the named packages and drop `--stack` on
+    the floor, which is the same defect as a silently ignored `--want`: the caller reads a receipt
+    for a set it did not ask for and cannot tell which input was honoured.
     """
     catalog = packages()
+    if package_ids and stack is not None:
+        raise ProvisioningError(
+            "stack_conflicts_with_named_packages",
+            f"--stack {stack} was passed alongside named packages; a stack selects every package "
+            "it can use and named ids select exactly those, so one of the two has to go",
+            exit_code=2, stack=stack, packages=list(package_ids),
+            fix=f"audio packages pull {' '.join(package_ids)}",
+        )
     if package_ids:
         unknown = sorted(set(package_ids) - set(catalog))
         if unknown:
@@ -500,24 +527,53 @@ class Provisioner:
 
     # -- packages ----------------------------------------------------------------------
 
-    def pull(self, selection: list[Package]) -> dict:
+    def pull(self, selection: list[Package], *, repair: bool = False,
+             stack: str | None = None) -> dict:
+        """Materialize what is not already provisioned. Two asymmetries, both deliberate.
+
+        **A `ready` package is skipped, not re-materialized.** Re-hashing a multi-gigabyte
+        artifact, re-cloning and re-installing a checkout, or rebuilding the Swift product costs
+        minutes and produces what is already there. Worse, the `pulling` entry that has to be
+        written first would leave a working install downgraded if the pointless re-pull were
+        interrupted — the crash-safety rule turned against a package nothing was wrong with.
+        `--repair` is how a caller asks for the work anyway, and it *forces* re-materialization
+        rather than trusting what is on disk, because a corrupt-but-present artifact is exactly
+        the case it exists for.
+
+        **A stack tolerates a toolchain-blocked package; a named one does not.** `--stack` is a
+        superset guess, so an absent `swift` blocks `fluidaudio` and the rest of the stack still
+        provisions, with the blocked package reported in `warnings` — which is what
+        TRANSCRIBE_HAPPY_PATH.md §0 promises and what raising on the first blocked package broke,
+        since `fluidaudio` sorts first and took the whole stack down with it. Naming a package is
+        an instruction, so there the missing tool is still exit 3: silently skipping what a caller
+        asked for by name is worse than refusing.
+        """
         document = load_registry()
         # Read the cache once, before anything downloads. Everything after this point works
         # from that snapshot, so a revision fetched by this pull is never mistaken for one that
         # was already there.
         cached = self.fetcher.cached_revisions()
         pulled: list[dict] = []
+        skipped: list[str] = []
         created: list[str] = []
         warnings: list[dict] = []
+        blocked: list[tuple[Package, str]] = []
 
         for package in selection:
-            for tool in package.requires_tool:
-                if self.toolchain.which(tool) is None:
-                    raise ProvisioningError(
-                        "toolchain_missing",
-                        f"{package.id} needs {tool}, which is not on PATH",
-                        missing_tool=tool, package=package.id, requires_tool=[tool],
-                    )
+            if not repair and is_ready(document, package.id):
+                # Nothing needs doing, so nothing is touched — in particular the entry is not
+                # transitioned to `pulling`, which an interrupted no-op would leave behind.
+                skipped.append(package.id)
+                continue
+
+            missing_tool = next((tool for tool in package.requires_tool
+                                 if self.toolchain.which(tool) is None), None)
+            if missing_tool is not None:
+                if stack is None:
+                    raise _toolchain_missing(package, missing_tool)
+                blocked.append((package, missing_tool))
+                continue
+
             if self.ensure_environment(package.environment, document):
                 created.append(package.environment)
 
@@ -534,7 +590,7 @@ class Provisioner:
             document["packages"][package.id] = entry
             save_registry(document)
 
-            materialized = self._materialize(package, document, pre_existing)
+            materialized = self._materialize(package, document, pre_existing, repair=repair)
             entry["materialized"] = materialized
             entry["state"] = "ready"
             document["packages"][package.id] = entry
@@ -555,7 +611,32 @@ class Provisioner:
                 )
             pulled.append(receipt)
 
-        unreviewed = sorted(p.id for p in selection if not p.license_reviewed)
+        if blocked and not pulled and not skipped:
+            # Nothing in the stack was provisionable, so there is no partial success to report
+            # and the caller needs the exit code rather than a receipt of an empty pull.
+            raise _toolchain_missing(*blocked[0])
+
+        if blocked:
+            tools = sorted({tool for _, tool in blocked})
+            names = [package.id for package, _ in blocked]
+            warnings.append({
+                "code": "toolchain_missing", "blocking": True,
+                "packages": names, "requires_tool": tools,
+                "detail": (
+                    f"{', '.join(names)} {'needs' if len(names) == 1 else 'need'} "
+                    f"{', '.join(tools)}, which {'is' if len(tools) == 1 else 'are'} not on "
+                    f"PATH, so {'it' if len(names) == 1 else 'they'} "
+                    f"{'was' if len(names) == 1 else 'were'} not provisioned; the rest of "
+                    f"{f'stack {stack}' if stack else 'the selection'} was. Install the "
+                    f"toolchain and pull {'it' if len(names) == 1 else 'them'} by name."
+                ),
+            })
+
+        # A blocked package provisioned nothing, so it carries no license claim and no bytes.
+        # `pulled_known_bytes` says what this pull added, and a skipped package added none of it.
+        blocked_ids = {package.id for package, _ in blocked}
+        provisioned = [p for p in selection if p.id not in blocked_ids]
+        unreviewed = sorted(p.id for p in provisioned if not p.license_reviewed)
         if unreviewed:
             warnings.append({
                 "code": "license_unreviewed", "blocking": False,
@@ -568,9 +649,11 @@ class Provisioner:
                 ),
             })
 
-        known, unsized = _selection_bytes(selection, document)
-        return {
+        known, unsized = _selection_bytes(
+            [p for p in provisioned if p.id not in set(skipped)], document)
+        report = {
             "pulled": pulled,
+            "skipped": skipped,
             "environments_created": sorted(set(created)),
             "root": str(paths.root()),
             "registry": str(paths.registry_path()),
@@ -581,6 +664,13 @@ class Provisioner:
             "unsized_packages": unsized,
             "warnings": warnings,
         }
+        if skipped:
+            report["skipped_reason"] = (
+                "already ready in the registry, so nothing was re-materialized and nothing "
+                "counts toward pulled_known_bytes; audio packages pull --repair <package> "
+                "re-materializes anyway, and audio packages verify is what checks them"
+            )
+        return report
 
     @staticmethod
     def _pre_existing_revisions(package: Package, previous: dict,
@@ -602,14 +692,26 @@ class Provisioner:
             return set(previous["hub_revisions_pre_existing"])
         return {revision for revision in _source_revisions(package) if revision in cached}
 
-    def _materialize(self, package: Package, document: dict,
-                     pre_existing: set[str]) -> dict:
+    def _materialize(self, package: Package, document: dict, pre_existing: set[str], *,
+                     repair: bool = False) -> dict:
+        """Put the package on disk. `digest_verified` appears only where a digest was taken.
+
+        One source kind pins a content hash — `url` — and it is the only one whose materialization
+        can claim to have been verified against the manifest. The Hub kinds pin a *revision*; no
+        `sha256` exists in the manifest to hash a snapshot against, so they record the revision
+        and nothing more. They used to record `digest_verified: True` regardless, which made
+        `verify` print `digest: "ok"` for a check no code performs.
+        """
         kind = package.source["type"]
         if kind == "url":
             # The filename is manifest data, not derived: the shipped Silero backend resolves
             # this exact name, and a pull that invented one would leave two copies on disk and
             # re-download on first use. tests/test_environments.py ties the two together.
             target = paths.models_dir() / package.source["filename"]
+            # `repair` needs no force here, and the digest is the reason: url_file re-hashes what
+            # is on disk against the manifest pin and downloads again unless it matches, so a
+            # match already is the strongest re-materialization available. Forcing the transfer
+            # would spend the bytes to arrive at the same file.
             resolved = self.fetcher.url_file(package.source["url"], package.source["sha256"],
                                              target)
             return {"path": str(resolved), "bytes": _tree_bytes(resolved),
@@ -617,16 +719,16 @@ class Provisioner:
 
         if kind == "huggingface":
             revision = package.source["revision"]
-            snapshot = self.fetcher.hf_snapshot(package.source["repo"], revision)
+            snapshot = self.fetcher.hf_snapshot(package.source["repo"], revision, force=repair)
             result = {
                 "path": str(snapshot), "bytes": _tree_bytes(snapshot),
-                "revision": revision, "digest_verified": True,
+                "revision": revision,
                 # Only what this pull fetched is ours to delete later, decided before the
                 # download rather than after it — see _pre_existing_revisions.
                 "hub_revisions": [] if revision in pre_existing else [revision],
                 "hub_revisions_pre_existing": sorted(pre_existing),
             }
-            result.update(self._checkout_and_install(package))
+            result.update(self._checkout_and_install(package, repair=repair))
             return result
 
         if kind == "huggingface_multi":
@@ -634,38 +736,62 @@ class Provisioner:
             total = 0
             ours: list[str] = []
             for repo in package.source["repos"]:
-                snapshot = self.fetcher.hf_snapshot(repo["repo"], repo["revision"])
+                snapshot = self.fetcher.hf_snapshot(repo["repo"], repo["revision"],
+                                                    force=repair)
                 snapshots[repo["repo"]] = str(snapshot)
                 total += _tree_bytes(snapshot)
                 if repo["revision"] not in pre_existing:
                     ours.append(repo["revision"])
             result = {
-                "paths": snapshots, "bytes": total, "digest_verified": True,
+                "paths": snapshots, "bytes": total,
                 # Plural, because this package spans four repositories. A single `revision`
                 # key would have to pick one of them, and the receipt promises the revisions
                 # a pull materialized.
                 "revisions": [repo["revision"] for repo in package.source["repos"]],
                 "hub_revisions": ours, "hub_revisions_pre_existing": sorted(pre_existing),
             }
-            result.update(self._checkout_and_install(package))
+            result.update(self._checkout_and_install(package, repair=repair))
             return result
 
         if kind == "git+build":
             checkout = paths.checkout_dir(package.environment, package.id)
+            if repair:
+                # Rebuilding in place would trust the checkout whose state is what is in doubt:
+                # `clone` skips an existing directory, so a dirty or half-built tree survives.
+                _delete(checkout)
             checkout.parent.mkdir(parents=True, exist_ok=True)
             self.toolchain.clone(package.source["repo"], package.source["commit"], checkout)
             self.toolchain.swift_build(checkout)
+            product = package.source["product"]
+            runs = self.toolchain.swift_product_runs(checkout, product)
+            if not runs:
+                # A build that produces an executable nobody can launch is not a provisioned
+                # package, and this used to be recorded and then ignored: `pull` returned exit 0
+                # with an empty `warnings`, `verify` reported `failed: []`, and the environment
+                # read `ok`, while the one thing the package exists to do was impossible. The
+                # entry stays `pulling`, so `list` and `run` both report it absent.
+                raise ProvisioningError(
+                    "package_build_unusable",
+                    f"{package.id} built, but its product {product!r} does not run, so nothing "
+                    f"in the {package.environment} environment can use it",
+                    package=package.id, product=product, built=True,
+                    fix=f"audio packages pull --repair {package.id}",
+                )
             return {"path": str(checkout), "bytes": _tree_bytes(checkout / ".build"),
                     "revision": package.source["commit"], "built": True,
-                    "product_runs": self.toolchain.swift_product_runs(checkout)}
+                    "product_runs": runs}
 
         raise ManifestError(f"{package.id}: unsupported source type {kind!r}")
 
-    def _checkout_and_install(self, package: Package) -> dict:
+    def _checkout_and_install(self, package: Package, *, repair: bool = False) -> dict:
         """Pinned source checkout, patch, and a --no-deps install into the environment."""
         if package.checkout is None:
             return {}
         checkout = paths.checkout_dir(package.environment, package.id)
+        if repair:
+            # Same reason as the Swift build: a repair of `patch_not_applied` must not re-patch a
+            # tree that may also be at the wrong commit. Re-clone, then patch.
+            _delete(checkout)
         checkout.parent.mkdir(parents=True, exist_ok=True)
         self.toolchain.clone(package.checkout["repo"], package.checkout["commit"], checkout)
 
@@ -705,6 +831,19 @@ class Provisioner:
             if entry is None or entry.get("state") != "ready":
                 environment_states[name] = "absent"
                 continue
+            # A missing toolchain is a property of the environment, not of what is inside it.
+            # This tool launches the Swift product through `swift run`, so with no toolchain
+            # nothing in that environment can execute whatever the registry holds — and the
+            # registry can legitimately hold something, because a stack pull provisions the
+            # packages that need no toolchain and reports the blocked one. `ok` there would tell
+            # a caller diarization is available on a machine that cannot run it. Not a `failed`
+            # entry: nothing provisioned is broken, the gap is a package `list` already reports
+            # as absent, and no `audio` command installs a toolchain for a `fix` to name.
+            blocked_by = [tool for tool in environment.requires_tool
+                          if self.toolchain.which(tool) is None]
+            if blocked_by:
+                environment_states[name] = "blocked"
+                continue
             if not environment.has_interpreter:
                 # No interpreter means no lock to compare against. Its packages carry the
                 # checks that apply — that the product builds and runs — so reporting `ok`
@@ -740,6 +879,7 @@ class Provisioner:
             package = catalog.get(identifier)
             record: dict = {"package": identifier}
             materialized = entry.get("materialized", {})
+            # `digest: "ok"` is reserved for the one kind that has something to hash against.
             if package is not None and package.source["type"] == "url":
                 location = Path(materialized.get("path", ""))
                 if location.is_file() and sha256_file(location) == package.source["sha256"]:
@@ -752,6 +892,17 @@ class Provisioner:
                     })
                     continue
             elif "product_runs" in materialized:
+                if not materialized["product_runs"]:
+                    # Reachable from a registry written before `pull` started refusing this, and
+                    # the reason it has to fail rather than report: the package's whole purpose is
+                    # that executable, so `verified` would otherwise list a package that cannot do
+                    # the one thing it is for.
+                    failed.append({
+                        "package": identifier, "code": "package_build_unusable",
+                        "detail": "built, but its product does not run",
+                        "fix": f"audio packages pull --repair {identifier}",
+                    })
+                    continue
                 record["product_runs"] = materialized["product_runs"]
                 record["patches_applied"] = materialized.get("patches_applied", [])
             else:
@@ -769,7 +920,7 @@ class Provisioner:
                         "fix": f"audio packages pull --repair {identifier}",
                     })
                     continue
-                record["digest"] = "ok" if materialized.get("digest_verified") else "unverified"
+                record.update(_pinned_revisions(materialized))
 
             digests = materialized.get("patched_file_digests") or {}
             if digests:
@@ -842,20 +993,40 @@ class Provisioner:
     # -- teardown ----------------------------------------------------------------------
 
     def remove(self, package_ids: list[str]) -> dict:
+        """Remove named packages. Every name is resolved before anything is deleted.
+
+        The ordering is the point. Deleting inside the same loop that raised on an unknown name,
+        with one `save_registry` after it, meant `remove vibevoice-asr-7b firered-asr2` discarded
+        17 GiB and then rolled the registry *back* — leaving an entry that still read `ready` for
+        a package whose bytes were gone. Nothing downstream notices, because `missing_packages`
+        keys on `state`, so the caller finds out at model load. That is the mirror image of what
+        the `pulling` state exists to prevent: a pull that dies is honest about being incomplete,
+        and a teardown that died was not. A caller naming several packages already assumes
+        all-or-nothing, so validate the whole list first.
+
+        Two consequences, both intended. A repeated name removes once and is reported once. And
+        each entry is dropped and saved as soon as its own files are gone rather than in one write
+        at the end, so no later failure in the teardown can restore a claim to bytes that no
+        longer exist.
+        """
         document = load_registry()
+        targets: list[str] = []
+        for identifier in package_ids:
+            if identifier not in document["packages"]:
+                raise ProvisioningError(
+                    "package_not_provisioned", f"{identifier} is not in the registry",
+                    exit_code=2, package=identifier, fix="audio packages list",
+                )
+            if identifier not in targets:
+                targets.append(identifier)
+
         removed: list[str] = []
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
 
-        for identifier in package_ids:
-            entry = document["packages"].get(identifier)
-            if entry is None:
-                raise ProvisioningError(
-                    "package_not_provisioned", f"{identifier} is not in the registry",
-                    exit_code=2, package=identifier, fix="audio packages list",
-                )
-            materialized = entry.get("materialized", {})
+        for identifier in targets:
+            materialized = document["packages"][identifier].get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
             retained.extend(materialized.get("hub_revisions_pre_existing", []))
             # Measured before deleting, not read off the registry: what a teardown reports as
@@ -865,7 +1036,11 @@ class Provisioner:
                 _delete(location)
             document["packages"].pop(identifier)
             removed.append(identifier)
+            save_registry(document)
 
+        # After the entries are gone, so a cache that fails here costs reclaimable space in a
+        # shared cache rather than leaving a package whose local bytes are already deleted
+        # reading as ready. There is no ordering that keeps that entry honest.
         deleted, hub_freed = self.fetcher.delete_hub_revisions(hub_revisions)
         kept, dropped, environment_freed = self._collect_environments(document)
         local_freed += environment_freed
@@ -942,6 +1117,11 @@ class Provisioner:
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
+        # `purge` cannot take a name that is not in the registry — it reads the list *from* the
+        # registry — so it never had `remove`'s validation defect. It shared the narrower half:
+        # every local file was deleted and the registry was cleared in one write afterwards, so
+        # anything that raised in between left every package reading as `ready` with nothing
+        # behind it. Same rule as `remove`, then: an entry goes as soon as its own bytes do.
         for identifier in package_ids:
             materialized = document["packages"][identifier].get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
@@ -949,13 +1129,14 @@ class Provisioner:
             for location in _locations(materialized):
                 local_freed += _tree_bytes(location) if location.exists() else 0
                 _delete(location)
+            document["packages"].pop(identifier)
+            save_registry(document)
         for name in environment_names:
             local_freed += _tree_bytes(paths.env_dir(name)) if paths.env_dir(name).exists() else 0
             _delete(paths.env_dir(name))
+            document["environments"].pop(name, None)
+            save_registry(document)
         deleted, hub_freed = self.fetcher.delete_hub_revisions(hub_revisions)
-        document["packages"].clear()
-        document["environments"].clear()
-        save_registry(document)
         return {
             "removed": {"packages": package_ids, "environments": environment_names},
             "hub_revisions_deleted": deleted,
@@ -1096,6 +1277,31 @@ def _patched_files(patch: Path, checkout: Path) -> list[Path]:
     return touched
 
 
+def _toolchain_missing(package: Package, tool: str) -> ProvisioningError:
+    """The exit-3 refusal for a package whose external toolchain is absent."""
+    return ProvisioningError(
+        "toolchain_missing", f"{package.id} needs {tool}, which is not on PATH",
+        missing_tool=tool, package=package.id, requires_tool=[tool],
+    )
+
+
+def _pinned_revisions(materialized: dict) -> dict:
+    """What a Hub package's `verify` entry can honestly claim, which is not a digest.
+
+    Nothing here hashes a snapshot. The manifest pins a revision and carries no `sha256` for a Hub
+    source, so there is nothing to hash *against*; a `digest` key would name a check no code
+    performs. The revision is what is pinned, and the existence check above it is the rest of what
+    was verified. So the two claims are told apart by which key is present — `digest` where
+    contents were hashed against a manifest pin, `revision`/`revisions` where a revision is pinned
+    and the snapshot is present — rather than by a `digest_verified: false` confession.
+    """
+    if "revision" in materialized:
+        return {"revision": materialized["revision"]}
+    if "revisions" in materialized:
+        return {"revisions": list(materialized["revisions"])}
+    return {}
+
+
 def _source_revisions(package: Package) -> list[str]:
     """Every Hub revision a package pins, whether it names one or four."""
     source = package.source
@@ -1117,9 +1323,20 @@ def _locations(materialized: dict) -> list[Path]:
         if materialized.get(key):
             found.append(Path(materialized[key]))
     path = materialized.get("path")
-    if path and str(paths.models_dir()) in path:
+    if path and _inside(Path(path), paths.models_dir()):
         found.append(Path(path))
     return found
+
+
+def _inside(candidate: Path, directory: Path) -> bool:
+    """Real path containment, because the substring test this replaces was not one.
+
+    `str(models_dir) in path` also matched a *sibling* whose name starts with the models
+    directory's — point `HF_HOME` at `<root>/models_hub` and every snapshot path under it tests
+    positive, so teardown would delete directories inside the shared Hub cache that
+    `_locations` exists to keep its hands off.
+    """
+    return candidate != directory and candidate.is_relative_to(directory)
 
 
 def _delete(target: Path) -> None:

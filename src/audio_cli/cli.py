@@ -46,6 +46,11 @@ def _parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument(
         "--report", type=Path, help="Also write the JSON inspection here."
     )
+    inspect_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing report.",
+    )
 
     enhance_parser = subparsers.add_parser(
         "enhance",
@@ -98,7 +103,7 @@ def _parser() -> argparse.ArgumentParser:
     pull_parser.add_argument("--stack", help="Provision what this stack can use.")
     pull_parser.add_argument(
         "--want",
-        help="Capabilities, for symmetry with transcribe. Reserved until the planner lands.",
+        help="Reserved until the planner lands, and refused until then rather than ignored.",
     )
     pull_parser.add_argument(
         "--repair",
@@ -143,11 +148,13 @@ def _ensure_writable_target(path: Path | None, *, force: bool, label: str) -> No
 
 
 def _run_inspect(args: argparse.Namespace) -> int:
+    # Checked before any work, the way `enhance` checks it: the analysis decodes the file and runs
+    # speech detection over it, and refusing the destination afterwards throws all of that away.
+    _ensure_writable_target(args.report, force=args.force, label="Report")
     profile = get_profile(args.profile) if args.profile else None
     detector = SileroOnnxVad(args.vad_model)
     report = inspect_source(args.input, profile=profile, detector=detector)
     if args.report:
-        _ensure_writable_target(args.report, force=False, label="Report")
         write_report(args.report, report)
     _print_json(report)
     return 0
@@ -229,10 +236,22 @@ def _run_packages(args: argparse.Namespace) -> int:
         if args.want and not args.stack:
             raise ProvisioningError(
                 "stack_required", "--want needs --stack: capabilities are resolved per stack",
-                exit_code=2, fix="audio packages pull --stack <stack> --want <capabilities>",
+                exit_code=2, fix="audio packages pull --stack <stack>",
+            )
+        if args.want:
+            # Refused rather than ignored. Nothing downstream of here reads `--want`: resolving
+            # capabilities to a package set is the planner's job (#12), and a stack still
+            # provisions every package it can use. Accepting the flag silently would be the real
+            # failure — a caller would believe it had narrowed a 17 GiB download it never touched.
+            raise ProvisioningError(
+                "want_not_implemented",
+                "capabilities cannot narrow a pull yet: resolving them to packages is the "
+                f"planner's job, so --stack {args.stack} provisions every package it can use",
+                exit_code=2, field="--want", provided=args.want,
+                fix=f"audio packages pull --stack {args.stack}",
             )
         selection = select(args.packages, stack=args.stack)
-        _print_json(provisioner.pull(selection))
+        _print_json(provisioner.pull(selection, repair=args.repair, stack=args.stack))
         return 0
     if command == "verify":
         report = provisioner.verify(repair=args.repair)

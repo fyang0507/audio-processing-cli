@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from scipy.io import wavfile
 
 import audio_cli.pipeline as pipeline_module
-from audio_cli.pipeline import EnhancementPipeline
+from audio_cli.media import is_enhanced_media, probe_media
+from audio_cli.pipeline import EnhancementPipeline, PipelineError
 from audio_cli.profiles import PROFILES, STAGE_ORDER
 from audio_cli.vad import SpeechRegion
 
@@ -105,3 +107,72 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     assert all(
         final_evaluations[region_id] == "abstained_overlap" for region_id in abstained
     )
+
+
+def test_an_enhanced_render_is_refused_as_input_unless_it_is_allowed(tmp_path) -> None:
+    """The original media is canonical, so re-enhancing a render takes an explicit override.
+
+    Nothing asserted the guard: a mutation scan turned `allow_enhanced_input` into a no-op and the
+    suite stayed green, which would have let a second pass compound on a first. No fake probe here
+    — the render's own `comment` tag carries the marker the guard reads, so this is the round trip
+    a caller would actually make.
+    """
+    sample_rate = 48_000
+    time = np.arange(round(sample_rate * 4.0)) / sample_rate
+    audio = np.zeros((time.size, 2), dtype=np.float32)
+    speech = (time >= 1.5) & (time < 3.5)
+    audio[speech] = (0.02 * np.sin(2 * np.pi * 180 * time[speech]))[:, None]
+    source = tmp_path / "source.wav"
+    wavfile.write(source, sample_rate, audio)
+
+    pipeline = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad())
+    once = tmp_path / "once.wav"
+    pipeline.run(source, output=once, dry_run=False)
+    assert is_enhanced_media(probe_media(once)), "the render carries no marker to refuse"
+    assert not is_enhanced_media(probe_media(source))
+
+    twice = tmp_path / "twice.wav"
+    with pytest.raises(PipelineError, match="enhanced render"):
+        pipeline.run(once, output=twice, dry_run=False)
+    assert not twice.exists()
+
+    report = pipeline.run(once, output=twice, dry_run=False, allow_enhanced_input=True)
+    assert report["rendered"] is True
+    assert twice.is_file()
+
+
+@pytest.mark.parametrize(
+    "samples_48k",
+    [1332160, 48_000, 48_001, 12_345, 99_999, 1, 512],
+)
+def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
+    """The defect this catches: a speech bound published outside the media.
+
+    `resample_poly` returns `ceil(n * up / down)`, so 1332160 samples at 48 kHz became 444054 at
+    16 kHz where the exact figure is 444053.333. A region running to the end of that signal was
+    published ending at 27.753375 s in a 27.753333 s file -- a bound the source does not have --
+    and the treatment clamp that pulled it back then reported a negative extension, contradicting
+    the guarantee that speech effects are fully engaged at the last detected sample.
+    """
+    audio = np.zeros((samples_48k, 1), dtype=np.float32)
+    vad = pipeline_module._vad_audio(audio, 48_000)
+
+    assert vad.size / 16_000 <= samples_48k / 48_000 + 1e-12, (
+        f"{samples_48k} samples at 48 kHz became {vad.size} at 16 kHz, which is "
+        f"{vad.size / 16_000:.9f} s of timeline for a {samples_48k / 48_000:.9f} s source"
+    )
+
+
+def test_a_source_already_at_16k_is_passed_through_whole() -> None:
+    """The truncation must not eat a sample when no resampling happens."""
+    audio = np.zeros((16_000, 1), dtype=np.float32)
+    assert pipeline_module._vad_audio(audio, 16_000).size == 16_000
+
+
+def test_the_vad_timeline_loses_at_most_one_sample() -> None:
+    """Truncating is the safe direction, but it must not become a habit of discarding tail."""
+    samples_48k = 1332160
+    audio = np.zeros((samples_48k, 1), dtype=np.float32)
+    vad = pipeline_module._vad_audio(audio, 48_000)
+    exact = samples_48k * 16_000 / 48_000
+    assert exact - vad.size < 1.0, f"dropped {exact - vad.size:.3f} samples of tail"

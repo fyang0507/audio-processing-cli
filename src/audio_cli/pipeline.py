@@ -101,13 +101,27 @@ def _resolved_operations_hash(
 
 
 def _vad_audio(audio: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Mono at 16 kHz, never longer than the source timeline it will be timestamped against.
+
+    `resample_poly` returns `ceil(n * up / down)` samples, so 1332160 samples at 48 kHz became
+    444054 at 16 kHz where the exact figure is 444053.333. Two thirds of a sample sounds like
+    nothing, and it is -- until a speech region runs to the end of the signal and is published
+    ending at 27.753375 s in a 27.753333 s file. That is a bound the media does not have, and the
+    treatment clamp that pulled it back to the real end then reported a *negative* extension,
+    contradicting the guarantee that speech effects are fully engaged at the last detected sample.
+
+    Truncating to the floor keeps the detector's timeline inside the source's. It gives up at most
+    one 16 kHz sample of tail, which is 62.5 us and cannot carry speech; inventing a bound past
+    the end of the file is the more expensive mistake.
+    """
     mono = np.mean(audio, axis=1, dtype=np.float64).astype(np.float32)
     if sample_rate == 16_000:
         return mono
     divisor = math.gcd(sample_rate, 16_000)
-    return signal.resample_poly(mono, 16_000 // divisor, sample_rate // divisor).astype(
-        np.float32
-    )
+    resampled = signal.resample_poly(
+        mono, 16_000 // divisor, sample_rate // divisor
+    ).astype(np.float32)
+    return resampled[: mono.size * 16_000 // sample_rate]
 
 
 def _detect_speech(

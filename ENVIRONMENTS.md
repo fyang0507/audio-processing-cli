@@ -226,12 +226,50 @@ download discoverable at all — VOCABULARY requires `purge` to find everything 
 registry alone, and a registry that only gains entries on success leaves orphaned bytes that
 nothing can name.
 
+**A `ready` package is skipped rather than re-materialized.** `pull` used to re-do the work
+unconditionally: re-hashing a multi-gigabyte artifact, re-cloning and re-installing a checkout,
+rebuilding the Swift product. Measured, a second `pull` of a ready `silero-vad` moved its
+`pulled_utc` from `00:53:35Z` to `01:10:40Z` — it had done the whole thing again. The cost that
+matters is not the time, though: the `pulling` entry written first means an interrupt during a
+pointless re-pull downgrades a working install, so the crash-safety rule above turns against a
+package nothing was wrong with. Skipped packages are reported in the receipt's `skipped` array
+and contribute nothing to `pulled_known_bytes`.
+
+**`pull --repair` forces re-materialization, and had to be wired to do it.** The flag was
+declared, documented, and named in four `fix` strings, and nothing read it. For a Hub package
+that mattered most: `snapshot_download` returns a revision the cache already holds as it
+stands, so a repair of a corrupt snapshot reported success having moved no bytes. `--repair`
+now passes `force_download=True`, and deletes a checkout before re-cloning rather than patching
+a tree whose state is what is in doubt. It is a no-op for `silero-vad` by construction and for
+that one reason only: `url_file` re-hashes the file against the manifest pin and re-downloads
+unless it matches, so a match already is the strongest re-materialization available.
+
+**A stack tolerates a toolchain-blocked package; a named one does not.** `--stack` selects every
+package a stack can use, which is a superset guess, so a machine with no Swift toolchain
+provisions the rest of the stack and reports `fluidaudio` as a blocking `warnings` entry. Exit 3
+is reserved for a stack where nothing at all was provisionable, and for a package named on the
+command line — an instruction, where a silent skip would be worse than a refusal. Raising on the
+first blocked package is what this replaced, and because `select` sorts by id, `fluidaudio`
+sorted first and `pull --stack qwen-1.7b` on a toolchain-less machine provisioned nothing at all.
+
 **Reference counts are derived, never stored.** `remove <package>` deletes that package's
 artifacts, then removes its environment only if no other non-absent package targets it. A
 stored count is a second copy of a fact the table already holds, and it would eventually
 disagree with it.
 
 **`purge` reads the registry, reports reclaimable bytes, and touches no media or output.**
+
+**A teardown validates before it deletes.** `remove` resolves every name it was given against
+the registry and refuses the whole command if one of them is not there, because it used to delete
+as it went: `remove vibevoice-asr-7b firered-asr2` discarded 17 GiB, then raised on the typo, and
+the single `save_registry` after the loop never ran — so the registry rolled back and went on
+calling a package with no bytes `ready`. `missing_packages` keys on `state`, so nothing noticed
+until a model load. It is the mirror image of the `pulling` rule above: a pull that dies is honest
+about being incomplete, and that teardown was not. Each entry is now dropped and saved as its own
+files go, rather than in one write at the end, which also closes the narrower version of the same
+window in `purge` — a Hub cache that fails mid-teardown used to leave every package `ready` with
+nothing behind it. `purge` never had the validation defect, because it takes its list from the
+registry rather than from a caller. A repeated name removes once and is reported once.
 
 **A teardown reports what it actually freed.** Two things follow, and the first was got wrong
 before it was got right. Most of the bytes are not under the root at all — they are Hub
@@ -247,7 +285,14 @@ of virtual environment. Revisions the cache no longer holds are reported as
 
 Four checks, all cheap, none loading weights:
 
-1. **Artifact digests** for every `weights` package, against what `pull` recorded.
+1. **Artifact digests** for every package pinned by content hash, which is `silero-vad` and
+   nothing else. The manifest pins the Hub packages by *revision* and carries no `sha256` for
+   them, so there is nothing to hash a snapshot against: those report the revision they
+   materialized, and the check that applies to them is that the snapshot still exists. `verify`
+   says `digest: "ok"` only where bytes were hashed and `revision`/`revisions` where a revision
+   is pinned — the two are different claims and must not print the same word. Every Hub package
+   recorded `digest_verified: true` at pull time until this was corrected, which made `verify`
+   report a digest check for eight packages and perform it for one.
 2. **Environment equality with its lock** — `uv pip freeze` against the locked set. A drifted
    environment is a repairable state, not a fatal one; `--repair` re-syncs.
 3. **The `mlx-audio` private-API guard** — the source hash over
@@ -260,6 +305,17 @@ Four checks, all cheap, none loading weights:
 
 Each check has a failure that must be reachable, not merely described: reverting the patch,
 deleting a wheel, or bumping `mlx-audio` each has to make exactly one of these fail.
+
+Per-environment, `verify` states a verdict rather than the registry's state: `ok`, `drifted`,
+`blocked`, or `absent`. `blocked` means a tool in that environment's `requires_tool` is not on
+`PATH`, so nothing in it can run — this tool launches the Swift product through `swift run` —
+and it is reachable exactly because a stack pull now provisions around a blocked package:
+`speaker-diarization-coreml` needs no toolchain, so it lands in `swift` and leaves the
+environment `ready` in the registry while holding nothing executable. That state used to be
+unreachable, since the stack pull aborted and the environment stayed absent. It is not a
+`failed` entry, so `verify` still exits 0: nothing provisioned is broken, and no `audio` command
+installs a toolchain for a `fix` to name. `doctor`, `list`, and `path` keep publishing the
+registry's own `state`, which is a different fact — see VOCABULARY.md for both enumerations.
 
 ## Running a stage in another environment
 
