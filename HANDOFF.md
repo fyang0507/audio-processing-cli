@@ -1,6 +1,6 @@
 # Agent handoff
 
-Updated 2026-08-16. This repository currently has a production-oriented audio
+Updated 2026-08-18. This repository currently has a production-oriented audio
 enhancement CLI and a completed ASR research/distillation phase. The next phase
 is to turn the ASR decisions into a transcription CLI where the caller picks a
 stack and states requirements, plus its associated agent skill.
@@ -10,9 +10,14 @@ stack and states requirements, plus its associated agent skill.
 - `audio inspect` and `audio enhance` are implemented under `src/audio_cli/`.
   Their contract and usage are in [README.md](README.md); do not regress the
   deterministic, render-from-original enhancement flow.
+- `audio packages` and `audio doctor` are implemented, over the four provisioned
+  environments in [ENVIRONMENTS.md](ENVIRONMENTS.md). Their tests run entirely on a
+  `FakeToolchain` and `FakeFetcher`, so the real Hub, `uv venv`, digest, and Swift-build
+  paths are unexercised, and nothing is provisioned on any machine yet.
 - ASR research for [Issue #2](https://github.com/fyang0507/audio-processing-cli/issues/2)
-  is on branch `codex/asr-benchmark-field-guide` in
-  [draft PR #8](https://github.com/fyang0507/audio-processing-cli/pull/8).
+  landed on `main` in [#8](https://github.com/fyang0507/audio-processing-cli/pull/8), and the
+  `transcribe` specification plus the provisioning layer landed in
+  [#15](https://github.com/fyang0507/audio-processing-cli/pull/15).
 - The benchmark harness, manifests, compact results, and controlled research
   record live under `model_tests/`. Raw media, downloaded model weights, and
   local run directories are intentionally ignored.
@@ -254,7 +259,7 @@ and experiment digest rather than the full findings file.
 ## Working commands
 
 ```bash
-git switch codex/asr-benchmark-field-guide
+git switch main
 uv sync --extra dev
 uv run --extra dev pytest
 ```

@@ -87,22 +87,58 @@ audio doctor
 
 ```json
 {
-  "tool": {"name": "audio-processing-cli", "version": "0.4.0",
+  "tool": {"version": "0.1.0", "python": "3.12.12",
            "path": "/Users/you/.local/bin/audio"},
-  "platform": {"os": "macOS 26.5.2", "arch": "arm64", "hw_model": "Mac16,5"},
-  "external_tools": {"ffmpeg": "8.0", "ffprobe": "8.0", "uv": "0.9.7", "swift": "6.2"},
-  "memory": {"physical_bytes": 68719476736, "available_bytes": 41234567168},
-  "disk": {"root": "/Users/you/Library/Caches/audio-processing-cli",
-           "available_bytes": 402653184000},
-  "environments": {"core": "ready", "mlx": "absent", "torch-firered": "absent",
-                   "torch-vibevoice": "absent", "swift": "absent"},
-  "packages": {"provisioned": [], "count": 0},
-  "warnings": []
+  "platform": {"system": "Darwin", "release": "25.5.0", "machine": "arm64"},
+  "tools": {
+    "ffmpeg": {"path": "/opt/homebrew/bin/ffmpeg", "present": true},
+    "ffprobe": {"path": "/opt/homebrew/bin/ffprobe", "present": true},
+    "git": {"path": "/opt/homebrew/bin/git", "present": true},
+    "huggingface_hub": {"path": null, "present": true},
+    "swift": {"path": "/usr/bin/swift", "present": true},
+    "uv": {"path": "/Users/you/.local/bin/uv", "present": true}
+  },
+  "memory": {"total_bytes": 68719476736, "available_bytes": 30585126912,
+             "note": "Host-wide counters; not process-attributable and not summable with per-stage peaks."},
+  "disk": {"total_bytes": 994662584320, "free_bytes": 107730939904},
+  "root": "/Users/you/Library/Caches/audio-processing-cli",
+  "root_exists": true,
+  "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
+  "environments": {
+    "mlx": {"state": "absent", "python": "3.13.9", "requires_tool": [],
+            "provisional": false, "blocked_by_missing_tool": []},
+    "swift": {"state": "absent", "python": null, "requires_tool": ["swift"],
+              "provisional": false, "blocked_by_missing_tool": []},
+    "torch-firered": {"state": "absent", "python": "3.12.12", "requires_tool": [],
+                      "provisional": false, "blocked_by_missing_tool": []},
+    "torch-vibevoice": {"state": "absent", "python": "3.12.12", "requires_tool": [],
+                        "provisional": true, "blocked_by_missing_tool": []}
+  },
+  "packages": {
+    "firered-asr2s": "absent", "fluidaudio": "absent",
+    "qwen3-asr-0.6b-8bit": "absent", "qwen3-asr-1.7b-8bit": "absent",
+    "qwen3-forcedaligner": "absent", "silero-vad": "absent",
+    "speaker-diarization-coreml": "absent", "vibevoice-asr-7b": "absent"
+  },
+  "note": "An absent swift blocks only the packages that need it; it is reported rather than fatal."
 }
 ```
 
-Exit 0. `swift` present here; absent it would be reported and non-fatal, blocking only
-the packages that need it.
+Exit 0, and unlike every other block in this document this one is **real output**, not a mock —
+`doctor` is implemented, so its shape is checked against a live run by
+`tests/test_shipped_commands_match_the_document.py` rather than maintained by eye — as are the
+`packages list` block in §5 and the `packages verify` block in §1.3, the other two commands that
+ship. Values remain illustrative: paths, versions, and the memory and disk counters are this
+machine's.
+
+`swift` is present here. Absent, it would report `present: false` and appear in the
+`blocked_by_missing_tool` list of the `swift` environment — reported rather than fatal, blocking
+only the packages that need it. That per-environment list is why there is no top-level
+`warnings` array: a blocked environment says so where a caller is already looking.
+
+`environments` reports the four *provisioned* environments and not `core`, which is the CLI's own
+and always present. `packages` is a state per package rather than a count, because a caller
+deciding whether to `pull` needs to know *which* are absent, not how many.
 
 ## 1. Fast long-form transcription — interview
 
@@ -321,14 +357,20 @@ audio packages verify
     {"package": "speaker-diarization-coreml", "digest": "ok"},
     {"package": "qwen3-forcedaligner", "digest": "ok"}
   ],
-  "environments": {"mlx": "ok", "swift": "ok"},
+  "environments": {"mlx": "ok", "swift": "ok", "torch-firered": "absent",
+                   "torch-vibevoice": "absent"},
+  "mlx_audio_private_api_expected_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_matches_expected": true,
   "failed": []
 }
 ```
 
-Exit 0.
+Exit 0. `verify` reports every provisioned environment, not only the ones this pull touched, so the
+two `torch` environments appear as `absent` rather than being omitted — an environment missing from
+the map would be indistinguishable from one nobody has looked at. The private-API hash is published
+alongside the value it is compared against, because `matches_expected: true` on its own is a claim
+a reader cannot check.
 
 ### 1.4 Run
 
@@ -1038,22 +1080,22 @@ audio packages list
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "bytes": 2467859030,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b"]},
     {"package": "fluidaudio", "environment": "swift", "bytes": null,
-     "license_declared": "apache-2.0", "license_reviewed": true,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
     {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 129243647,
-     "license_declared": "cc-by-4.0", "license_reviewed": true,
+     "state": "ready", "license_declared": "cc-by-4.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
     {"package": "qwen3-forcedaligner", "environment": "mlx", "bytes": 1276475979,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"]},
     {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "bytes": 17349559904,
-     "license_declared": "mit", "license_reviewed": false,
+     "state": "ready", "license_declared": "mit", "license_reviewed": false,
      "used_by_stacks": ["vibevoice"]},
     {"package": "firered-asr2s", "environment": "torch-firered", "bytes": 9583893873,
-     "license_declared": "apache-2.0", "license_reviewed": false,
+     "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["firered"]}
   ],
   "environments": {"mlx": "ready", "torch-firered": "ready", "torch-vibevoice": "ready",
