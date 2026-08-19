@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "fixture_role": "canonical two-channel-downmix interview diarization input",
+  "corpus": "SpiCE: Speech in Cantonese and English",
+  "license": "CC BY 4.0",
+  "source_url": "https://doi.org/10.5683/SP2/MJOXP3",
+  "source": {
+    "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_I2_20181114.wav",
+    "sha256": "56773f36702a74a114e9086e2ce9a0314151c67a2b453ad128bcefcc8b702236",
+    "bytes": 365662764,
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 44100,
+    "channels": 2,
+    "duration_s": 2072.917914,
+    "channel_description": "FL is the participant dedicated microphone and FR is the interviewer dedicated microphone. Both microphones contain audible bleed."
+  },
+  "preparation": {
+    "ffmpeg_version": "8.1",
+    "command": "ffmpeg -nostdin -hide_banner -loglevel error -y -ss 271.130649013 -t 1800 -i model_tests/benchmark_data/spice/VF19A_Cantonese_I2_20181114.wav -ac 1 -ar 16000 -c:a pcm_s16le model_tests/benchmark_data/spice/VF19A_Cantonese_interview30m_canonical_mix_16k.wav",
+    "source_start_s": 271.130649013,
+    "duration_s": 1800.0,
+    "channel_operation": "FFmpeg automatic stereo-to-mono downmix"
+  },
+  "output": {
+    "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview30m_canonical_mix_16k.wav",
+    "sha256": "79c28259614253cb589c968c4d27693eea98ceaf7c2db372a4cdbeb8a77eb511",
+    "decoded_pcm_s16le_sha256": "465cae97476254ae563420fc11e503b4cc2a7e09b687b5a7b12b158590384c9d",
+    "bytes": 57600078,
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "duration_s": 1800.0
+  },
+  "reference": {
+    "path": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m.json",
+    "scope": "153 hand-corrected participant utterance intervals only. The interviewer has no reference tier, so this fixture cannot support full DER."
+  },
+  "epistemic_limit": "The mono downmix contains both dedicated microphone channels and bleed. It is not an isolated-speaker recording, and channel origin alone does not establish speaker identity in the downmix."
+}

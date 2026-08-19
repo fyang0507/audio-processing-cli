@@ -1,0 +1,462 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-12",
+  "purpose": "Bounded MLX fast-ASR candidate funnel on the frozen SpiCE Cantonese participant-microphone interview.",
+  "host": {
+    "device": "Apple M4 Max",
+    "cpu_cores": 16,
+    "physical_memory_bytes": 68719476736,
+    "os": "macOS 26.5.2",
+    "python": "3.12.12"
+  },
+  "runtime": {
+    "mlx": "0.32.0",
+    "mlx_metal": "0.32.0",
+    "mlx_audio": "0.4.5",
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "transformers": "5.12.1",
+    "tokenizers": "0.22.2",
+    "huggingface_hub": "1.24.0",
+    "hub_offline": true
+  },
+  "evidence_contract": {
+    "raw_artifact_root": "model_tests/benchmark_runs",
+    "raw_artifacts_tracked": false,
+    "runner_current_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+    "asr_scorer_sha256": "a455bb9708e03bd4091d57eb1940c169394fdef60a66c00141e95124f30475e1",
+    "asr_scorer_schema_version": 2,
+    "asr_scorer_normalization_version": 2,
+    "mlx_audio_stt_utils_sha256": "515411ec95a96b9747b4b1ae27ee10a6fdbffa213e0e9bc4e2b3f6c27233028b",
+    "memory_semantics": "Process RSS and MLX allocator counters overlap and must not be summed. Sampled MLX active-plus-cache is the closest exposed allocator-footprint proxy; it omits non-MLX memory and is not a physical-16-GB validation.",
+    "timing_semantics": "Every artifact came from a new OS process. Runner wall begins after argument/config validation and includes MLX imports, model load, audio preparation, and synchronized inference; it excludes interpreter startup. Persistent compiler, filesystem, and OS cache state was not cleared between jobs.",
+    "quality_semantics": "MER is orthography-sensitive mixed Han-character/Latin-token edit distance against a participant-only reference. The participant microphone contains audible interviewer bleed; an unfiltered single-stream hypothesis is therefore not directly comparable with an oracle-filtered diarized hypothesis and may be penalized for correctly transcribing audible interviewer speech."
+  },
+  "fixtures": {
+    "spice_3m_participant_mic": {
+      "audio_sha256": "18ecadfbe300c9cb4796bbdb08f7e91c31be782669b390831c2ed46d178a7d3d",
+      "prepared_16khz_float32_sha256": "d404936b0b22a056db177d539efec3c6a7565afa8174bd1508a4e8bee66370d3",
+      "duration_s": 180.0,
+      "manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview3m.json",
+      "manifest_sha256": "bb5b51ce37552e8234b0e4cb854b4da4fed125268823a41d4869636ae5d7e0ab"
+    },
+    "spice_30m_participant_mic": {
+      "audio_sha256": "0769ce2478709153d6e7ba5c10078f49edc58a76351189fcf92d1d8e7b6f233c",
+      "prepared_16khz_float32_sha256": "86f097e017fe5aea61c9066fd096aae0dce1f758afc178d644051fac3f84e33c",
+      "duration_s": 1800.0,
+      "manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m.json",
+      "manifest_sha256": "61e191626e701bac5a8e7c52fb0d39b759e63075b0722096775490fc7a7286c8"
+    },
+    "spice_60m_participant_mic_duplicate_stress": {
+      "audio_sha256": "d0049e2bd6080dbd2125ff2981acc8d8e25c09e63a5a6413d0e2d088e43c549e",
+      "prepared_16khz_float32_sha256": "b89b651f1b82f7ed903167f926bc952df14bd4d9f3108e2b26e315e5c5deccd4",
+      "duration_s": 3600.0,
+      "construction": "Two exact copies of the 30-minute participant microphone; duration/resource and repeat-stability evidence only, not an independent quality sample."
+    }
+  },
+  "qwen3_asr_0_6b_8bit": {
+    "decision": "Retain as the smallest and fastest interview worker. The subsequent same-turn FluidAudio integration is complete and prefers 1.7B for transcript quality and speed while keeping 0.6B as the minimum-latency/minimum-memory option.",
+    "model": {
+      "snapshot_revision": "89e96d92ba34aca20b3e29fb10cc284097d1219f",
+      "config_sha256": "5d104a945fed08728ab010f12bf3ce5ab4d0794bba276d81bff5bd83ae9d2be0",
+      "weight_sha256": "b5bfe4abc1b4c6e58b633096682ec2b6297298add1527119936107d211adf0e8",
+      "weight_bytes": 1006229426,
+      "loaded_parameter_bytes": 1006116864,
+      "quantization": {
+        "bits": 8,
+        "group_size": 64,
+        "mode": "affine"
+      },
+      "mlx_audio_model_source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250"
+    },
+    "configuration": {
+      "language": "Cantonese",
+      "persistent_model_load": true,
+      "chunk_target_s": 180.0,
+      "chunk_policy": "mlx-audio low-energy boundaries within approximately 5 seconds of the target",
+      "batch_size": 1,
+      "temperature": 0.0,
+      "target_rtf": 0.16666666666666666
+    },
+    "calibration_3m": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_spice3m.json",
+      "artifact_sha256": "957a516a4674c1535cf5d26bf1adad569d36c0bbee8eabe1f1c84848f3f3021d",
+      "artifact_embedded_runner_sha256": "6b3aea25f4be97e8e13190c7de534c588ecf2a7428b7f5644a55bc27cd61f4e6",
+      "score_artifact": "mlx_qwen3_asr_0.6b_8bit_spice3m_score.json",
+      "score_artifact_sha256": "70a323533027b0680c0ae81a5737ba6742710ac5aeefd56df626aa881275816a",
+      "status": "ok",
+      "timing_s": {
+        "import": 0.6950645828619599,
+        "model_load": 1.3070125840604305,
+        "audio_preprocess": 19.244805000023916,
+        "inference": 3.2831915840506554,
+        "runner_wall": 24.54972879192792
+      },
+      "rtf": {
+        "inference": 0.018239953244725864,
+        "service_job_after_model_load": 0.12515553657819206,
+        "runner_wall": 0.13638738217737734
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 1511325696,
+        "peak_sampled_mlx_active": 2622317948,
+        "peak_sampled_mlx_active_plus_cache_derived_from_timeline": 4211268600,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 1,
+        "generated_tokens": 486,
+        "last_container_end_s": 180.0,
+        "timestamp_semantics": "processing-container bound, not a speech or word timestamp",
+        "normalized_segments_sha256": "74c6d4bdb41fd4f3d3c8c345762737054984508e63fbb42e89867003758e6bf2"
+      },
+      "score": {
+        "reference_tokens": 385,
+        "hypothesis_tokens": 410,
+        "distance": 192,
+        "mixed_error_rate": 0.4987012987012987
+      },
+      "cache_state": "First MLX-ASR job in this benchmark session. It was a fresh process, but cold OS/filesystem/compiler state was not controlled. Its 19.245-second audio-preparation cost must not be projected linearly."
+    },
+    "measured_30m": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_spice30m.json",
+      "artifact_sha256": "b90a7d458d239a12d691ab1bf8bf07fc2a16f06e1348d984f851ddcfc601f168",
+      "artifact_embedded_runner_sha256": "6b3aea25f4be97e8e13190c7de534c588ecf2a7428b7f5644a55bc27cd61f4e6",
+      "score_artifact": "mlx_qwen3_asr_0.6b_8bit_spice30m_score.json",
+      "score_artifact_sha256": "694349afc27281c3d710e0e453c55b8983b40cbaa56c74fc52b9dc0ab175a93e",
+      "status": "ok",
+      "timing_s": {
+        "import": 0.5948984171263874,
+        "model_load": 0.948387041920796,
+        "audio_preprocess": 4.769344125175849,
+        "inference": 25.29870625003241,
+        "runner_wall": 31.619123083073646
+      },
+      "rtf": {
+        "inference": 0.01405483680557356,
+        "service_job_after_model_load": 0.016704472430671254,
+        "runner_wall": 0.01756617949059647
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 2384986112,
+        "peak_sampled_mlx_active": 3506528136,
+        "peak_sampled_mlx_active_plus_cache_derived_from_timeline": 4600018769,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 10,
+        "generated_tokens": 5074,
+        "container_duration_min_s": 175.98531249999996,
+        "container_duration_max_s": 183.6540625,
+        "last_container_end_s": 1800.0,
+        "timestamp_semantics": "processing-container bounds, not speech or word timestamps",
+        "normalized_segments_sha256": "8e90af0da1a1c112992f1ceb4d7e4034ece33d3e90317d6de289ab086be26e48"
+      },
+      "score": {
+        "reference_tokens": 3972,
+        "hypothesis_tokens": 4415,
+        "distance": 2163,
+        "mixed_error_rate": 0.5445619335347432,
+        "window_scores_valid": false,
+        "window_score_exclusion_reason": "The generic scorer includes the complete text of every segment overlapping a window. Qwen segments are approximately 180-second processing containers: the middle and last 180-second windows each overlap two containers and therefore include roughly six minutes of hypothesis text. Values above 100 percent are scoring-scope artifacts and must not be cited."
+      },
+      "cache_state": "Fresh OS process after earlier MLX jobs. Persistent Metal/kernel, filesystem, and OS caches were not cleared, so treat the 4.769-second preprocessing and 31.619-second runner wall as warmed persistent compilation/cache state rather than controlled cold start.",
+      "interpretation": "The actual 30-minute runner wall beat the five-minute target by a wide margin. The overall MER is valid for the concatenated single-stream output, but it is not a clean participant-only quality estimate because audible interviewer bleed is unfiltered."
+    },
+    "measured_60m_duplicate_stress": {
+      "artifact": "mlx_qwen3_asr_0.6b_8bit_spice60m_participant_concat.json",
+      "artifact_sha256": "c830104e172b928c82b424a1097eec4869fa1c140dcb732908705c374da3df26",
+      "artifact_embedded_runner_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+      "status": "ok",
+      "timing_s": {
+        "import": 0.6272415420971811,
+        "model_load": 0.960721833165735,
+        "audio_preprocess": 8.628480667015538,
+        "inference": 50.676946457941085,
+        "runner_wall": 60.90447004092857
+      },
+      "rtf": {
+        "inference": 0.014076929571650302,
+        "service_job_after_model_load": 0.016473729756932395,
+        "runner_wall": 0.01691790834470238
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 3276881920,
+        "peak_sampled_mlx_active": 3630931196,
+        "peak_sampled_mlx_active_plus_cache": 4715157094,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 20,
+        "generated_tokens": 10169,
+        "global_generation_budget_tokens": 16384,
+        "generation_budget_remaining_tokens": 6215,
+        "generation_budget_exhausted": false,
+        "finish_reason_exposed_by_library": false,
+        "eos_interpretation": "Source-grounded inference: mlx-audio's sequential chunk loop returned all containers with global budget remaining, and its token generator otherwise stops at EOS or max_tokens; the cap was not reached.",
+        "container_duration_min_s": 175.98531249999996,
+        "container_duration_max_s": 183.6540625,
+        "last_container_end_s": 3600.0,
+        "timestamp_semantics": "processing-container bounds, not speech or word timestamps",
+        "text_sha256": "d03881008cffc3c8f8fbb9c932c1c27f6ba33aa051e1d0ae14ca1ff3a3a3bff7",
+        "normalized_segments_sha256": "8fc35ee60034d7b4e048293e812f33853735d2e754412a02de84fc6228657263"
+      },
+      "repeat_stability": {
+        "whole_half_hash_comparison_valid": false,
+        "reason": "The global low-energy splitter placed a join-adjacent boundary at 1802.2299375 seconds, so the first and second copies do not share all container bounds.",
+        "paired_interior_container_indices_zero_based": {
+          "first_copy": [1, 8],
+          "second_copy": [11, 18]
+        },
+        "paired_container_count": 8,
+        "paired_audio_span_per_copy_s": 1438.1650625,
+        "text_sequences_exact": true,
+        "text_sequence_sha256": "4bfcea09de24779c285fc445b0a60a8ebc9b3d1a987a7b0233a7b4fba7719b15",
+        "max_rebased_boundary_difference_s": 3.410605131648481e-13,
+        "join_adjacent_containers_excluded": true
+      },
+      "cache_state": "Fresh OS process after earlier MLX jobs; persistent compiler, filesystem, and OS cache state was not cleared.",
+      "interpretation": "This closes the one-hour duration/resource gate for the measured chunk policy. The audio is an exact duplicate, so it adds repeat stability but no independent transcript-quality evidence."
+    }
+  },
+  "qwen3_asr_1_7b_8bit": {
+    "measured_date": "2026-08-13",
+    "decision": "The monolithic score is superseded for model selection by the controlled same-turn result in results/2026-08-13-turn-attributed-fast-asr.json: prefer 1.7B for interview transcript quality and speed; retain 0.6B as the smallest and fastest option.",
+    "model": {
+      "snapshot_revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
+      "config_sha256": "1b76b3b6c655fc54595da025f7a96474ad9fa86363303fbdd61a7d8483ccfaf7",
+      "weight_sha256": "bf304b009cc7eca79283056f787b44c952d24ac22cec787b39732bba3c23c13c",
+      "weight_bytes": 2463307541,
+      "loaded_parameter_bytes": 2463182080,
+      "quantization": {
+        "bits": 8,
+        "group_size": 64,
+        "mode": "affine"
+      },
+      "mlx_audio_model_source_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250"
+    },
+    "configuration": {
+      "language": "Cantonese",
+      "persistent_model_load": true,
+      "chunk_target_s": 180.0,
+      "chunk_policy": "mlx-audio low-energy boundaries within approximately 5 seconds of the target",
+      "batch_size": 1,
+      "temperature": 0.0,
+      "target_rtf": 0.16666666666666666
+    },
+    "calibration_3m": {
+      "artifact": "mlx_qwen3_asr_1.7b_8bit_spice3m.json",
+      "artifact_sha256": "794a629120a50656e4911dbf943c306d77eac8c1061e22756d804b1ed7ee6878",
+      "artifact_embedded_runner_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+      "score_artifact": "mlx_qwen3_asr_1.7b_8bit_spice3m_score.json",
+      "score_artifact_sha256": "f3e1ad77ddb8f8d9e913526a839e4e126175563f0223ad4c501f839e781a0392",
+      "status": "ok",
+      "timing_s": {
+        "import": 0.7237619580700994,
+        "model_load": 1.6947428749408573,
+        "audio_preprocess": 1.9551686660852283,
+        "inference": 4.8177835831884295,
+        "runner_wall": 9.20613104198128
+      },
+      "rtf": {
+        "inference": 0.02676546435104683,
+        "service_job_after_model_load": 0.037627512495964764,
+        "runner_wall": 0.051145172455451554
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 2958262272,
+        "peak_sampled_mlx_active": 4447500948,
+        "peak_sampled_mlx_active_plus_cache": 5623866128,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 1,
+        "generated_tokens": 623,
+        "last_container_end_s": 180.0,
+        "timestamp_semantics": "processing-container bound, not a speech or word timestamp",
+        "normalized_segments_sha256": "e404ab434f5be40bdd5b958c821c1cab25e6d0d286fcecfdf4740d47e7ff22a9"
+      },
+      "score": {
+        "reference_tokens": 385,
+        "hypothesis_tokens": 538,
+        "distance": 313,
+        "deletions": 6,
+        "insertions": 159,
+        "substitutions": 148,
+        "mixed_error_rate": 0.812987012987013
+      },
+      "comparison_to_0_6b": {
+        "runner_wall_ratio": 0.3749992971412501,
+        "inference_time_ratio": 1.4674086052707478,
+        "sampled_rss_ratio": 1.9573956029660466,
+        "mlx_active_plus_cache_ratio": 1.3354327786168756,
+        "hypothesis_token_delta": 128,
+        "insertion_delta": 127,
+        "deletion_delta": -1,
+        "substitution_delta": -5,
+        "timing_comparison_valid": false,
+        "timing_limit": "The 0.6B observation was the first MLX-ASR job and paid 19.245 seconds of audio preparation; 1.7B ran after persistent caches were warm."
+      },
+      "cache_state": "Fresh OS process after earlier MLX jobs; persistent compiler, filesystem, and OS cache state was not cleared.",
+      "interpretation": "The transcript was coherent conversational Cantonese and passed the speed gate. Its participant-only MER is heavily penalized because it transcribed substantially more audible interviewer speech than 0.6B."
+    },
+    "measured_30m": {
+      "artifact": "mlx_qwen3_asr_1.7b_8bit_spice30m.json",
+      "artifact_sha256": "037f99174ec736f3a960456e9c3b3c86781246ce508da620153c02e24dd28f8f",
+      "artifact_embedded_runner_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+      "score_artifact": "mlx_qwen3_asr_1.7b_8bit_spice30m_score.json",
+      "score_artifact_sha256": "6f3e228406a786ca17edc8dc0ed3cc7bc17bf517a166089579d1b09cc90ce773",
+      "status": "ok",
+      "timing_s": {
+        "import": 0.5789481250103563,
+        "model_load": 0.9491326250135899,
+        "audio_preprocess": 4.881976792123169,
+        "inference": 48.13895933399908,
+        "runner_wall": 54.558992750011384
+      },
+      "rtf": {
+        "inference": 0.02674386629666616,
+        "service_job_after_model_load": 0.02945607562562347,
+        "runner_wall": 0.030310551527784103
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 3835035648,
+        "peak_sampled_mlx_active": 4903232672,
+        "peak_sampled_mlx_active_plus_cache": 5991090258,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 10,
+        "generated_tokens": 6008,
+        "container_duration_min_s": 175.98531249999996,
+        "container_duration_max_s": 183.6540625,
+        "last_container_end_s": 1800.0,
+        "timestamp_semantics": "processing-container bounds, not speech or word timestamps",
+        "text_sha256": "c3a7b78ce389c6f2c5db42e227c810c6b1174c1616e3295d015a5b1765f5445e",
+        "normalized_segments_sha256": "159c0dc154dc837e0520924d58ab83212711f0e738db2c8367d5849eca286f80"
+      },
+      "score": {
+        "reference_tokens": 3972,
+        "hypothesis_tokens": 5313,
+        "distance": 2943,
+        "deletions": 112,
+        "insertions": 1453,
+        "substitutions": 1378,
+        "mixed_error_rate": 0.7409365558912386,
+        "speaker_scope_limit": "The reference contains participant speech only; the undiarized hypothesis also transcribes audible interviewer speech."
+      },
+      "comparison_to_0_6b": {
+        "runner_wall_ratio": 1.7255061946742576,
+        "sampled_rss_ratio": 1.6079907672015827,
+        "mlx_active_plus_cache_ratio": 1.3024056115541471,
+        "sampled_rss_delta_bytes": 1450049536,
+        "mlx_active_plus_cache_delta_bytes": 1391071489,
+        "hypothesis_token_delta": 898,
+        "insertion_delta": 849,
+        "deletion_delta": -49,
+        "substitution_delta": -20,
+        "interpretation": "The higher MER is driven by extra interviewer-bleed insertions, while edit-path deletions and substitutions are slightly lower. These components do not establish a speaker-specific quality ranking because the hypotheses cover different audible speech."
+      },
+      "cache_state": "Fresh OS process after earlier MLX jobs; persistent compiler, filesystem, and OS cache state was not cleared.",
+      "interpretation": "The actual 30-minute runner beat the five-minute target by a wide margin and produced complete, structurally usable two-sided conversation text. Its bleed-confounded score must not drive model selection; the later controlled attributed-turn A/B supersedes this disposition."
+    },
+    "subsequent_controlled_turn_ab": {
+      "evidence": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json",
+      "input_contract": "Identical 195 FluidAudio turns, batch one, per-turn cache clearing, Cantonese conditioning, and 16,384-token budget; only the Qwen checkpoint changed.",
+      "qwen_0_6b": {
+        "fresh_asr_wall_s": 29.904042458860204,
+        "oracle_participant_mer": 0.5264350453172205
+      },
+      "qwen_1_7b": {
+        "fresh_asr_wall_s": 53.76893762499094,
+        "oracle_participant_mer": 0.33559919436052366
+      },
+      "decision": "The 19.08-point MER reduction earns the 1.80x ASR wall for the quality/speed interview route."
+    },
+    "measured_60m_duplicate_stress": null,
+    "sixty_minute_decision": "Not run: both the actual 1.7B monolithic 30-minute run and the controlled 1.7B same-turn 30-minute run pass the speed/resource gate, while the 0.6B duplicated-hour run already closes the shared MLX runtime's duration gate. Repeating duplicated audio with 1.7B would add no independent quality evidence."
+  },
+  "whisper_large_v3_turbo_4bit": {
+    "decision": "reject for Cantonese interview transcription; do not advance to 30 minutes",
+    "model": {
+      "snapshot_revision": "321a6ead9f6e0646bc8188a54d2a470e275c6b76",
+      "config_sha256": "9135b2ae07e6450a8f4e87ad1124abe970f705d72ea426030f969cb5014b82e9",
+      "weight_sha256": "45298f6dc48df8c11e0a8d1dc5e0197c688bfa530646fa21f1a0238d2b0ecda3",
+      "weight_bytes": 463462815,
+      "loaded_parameter_bytes": 463353120,
+      "quantization": {
+        "bits": 4,
+        "group_size": 64,
+        "mode": "affine"
+      },
+      "mlx_audio_model_source_sha256": "174c768ba672f3ac0ce8f8144c2c9004be422420b6e61cc5b68e4bd5cea3d4c0"
+    },
+    "calibration_3m": {
+      "artifact": "mlx_whisper_large_v3_turbo_4bit_spice3m_wordts.json",
+      "artifact_sha256": "4a09320debc46a86363c5708ece024f81947240a5ca36736cc1e4b1249faf21c",
+      "artifact_embedded_runner_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+      "score_artifact": "mlx_whisper_large_v3_turbo_4bit_spice3m_wordts_score.json",
+      "score_artifact_sha256": "d16797428d41a2f6e7c94f86b5bcabdc1ceb0b5e0263684f4725168231649d67",
+      "configuration": {
+        "language": "yue",
+        "word_timestamps": true,
+        "condition_on_previous_text": true,
+        "temperature_fallback": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        "compression_ratio_threshold": 2.4,
+        "log_probability_threshold": -1.0,
+        "no_speech_threshold": 0.6
+      },
+      "status": "ok",
+      "timing_s": {
+        "import": 0.559822249924764,
+        "model_load": 0.9020242921542376,
+        "audio_preprocess": 1.4216553748119622,
+        "inference": 8.269957207841799,
+        "runner_wall": 11.167561250040308
+      },
+      "rtf": {
+        "inference": 0.045944206710232215,
+        "service_job_after_model_load": 0.05384229212585423,
+        "runner_wall": 0.062042006944668375
+      },
+      "memory_bytes": {
+        "peak_sampled_process_rss": 883163136,
+        "peak_sampled_mlx_active": 1337440246,
+        "peak_sampled_mlx_active_plus_cache": 3050412189,
+        "host_swap_used_delta": 0
+      },
+      "output": {
+        "segments": 65,
+        "words": 349,
+        "last_segment_end_s": 179.98,
+        "timestamp_semantics": "native segment and word timestamps",
+        "normalized_segments_sha256": "17330e100db7ccb4b5130790d72db66abfbd41e1504940ca1947cff0dba20694"
+      },
+      "score": {
+        "reference_tokens": 385,
+        "hypothesis_tokens": 430,
+        "distance": 368,
+        "mixed_error_rate": 0.9558441558441558
+      },
+      "interpretation": "The standard fallback schedule removed a catastrophic repetition loop seen in a discarded greedy-only diagnostic, but the corrected transcript still contained severe Mandarin-normalization and mixed-script corruption. Native timestamps do not rescue unusable text."
+    }
+  },
+  "not_measured": [
+    {
+      "candidate": "mlx-community/whisper-large-v3-turbo-asr-8bit",
+      "reason": "Pruned after the production-configured 4-bit model failed the three-minute quality gate. No inference about 8-bit quality is made."
+    }
+  ],
+  "architecture_recommendation": {
+    "use_case": "speed-first 30-to-60-minute interview transcription where turn-level timing is sufficient",
+    "pipeline": [
+      "Preserve separate recorder channels when available; otherwise run VAD plus diarization first.",
+      "Cut speaker-attributed speech turns and retain their absolute start/end and anonymous speaker label.",
+      "Keep one Qwen3-ASR-1.7B-8bit MLX worker loaded and transcribe turns with explicit Cantonese language conditioning; use 0.6B when minimum latency or memory is the priority.",
+      "Reattach upstream speaker and turn bounds. Run the existing forced aligner per turn only if word-level editing timestamps are needed.",
+      "Run behavioral analysis only on the attributed transcript with explicit uncertainty and human review; ASR benchmarks do not validate hiring inferences."
+    ],
+    "why": "The later controlled same-turn A/B removes the monolithic interviewer-bleed confound: 1.7B reduces oracle-participant MER from 52.64 to 33.56 percent at 1.80x ASR wall, while its actual 53.77-second ASR run remains far below five minutes. Upstream turns supply attribution/timing without asking the ASR model to diarize.",
+    "required_validation_before_default": "Measure the 1.7B sequential end-to-end wall, score independently labeled interviewer turns, validate a physical 16 GB host, test dense turns, and replace oracle role selection with capture metadata or human confirmation. The separately measured FluidAudio and 1.7B ASR components sum to 69.16 seconds, but this is not a measured end-to-end run."
+  }
+}

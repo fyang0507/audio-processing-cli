@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "downloaded_at": "2026-08-12",
+  "runtime": {
+    "package": "sherpa-onnx",
+    "tested_version": "1.13.5",
+    "source": "https://github.com/k2-fsa/sherpa-onnx",
+    "license": "Apache-2.0"
+  },
+  "artifacts": [
+    {
+      "role": "speaker_segmentation_fp32",
+      "name": "sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+      "upstream_source": "https://huggingface.co/pyannote/segmentation-3.0",
+      "bytes": 5992913,
+      "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+      "bundled_license": "MIT",
+      "bundled_license_sha256": "14d7016ad68e7394d6e6b78d96cc2ae431c905287b89674cfdf021e79e62b8ba"
+    },
+    {
+      "role": "speaker_segmentation_int8",
+      "name": "sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+      "upstream_source": "https://huggingface.co/pyannote/segmentation-3.0",
+      "bytes": 1540506,
+      "sha256": "d582f4b4c6b48205de7e0643c57df0df5615a3c176189be3fc461e9d18827b5d",
+      "bundled_license": "MIT",
+      "bundled_license_sha256": "14d7016ad68e7394d6e6b78d96cc2ae431c905287b89674cfdf021e79e62b8ba"
+    },
+    {
+      "role": "speaker_embedding_chinese",
+      "name": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+      "upstream_source": "https://github.com/modelscope/3D-Speaker",
+      "bytes": 39593761,
+      "sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
+      "upstream_license": "Apache-2.0"
+    },
+    {
+      "role": "speaker_embedding_english",
+      "name": "nemo_en_titanet_small.onnx",
+      "download_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx",
+      "upstream_source": "https://catalog.ngc.nvidia.com/orgs/nvidia/nemo/models/titanet_small",
+      "bytes": 40257283,
+      "sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
+      "upstream_license": "Apache-2.0",
+      "license_note": "The NGC model card points to the NVIDIA NeMo Speech license."
+    }
+  ]
+}

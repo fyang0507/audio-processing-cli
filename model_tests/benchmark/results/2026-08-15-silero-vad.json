@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-15",
+  "processor": {
+    "name": "Silero VAD",
+    "version": "silero-vad-6.2.1",
+    "adapter": "audio_cli.vad.SileroOnnxVad",
+    "model_sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
+  },
+  "configuration": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "threshold": 0.5,
+    "exit_threshold": 0.35,
+    "min_speech_ms": 100,
+    "min_silence_ms": 300,
+    "speech_pad_ms": 120
+  },
+  "scope": {
+    "fixture": "prepared CantoMap yue-Hant-HK 149.9-second mono downmix",
+    "audio_sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+    "reference": "union of 83 CantoMap ELAN speaker utterance intervals",
+    "reference_sha256": "4cd2fc6e531f6ad035dbc09234a8ecf55ed54a4f50b1dfb2c9eba2243b20002e"
+  },
+  "observed": {
+    "region_count": 33,
+    "model_load_s": 0.03722629230469465,
+    "inference_s": 0.3694936251267791,
+    "rss_after_inference_bytes": 115359744,
+    "speech_activity_agreement": {
+      "frame_ms": 10.0,
+      "true_positive_s": 94.99,
+      "false_positive_s": 29.1,
+      "false_negative_s": 4.3,
+      "precision": 0.7654927874929487,
+      "recall": 0.9566925168697754,
+      "f1": 0.8504790043871431
+    }
+  },
+  "interpretation": "A concrete activity-gate result for this exact Silero configuration. It does not establish language/dialect coverage, speaker turns, diarization, overlap behavior, or a chained VAD-plus-ASR/diarizer result.",
+  "raw_artifact": {
+    "path": "model_tests/benchmark_runs/silero_vad_6.2.1_cantomap150s_20260815.json",
+    "sha256": "07da4c4374726d99dbf83f889fa1262154490948d586dc848db36db6f11ac9bf"
+  }
+}

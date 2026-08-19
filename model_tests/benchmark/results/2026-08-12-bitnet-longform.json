@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-12",
+  "scope": "VibeVoice-ASR-BitNet via VibeASR.cpp, sequential long-form speed and resource rejection test",
+  "epistemic_limit": "Only 60 s sampled and 180 s greedy prefixes were measured. The 30-minute numbers are explicit linear projections, not measured runs. Transcript agreement is a rejection diagnostic, not a population quality estimate.",
+  "host": {
+    "model": "MacBook Pro Mac16,5",
+    "chip": "Apple M4 Max",
+    "cpu_cores": 16,
+    "performance_cores": 12,
+    "efficiency_cores": 4,
+    "memory_bytes": 68719476736,
+    "os": "macOS 26.5.2 (25F84)",
+    "kernel": "Darwin 25.5.0"
+  },
+  "target": {
+    "audio_duration_s": 1800.0,
+    "maximum_wall_s": 300.0,
+    "maximum_rtf": 0.1666666667
+  },
+  "runtime": {
+    "checkout": "model_tests/vibeasr_cpp/VibeASR.cpp",
+    "git_commit": "5cbce71c65911a7e10639ac13b6ab6929e4c8f9e",
+    "tracked_dirty": false,
+    "llama_cpp_submodule_commit": "68da0a250779d7e04695553f01efaf3d793bf8b0",
+    "build_type": "Release",
+    "compiler": "Apple clang 21.0.0",
+    "gpu_layers": 0,
+    "binary": {
+      "path": "build/bin/asr_infer",
+      "size_bytes": 227800,
+      "sha256": "46d4d7aa375ae140563634db37ccbe597ba8dd4f45f7f7a59d813aa68d3e09b8"
+    },
+    "sources": {
+      "demo/asr_infer.cpp": "ab34fdfa3c0213268a6e775a1c39b524fc6a03b95832fbd700e8a52540d31f5d",
+      "src/asr_server.cpp": "740ddc8fb5e64a25799d508b5fd994614351ba76a96332a1bf40b9fed1325ac4",
+      "utils/prompt_builder.h": "9ee39b2cbdbefa212bb204ac3c7f01f541a5704a7f1995e47f0fde350bf0d095"
+    },
+    "models": {
+      "vae": {
+        "path": "models/vibeasr/vibeasr-vae-encoder-i8_s.gguf",
+        "quantization": "I8_S",
+        "size_bytes": 703080064,
+        "sha256": "4941c82608c253ec066b5cc74d3dd11a5c8fef96cccbc5b87359ef0fe4338df6"
+      },
+      "lm": {
+        "path": "models/vibeasr/vibeasr-lm-i2_s-embed-q6_k.gguf",
+        "quantization": "I2_S with Q6_K embeddings",
+        "size_bytes": 992877600,
+        "sha256": "fbe273d8dc2f2433bb25f849e19d77ea65aaa2188d12c20cee987ab6f321e002"
+      }
+    }
+  },
+  "fixtures": {
+    "source_30m": {
+      "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview30m_participant_24k.wav",
+      "duration_s": 1800.0,
+      "sample_rate_hz": 24000,
+      "channels": 1,
+      "sha256": "0769ce2478709153d6e7ba5c10078f49edc58a76351189fcf92d1d8e7b6f233c"
+    },
+    "prefix_180s": {
+      "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview3m_participant_24k.wav",
+      "duration_s": 180.0,
+      "size_bytes": 8640078,
+      "sha256": "18ecadfbe300c9cb4796bbdb08f7e91c31be782669b390831c2ed46d178a7d3d"
+    },
+    "prefix_60s": {
+      "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview60s_participant_24k.wav",
+      "construction": "First 60 seconds of prefix_180s, PCM s16le copied with ffmpeg 8.1",
+      "duration_s": 60.0,
+      "sample_rate_hz": 24000,
+      "channels": 1,
+      "size_bytes": 2880078,
+      "sha256": "8b29fbe1709844626546d1030414baa955f01c9507b4e213211499b4e0074a67"
+    }
+  },
+  "runs": {
+    "sampled_60s_primary": {
+      "status": "completed_but_output_rejected",
+      "threads": 8,
+      "context_tokens": 4096,
+      "batch_tokens": 2048,
+      "maximum_generated_tokens": 2048,
+      "decoder": {
+        "mode": "sampling",
+        "top_k": 40,
+        "top_p": 0.9,
+        "temperature": 0.7,
+        "seed": 42,
+        "seed_source": "hardcoded llama_sampler_init_dist(42) in asr_infer.cpp"
+      },
+      "prompt_tokens": 497,
+      "speech_pad_tokens": 450,
+      "generated_tokens_including_terminal_token": 190,
+      "termination": "EOG before cap, inferred because generated tokens were below cap and no decode error was logged",
+      "fresh_process_wall_s": 19.17,
+      "fresh_process_rtf": 0.3195,
+      "internal_total_s": 19.082,
+      "internal_rtf": 0.318,
+      "stage_s": {
+        "audio_load": 0.0023,
+        "vae_model_load": 0.128,
+        "lm_model_load": 0.1869,
+        "vae_acoustic": 7.8564,
+        "vae_semantic": 8.0989,
+        "prompt_build": 0.0004,
+        "lm_prefill": 0.9987,
+        "lm_decode": 1.8101
+      },
+      "memory": {
+        "maximum_resident_set_bytes_from_macos_time": 14830682112,
+        "maximum_resident_set_gib": 13.8121490479,
+        "peak_memory_footprint_bytes_from_macos_time": 13848144744,
+        "peak_memory_footprint_gib": 12.8970898166,
+        "swaps_reported_by_macos_time": 0
+      },
+      "output": {
+        "stdout_bytes": 588,
+        "stdout_unicode_characters": 451,
+        "stdout_lines": 4,
+        "han_codepoints": 0,
+        "replacement_codepoints": 0,
+        "human_reading": "Vietnamese-like hallucination rather than Cantonese",
+        "stdout_sha256": "8e95af3581c1b433b963521f70d912b551e84e63ec6842e139a4b3903eeabc1b",
+        "stderr_bytes": 4226,
+        "stderr_sha256": "9ac727eef3a61d4bac72d255a26e6a74b22a6afdd7a00d07a3d3bdaec3d80550"
+      }
+    },
+    "greedy_180s_failure_diagnostic": {
+      "status": "completed_but_output_rejected",
+      "excluded_from_speed_projection": true,
+      "threads": 8,
+      "context_tokens": 16384,
+      "batch_tokens": 2048,
+      "maximum_generated_tokens": 16384,
+      "decoder": {
+        "mode": "greedy"
+      },
+      "prompt_tokens": 1398,
+      "speech_pad_tokens": 1350,
+      "generated_tokens_including_terminal_token": 7782,
+      "termination": "EOG before cap, inferred because generated tokens were below cap and no decode error was logged",
+      "fresh_process_wall_s": 160.33,
+      "fresh_process_rtf": 0.8907222222,
+      "internal_total_s": 159.3342,
+      "internal_rtf": 0.8852,
+      "stage_s": {
+        "audio_load": 0.0068,
+        "vae_model_load": 0.1193,
+        "lm_model_load": 0.5365,
+        "vae_acoustic": 27.0681,
+        "vae_semantic": 27.3204,
+        "prompt_build": 0.0016,
+        "lm_prefill": 3.7328,
+        "lm_decode": 100.5422
+      },
+      "memory": {
+        "maximum_resident_set_bytes_from_macos_time": 37399298048,
+        "maximum_resident_set_gib": 34.8308105469,
+        "peak_memory_footprint_bytes_from_macos_time": 39943730312,
+        "peak_memory_footprint_gib": 37.2004977539,
+        "swaps_reported_by_macos_time": 0
+      },
+      "output": {
+        "stdout_bytes": 11921,
+        "stdout_unicode_characters": 7997,
+        "stdout_lines": 4,
+        "han_codepoints": 0,
+        "replacement_codepoints": 0,
+        "failure": "Vietnamese-like hallucination followed by severe repeated-filler degeneration",
+        "stdout_sha256": "f057651357b969adfd6c82333e8eccded246310990952c6cc7a876f627841e9c",
+        "stderr_bytes": 4249,
+        "stderr_sha256": "5be08942008b6cff96fa63915c06b52471aadfc92708f6d79dbfbced9bbea963"
+      }
+    }
+  },
+  "quality_rejection_diagnostic": {
+    "reference_manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m.json",
+    "reference_manifest_sha256": "61e191626e701bac5a8e7c52fb0d39b759e63075b0722096775490fc7a7286c8",
+    "scorer": "model_tests/benchmark/score_asr.py mixed_tokens/edit_counts",
+    "scorer_sha256": "a455bb9708e03bd4091d57eb1940c169394fdef60a66c00141e95124f30475e1",
+    "reference_selection": "Three participant utterances fully contained in 0 <= interval <= 60 s; interviewer bleed is untranscribed; whole 60 s hypothesis used",
+    "reference_start_s": 18.333350987,
+    "reference_end_s": 55.333350987,
+    "reference_utterances": 3,
+    "reference_tokens": 63,
+    "reference_han_tokens": 59,
+    "hypothesis_tokens": 143,
+    "hypothesis_han_tokens": 0,
+    "distance": 143,
+    "deletions": 0,
+    "insertions": 80,
+    "substitutions": 63,
+    "mixed_error_rate": 2.2698412698,
+    "interpretation": "Rejection gate only; not a general dialect quality score"
+  },
+  "context_feasibility": {
+    "compression_ratio_samples_per_speech_token": 3200,
+    "sample_rate_hz": 24000,
+    "speech_pad_tokens_for_1800s": 13500,
+    "approximate_fixed_prompt_tokens": 48,
+    "approximate_total_prompt_tokens": 13548,
+    "default_context_tokens": 16384,
+    "approximate_remaining_generation_positions": 2836,
+    "frozen_raw_reference_tokens_under_current_gguf_tokenizer": 8563,
+    "conclusion": "The default context is not adequate for monolithic 30-minute reference-shaped output; chunking or a larger, more memory-intensive context is required"
+  },
+  "projection_from_sampled_60s": {
+    "measured_30m_run": false,
+    "chunks": 30,
+    "chunk_duration_s": 60.0,
+    "naive_fresh_process_wall_s": 575.1,
+    "naive_fresh_process_minutes": 9.585,
+    "naive_rtf": 0.3195,
+    "persistent_model_load_amortized_estimate_s": 563.3279,
+    "persistent_model_load_amortized_estimate_minutes": 9.3887983333,
+    "persistent_estimate_formula": "(19.082 - 0.128 - 0.1869) * 30 + 0.128 + 0.1869",
+    "vae_only_sequential_s": 478.659,
+    "vae_only_sequential_minutes": 7.97765,
+    "projection_excludes": [
+      "persistent-server protocol overhead",
+      "chunk enumeration and I/O differences",
+      "overlap and boundary reconciliation",
+      "post-processing",
+      "content-dependent decode-token variation"
+    ],
+    "parallel_workers_tested": false
+  },
+  "capabilities": {
+    "plain_text_transcript": true,
+    "validated_cantonese_transcript_on_fixture": false,
+    "timestamps": false,
+    "diarization": false,
+    "structured_json_for_bitnet_validated": false,
+    "sampled_repeat_stability_measured": false
+  },
+  "decision": "Reject current VibeASR.cpp BitNet configuration for the long-form Cantonese interview pipeline: sequential speed misses the target, output fails the language/script gate, and timestamps/diarization are absent. No measured 30-minute run was warranted."
+}

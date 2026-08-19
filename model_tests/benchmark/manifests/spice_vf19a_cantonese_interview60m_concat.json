@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "fixture_id": "spice-vf19a-cantonese-interview60m-participant-concat",
+  "purpose": "Runtime, resource-growth, and structural-stability stress only",
+  "quality_scoring_allowed": false,
+  "reason_quality_scoring_is_invalid": "The same 30-minute participant channel is repeated twice; this is not an independent 60-minute interview.",
+  "source": {
+    "corpus": "SpiCE: Speech in Cantonese and English",
+    "license": "CC BY 4.0",
+    "source_url": "https://doi.org/10.5683/SP2/MJOXP3",
+    "input_filename": "VF19A_Cantonese_interview30m_participant_24k.wav",
+    "input_sha256": "0769ce2478709153d6e7ba5c10078f49edc58a76351189fcf92d1d8e7b6f233c",
+    "input_duration_s": 1800.0
+  },
+  "construction": {
+    "tool": "ffmpeg",
+    "arguments": [
+      "-stream_loop",
+      "1",
+      "-t",
+      "3600",
+      "-ac",
+      "1",
+      "-ar",
+      "24000",
+      "-c:a",
+      "pcm_s16le"
+    ],
+    "operation": "repeat the complete source twice without crossfade"
+  },
+  "output": {
+    "filename": "VF19A_Cantonese_interview60m_participant_concat_24k.wav",
+    "sha256": "d0049e2bd6080dbd2125ff2981acc8d8e25c09e63a5a6413d0e2d088e43c549e",
+    "duration_s": 3600.0,
+    "sample_rate": 24000,
+    "channels": 1,
+    "codec": "pcm_s16le"
+  }
+}

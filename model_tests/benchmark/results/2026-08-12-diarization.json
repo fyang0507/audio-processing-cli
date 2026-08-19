@@ -1,0 +1,229 @@
+{
+  "schema_version": 1,
+  "study": "local long-form interview diarization",
+  "measured_at": "2026-08-12",
+  "hardware": {
+    "machine": "MacBook Pro Mac16,5",
+    "chip": "Apple M4 Max",
+    "cpu_cores": 16,
+    "unified_memory_gib": 64,
+    "os": "macOS 26.5.2 arm64"
+  },
+  "measurement_scope": {
+    "wall": "Fresh target-process wall after a separate model provisioning run. No competing model benchmark was running.",
+    "rss": "Target process RSS sampled at approximately 100 ms. It excludes system Core ML service memory and is not proof of operation on a physical 16 GB machine.",
+    "quality": "CantoMap is a full two-speaker ELAN agreement diagnostic; SpiCE supplies participant utterance intervals only and cannot produce full DER.",
+    "fluid_internal_timing_limit": "FluidAudio stage timers overlap and reported totalProcessingSeconds exceeded externally observed wall on the long runs. External fresh-process wall is canonical; stage values must not be summed or substituted for it."
+  },
+  "fixtures": {
+    "cantomap_full_label_149_9s": {
+      "audio_sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+      "reference_sha256": "4cd2fc6e531f6ad035dbc09234a8ecf55ed54a4f50b1dfb2c9eba2243b20002e",
+      "reference_speakers": 2,
+      "reference_intervals": 83,
+      "annotation_order_speaker_changes": 75,
+      "duration_s": 149.9
+    },
+    "spice_30m_canonical_mix": {
+      "manifest": "../manifests/spice_vf19a_cantonese_interview30m_canonical_mix.json",
+      "audio_sha256": "79c28259614253cb589c968c4d27693eea98ceaf7c2db372a4cdbeb8a77eb511",
+      "duration_s": 1800.0,
+      "reference_scope": "153 participant utterance intervals; interviewer unlabeled"
+    },
+    "spice_60m_exact_repeat": {
+      "manifest": "../manifests/spice_vf19a_cantonese_interview60m_canonical_mix_concat.json",
+      "audio_sha256": "dfc02923f19b0da6140f8289399be70047151f491a23d2cd9759e84877a022a8",
+      "duration_s": 3600.0,
+      "quality_eligible": false
+    }
+  },
+  "implementations": {
+    "sherpa_onnx": {
+      "runtime_version": "1.13.5",
+      "runtime_license": "Apache-2.0",
+      "model_manifest": "../manifests/sherpa_onnx_diarization_models.json",
+      "provider": "CPU",
+      "threads": 4,
+      "access": "public release assets; no account or token"
+    },
+    "fluidaudio": {
+      "version": "0.15.5",
+      "source_commit": "19600a485baa4998812e4654b70d2bab8f2c9949",
+      "source_license": "Apache-2.0",
+      "binary_sha256": "64eb8ed238c83a4b275be48ac72f93f0508fad695972405f44cfbb4219ce2313",
+      "model_repo": "FluidInference/speaker-diarization-coreml",
+      "model_repo_main_sha_observed_after_provisioning": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+      "model_license": "CC-BY-4.0",
+      "model_access": "public and ungated; offline after cache staging",
+      "compiled_model_inventory_files": 23,
+      "compiled_model_inventory_bytes": 21776918,
+      "compiled_model_inventory_canonical_sha256": "4e5a269f88fd62b29f0140c9ff65a63865390988b5ef7c7750aa8327e138cf26",
+      "offline_pipeline": "Core ML segmentation, WeSpeaker embeddings, PLDA and VBx clustering",
+      "known_speakers": 2,
+      "output": "regular overlap-permitting intervals"
+    }
+  },
+  "short_full_label_results": {
+    "scoring_conventions": {
+      "frame_ms": 10,
+      "overlap_view": "overlap included, zero collar",
+      "exclusive_views": "overlap excluded at zero and 250 ms collar",
+      "speaker_change_tolerance_s": 1.0,
+      "warning": "Values are agreement with one ELAN slice, not comparable to published DER under other collars/overlap rules."
+    },
+    "sherpa_matrix": [
+      {
+        "configuration": "FP32 segmentation + Chinese 3D-Speaker",
+        "wall_s": 7.652793208137155,
+        "rtf": 0.05105265649190897,
+        "peak_rss_bytes": 416333824,
+        "speakers_emitted": 2,
+        "segments": 42,
+        "overlap_zero_collar_error": 0.47781107995745914,
+        "exclusive_zero_collar_error": 0.47388334209143457,
+        "exclusive_250ms_error": 0.2106503298774741,
+        "speaker_change_f1": 0.1234567901234568
+      },
+      {
+        "configuration": "INT8 segmentation + Chinese 3D-Speaker",
+        "wall_s": 8.812921416945755,
+        "rtf": 0.05879200411571551,
+        "peak_rss_bytes": 403374080,
+        "speakers_emitted": 2,
+        "segments": 42,
+        "overlap_zero_collar_error": 0.4573141254955042,
+        "exclusive_zero_collar_error": 0.44992117708880713,
+        "exclusive_250ms_error": 0.2064090480678605,
+        "speaker_change_f1": 0.21428571428571425,
+        "selected_for_sherpa_long_run": true
+      },
+      {
+        "configuration": "FP32 segmentation + English TitaNet-S",
+        "wall_s": 4.421543875010684,
+        "rtf": 0.02949662358245953,
+        "peak_rss_bytes": 397754368,
+        "speakers_emitted": 2,
+        "segments": 41,
+        "overlap_zero_collar_error": 0.47858454993715555,
+        "exclusive_zero_collar_error": 0.474724119810825,
+        "exclusive_250ms_error": 0.2106503298774741,
+        "speaker_change_f1": 0.10126582278481014
+      },
+      {
+        "configuration": "INT8 segmentation + English TitaNet-S",
+        "wall_s": 5.638575291959569,
+        "rtf": 0.03761557899906317,
+        "peak_rss_bytes": 403079168,
+        "speakers_emitted": 1,
+        "segments": 38,
+        "overlap_zero_collar_error": 0.4707531663927294,
+        "exclusive_zero_collar_error": 0.464529689963216,
+        "exclusive_250ms_error": 0.2064090480678605,
+        "speaker_change_f1": null,
+        "failure": "Collapsed to one output label despite known speaker count 2"
+      }
+    ],
+    "fluidaudio_presets": [
+      {
+        "configuration": "fast: step ratio 0.2, minimum segment 1.0 s",
+        "wall_s": 0.7612725840881467,
+        "rtf": 0.005078536251421926,
+        "peak_rss_bytes": 316538880,
+        "segments_by_label": {"S1": 39, "S2": 1},
+        "speaker_seconds_by_label": {"S1": 90.96774429999994, "S2": 1.850590000000011},
+        "overlap_zero_collar_error": 0.48718940346127815,
+        "exclusive_zero_collar_error": 0.47640567524960586,
+        "exclusive_250ms_error": 0.2571473452717562,
+        "speaker_change_f1": null
+      },
+      {
+        "configuration": "quality: step ratio 0.1, minimum segment 0 s",
+        "wall_s": 1.2583710830658674,
+        "rtf": 0.008394737045135874,
+        "peak_rss_bytes": 327876608,
+        "segments_by_label": {"S1": 72, "S2": 18},
+        "speaker_seconds_by_label": {"S1": 100.59421714999993, "S2": 1.3412639999999953},
+        "overlap_zero_collar_error": 0.4805182248863966,
+        "exclusive_zero_collar_error": 0.475249605885444,
+        "exclusive_250ms_error": 0.22306000628338046,
+        "speaker_change_f1": 0.05504587155963303,
+        "selected_for_fluid_long_runs": true
+      }
+    ],
+    "interpretation": "Neither implementation is validated for dense short-turn Cantonese conversation. FluidAudio's quality preset is only a relative preset selection: it still assigns just 1.34 speaker-seconds to its minority label and matches 3 of 75 annotated speaker-change boundaries within 1 second."
+  },
+  "long_form_results": {
+    "sherpa_30m": {
+      "configuration": "INT8 segmentation + Chinese 3D-Speaker, CPU, 4 threads",
+      "wall_s": 133.86258991598152,
+      "rtf": 0.07436810550887862,
+      "peak_rss_bytes": 783810560,
+      "segments_by_label": {"speaker_00": 37, "speaker_01": 49},
+      "speaker_seconds_by_label": {"speaker_00": 28.147599577903748, "speaker_01": 1740.0823574066162},
+      "participant_oracle_label": "speaker_01",
+      "participant_interval_precision": 0.6069983679286486,
+      "participant_interval_recall": 0.9907514233990864,
+      "participant_interval_f1": 0.7527893294562457,
+      "interpretation": "Speed and memory pass comfortably, but one label absorbs almost the full interview. The partial reference cannot determine whether the interviewer was separated correctly."
+    },
+    "fluidaudio_30m": {
+      "configuration": "quality preset, regular overlap output, known two speakers",
+      "wall_s": 14.74278362491168,
+      "rtf": 0.008190435347173156,
+      "peak_rss_bytes": 587481088,
+      "segments_by_label": {"S1": 296, "S2": 293},
+      "speaker_seconds_by_label": {"S1": 1039.065251899999, "S2": 636.6559791},
+      "last_end_s": 1799.8641,
+      "participant_oracle_label": "S1",
+      "participant_interval_precision": 0.9665418923990339,
+      "participant_interval_recall": 0.9421541867161926,
+      "participant_interval_f1": 0.9541922368096062,
+      "interpretation": "Strong evidence for fast role separation on this long-turn interview, but still not full DER because the interviewer lacks labels."
+    },
+    "fluidaudio_60m_exact_repeat": {
+      "configuration": "quality preset, regular overlap output, known two speakers",
+      "wall_s": 31.37984783295542,
+      "rtf": 0.008716624398043172,
+      "peak_rss_bytes": 851427328,
+      "segments_by_label": {"S1": 568, "S2": 569},
+      "speaker_seconds_by_label": {"S1": 2077.0921518999985, "S2": 1272.3972790999992},
+      "last_end_s": 3599.8472,
+      "repeat_half_interval_counts": [588, 549],
+      "repeat_half_same_label_intervals_matching_both_bounds_within_10ms": 124,
+      "repeat_half_same_label_intervals_matching_both_bounds_within_100ms": 440,
+      "repeat_half_speaker_frame_error_rate": 0.009941995082710715,
+      "repeat_half_exact_active_set_fraction_all_audio": 0.9936222222222222,
+      "repeat_half_speech_activity_agreement": 0.9967111111111111,
+      "repeat_half_active_set_transition_f1_50ms": 0.8141935483870968,
+      "repeat_half_participant_oracle_f1": [0.9542602260150013, 0.9541201571937028],
+      "interpretation": "Runtime and RSS scale remain small and coarse rebased activity is similar, but fine segmentation is not repeat-stable: the halves emit 588 versus 549 intervals, only 124 same-label intervals match both bounds within 10 ms, and transition F1 is 81.42% at 50 ms. The consistent participant-only diagnostic does not repair the missing interviewer reference. This is duration/context behavior evidence only."
+    }
+  },
+  "recommendation": {
+    "primary_local_mac_interview_diarizer": "FluidAudio 0.15.5 offline quality preset with a known two-speaker prior",
+    "reason": "It processed the real 30-minute mixed interview in 14.74 seconds at 587 MB sampled target RSS and separated the participant interval reference with oracle P/R/F1 96.65/94.22/95.42%. The 60-minute repeat completed in 31.38 seconds at 851 MB sampled target RSS.",
+    "restriction": "Do not claim dense conversational-turn accuracy: the CantoMap short-turn result was poor. Require a broader fully labeled interview set and a physical 16 GB run before production support.",
+    "fallback": "sherpa-onnx is a public CPU-only fallback with small models and no token, but its selected 30-minute run was 9.1 times slower and its partial-reference label separation was much weaker.",
+    "asr_join": "Run ASR independently, then assign timestamped words by maximum overlap with diarizer intervals and abstain on gaps or ambiguous overlap. Map anonymous labels to candidate/interviewer only with channel metadata, enrollment, or confirmation."
+  },
+  "artifact_sha256": {
+    "sherpa_fp32_3dspeaker_cantomap_run": "84f5ab542dc273560cee72916afb279d4951039c63c3d7e72731006a3d83c4d6",
+    "sherpa_fp32_3dspeaker_cantomap_score": "cb47c65e34080b04a59e31838e030f43c3db8ef6aa4957aacb8ac15cf547ef9c",
+    "sherpa_int8_3dspeaker_cantomap_run": "f3eda1e5a1a8674c1b68147f0935026cc8fc07284a9920f4954fcf913bbeb29d",
+    "sherpa_int8_3dspeaker_cantomap_score": "1ff7cce3a2f05571945c8588544fe74150d7283055ecf401ed17ace77560c25f",
+    "sherpa_fp32_titanet_cantomap_run": "3108e049fe16f132af201558a20e28df3608231b73b6da3e70ba9589039dd756",
+    "sherpa_fp32_titanet_cantomap_score": "f7f43dd942e278c557c3351b504a69843f4be6df2cbd99168bb9a97dac86c2fe",
+    "sherpa_int8_titanet_cantomap_run": "31ee30e97230d3536a54b878367324f989e9a62b78043d23bb6dd62053b73927",
+    "sherpa_int8_titanet_cantomap_score": "cd1b272ffacec78e37843a231572e6dc5fc0d4110410076a2532e0f403e4a0f7",
+    "sherpa_30m_run": "12dc0044491102c9f59a67e6780a6705d31f9da6106e0b11fd3a166324c7dd69",
+    "sherpa_30m_partial_score": "8c6a9d0dcd396793bc260d613e1e36c08b7ba2ae8b653075eb7c5049bb0a8bea",
+    "fluidaudio_fast_cantomap_run": "36b9c08af0c13e90477158e064e95d72966ca2dc1b5e1478d7b994fe4fa4e256",
+    "fluidaudio_fast_cantomap_score": "a1a55c14a73ae41160f5fe1b6dfb89224f5de9ec223b2c4c783bddd49d7f61a3",
+    "fluidaudio_quality_cantomap_run": "3a33a320e0f4c3a70c148bc49ba8c25ab4959682b4ee4e20f7f692b58065ff93",
+    "fluidaudio_quality_cantomap_score": "4c6d61dc6a76c1d969c275ba24eb1100d2569bc765d1c910fdd688d6e6c46b5b",
+    "fluidaudio_30m_run": "cdb9ba6eba883e0f04af8635718249e4cd655803f4f2f377794ad451e8bc41e0",
+    "fluidaudio_30m_partial_score": "d11cc2069c53ef8f1036cd991c23bef4052de37f0bb091a5f619a4b5c719d77b",
+    "fluidaudio_60m_run": "cbc4c581cec66a838709e7b9f86b8d5045a995a1a476622af682bb16923de999",
+    "fluidaudio_60m_repeat_score": "5c2b47213cc0dcf17f558eaea3df1e57758115b56c5f11f11ec78cb5f91a5628"
+  }
+}

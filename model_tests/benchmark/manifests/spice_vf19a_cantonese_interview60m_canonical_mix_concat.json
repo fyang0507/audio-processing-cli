@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture_role": "exact-repeat one-hour diarization resource and stability stress",
+  "input": {
+    "manifest": "model_tests/benchmark/manifests/spice_vf19a_cantonese_interview30m_canonical_mix.json",
+    "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview30m_canonical_mix_16k.wav",
+    "sha256": "79c28259614253cb589c968c4d27693eea98ceaf7c2db372a4cdbeb8a77eb511",
+    "decoded_pcm_s16le_sha256": "465cae97476254ae563420fc11e503b4cc2a7e09b687b5a7b12b158590384c9d",
+    "duration_s": 1800.0
+  },
+  "preparation": {
+    "ffmpeg_version": "8.1",
+    "command": "ffmpeg -nostdin -hide_banner -loglevel error -y -stream_loop 1 -i model_tests/benchmark_data/spice/VF19A_Cantonese_interview30m_canonical_mix_16k.wav -t 3600 -map 0:a:0 -c:a copy model_tests/benchmark_data/spice/VF19A_Cantonese_interview60m_canonical_mix_concat_16k.wav",
+    "repetitions": 2
+  },
+  "output": {
+    "path": "model_tests/benchmark_data/spice/VF19A_Cantonese_interview60m_canonical_mix_concat_16k.wav",
+    "sha256": "dfc02923f19b0da6140f8289399be70047151f491a23d2cd9759e84877a022a8",
+    "bytes": 115200078,
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "duration_s": 3600.0,
+    "decoded_first_half_pcm_s16le_sha256": "465cae97476254ae563420fc11e503b4cc2a7e09b687b5a7b12b158590384c9d",
+    "decoded_second_half_pcm_s16le_sha256": "465cae97476254ae563420fc11e503b4cc2a7e09b687b5a7b12b158590384c9d"
+  },
+  "epistemic_limit": "The second half is an exact duplicate, not an independent one-hour conversation. This fixture supports duration/resource and repeat-consistency diagnostics only and must not be counted as additional diarization-quality evidence."
+}

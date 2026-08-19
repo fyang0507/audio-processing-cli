@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "corpus": "SpiCE: Speech in Cantonese and English",
+  "license": "CC BY 4.0",
+  "source_url": "https://doi.org/10.5683/SP2/MJOXP3",
+  "reference_scope": "Human-corrected participant speech only. Interviewer speech is audible but intentionally absent from the corpus transcript.",
+  "source": {
+    "audio_filename": "VF19A_Cantonese_interview3m_participant_24k.wav",
+    "audio_sha256": "18ecadfbe300c9cb4796bbdb08f7e91c31be782669b390831c2ed46d178a7d3d",
+    "textgrid_filename": "VF19A_Cantonese_I2_20181114.TextGrid",
+    "textgrid_sha256": "1e878f633a64f97832bc88f82ec477b7096ca0ab3eb77af6fbee73ca510fbf0f",
+    "start_s": 271.130649013,
+    "duration_s": 180.0,
+    "tasks": [
+      {
+        "start_s": 271.1306490129996,
+        "end_s": 2072.9179138321997,
+        "text": "interview"
+      }
+    ]
+  },
+  "utterances": [
+    {
+      "start_s": 18.333350987000017,
+      "end_s": 27.725350987000013,
+      "speaker": "participant",
+      "text": "um 我 媽咪 喺 江 門 嚟 的@m um 我 爸爸 又 喺 江 門 跟著 佢 細 【 個 嗰 】 時 搬 咗 去 香港 【 佢 喺 】 香港 長大 的@m"
+    },
+    {
+      "start_s": 31.621350987000028,
+      "end_s": 32.51735098700004,
+      "speaker": "participant",
+      "text": "廣東話"
+    },
+    {
+      "start_s": 45.98935098700002,
+      "end_s": 55.33335098700002,
+      "speaker": "participant",
+      "text": "um 應該 係 似 中國 或者 香 【 港 嘅 】 因為 我 返到 去 呢 同 我 姐係 um"
+    },
+    {
+      "start_s": 56.42935098700002,
+      "end_s": 65.86935098700002,
+      "speaker": "participant",
+      "text": "我 啲 姑媽 呀 喺 香港 呢 &k 通常 傾計 冇乜 大問題 同埋 有 返到 去 同 我 媽咪 嗰邊 度 呀 婆婆 呀"
+    },
+    {
+      "start_s": 66.58935098700005,
+      "end_s": 70.22935098700003,
+      "speaker": "participant",
+      "text": "姨媽 呀 聽@m 嘢 呢 又 冇乜 大問題"
+    },
+    {
+      "start_s": 74.30935098700002,
+      "end_s": 83.59735098700003,
+      "speaker": "participant",
+      "text": "um 唔多 返 呀 我 以前 細個 嗰時 呢 每四年 返 一次 度 依家 um 我讀 咗 中學 耐咗 囉"
+    },
+    {
+      "start_s": 86.437350987,
+      "end_s": 90.043350987,
+      "speaker": "participant",
+      "text": "最尾 一次 係 我 十年 級度 【 嗰陣 】 時返"
+    },
+    {
+      "start_s": 95.62935098700001,
+      "end_s": 103.83535098700003,
+      "speaker": "participant",
+      "text": "um 去 平時 嗰啲 地方 呢 um 姐係 我 媽咪 出 【 世 嗰 】 度 um 【 姐係 】 江門 呀 新會 呀"
+    },
+    {
+      "start_s": 103.971350987,
+      "end_s": 109.58135098700001,
+      "speaker": "participant",
+      "text": "uh 香港 呀 go5 哋 【 嗰 一 】 次返 呢 又去 咗 澳門 同 北京 玩"
+    },
+    {
+      "start_s": 114.877350987,
+      "end_s": 118.293350987,
+      "speaker": "participant",
+      "text": "um 我 最 【 鍾意 】 係 去 一度 澳門 一度 香港 囉"
+    },
+    {
+      "start_s": 119.925350987,
+      "end_s": 141.00535098700004,
+      "speaker": "participant",
+      "text": "um 因為 【 比較 】 多 um 是非 like rules um 同埋 呢 姐係 我去 嗰 &bi3 北京 呢 我 覺得 好 污糟 呀 同埋 um 我 返去 新會 呀 江門 呀 【 因為 】 我 唔係好 敢 或者 識 自己 過馬路 因為 啲 車 唔停 吖嘛"
+    },
+    {
+      "start_s": 148.757350987,
+      "end_s": 160.98135098700004,
+      "speaker": "participant",
+      "text": "um 我 媽咪 呢 呀 佢 話 佢 唔 【 鍾意 】 香港 佢 話 啲人 呀 成日 都 【 行緊 咁 】 快 呀 咁 忙 呀 佢 唔 【 鍾意 】 佢 比較 【 鍾意 】 佢 新 會 呀 或者 江門 呀 多啲"
+    },
+    {
+      "start_s": 162.805350987,
+      "end_s": 174.79735098700002,
+      "speaker": "participant",
+      "text": "我 爹哋 好少 同 我哋 返 【 所以 】 佢 通常 佢 返 呢 &j uh 佢 係 自己 一個 煩返 好少 【 都 一 】 跟 埋 我哋 好少 跟 埋 我 媽咪 我 妹妹 或者 我返"
+    }
+  ],
+  "reference_text": "um 我 媽咪 喺 江 門 嚟 的@m um 我 爸爸 又 喺 江 門 跟著 佢 細 【 個 嗰 】 時 搬 咗 去 香港 【 佢 喺 】 香港 長大 的@m 廣東話 um 應該 係 似 中國 或者 香 【 港 嘅 】 因為 我 返到 去 呢 同 我 姐係 um 我 啲 姑媽 呀 喺 香港 呢 &k 通常 傾計 冇乜 大問題 同埋 有 返到 去 同 我 媽咪 嗰邊 度 呀 婆婆 呀 姨媽 呀 聽@m 嘢 呢 又 冇乜 大問題 um 唔多 返 呀 我 以前 細個 嗰時 呢 每四年 返 一次 度 依家 um 我讀 咗 中學 耐咗 囉 最尾 一次 係 我 十年 級度 【 嗰陣 】 時返 um 去 平時 嗰啲 地方 呢 um 姐係 我 媽咪 出 【 世 嗰 】 度 um 【 姐係 】 江門 呀 新會 呀 uh 香港 呀 go5 哋 【 嗰 一 】 次返 呢 又去 咗 澳門 同 北京 玩 um 我 最 【 鍾意 】 係 去 一度 澳門 一度 香港 囉 um 因為 【 比較 】 多 um 是非 like rules um 同埋 呢 姐係 我去 嗰 &bi3 北京 呢 我 覺得 好 污糟 呀 同埋 um 我 返去 新會 呀 江門 呀 【 因為 】 我 唔係好 敢 或者 識 自己 過馬路 因為 啲 車 唔停 吖嘛 um 我 媽咪 呢 呀 佢 話 佢 唔 【 鍾意 】 香港 佢 話 啲人 呀 成日 都 【 行緊 咁 】 快 呀 咁 忙 呀 佢 唔 【 鍾意 】 佢 比較 【 鍾意 】 佢 新 會 呀 或者 江門 呀 多啲 我 爹哋 好少 同 我哋 返 【 所以 】 佢 通常 佢 返 呢 &j uh 佢 係 自己 一個 煩返 好少 【 都 一 】 跟 埋 我哋 好少 跟 埋 我 媽咪 我 妹妹 或者 我返"
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-15",
+  "host": {
+    "machine": "Apple M4 Max",
+    "physical_memory_bytes": 68719476736,
+    "os": "macOS 26.5.2",
+    "cpu_count": 16
+  },
+  "scope": {
+    "fixture_description": "Local Mandarin-English-Sichuanese two-speaker/filler code-switch material; each run records its own source/prepared hash.",
+    "quality_limit": "No frozen reference or code-switch spans; outputs are interface/operational evidence, not code-switch or LID accuracy metrics.",
+    "memory_limit": "Current-process RSS and MLX allocator proxies are not whole-system or physical-16-GiB compatibility measurements."
+  },
+  "firered_lid_pair": {
+    "runtime": {
+      "firered_code_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
+      "torch": "2.10.0",
+      "firered_asr_revision": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+      "firered_lid_revision": "1bb4d285c8456429385d9c0810300df4297bc11b"
+    },
+    "configuration": {
+      "device": "cpu",
+      "dtype": "float32",
+      "asr_batch_size": 4,
+      "punc_batch_size": 4,
+      "vad_region_count": 58,
+      "asr_and_lid_batch_count": 15
+    },
+    "audio": {
+      "sha256": "ec4c3a63462cc0ed6d5dd7f7fb6df56f493e1a746ee3ab293a0e78a2a9af928f",
+      "duration_s": 139.284,
+      "sample_rate": 16000,
+      "channels": 1
+    },
+    "lid_on": {
+      "artifact": "benchmark_runs/firered_lidon_batch4_multispeaker_codeswitch_20260815.json",
+      "artifact_sha256": "df32268dad30a0322745c1df85653240fc65ab7c87b428463e8e7abd65308b9d",
+      "inference_s": 162.08530725026503,
+      "end_to_end_s": 173.52842991705984,
+      "peak_sampled_rss_bytes": 13169377280,
+      "lid_stage_s": 71.74037132970989,
+      "lid_load_s": 2.325234000105411,
+      "normalized_segments_sha256": "38185b4893d44c49f19844809d2d6143a0bd82d0721948a1c01c2b3b72c2d182"
+    },
+    "lid_off": {
+      "artifact": "benchmark_runs/firered_lidoff_batch4_multispeaker_codeswitch_20260815.json",
+      "artifact_sha256": "66cf36d41ec116fb41eb06b45bec727871f6c12dcebfca4ab8288944d6df2564",
+      "inference_s": 84.23874570801854,
+      "end_to_end_s": 92.72447645803913,
+      "peak_sampled_rss_bytes": 9830449152,
+      "normalized_segments_sha256": "38185b4893d44c49f19844809d2d6143a0bd82d0721948a1c01c2b3b72c2d182"
+    },
+    "on_minus_off": {
+      "inference_s": 77.84656154224649,
+      "inference_percent": 92.40924864734337,
+      "end_to_end_s": 80.80395345902071,
+      "end_to_end_percent": 87.14760391185814,
+      "peak_sampled_rss_bytes": 3338928128,
+      "peak_sampled_rss_percent": 33.96592464606148
+    },
+    "output_invariance": {
+      "transcript_text_equal": true,
+      "sentence_bounds_text_confidence_equal": true,
+      "word_text_and_bounds_equal": true,
+      "normalized_segments_equal": true,
+      "difference": "LID-on adds lang and lang_confidence metadata only."
+    },
+    "interface_result": "One language/dialect label is emitted for each VAD region and copied to punctuation sentences. It is not token-level code-switch detection."
+  },
+  "qwen_codeswitch_probe": {
+    "runtime": {
+      "mlx": "0.32.0",
+      "mlx_audio": "0.4.5",
+      "runner_sha256": "2a8cdb366b57476b97fb146b7a5ffeeaa20f4ecd919d05be6959f47ff5c3e57c",
+      "qwen_backend_sha256": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250"
+    },
+    "configuration": {
+      "language_condition": "Chinese",
+      "qwen_chunk_seconds": 180,
+      "qwen_batch_size": 1,
+      "max_tokens": 4096,
+      "timestamp_semantics": "one processing-container bound; not a speech/word/speaker timestamp"
+    },
+    "audio": {
+      "source_sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+      "source_duration_s": 139.328,
+      "prepared_sha256": "acd0b06546e9c009271005ad1addc5209f290f0591cf5a855cd4e300759a39d5",
+      "prepared_duration_s": 139.284,
+      "prepared_sample_rate": 16000,
+      "prepared_channels": 1
+    },
+    "qwen_0_6b": {
+      "artifact": "benchmark_runs/qwen3_asr_0.6b_8bit_codeswitch_zh_139s_20260815.json",
+      "artifact_sha256": "c9daa7421fbdb3d71f63ba6037dc99d983813959de58632820856ef7b601907e",
+      "inference_s": 1.5695757907815278,
+      "fresh_process_wall_s": 7.208096125163138,
+      "peak_sampled_rss_bytes": 1630404608,
+      "peak_sampled_mlx_active_plus_cache_bytes": 3882134576
+    },
+    "qwen_1_7b": {
+      "artifact": "benchmark_runs/qwen3_asr_1.7b_8bit_codeswitch_zh_139s_20260815.json",
+      "artifact_sha256": "32cf2fb639a4b1a55b3ba98f52c9040935354a87f18a940ca090faf5ad70a0b7",
+      "inference_s": 2.5356362499296665,
+      "fresh_process_wall_s": 7.379519915673882,
+      "peak_sampled_rss_bytes": 3091808256,
+      "peak_sampled_mlx_active_plus_cache_bytes": 5322353224
+    },
+    "observed_output": "Both outputs retained inline English under the caller-supplied Chinese condition. The 1.7B output rendered the repeated game name as Fortnite; the 0.6B output rendered For For Night, For Night, and For tonight. This is qualitative evidence only."
+  }
+}

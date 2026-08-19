@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-13",
+  "diagnostic": "CantoMap dense-conversation stereo channel structure versus destructive mono preparation",
+  "decision": "Preserve source channels. Stereo energy is associated with the two opaque reference tiers, but raw 10 ms channel dominance is not a diarizer and does not establish that downmix caused FluidAudio collapse.",
+  "epistemic_limits": [
+    "One 149.9-second CantoMap pair and one predeclared threshold ladder",
+    "Reference labels used as an oracle diagnostic and for optimal anonymous mapping",
+    "No person or conversational role is inferred from left/right channels",
+    "Local corpus README and EAF do not provide a checked channel-to-speaker mapping",
+    "No channel-aware FluidAudio counterfactual was run",
+    "No threshold may be promoted to a production default from this same slice"
+  ],
+  "provenance": {
+    "source_stereo": {
+      "path": "model_tests/benchmark_data/cantomap/ConversationData/Subjects-37_38/160818_009F37_38_D.wav",
+      "sha256": "84d6edb64f9115992c89a0ca8e72c0f53259117e00139e0d463201f802b96d98",
+      "duration_s": 289.732063,
+      "sample_rate_hz": 44100,
+      "channels": 2,
+      "codec": "pcm_s16le"
+    },
+    "analyzed_window": {
+      "source_start_s": 30.5,
+      "source_end_s": 180.4,
+      "duration_s": 149.9
+    },
+    "reference": {
+      "path": "model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/reference.json",
+      "sha256": "4cd2fc6e531f6ad035dbc09234a8ecf55ed54a4f50b1dfb2c9eba2243b20002e",
+      "annotation_intervals": 83,
+      "annotation_order_speaker_changes": 75,
+      "speakers": ["F", "G"],
+      "speaker_semantics": "opaque corpus tier IDs"
+    },
+    "existing_prepared_mono": {
+      "path": "model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio.wav",
+      "sha256": "39d206733b9d8dea84b2b115253150256ad49adffade6eab7298596d41367fb8",
+      "duration_s": 149.9,
+      "sample_rate_hz": 16000,
+      "channels": 1,
+      "codec": "pcm_s16le",
+      "preparation": "ffmpeg -ac 1 downmix in prepare_cantomap.py"
+    },
+    "prepared_channel_fixtures_not_model_tested": {
+      "left": {
+        "path": "model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio-left.wav",
+        "sha256": "0f8b15328a0f4cca5c0aa4f0ebf0542e3e74d494acb8ba261f8149f9e0b0cf8c",
+        "duration_s": 149.9,
+        "sample_rate_hz": 16000,
+        "channels": 1,
+        "codec": "pcm_s16le"
+      },
+      "right": {
+        "path": "model_tests/benchmark_data/prepared/cantomap_yue_hk_37_38_d_030500_180400/audio-right.wav",
+        "sha256": "3b9cdadd70dab6b1b4826217f3c049e2e812dd55d0037725c3255fac49fa827f",
+        "duration_s": 149.9,
+        "sample_rate_hz": 16000,
+        "channels": 1,
+        "codec": "pcm_s16le"
+      }
+    }
+  },
+  "method": {
+    "runner": "model_tests/benchmark/run_channel_energy_diarization.py",
+    "runner_sha256": "56e0c6368265c70ae2d55bd6e389e80da01d96719cb0c0af3dd94f43d6ed161d",
+    "scorer": "model_tests/benchmark/score_diarization.py",
+    "scorer_sha256": "61d6d05cf2993c0c3d16e0c2f3d819ffd0fbe747ce838425094e6e53015d4257",
+    "learned_model_used_by_channel_energy_ladder": false,
+    "frame_ms": 10.0,
+    "activity_dbfs": -45.0,
+    "predeclared_dominance_db_ladder": [0.0, 3.0, 6.0],
+    "rule": "Below activity gate emit no channel. Above gate emit the louder anonymous channel when its absolute advantage is greater than the threshold; otherwise emit both channels.",
+    "score_contract": "10 ms frames, optimal anonymous channel-to-tier mapping; exclusive zero/250 ms collar, overlap-included zero collar, annotation-order change matching at 1 second"
+  },
+  "stereo_window": {
+    "left_rms_dbfs": -23.808483986,
+    "right_rms_dbfs": -26.9230631223,
+    "uncentered_channel_correlation": 0.1290359058
+  },
+  "oracle_speaker_exclusive_channel_dominance": {
+    "F": {
+      "exclusive_frames": 2301,
+      "exclusive_duration_s": 23.01,
+      "left_minus_right_db_median": -3.5529504233,
+      "left_minus_right_db_p10": -10.5138076071,
+      "left_minus_right_db_p90": 5.8249802114,
+      "left_louder_fraction": 0.2955236854,
+      "right_louder_fraction": 0.7044763146,
+      "oracle_dominant_anonymous_channel": "right"
+    },
+    "G": {
+      "exclusive_frames": 7214,
+      "exclusive_duration_s": 72.14,
+      "left_minus_right_db_median": 5.2239071363,
+      "left_minus_right_db_p10": -3.9497871833,
+      "left_minus_right_db_p90": 11.8722253053,
+      "left_louder_fraction": 0.7978929859,
+      "right_louder_fraction": 0.2021070141,
+      "oracle_dominant_anonymous_channel": "left"
+    }
+  },
+  "score_denominators": {
+    "exclusive_zero_collar": {
+      "evaluated_audio_s": 145.76,
+      "reference_speaker_s": 95.15
+    },
+    "exclusive_250ms_collar": {
+      "evaluated_audio_s": 86.64,
+      "reference_speaker_s": 63.66
+    },
+    "overlap_included_zero_collar": {
+      "evaluated_audio_s": 149.9,
+      "reference_speaker_s": 103.43
+    },
+    "reference_change_boundaries": 75
+  },
+  "predeclared_ladder": [
+    {
+      "dominance_db": 0.0,
+      "optimal_mapping": {"channel_left": "G", "channel_right": "F"},
+      "output_intervals": 3485,
+      "output_channel_seconds": {"left": 91.1, "right": 56.86},
+      "exclusive_zero_collar_error": 0.7482921703,
+      "exclusive_250ms_collar_error": 0.5149230286,
+      "overlap_included_zero_collar_error": 0.7288987721,
+      "hypothesis_change_boundaries": 3422,
+      "matched_change_boundaries": 75,
+      "change_precision": 0.0219170076,
+      "change_recall": 1.0,
+      "change_f1": 0.0428939091,
+      "run_sha256": "f60e1e2c2fda2c3ba69b78485e3f520100b2c0e771b9e22391efa49f92e4dc20",
+      "score_sha256": "7ac153155ddf91f47b917c0bf757b01593e92d0e225d6cd630491a88be817e82"
+    },
+    {
+      "dominance_db": 3.0,
+      "optimal_mapping": {"channel_left": "G", "channel_right": "F"},
+      "output_intervals": 3389,
+      "output_channel_seconds": {"left": 108.41, "right": 77.65},
+      "exclusive_zero_collar_error": 1.0447714136,
+      "exclusive_250ms_collar_error": 0.7552623311,
+      "overlap_included_zero_collar_error": 0.9912984627,
+      "hypothesis_change_boundaries": 2159,
+      "matched_change_boundaries": 75,
+      "change_precision": 0.0347383048,
+      "change_recall": 1.0,
+      "change_f1": 0.0671441361,
+      "run_sha256": "68de49e08384808f32c00f8424234af8023ad51e7805b8469a11395bbd15ecb9",
+      "score_sha256": "89e4cc56068e920540c40aaa72c424b8c9072fd5af8f34c8414a3f1d5ccc8fa7"
+    },
+    {
+      "dominance_db": 6.0,
+      "optimal_mapping": {"channel_left": "G", "channel_right": "F"},
+      "output_intervals": 2943,
+      "output_channel_seconds": {"left": 123.86, "right": 102.91},
+      "exclusive_zero_collar_error": 1.4003152916,
+      "exclusive_250ms_collar_error": 1.0721017908,
+      "overlap_included_zero_collar_error": 1.3050372232,
+      "hypothesis_change_boundaries": 1412,
+      "matched_change_boundaries": 75,
+      "change_precision": 0.0531161473,
+      "change_recall": 1.0,
+      "change_f1": 0.1008742434,
+      "run_sha256": "4eb287439078ff7df30dcafed3352f65ec8f37756df18ac761d14ce376dd61b3",
+      "score_sha256": "f282c334b107b6f3b587fbf1a14122569519f3cc0a5b3c9b2e9a62e46b9ec0da"
+    }
+  ],
+  "existing_fluidaudio_mono_comparator": {
+    "configuration": "FluidAudio 0.15.5 quality preset, known two-speaker prior",
+    "run_sha256": "3a33a320e0f4c3a70c148bc49ba8c25ab4959682b4ee4e20f7f692b58065ff93",
+    "score_sha256": "4c6d61dc6a76c1d969c275ba24eb1100d2569bc765d1c910fdd688d6e6c46b5b",
+    "exclusive_zero_collar_error": 0.4752496059,
+    "exclusive_250ms_collar_error": 0.2230600063,
+    "overlap_included_zero_collar_error": 0.4805182249,
+    "hypothesis_change_boundaries": 34,
+    "matched_change_boundaries": 3,
+    "change_f1": 0.0550458716,
+    "minority_label_s": 1.341264,
+    "interpretation": "Comparator only. It was run on mono input, so these data cannot isolate downmix as the cause of dense-turn collapse."
+  },
+  "interpretation": {
+    "supported": [
+      "The original stereo window contains speaker-correlated channel dominance",
+      "The canonical mono fixture discards that channel structure",
+      "Instantaneous energy switching massively oversegments and is not a valid diarizer",
+      "Original channels and capture metadata should be retained"
+    ],
+    "not_supported": [
+      "Downmix caused FluidAudio's dense-turn collapse",
+      "A production dominance threshold",
+      "A person or role identity for either channel",
+      "Generalization beyond this CantoMap slice"
+    ],
+    "next_held_out_test": "Freeze a channel-aware front end with per-channel VAD, hysteresis/minimum durations, bleed suppression or ambiguity abstention, and evaluate it on other fully labeled stereo conversations before returning to this slice as held-out evidence."
+  },
+  "artifacts": {
+    "generated_summary_sha256": "29caebab122301ab2f33c8a1f1141ad6af107061ddcb76a56419ed770a28637b",
+    "raw_generated_artifacts": "Ignored under model_tests/benchmark_runs/cantomap_channel_energy/"
+  }
+}
