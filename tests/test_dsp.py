@@ -147,3 +147,90 @@ def test_machine_region_padding_that_reaches_speech_abstains() -> None:
     assert source_stage["abstained_regions"] == [region.region_id]
     assert source_stage["operations"] == []
     np.testing.assert_array_equal(balanced, audio)
+
+
+SR = 48_000
+FADE_MS = 40
+
+
+def _mask(intervals, length_s=7.0, fade_ms=FADE_MS):
+    return smooth_time_mask(
+        int(length_s * SR), intervals, SR, fade_ms, transition_placement="outside"
+    )
+
+
+import pytest  # noqa: E402  (kept beside the cases it serves)
+
+
+@pytest.mark.parametrize(
+    "label, intervals",
+    [
+        ("single", [(1.0, 2.0)]),
+        ("far apart", [(1.0, 2.0), (5.0, 6.0)]),
+        ("closer than two fades", [(1.0, 2.0), (2.01, 3.0)]),
+        ("touching", [(1.0, 2.0), (2.0, 3.0)]),
+        ("overlapping", [(1.0, 2.0), (1.5, 3.0)]),
+        ("at zero", [(0.0, 1.0)]),
+        ("at the end", [(6.9, 7.0)]),
+        ("unsorted", [(5.0, 6.0), (1.0, 2.0)]),
+        ("shorter than one fade", [(1.0, 1.0005)]),
+    ],
+)
+def test_an_outside_placed_mask_is_fully_engaged_over_every_requested_sample(
+    label: str, intervals: list[tuple[float, float]]
+) -> None:
+    """The promise `outside` placement exists to keep: speech-scoped effects are at full strength
+    at the first and last detected sample, with the transition in the surrounding context, so an
+    opening or closing phoneme is not levelled progressively."""
+    mask = _mask(intervals)
+    for start, end in intervals:
+        lo, hi = max(0, round(start * SR)), min(mask.size, round(end * SR))
+        if hi <= lo:
+            continue
+        assert np.allclose(mask[lo:hi], 1.0, atol=1e-6), (
+            f"{label}: mask dips to {mask[lo:hi].min():.4f} inside {start}-{end}"
+        )
+
+
+@pytest.mark.parametrize(
+    "intervals",
+    [
+        [(1.0, 2.0)],
+        [(1.0, 2.0), (2.01, 3.0)],
+        [(1.0, 2.0), (2.0, 3.0)],
+        [(0.0, 1.0)],
+        [(6.9, 7.0)],
+        [(1.0, 1.0005)],
+    ],
+)
+def test_a_mask_stays_in_range_and_free_of_steps(intervals) -> None:
+    """A discontinuity in the blend weight is a click in the render, so bound the step by the
+    fade's own slope rather than merely checking the endpoints."""
+    mask = _mask(intervals)
+    assert mask.min() >= -1e-6 and mask.max() <= 1.0 + 1e-6, (
+        f"mask leaves [0, 1]: [{mask.min():.4f}, {mask.max():.4f}]"
+    )
+    fade_samples = max(1, round(SR * FADE_MS / 1000))
+    largest_step = float(np.max(np.abs(np.diff(mask))))
+    assert largest_step <= 4.0 / fade_samples, (
+        f"step of {largest_step:.5f} exceeds what a {FADE_MS} ms fade can produce"
+    )
+
+
+def test_a_mask_is_the_length_it_was_asked_for() -> None:
+    assert _mask([(1.0, 2.0)], length_s=3.0).size == 3 * SR
+
+
+def test_nothing_is_engaged_far_from_any_interval() -> None:
+    """The scoping guarantee: a speech-scoped effect must reach nowhere near the rest of the file."""
+    mask = _mask([(3.0, 4.0)])
+    quiet = np.r_[mask[: int(2.9 * SR)], mask[int(4.1 * SR) :]]
+    assert float(np.max(quiet)) == 0.0, "the mask is engaged outside its interval plus fade"
+
+
+def test_an_inside_placed_mask_ramps_within_the_interval() -> None:
+    """The other placement still has to behave: `inside` puts the transition in the region, so the
+    first sample is not at full strength. Asserted so the two modes cannot converge unnoticed."""
+    inside = smooth_time_mask(3 * SR, [(1.0, 2.0)], SR, FADE_MS, transition_placement="inside")
+    assert inside[round(1.0 * SR)] < 0.05
+    assert inside[round(1.5 * SR)] == pytest.approx(1.0, abs=1e-6)
