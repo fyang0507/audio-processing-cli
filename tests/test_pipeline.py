@@ -139,3 +139,40 @@ def test_an_enhanced_render_is_refused_as_input_unless_it_is_allowed(tmp_path) -
     report = pipeline.run(once, output=twice, dry_run=False, allow_enhanced_input=True)
     assert report["rendered"] is True
     assert twice.is_file()
+
+
+@pytest.mark.parametrize(
+    "samples_48k",
+    [1332160, 48_000, 48_001, 12_345, 99_999, 1, 512],
+)
+def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
+    """The defect this catches: a speech bound published outside the media.
+
+    `resample_poly` returns `ceil(n * up / down)`, so 1332160 samples at 48 kHz became 444054 at
+    16 kHz where the exact figure is 444053.333. A region running to the end of that signal was
+    published ending at 27.753375 s in a 27.753333 s file -- a bound the source does not have --
+    and the treatment clamp that pulled it back then reported a negative extension, contradicting
+    the guarantee that speech effects are fully engaged at the last detected sample.
+    """
+    audio = np.zeros((samples_48k, 1), dtype=np.float32)
+    vad = pipeline_module._vad_audio(audio, 48_000)
+
+    assert vad.size / 16_000 <= samples_48k / 48_000 + 1e-12, (
+        f"{samples_48k} samples at 48 kHz became {vad.size} at 16 kHz, which is "
+        f"{vad.size / 16_000:.9f} s of timeline for a {samples_48k / 48_000:.9f} s source"
+    )
+
+
+def test_a_source_already_at_16k_is_passed_through_whole() -> None:
+    """The truncation must not eat a sample when no resampling happens."""
+    audio = np.zeros((16_000, 1), dtype=np.float32)
+    assert pipeline_module._vad_audio(audio, 16_000).size == 16_000
+
+
+def test_the_vad_timeline_loses_at_most_one_sample() -> None:
+    """Truncating is the safe direction, but it must not become a habit of discarding tail."""
+    samples_48k = 1332160
+    audio = np.zeros((samples_48k, 1), dtype=np.float32)
+    vad = pipeline_module._vad_audio(audio, 48_000)
+    exact = samples_48k * 16_000 / 48_000
+    assert exact - vad.size < 1.0, f"dropped {exact - vad.size:.3f} samples of tail"
