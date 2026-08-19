@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+from audio_cli import environments as env
 from audio_cli import packages as pkg
 
 REPO = Path(__file__).resolve().parents[1]
@@ -188,14 +189,27 @@ VERIFY_CONDITIONAL = {
 def test_packages_verify_emits_no_field_the_document_does_not_publish(tmp_path) -> None:
     """The defect this catches: `verify` publishing a claim §1.3 never described.
 
-    It was there: `verify` emits the expected private-API hash beside the measured one, where
-    §1.3 published only the measured -- so `matches_expected: true` was unreproducible by eye.
-    """
-    provisioner = provisioned_like_the_document(tmp_path)
-    documented = shape(documented_block("audio packages verify"))
-    actual = shape(provisioner.verify())
+    It was there twice. `verify` emits the expected private-API hash beside the measured one,
+    where §1.3 published only the measured -- so `matches_expected: true` was unreproducible by
+    eye. And the guard's *passing* verdict adds `signature_ok` and `target`, which stayed
+    invisible here for as long as the only reachable path was the one that yields no verdict.
 
-    undocumented = sorted(set(actual) - set(documented) - VERIFY_CONDITIONAL)
+    So both guard paths are compared, unioned. §1.3 depicts a machine where the guard passes, and
+    a payload shape that only one fixture can reach is a payload shape nothing checks.
+    """
+    from test_packages import FakeToolchain  # sibling module, same rootdir
+
+    documented = shape(documented_block("audio packages verify"))
+    silent = provisioned_like_the_document(tmp_path)
+    emitted = set(shape(silent.verify()))
+
+    expected_hash = {guard["kind"]: guard
+                     for guard in env.environments()["mlx"].guards}["source_hash"]["sha256"]
+    answering = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash=expected_hash),
+                                fetcher=silent.fetcher)
+    emitted |= set(shape(answering.verify()))
+
+    undocumented = sorted(emitted - set(documented) - VERIFY_CONDITIONAL)
     assert not undocumented, (
         f"audio packages verify emits fields §1.3 does not publish: {undocumented}"
     )

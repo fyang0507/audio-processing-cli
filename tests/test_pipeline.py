@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from scipy.io import wavfile
 
 import audio_cli.pipeline as pipeline_module
-from audio_cli.pipeline import EnhancementPipeline
+from audio_cli.media import is_enhanced_media, probe_media
+from audio_cli.pipeline import EnhancementPipeline, PipelineError
 from audio_cli.profiles import PROFILES, STAGE_ORDER
 from audio_cli.vad import SpeechRegion
 
@@ -105,3 +107,35 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     assert all(
         final_evaluations[region_id] == "abstained_overlap" for region_id in abstained
     )
+
+
+def test_an_enhanced_render_is_refused_as_input_unless_it_is_allowed(tmp_path) -> None:
+    """The original media is canonical, so re-enhancing a render takes an explicit override.
+
+    Nothing asserted the guard: a mutation scan turned `allow_enhanced_input` into a no-op and the
+    suite stayed green, which would have let a second pass compound on a first. No fake probe here
+    — the render's own `comment` tag carries the marker the guard reads, so this is the round trip
+    a caller would actually make.
+    """
+    sample_rate = 48_000
+    time = np.arange(round(sample_rate * 4.0)) / sample_rate
+    audio = np.zeros((time.size, 2), dtype=np.float32)
+    speech = (time >= 1.5) & (time < 3.5)
+    audio[speech] = (0.02 * np.sin(2 * np.pi * 180 * time[speech]))[:, None]
+    source = tmp_path / "source.wav"
+    wavfile.write(source, sample_rate, audio)
+
+    pipeline = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad())
+    once = tmp_path / "once.wav"
+    pipeline.run(source, output=once, dry_run=False)
+    assert is_enhanced_media(probe_media(once)), "the render carries no marker to refuse"
+    assert not is_enhanced_media(probe_media(source))
+
+    twice = tmp_path / "twice.wav"
+    with pytest.raises(PipelineError, match="enhanced render"):
+        pipeline.run(once, output=twice, dry_run=False)
+    assert not twice.exists()
+
+    report = pipeline.run(once, output=twice, dry_run=False, allow_enhanced_input=True)
+    assert report["rendered"] is True
+    assert twice.is_file()

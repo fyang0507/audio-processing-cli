@@ -7,6 +7,11 @@ digest verification, and every payload shape the spec documents publish.
 
 The one thing a fake cannot check is whether the real `uv` and Hub calls work. Those are
 exercised by the provisioning probes in `model_tests/benchmark/` and recorded there.
+
+What a fake here *must* be able to represent is the state a repair produces. Both doubles below
+say so at the point where it matters, because both were wrong about it once: a double that always
+rewrites a snapshot, or that can never stop being drifted, turns a repair test green without the
+repair ever running.
 """
 
 from __future__ import annotations
@@ -33,13 +38,26 @@ def isolated_root(tmp_path, monkeypatch):
 
 
 class FakeToolchain(pkg.Toolchain):
-    """Records what would have been run, and pretends it succeeded."""
+    """Records what would have been run, and pretends it succeeded.
 
-    def __init__(self, *, missing: tuple[str, ...] = (), drift: dict | None = None) -> None:
+    Drift is *clearable state*, which is the one thing this double has to get right. `uv pip
+    sync` is convergent — it makes an environment equal to its lock (ENVIRONMENTS.md) — so an
+    environment that has just been recreated cannot still be drifted. This applied `drift`
+    unconditionally and never cleared it, which made a repaired environment unrepresentable: the
+    only way to observe `ok` was to swap in a second toolchain, and a test doing that never
+    executes `verify`'s repair branch at all. Same standard as `FakeFetcher.hf_snapshot` below,
+    for the same reason: a double that cannot represent the state a repair produces makes a
+    broken repair pass.
+    """
+
+    def __init__(self, *, missing: tuple[str, ...] = (), drift: dict | None = None,
+                 private_api_hash: str | None = None) -> None:
         self.calls: list[list[str]] = []
         self.missing = set(missing)
-        self._drift = drift or {}
+        self._drift = dict(drift or {})
         self.created: list[str] = []
+        self._synced: set[str] = set()
+        self.private_api_hash = private_api_hash
 
     def which(self, tool: str) -> str | None:
         return None if tool in self.missing else f"/usr/bin/{tool}"
@@ -52,17 +70,30 @@ class FakeToolchain(pkg.Toolchain):
             stdout = ""
             stderr = ""
 
+        # Opt-in, because the default has to keep yielding *no* verdict: that is the path
+        # `mlx_audio_private_api_error` covers, and the exemption for it in
+        # tests/test_shipped_commands_match_the_document.py has to stay reachable. The only
+        # `-c` invocation in the tool is the private-API probe.
+        if self.private_api_hash is not None and list(args)[1:2] == ["-c"]:
+            guards = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}
+            Result.stdout = json.dumps({
+                "sha256": self.private_api_hash,
+                "params": sorted(guards["signature"]["required_parameters"]),
+            })
         return Result()
 
     def create_environment(self, environment, target: Path) -> None:
         self.created.append(environment.name)
         (target / "bin").mkdir(parents=True, exist_ok=True)
         (target / "bin" / "python").write_text("#!/bin/sh\n")
+        # Re-syncing from the lock is what removes drift, so this is where it goes.
+        self._synced.add(environment.name)
 
     def frozen_packages(self, environment_python: Path) -> dict[str, str]:
         name = environment_python.parent.parent.name
         installed = pkg._locked_versions(env.environments()[name])
-        installed.update(self._drift)
+        if name not in self._synced:
+            installed.update(self._drift)
         return installed
 
     def clone(self, repo: str, commit: str, target: Path) -> None:
@@ -333,21 +364,37 @@ def test_verify_reports_a_reverted_patch(provisioner) -> None:
 
 
 def test_verify_reports_a_drifted_environment_and_repairs_it(tmp_path) -> None:
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
-    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    """One provisioner, drifted before and `ok` after, with evidence the repair path ran.
 
-    drifted = pkg.Provisioner(
-        toolchain=FakeToolchain(drift={"mlx": "0.31.0"}),
-        fetcher=FakeFetcher(tmp_path),
-    )
-    report = drifted.verify()
+    This used to assert the second half against a *different* toolchain, which reports `ok` with
+    or without the flag — so `repair=True` was decorative and `verify`'s `if drift and repair`
+    branch never executed. Note `"mlx"` here is the pip package whose lock pins 0.32.0, not the
+    environment that happens to share its name.
+    """
+    pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).pull(
+        pkg.select(["qwen3-asr-1.7b-8bit"]))
+
+    toolchain = FakeToolchain(drift={"mlx": "0.31.0"})
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+
+    report = provisioner.verify()
     assert report["environments"]["mlx"] == "drifted"
     assert report["failed"][0]["code"] == "environment_drifted"
     assert report["failed"][0]["examples"]["mlx"] == {"locked": "0.32.0", "installed": "0.31.0"}
     assert report["failed"][0]["fix"] == "audio packages verify --repair"
+    # Reported, not repaired: the flag is what re-syncs, so without it the state persists and a
+    # second look says the same thing rather than the report having consumed it.
+    assert toolchain.created == [], "verify without --repair re-synced an environment"
+    assert provisioner.verify()["environments"]["mlx"] == "drifted"
 
-    repaired = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
-    assert repaired.verify(repair=True)["environments"]["mlx"] == "ok"
+    repaired = provisioner.verify(repair=True)
+    assert repaired["environments"]["mlx"] == "ok"
+    assert repaired["failed"] == []
+    assert toolchain.created == ["mlx"], (
+        "the environment was never re-synced, so nothing repaired the drift"
+    )
+    # And it stayed repaired, which is what distinguishes a re-sync from a suppressed report.
+    assert provisioner.verify()["environments"]["mlx"] == "ok"
 
 
 def test_verify_reports_a_corrupted_single_file_artifact(tmp_path) -> None:
@@ -1088,3 +1135,87 @@ def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(tmp_path) -> No
         assert pkg.load_registry()["packages"] == {}, (
             f"{teardown} left a package reading as ready with its bytes already deleted"
         )
+
+
+def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_path) -> None:
+    """The guard's *passing* verdict was unreachable: every test only ever observed `None`.
+
+    A fake interpreter that never answers exercises the no-verdict path and nothing else, so a
+    regression that stopped comparing — or compared against the wrong value — would have looked
+    exactly like a clean run. §1.3 publishes `matches_expected: true`, so something has to be able
+    to produce it. Found while scanning for the vacuous-flag shape; it is the same family.
+    """
+    expected = {guard["kind"]: guard
+                for guard in env.environments()["mlx"].guards}["source_hash"]["sha256"]
+
+    answering = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash=expected),
+                                fetcher=FakeFetcher(tmp_path))
+    answering.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    report = answering.verify()
+    assert report["mlx_audio_private_api_source_hash"] == expected
+    assert report["mlx_audio_private_api_matches_expected"] is True
+    assert report["mlx_audio_private_api_signature_ok"] is True
+    assert "mlx_audio_private_api_error" not in report
+
+    # And it is a comparison rather than an echo: a source file that moved fails it, with both
+    # values published so a reader can see why.
+    moved = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash="0" * 64),
+                            fetcher=FakeFetcher(tmp_path))
+    report = moved.verify()
+    assert report["mlx_audio_private_api_source_hash"] == "0" * 64
+    assert report["mlx_audio_private_api_matches_expected"] is False
+    assert report["mlx_audio_private_api_expected_source_hash"] == expected
+    # Stated, not fixed: a moved private API is reported and does not reach `failed`, so `verify`
+    # still exits 0. Whether it should is a contract decision, recorded in HANDOFF.md.
+    assert report["failed"] == []
+
+
+def test_repair_forces_every_repository_of_a_multi_repo_package(tmp_path) -> None:
+    """A repair that forced only the first of four repositories would leave the rot in place.
+
+    The single-repo test cannot see this: `huggingface` and `huggingface_multi` pass `force`
+    through separate code, and a mutation scan showed nothing asserted the second one.
+    """
+    fetcher = FakeFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["firered-asr2s"]))
+    snapshots = pkg.load_registry()["packages"]["firered-asr2s"]["materialized"]["paths"]
+    weights = [Path(location) / "model.safetensors" for location in snapshots.values()]
+    assert len(weights) == 4
+    for artifact in weights:
+        artifact.write_bytes(b"bit rot")
+
+    provisioner.pull(pkg.select(["firered-asr2s"]), repair=True)
+    assert {revision for _, revision in fetcher.forced} == set(FIRERED_REVISIONS)
+    assert all(artifact.read_bytes() == FakeFetcher.WEIGHTS for artifact in weights), (
+        "a repair left at least one of the four repositories unfetched"
+    )
+
+
+def test_the_cli_hands_repair_and_dry_run_to_verify_and_purge(monkeypatch, capsys) -> None:
+    """The rest of the flag wiring, for the same reason `--repair` on `pull` needed it.
+
+    `--dry-run` is the one where a dropped argument is destructive: a caller asking what a purge
+    would reclaim would have it reclaimed.
+    """
+    seen: dict[str, object] = {}
+
+    class Recorder:
+        def verify(self, *, repair: bool = False) -> dict:
+            seen["verify_repair"] = repair
+            return {"verified": [], "environments": {}, "failed": []}
+
+        def purge(self, *, dry_run: bool) -> dict:
+            seen["purge_dry_run"] = dry_run
+            return {"removed": {}}
+
+    monkeypatch.setattr("audio_cli.cli.Provisioner", Recorder)
+    for argv, key, expected in (
+        (["packages", "verify"], "verify_repair", False),
+        (["packages", "verify", "--repair"], "verify_repair", True),
+        (["packages", "purge"], "purge_dry_run", False),
+        (["packages", "purge", "--dry-run"], "purge_dry_run", True),
+    ):
+        assert main(argv) == 0
+        capsys.readouterr()
+        assert seen[key] is expected, f"{' '.join(argv)} reached the provisioner as {seen[key]!r}"

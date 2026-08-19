@@ -404,9 +404,11 @@ audio packages verify
   ],
   "environments": {"mlx": "ok", "swift": "ok", "torch-firered": "absent",
                    "torch-vibevoice": "absent"},
+  "mlx_audio_private_api_target": "mlx_audio/stt/models/qwen3_asr/qwen3_asr.py",
   "mlx_audio_private_api_expected_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_source_hash": "c082690575eedcd28fb76207d032cefd7eac2f9ce5d36df5a7a06575bc45d250",
   "mlx_audio_private_api_matches_expected": true,
+  "mlx_audio_private_api_signature_ok": true,
   "failed": []
 }
 ```

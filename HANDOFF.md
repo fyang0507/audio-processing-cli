@@ -22,6 +22,19 @@ stack and states requirements, plus its associated agent skill.
   all. A flag that parses is not a flag that works, and a payload key is a claim about work
   someone has to have done. `pull` is now idempotent, tolerates a toolchain-blocked package
   when a *stack* selected it, and refuses `--want` rather than ignoring it.
+- Two things that sweep surfaced and did **not** settle, both about `verify`. A moved
+  `mlx-audio` private API is reported and never reaches `failed`, so `verify` exits 0 while
+  saying `mlx_audio_private_api_matches_expected: false` — the guard the recorded Qwen timings
+  depend on cannot fail the command. And a `blocked` environment is likewise exit 0, which is
+  deliberate and documented. Whether the first should join the second or become an exit-3 check
+  is a contract decision; there is no `audio` command that would fix it, so its `fix` would be a
+  sentence.
+- The suite's doubles are now held to one rule, learned twice: **a double must be able to
+  represent the state a repair produces.** `FakeToolchain` could not stop being drifted and
+  `FakeFetcher` would rewrite a snapshot unasked, and each made a repair test pass without the
+  repair running. A flag-mutation scan over every `repair`/`force`/`dry_run`/`allow_*` branch in
+  the command surfaces is the cheap way to find the rest; it found six unasserted branches on
+  first run, all now covered.
 - ASR research for [Issue #2](https://github.com/fyang0507/audio-processing-cli/issues/2)
   landed on `main` in [#8](https://github.com/fyang0507/audio-processing-cli/pull/8), and the
   `transcribe` specification plus the provisioning layer landed in
