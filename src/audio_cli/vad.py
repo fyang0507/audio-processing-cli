@@ -207,23 +207,33 @@ class SileroOnnxVad:
         if triggered and samples.size - start_sample >= min_speech:
             raw_regions.append((start_sample, samples.size))
 
+        # Join regions separated by less silence than counts as a break, then pad. Both steps
+        # read the *raw* gap, and the threshold is `min_silence` rather than a constant of its
+        # own, because "how much silence is a real break" is one question and two answers to it
+        # can only disagree. They did: this merged on the gap left *after* padding, against a
+        # hard-coded 300 ms. Padding shrinks every gap by `2 * speech_pad_ms`, so with the
+        # shipped 120 ms pad a 300 ms silence arrived at the merge as 60 ms and was rejoined --
+        # making the effective break 540 ms while the profile declared 300, and leaving
+        # `vad_min_silence_ms` inert anywhere in between.
+        merged: list[tuple[int, int]] = []
+        for start, end in raw_regions:
+            if merged and start - merged[-1][1] <= min_silence:
+                merged[-1] = (merged[-1][0], end)
+            else:
+                merged.append((start, end))
+
         padded: list[tuple[int, int]] = []
-        for index, (start, end) in enumerate(raw_regions):
+        for index, (start, end) in enumerate(merged):
             left = max(0, start - pad)
             right = min(samples.size, end + pad)
+            # Padding can still push two surviving regions into each other; splitting the
+            # overlap at its midpoint keeps them ordered and disjoint without inventing speech.
             if index and left < padded[-1][1]:
                 midpoint = (padded[-1][1] + left) // 2
                 padded[-1] = (padded[-1][0], midpoint)
                 left = midpoint
             padded.append((left, right))
-
-        merged: list[tuple[int, int]] = []
-        merge_gap = round(0.30 * sample_rate)
-        for start, end in padded:
-            if merged and start - merged[-1][1] <= merge_gap:
-                merged[-1] = (merged[-1][0], end)
-            else:
-                merged.append((start, end))
+        merged = padded
 
         regions: list[SpeechRegion] = []
         for start, end in merged:

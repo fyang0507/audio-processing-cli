@@ -8,7 +8,7 @@ def test_list_stages_requires_no_input(capsys) -> None:
     result = main(["enhance", "--profile", "product-demo", "--list-stages"])
     payload = json.loads(capsys.readouterr().out)
     assert result == 0
-    assert payload["profile_version"] == "3"
+    assert payload["profile_version"] == "4"
     assert len(payload["stages"]) == 5
 
 
