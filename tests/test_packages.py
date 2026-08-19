@@ -830,14 +830,26 @@ def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
 
 
 def test_naming_a_toolchain_blocked_package_is_still_exit_three(tmp_path) -> None:
-    """The asymmetry: a stack is a superset guess, a named package is an instruction."""
+    """The asymmetry: a stack is a superset guess, a named package is an instruction.
+
+    Named *beside a package that did provision*, so this cannot pass by way of the
+    nothing-was-provisionable rule below — the refusal has to come from the naming.
+    """
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
                                   fetcher=FakeFetcher(tmp_path))
     with pytest.raises(pkg.ProvisioningError) as caught:
-        provisioner.pull(pkg.select(["fluidaudio"]))
+        provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "fluidaudio"]))
     assert caught.value.code == "toolchain_missing"
     assert caught.value.exit_code == 3
+    assert caught.value.payload["package"] == "fluidaudio"
     assert caught.value.payload["requires_tool"] == ["swift"]
+    # What it did provision before refusing stays provisioned, as after any interrupted pull.
+    assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
+
+    # Order does not soften it either: blocked first is the case that used to abort a stack.
+    with pytest.raises(pkg.ProvisioningError):
+        provisioner.pull(pkg.select(["fluidaudio", "qwen3-asr-0.6b-8bit"]))
+    assert "qwen3-asr-0.6b-8bit" not in pkg.load_registry()["packages"]
 
     # And a stack in which nothing at all was provisionable is exit 3 too, because there is no
     # partial success to report. No shipped stack is one package wide, so the selection is

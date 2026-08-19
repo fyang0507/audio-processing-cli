@@ -59,8 +59,10 @@ Three things to read off that table rather than guess:
 
 Selecting by stack deliberately over-provisions: it takes every package that stack *can* use,
 diarizer and aligner included. Prefer explicit ids when the request is narrow and the difference is
-gigabytes. Capability-based selection is reserved and does not narrow anything yet, so it cannot be
-used to trim a download today.
+gigabytes. Capability-based selection cannot trim a download today, and `pull` **refuses `--want`**
+with exit 2 rather than accepting a flag it would ignore. Pass a stack or a list of ids, never both:
+that is a conflict, also exit 2, because a stack is a guess about what might be needed and a list of
+ids is an instruction.
 
 ## Expect a pull to be long, and silent
 
@@ -74,11 +76,21 @@ it. Progress goes to stderr; stdout is a JSON receipt whose `pulled_known_bytes`
 *this* pull added, and whose `hub_revisions_pre_existing` names what was already cached and therefore
 not downloaded again.
 
+Re-running a finished `pull` is cheap and safe: anything already provisioned comes back under
+`skipped` and is not touched, so the receipt for a second run lists no packages and no bytes. Read
+`skipped` as "already there", never as "failed". Forcing the work anyway is `--repair PACKAGE`, and
+that is not something to reach for routinely — it re-downloads.
+
 Then confirm with `audio packages verify`. It exits **3** if any check fails and names a `fix` for
 each failure. Two different repairs exist and the failure tells you which: a package whose files
 changed or vanished is re-materialized with `pull --repair PACKAGE`, while a failure naming a runtime
 environment is re-synced with `verify --repair`. Read the `fix` from the payload instead of choosing
 from memory.
+
+Quote what a passing entry actually says. `digest: "ok"` means the bytes were hashed against a pin,
+and only the speech-activity model has one; the others report the `revision` they pinned, which says
+the pin is recorded and the weights are present, not that anything was hashed. Never summarize a
+`revision` entry as "digest verified".
 
 Expect `license_unreviewed` among a pull's warnings. It is non-blocking, and it means nobody has read
 the license the model card declares. Report it, and never describe a declared license as a cleared
@@ -130,9 +142,15 @@ tool, or the provisioning root outlives the only thing that knows how to describ
 | Code | Meaning | What to do |
 | --- | --- | --- |
 | 0 | done | continue |
-| 2 | the request was wrong — an unknown package or stack, a package that was never provisioned | correct the name; the error usually carries an `allowed` list |
+| 2 | the request was wrong — an unknown package or stack, a package that was never provisioned, or an argument the command cannot honour (`--want`; `--stack` beside package ids) | run the `fix` the payload names; for a bad name the error usually carries an `allowed` list |
 | 3 | provisioning is incomplete or broken — a failed integrity check, a missing tool, a failed verify | run the `fix` the payload names, verbatim |
 
 An absent toolchain blocks only the packages that need it — `doctor` says so, those packages report
 `requires_tool`, and everything else still provisions. Report the blocked capability rather than
 substituting something else for it.
+
+That cuts two ways, deliberately. `pull --stack S` on a machine missing a toolchain exits **0**,
+provisions everything it can, and names what it could not in a `warnings` entry carrying
+`blocking: true` — so check `warnings` on a successful pull, not only the exit code. Naming that
+package on the command line instead exits **3**, because skipping something asked for by name would
+be worse than refusing it.

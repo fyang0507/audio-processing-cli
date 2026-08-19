@@ -14,6 +14,14 @@ stack and states requirements, plus its associated agent skill.
   environments in [ENVIRONMENTS.md](ENVIRONMENTS.md). Their tests run entirely on a
   `FakeToolchain` and `FakeFetcher`, so the real Hub, `uv venv`, digest, and Swift-build
   paths are unexercised, and nothing is provisioned on any machine yet.
+- An audit of that layer found eight defects and all eight are fixed on
+  `fix/cli-provisioning-bugs`. The two worth remembering as *kinds* of mistake, because both
+  survived review by looking finished: `pull` recorded `digest_verified: true` for every Hub
+  package and hashed none of them, so `verify` reported a check it never ran; and `--repair`
+  was declared, documented, and named in four `fix` strings while being read by no code at
+  all. A flag that parses is not a flag that works, and a payload key is a claim about work
+  someone has to have done. `pull` is now idempotent, tolerates a toolchain-blocked package
+  when a *stack* selected it, and refuses `--want` rather than ignoring it.
 - ASR research for [Issue #2](https://github.com/fyang0507/audio-processing-cli/issues/2)
   landed on `main` in [#8](https://github.com/fyang0507/audio-processing-cli/pull/8), and the
   `transcribe` specification plus the provisioning layer landed in
