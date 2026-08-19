@@ -294,6 +294,17 @@ Four checks, all cheap, none loading weights:
 Each check has a failure that must be reachable, not merely described: reverting the patch,
 deleting a wheel, or bumping `mlx-audio` each has to make exactly one of these fail.
 
+Per-environment, `verify` states a verdict rather than the registry's state: `ok`, `drifted`,
+`blocked`, or `absent`. `blocked` means a tool in that environment's `requires_tool` is not on
+`PATH`, so nothing in it can run — this tool launches the Swift product through `swift run` —
+and it is reachable exactly because a stack pull now provisions around a blocked package:
+`speaker-diarization-coreml` needs no toolchain, so it lands in `swift` and leaves the
+environment `ready` in the registry while holding nothing executable. That state used to be
+unreachable, since the stack pull aborted and the environment stayed absent. It is not a
+`failed` entry, so `verify` still exits 0: nothing provisioned is broken, and no `audio` command
+installs a toolchain for a `fix` to name. `doctor`, `list`, and `path` keep publishing the
+registry's own `state`, which is a different fact — see VOCABULARY.md for both enumerations.
+
 ## Running a stage in another environment
 
 The recorded evidence used **strictly sequential fresh subprocesses** — that is what

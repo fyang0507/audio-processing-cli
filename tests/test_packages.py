@@ -945,3 +945,69 @@ def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys)
     assert seen["stack"] == "firered"
     assert seen["repair"] is False
     assert seen["packages"] == ["firered-asr2s", "fluidaudio", "speaker-diarization-coreml"]
+
+
+def test_verify_does_not_call_an_environment_ok_when_its_toolchain_is_absent(
+    tmp_path, the_fake_download_satisfies_the_pin
+) -> None:
+    """A state that only became reachable once a stack pull stopped aborting on a blocked package.
+
+    `speaker-diarization-coreml` needs no toolchain of its own, so it lands in `swift` and marks
+    that environment `ready` while `fluidaudio` stays blocked. Nothing in it can run: this tool
+    launches the built product through `swift run`. A caller dispatching on `swift: "ok"` would
+    conclude diarization is available on a machine that cannot do it.
+    """
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
+    assert pkg.load_registry()["environments"]["swift"]["state"] == "ready", (
+        "the fixture no longer reaches the state under test"
+    )
+
+    report = provisioner.verify()
+    assert report["environments"]["swift"] == "blocked"
+    assert report["environments"]["mlx"] == "ok"
+    # Exit 0, deliberately: `verify` exits 3 on `failed`, and this is not a broken check. The
+    # missing package is one `list` reports as absent, and no `audio` command installs Swift.
+    assert report["failed"] == []
+
+    # And it is a claim about the toolchain, not about the root: the same registry verifies `ok`
+    # once `swift` is back, with nothing re-pulled.
+    restored = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
+    assert restored.verify()["environments"]["swift"] == "ok"
+
+
+def test_a_blocked_environment_outranks_the_checks_it_would_prevent(tmp_path) -> None:
+    """`blocked` replaces a verdict, and only a verdict.
+
+    An environment nobody has provisioned stays `absent` — that is not a claim of usability and
+    it is what `pull` acts on. The word replaces `ok` and `drifted`, which are statements about
+    checks that passed or failed, and it outranks them because a repair that needs the missing
+    tool is not a repair a caller can run.
+    """
+    absent_root = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
+                                  fetcher=FakeFetcher(tmp_path))
+    assert absent_root.verify()["environments"]["swift"] == "absent"
+
+    absent_root.pull(pkg.select(["speaker-diarization-coreml"]))
+    assert absent_root.verify()["environments"]["swift"] == "blocked"
+
+
+def test_vocabulary_names_every_environment_state_verify_can_emit() -> None:
+    """VOCABULARY.md is the naming contract, so a new enum member cannot land unregistered.
+
+    Derived from the source rather than listed by hand: a member added to `verify` without a
+    line in the contract fails the first assertion, and one added to both without the backticked
+    spelling fails the second.
+    """
+    import re
+
+    emitted = set(re.findall(r'environment_states\[name\] = "(\w+)"',
+                             Path(pkg.__file__).read_text()))
+    assert emitted == {"absent", "ok", "drifted", "blocked"}, (
+        f"verify emits environment states {sorted(emitted)}; register the new one in "
+        "VOCABULARY.md and add it here"
+    )
+    vocabulary = (Path(__file__).resolve().parents[1] / "VOCABULARY.md").read_text()
+    for state in sorted(emitted):
+        assert f"`{state}`" in vocabulary, f"VOCABULARY.md does not name the {state!r} state"

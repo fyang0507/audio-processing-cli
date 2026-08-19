@@ -411,7 +411,26 @@ audio packages verify
 }
 ```
 
-Exit 0. Which key an entry carries *is* the claim, and the two are not the same claim. `digest: "ok"`
+Exit 0. On the Swift-less machine above, the same command instead reports:
+
+```json
+{
+  "environments": {"mlx": "ok", "swift": "blocked", "torch-firered": "absent",
+                   "torch-vibevoice": "absent"}
+}
+```
+
+`blocked` rather than `ok`, and still exit 0. `speaker-diarization-coreml` needs no toolchain of
+its own, so it provisioned and left the `swift` environment `ready` in the registry — while
+nothing in that environment can run, because the built product is launched through `swift run`.
+`ok` there would tell a caller diarization is available on a machine that cannot do it. It is not
+a `failed` entry either: nothing provisioned is broken, the gap is a package `list` already
+reports as absent, and no `audio` command installs a toolchain for a `fix` to name. The registry
+state stays `ready` in `doctor` and `list`, which report what the registry holds and publish
+`blocked_by_missing_tool` beside it; only `verify` states a verdict, so only `verify` needed the
+fourth word. VOCABULARY.md has the two enumerations.
+
+Which key an entry carries *is* the claim, and the two are not the same claim. `digest: "ok"`
 means the bytes on disk were hashed and match the manifest's pin. `revision` means that revision is
 pinned and its snapshot is present — the pin is recorded and checkable, the contents were not
 hashed, and there is nothing to hash them against. The absent key is the honest report; a

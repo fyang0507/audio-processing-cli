@@ -808,6 +808,19 @@ class Provisioner:
             if entry is None or entry.get("state") != "ready":
                 environment_states[name] = "absent"
                 continue
+            # A missing toolchain is a property of the environment, not of what is inside it.
+            # This tool launches the Swift product through `swift run`, so with no toolchain
+            # nothing in that environment can execute whatever the registry holds — and the
+            # registry can legitimately hold something, because a stack pull provisions the
+            # packages that need no toolchain and reports the blocked one. `ok` there would tell
+            # a caller diarization is available on a machine that cannot run it. Not a `failed`
+            # entry: nothing provisioned is broken, the gap is a package `list` already reports
+            # as absent, and no `audio` command installs a toolchain for a `fix` to name.
+            blocked_by = [tool for tool in environment.requires_tool
+                          if self.toolchain.which(tool) is None]
+            if blocked_by:
+                environment_states[name] = "blocked"
+                continue
             if not environment.has_interpreter:
                 # No interpreter means no lock to compare against. Its packages carry the
                 # checks that apply — that the product builds and runs — so reporting `ok`
