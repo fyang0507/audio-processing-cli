@@ -109,7 +109,7 @@ Every stage ends as `applied`, `no_op`, `skipped`, `abstained`, or `failed`. The
 4. `source-balance` — balances non-overlapping machine-audio regions against treated speech for `product-demo`; it is disabled for `transcription`.
 5. `program-loudness` — uses EBU R128 measurement to resolve fixed gain, then iterates an oversampled true-peak limiter without undoing earlier region balance.
 
-`transcription@3` targets −23 LUFS / −3 dBTP. `product-demo@3` targets −16 LUFS / −1.5 dBTP and keeps detected machine audio between 4 and 2 dB below the treated speech reference. Version 3 grows reliable VAD seeds to neighboring acoustic activity, reserves silent guard time, and places speech-treatment fades outside that guard. Every threshold and bound is emitted in the report’s `profile` object.
+`transcription@4` targets −23 LUFS / −3 dBTP. `product-demo@4` targets −16 LUFS / −1.5 dBTP and keeps detected machine audio between 4 and 2 dB below the treated speech reference. Version 3 grows reliable VAD seeds to neighboring acoustic activity, reserves silent guard time, and places speech-treatment fades outside that guard. Version 4 changes no threshold: it makes `vad_min_silence_ms` the only thing that decides where a speech region breaks, where a second hard-coded merge had previously required 540 ms of silence to split a region the profile said should split at 300. Renders therefore differ from version 3 wherever a pause falls between those figures — the local 27.8 s fixture moves from 6 speech regions to 10. Every threshold and bound is emitted in the report’s `profile` object.
 
 ## Constrained adjustments
 
