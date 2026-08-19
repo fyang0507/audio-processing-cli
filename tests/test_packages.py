@@ -1011,3 +1011,80 @@ def test_vocabulary_names_every_environment_state_verify_can_emit() -> None:
     vocabulary = (Path(__file__).resolve().parents[1] / "VOCABULARY.md").read_text()
     for state in sorted(emitted):
         assert f"`{state}`" in vocabulary, f"VOCABULARY.md does not name the {state!r} state"
+
+
+def test_remove_validates_every_name_before_deleting_anything(provisioner) -> None:
+    """One fat-fingered name used to cost a good package's bytes.
+
+    The assertions that matter are on the filesystem. The registry is the half that looked
+    correct — it rolled back with the raise, which is precisely how this hid: `is_ready` alone
+    reports `True` both before and after the fix, and the bytes are gone in only one of them.
+    """
+    provisioner.pull(pkg.select(["silero-vad", "vibevoice-asr-7b"]))
+    document = pkg.load_registry()
+    artifact = Path(document["packages"]["silero-vad"]["materialized"]["path"])
+    snapshot = Path(document["packages"]["vibevoice-asr-7b"]["materialized"]["path"])
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    assert artifact.is_file() and snapshot.is_dir() and checkout.is_dir()
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.remove(["silero-vad", "vibevoice-asr-7b", "not-a-package"])
+    assert caught.value.code == "package_not_provisioned"
+    assert caught.value.exit_code == 2
+
+    # All three kinds of location a package can hold, none of them touched.
+    assert artifact.is_file(), "a pinned artifact was deleted before the list was validated"
+    assert checkout.is_dir(), "a source checkout was deleted before the list was validated"
+    assert snapshot.is_dir(), "a Hub revision was deleted before the list was validated"
+    assert pkg.is_ready(pkg.load_registry(), "silero-vad")
+    assert pkg.is_ready(pkg.load_registry(), "vibevoice-asr-7b")
+
+    # And the refusal is not a disabled teardown: the same names without the typo still work.
+    provisioner.remove(["silero-vad", "vibevoice-asr-7b"])
+    assert not artifact.exists() and not checkout.exists() and not snapshot.exists()
+    assert pkg.load_registry()["packages"] == {}
+
+
+def test_remove_names_only_what_it_removed(provisioner) -> None:
+    """`removed` is accumulated inside the loop, so it must not be able to name a survivor."""
+    provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit"]))
+
+    with pytest.raises(pkg.ProvisioningError):
+        provisioner.remove(["qwen3-asr-1.7b-8bit", "not-a-package"])
+    assert sorted(pkg.load_registry()["packages"]) == ["qwen3-asr-1.7b-8bit", "silero-vad"]
+
+    # A name given twice is removed once and reported once, rather than raising on the second
+    # pass over an entry the first pass already dropped.
+    report = provisioner.remove(["silero-vad", "silero-vad"])
+    assert report["removed"] == ["silero-vad"]
+    assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
+
+
+def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(tmp_path) -> None:
+    """The narrower half of the same defect, and the reason each entry is saved as it goes.
+
+    A shared Hub cache can fail or vanish mid-teardown. With one write at the end, that failure
+    rolled back the registry after every local file had already been deleted — every package
+    named still `ready`, nothing behind any of them. This is the only way to reach that window
+    now that unknown names are refused up front, so it is worth an injected failure.
+    """
+    class HostileCache(FakeFetcher):
+        def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
+            raise OSError("the shared cache went away mid-teardown")
+
+    for teardown in ("remove", "purge"):
+        provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
+                                      fetcher=HostileCache(tmp_path / teardown))
+        provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit"]))
+        artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
+
+        with pytest.raises(OSError):
+            if teardown == "remove":
+                provisioner.remove(["silero-vad", "qwen3-asr-1.7b-8bit"])
+            else:
+                provisioner.purge(dry_run=False)
+
+        assert not artifact.exists(), f"{teardown} did not delete the local artifact"
+        assert pkg.load_registry()["packages"] == {}, (
+            f"{teardown} left a package reading as ready with its bytes already deleted"
+        )

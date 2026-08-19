@@ -259,6 +259,18 @@ disagree with it.
 
 **`purge` reads the registry, reports reclaimable bytes, and touches no media or output.**
 
+**A teardown validates before it deletes.** `remove` resolves every name it was given against
+the registry and refuses the whole command if one of them is not there, because it used to delete
+as it went: `remove vibevoice-asr-7b firered-asr2` discarded 17 GiB, then raised on the typo, and
+the single `save_registry` after the loop never ran — so the registry rolled back and went on
+calling a package with no bytes `ready`. `missing_packages` keys on `state`, so nothing noticed
+until a model load. It is the mirror image of the `pulling` rule above: a pull that dies is honest
+about being incomplete, and that teardown was not. Each entry is now dropped and saved as its own
+files go, rather than in one write at the end, which also closes the narrower version of the same
+window in `purge` — a Hub cache that fails mid-teardown used to leave every package `ready` with
+nothing behind it. `purge` never had the validation defect, because it takes its list from the
+registry rather than from a caller. A repeated name removes once and is reported once.
+
 **A teardown reports what it actually freed.** Two things follow, and the first was got wrong
 before it was got right. Most of the bytes are not under the root at all — they are Hub
 revisions — so `remove` and `purge` delete exactly the revisions the registry records, by

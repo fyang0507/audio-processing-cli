@@ -959,20 +959,40 @@ class Provisioner:
     # -- teardown ----------------------------------------------------------------------
 
     def remove(self, package_ids: list[str]) -> dict:
+        """Remove named packages. Every name is resolved before anything is deleted.
+
+        The ordering is the point. Deleting inside the same loop that raised on an unknown name,
+        with one `save_registry` after it, meant `remove vibevoice-asr-7b firered-asr2` discarded
+        17 GiB and then rolled the registry *back* — leaving an entry that still read `ready` for
+        a package whose bytes were gone. Nothing downstream notices, because `missing_packages`
+        keys on `state`, so the caller finds out at model load. That is the mirror image of what
+        the `pulling` state exists to prevent: a pull that dies is honest about being incomplete,
+        and a teardown that died was not. A caller naming several packages already assumes
+        all-or-nothing, so validate the whole list first.
+
+        Two consequences, both intended. A repeated name removes once and is reported once. And
+        each entry is dropped and saved as soon as its own files are gone rather than in one write
+        at the end, so no later failure in the teardown can restore a claim to bytes that no
+        longer exist.
+        """
         document = load_registry()
+        targets: list[str] = []
+        for identifier in package_ids:
+            if identifier not in document["packages"]:
+                raise ProvisioningError(
+                    "package_not_provisioned", f"{identifier} is not in the registry",
+                    exit_code=2, package=identifier, fix="audio packages list",
+                )
+            if identifier not in targets:
+                targets.append(identifier)
+
         removed: list[str] = []
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
 
-        for identifier in package_ids:
-            entry = document["packages"].get(identifier)
-            if entry is None:
-                raise ProvisioningError(
-                    "package_not_provisioned", f"{identifier} is not in the registry",
-                    exit_code=2, package=identifier, fix="audio packages list",
-                )
-            materialized = entry.get("materialized", {})
+        for identifier in targets:
+            materialized = document["packages"][identifier].get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
             retained.extend(materialized.get("hub_revisions_pre_existing", []))
             # Measured before deleting, not read off the registry: what a teardown reports as
@@ -982,7 +1002,11 @@ class Provisioner:
                 _delete(location)
             document["packages"].pop(identifier)
             removed.append(identifier)
+            save_registry(document)
 
+        # After the entries are gone, so a cache that fails here costs reclaimable space in a
+        # shared cache rather than leaving a package whose local bytes are already deleted
+        # reading as ready. There is no ordering that keeps that entry honest.
         deleted, hub_freed = self.fetcher.delete_hub_revisions(hub_revisions)
         kept, dropped, environment_freed = self._collect_environments(document)
         local_freed += environment_freed
@@ -1059,6 +1083,11 @@ class Provisioner:
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
+        # `purge` cannot take a name that is not in the registry — it reads the list *from* the
+        # registry — so it never had `remove`'s validation defect. It shared the narrower half:
+        # every local file was deleted and the registry was cleared in one write afterwards, so
+        # anything that raised in between left every package reading as `ready` with nothing
+        # behind it. Same rule as `remove`, then: an entry goes as soon as its own bytes do.
         for identifier in package_ids:
             materialized = document["packages"][identifier].get("materialized", {})
             hub_revisions.extend(materialized.get("hub_revisions", []))
@@ -1066,13 +1095,14 @@ class Provisioner:
             for location in _locations(materialized):
                 local_freed += _tree_bytes(location) if location.exists() else 0
                 _delete(location)
+            document["packages"].pop(identifier)
+            save_registry(document)
         for name in environment_names:
             local_freed += _tree_bytes(paths.env_dir(name)) if paths.env_dir(name).exists() else 0
             _delete(paths.env_dir(name))
+            document["environments"].pop(name, None)
+            save_registry(document)
         deleted, hub_freed = self.fetcher.delete_hub_revisions(hub_revisions)
-        document["packages"].clear()
-        document["environments"].clear()
-        save_registry(document)
         return {
             "removed": {"packages": package_ids, "environments": environment_names},
             "hub_revisions_deleted": deleted,

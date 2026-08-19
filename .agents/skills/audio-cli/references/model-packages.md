@@ -122,6 +122,10 @@ Three readings that trip people up:
 go when their last package does, and the report names what was kept and why. Neither touches media or
 transcript output.
 
+`remove` is all-or-nothing across the names you give it: one that was never provisioned refuses the
+whole command with exit 2 and deletes nothing, so a typo costs a retry rather than gigabytes. Read
+`removed` for what actually went; it never names a package the command left alone.
+
 Because weights sit in that shared cache, teardown draws one line: a revision **this machine's root
 downloaded** is deleted, and a revision that was **already there** when it was pulled is retained,
 since it may belong to another tool or an earlier experiment. That is why a purge can legitimately

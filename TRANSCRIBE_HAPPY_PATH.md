@@ -1245,6 +1245,11 @@ audio packages remove vibevoice-asr-7b
 }
 ```
 
+`remove` takes several names, and it is all-or-nothing: every name is resolved against the
+registry before anything is deleted, so a typo among four ids costs nothing but the retry. It used
+to delete as it went and then roll the registry back, which left a package whose bytes were gone
+still reading as `ready`.
+
 Reference counting cuts both ways here, which is the point of showing it: `torch-vibevoice`
 held exactly one package and dies with it, while `mlx` survives because the aligner and the
 ASR checkpoint are still provisioned there. The count is derived from the package table each
