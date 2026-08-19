@@ -8,7 +8,6 @@
     "revisions": "Recovered from the recorded runs: .cache/huggingface/download/*.metadata under each local model directory, and the hub snapshot directories for the MLX checkpoints."
   },
   "license_policy": "license_declared is what the model card says at the pinned revision. license_reviewed stays false until someone reads the terms; a declared license is evidence that one exists, not a redistribution clearance. `audio packages list` reports both.",
-
   "environments": {
     "core": {
       "provisioned": false,
@@ -33,7 +32,15 @@
         {
           "kind": "signature",
           "target": "mlx_audio.stt.models.qwen3_asr.qwen3_asr.Qwen3ASRModel._generate_chunks_batched",
-          "required_parameters": ["chunks", "max_tokens", "sampler", "language", "system_prompt", "batch_size", "verbose"],
+          "required_parameters": [
+            "chunks",
+            "max_tokens",
+            "sampler",
+            "language",
+            "system_prompt",
+            "batch_size",
+            "verbose"
+          ],
           "checkable_without_weights": true
         }
       ]
@@ -58,17 +65,24 @@
       "provisioned": true,
       "python": null,
       "lock": null,
-      "requires_tool": ["swift"],
+      "requires_tool": [
+        "swift"
+      ],
       "reason": "A Swift build product plus one Core ML model package. No interpreter, so no lock; absent `swift` blocks only these packages and is reported by `audio doctor` rather than being fatal."
     }
   },
-
   "packages": {
     "silero-vad": {
       "environment": "core",
       "kind": "weights",
-      "roles": ["vad"],
-      "stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"],
+      "roles": [
+        "vad"
+      ],
+      "stacks": [
+        "qwen-1.7b",
+        "qwen-0.6b",
+        "vibevoice"
+      ],
       "bytes": 2327524,
       "license_declared": "mit",
       "license_reviewed": true,
@@ -86,8 +100,12 @@
     "qwen3-asr-1.7b-8bit": {
       "environment": "mlx",
       "kind": "weights",
-      "roles": ["asr"],
-      "stacks": ["qwen-1.7b"],
+      "roles": [
+        "asr"
+      ],
+      "stacks": [
+        "qwen-1.7b"
+      ],
       "bytes": 2467859030,
       "license_declared": "apache-2.0",
       "license_reviewed": false,
@@ -100,8 +118,12 @@
     "qwen3-asr-0.6b-8bit": {
       "environment": "mlx",
       "kind": "weights",
-      "roles": ["asr"],
-      "stacks": ["qwen-0.6b"],
+      "roles": [
+        "asr"
+      ],
+      "stacks": [
+        "qwen-0.6b"
+      ],
       "bytes": 1010773761,
       "license_declared": "apache-2.0",
       "license_reviewed": false,
@@ -114,8 +136,14 @@
     "qwen3-forcedaligner": {
       "environment": "mlx",
       "kind": "weights",
-      "roles": ["aligner"],
-      "stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"],
+      "roles": [
+        "aligner"
+      ],
+      "stacks": [
+        "qwen-1.7b",
+        "qwen-0.6b",
+        "vibevoice"
+      ],
       "bytes": 1276475979,
       "license_declared": "apache-2.0",
       "license_reviewed": false,
@@ -129,14 +157,18 @@
         "revision": "c7cbfc2048c462b0d63a45797104fc9db3ad62b7",
         "bytes": 1840072459,
         "environment_was": "a PyTorch environment via the qwen-asr package",
-        "evidence": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json — identical token text on all 246 aligned tokens across all 17 word-bearing segments, no punctuation-invariant violations, bound agreement median 0 s with P95 80 ms and max 1.6 s."
+        "evidence": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json \u2014 identical token text on all 246 aligned tokens across all 17 word-bearing segments, no punctuation-invariant violations, bound agreement median 0 s with P95 80 ms and max 1.6 s."
       }
     },
     "vibevoice-asr-7b": {
       "environment": "torch-vibevoice",
       "kind": "weights",
-      "roles": ["asr"],
-      "stacks": ["vibevoice"],
+      "roles": [
+        "asr"
+      ],
+      "stacks": [
+        "vibevoice"
+      ],
       "bytes": 17349559904,
       "license_declared": "mit",
       "license_reviewed": false,
@@ -164,18 +196,45 @@
     "firered-asr2s": {
       "environment": "torch-firered",
       "kind": "weights",
-      "roles": ["vad", "lid", "asr", "punctuator"],
-      "stacks": ["firered"],
+      "roles": [
+        "vad",
+        "lid",
+        "asr",
+        "punctuator"
+      ],
+      "stacks": [
+        "firered"
+      ],
       "bytes": 9583893873,
       "license_declared": "apache-2.0",
       "license_reviewed": false,
       "source": {
         "type": "huggingface_multi",
         "repos": [
-          {"role": "asr", "repo": "FireRedTeam/FireRedASR2-AED", "revision": "2304afed56eacfee6256dee5937ed22ffa0b64ec", "bytes": 4731895352},
-          {"role": "lid", "repo": "FireRedTeam/FireRedLID", "revision": "1bb4d285c8456429385d9c0810300df4297bc11b", "bytes": 3550109871},
-          {"role": "punctuator", "repo": "FireRedTeam/FireRedPunc", "revision": "e448fd967f44182a1c323cc30f5d89f2400c28da", "bytes": 1294853603},
-          {"role": "vad", "repo": "FireRedTeam/FireRedVAD", "revision": "7990aaccc6b7aec1e527743bd30201f2c4a03b8c", "bytes": 7035047}
+          {
+            "role": "asr",
+            "repo": "FireRedTeam/FireRedASR2-AED",
+            "revision": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+            "bytes": 4731895352
+          },
+          {
+            "role": "lid",
+            "repo": "FireRedTeam/FireRedLID",
+            "revision": "1bb4d285c8456429385d9c0810300df4297bc11b",
+            "bytes": 3550109871
+          },
+          {
+            "role": "punctuator",
+            "repo": "FireRedTeam/FireRedPunc",
+            "revision": "e448fd967f44182a1c323cc30f5d89f2400c28da",
+            "bytes": 1294853603
+          },
+          {
+            "role": "vad",
+            "repo": "FireRedTeam/FireRedVAD",
+            "revision": "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+            "bytes": 7035047
+          }
         ]
       },
       "checkout": {
@@ -189,27 +248,44 @@
     "fluidaudio": {
       "environment": "swift",
       "kind": "toolchain",
-      "roles": ["diarizer"],
-      "stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"],
+      "roles": [
+        "diarizer"
+      ],
+      "stacks": [
+        "qwen-1.7b",
+        "qwen-0.6b",
+        "vibevoice",
+        "firered"
+      ],
       "bytes": null,
       "unsized_because": "A Swift build product, whose size depends on the toolchain that builds it. pull records the measured size afterwards.",
       "license_declared": "apache-2.0",
       "license_reviewed": true,
       "license_source": "model_tests/benchmark/DIARIZATION.md",
-      "requires_tool": ["swift"],
+      "requires_tool": [
+        "swift"
+      ],
       "source": {
         "type": "git+build",
         "repo": "https://github.com/FluidInference/FluidAudio.git",
         "version": "0.15.5",
-        "commit": "19600a485baa4998812e4654b70d2bab8f2c9949"
+        "commit": "19600a485baa4998812e4654b70d2bab8f2c9949",
+        "product": "fluidaudiocli"
       },
       "note": "Also ships a Core ML VAD that its own VadManager resolves. That is not a named package here: the comparison probe exercised it, but this tool has never provisioned it. If --vad fluidaudio ships, it becomes one and gets its own entry."
     },
     "speaker-diarization-coreml": {
       "environment": "swift",
       "kind": "weights",
-      "roles": ["diarizer"],
-      "stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"],
+      "roles": [
+        "diarizer"
+      ],
+      "stacks": [
+        "qwen-1.7b",
+        "qwen-0.6b",
+        "vibevoice",
+        "firered"
+      ],
       "bytes": 129243647,
       "license_declared": "cc-by-4.0",
       "license_reviewed": true,

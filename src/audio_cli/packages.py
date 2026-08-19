@@ -189,8 +189,16 @@ class Toolchain:
             raise ProvisioningError("swift_build_failed",
                                     f"swift build failed: {built.stderr.strip()[-600:]}")
 
-    def swift_product_runs(self, checkout: Path) -> bool:
-        result = self.run(["swift", "run", "-c", "release", "fluidaudio", "--help"],
+    def swift_product_runs(self, checkout: Path, product: str) -> bool:
+        """Whether the built executable actually launches.
+
+        The product name is pinned in the manifest rather than written here. It was `fluidaudio`
+        in this call, and `Package.swift` declares `.executable(name: "fluidaudiocli")` -- so
+        `swift run` answered `no executable product named 'fluidaudio'` on a perfectly good build
+        and this check could never return True. A name that lives beside the commit it belongs to
+        is reviewable when the commit moves; a literal buried in a runner is not.
+        """
+        result = self.run(["swift", "run", "-c", "release", product, "--help"],
                           cwd=checkout, timeout=600)
         return result.returncode == 0
 
@@ -754,9 +762,24 @@ class Provisioner:
             checkout.parent.mkdir(parents=True, exist_ok=True)
             self.toolchain.clone(package.source["repo"], package.source["commit"], checkout)
             self.toolchain.swift_build(checkout)
+            product = package.source["product"]
+            runs = self.toolchain.swift_product_runs(checkout, product)
+            if not runs:
+                # A build that produces an executable nobody can launch is not a provisioned
+                # package, and this used to be recorded and then ignored: `pull` returned exit 0
+                # with an empty `warnings`, `verify` reported `failed: []`, and the environment
+                # read `ok`, while the one thing the package exists to do was impossible. The
+                # entry stays `pulling`, so `list` and `run` both report it absent.
+                raise ProvisioningError(
+                    "package_build_unusable",
+                    f"{package.id} built, but its product {product!r} does not run, so nothing "
+                    f"in the {package.environment} environment can use it",
+                    package=package.id, product=product, built=True,
+                    fix=f"audio packages pull --repair {package.id}",
+                )
             return {"path": str(checkout), "bytes": _tree_bytes(checkout / ".build"),
                     "revision": package.source["commit"], "built": True,
-                    "product_runs": self.toolchain.swift_product_runs(checkout)}
+                    "product_runs": runs}
 
         raise ManifestError(f"{package.id}: unsupported source type {kind!r}")
 
@@ -869,6 +892,17 @@ class Provisioner:
                     })
                     continue
             elif "product_runs" in materialized:
+                if not materialized["product_runs"]:
+                    # Reachable from a registry written before `pull` started refusing this, and
+                    # the reason it has to fail rather than report: the package's whole purpose is
+                    # that executable, so `verified` would otherwise list a package that cannot do
+                    # the one thing it is for.
+                    failed.append({
+                        "package": identifier, "code": "package_build_unusable",
+                        "detail": "built, but its product does not run",
+                        "fix": f"audio packages pull --repair {identifier}",
+                    })
+                    continue
                 record["product_runs"] = materialized["product_runs"]
                 record["patches_applied"] = materialized.get("patches_applied", [])
             else:

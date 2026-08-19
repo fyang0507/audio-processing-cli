@@ -62,6 +62,7 @@ field not listed for its code, or missing one that is, is a defect:
 | `timing_required_for_format` | 2 | `field`, `provided`, `requires_capability`, `found`, `note` |
 | `packages_not_provisioned` | 3 | `missing`, `total_known_download_bytes`, `unsized_packages` |
 | `package_integrity_failed` | 3 | `failed` (package, check, expected, actual) |
+| `package_build_unusable` | 3 | `package`, `product`, `built`, `fix` |
 | `backend_failed` | 1 | `role`, `backend`, `detail` |
 | `run_incomplete` | 4 | `role`, `backend`, `detail`, `coverage`, `output` |
 
@@ -1028,6 +1029,27 @@ invocation; it checks presence and the registry, so this surfaces either from an
 corruption subtle enough to pass the cheap check fails at model load instead, which is
 `backend_failed` at exit 1 with `fix` pointing at `audio packages verify` — the same
 condition, found later, reported as what it looked like from where it was found.
+
+A built package has a fourth failure of its own: the build succeeded and the executable it
+produced does not launch.
+
+```json
+{
+  "code": "package_build_unusable",
+  "package": "fluidaudio",
+  "product": "fluidaudiocli",
+  "built": true,
+  "fix": "audio packages pull --repair fluidaudio"
+}
+```
+
+Exit 3, and the registry entry stays `pulling`, so `list` and `run` both report the package
+absent rather than ready. `built: true` is kept because it is the useful half of the diagnosis —
+a compile failure and a product that will not start need different responses, and this is the
+second. The condition was real: the product name was hard-coded as `fluidaudio` while
+`Package.swift` at the pinned commit declares `fluidaudiocli`, so `swift run` refused a perfectly
+good build. It is pinned in the manifest beside the commit now, and `pull` refuses instead of
+recording `product_runs: false` and exiting 0.
 
 ### 5.1 Incomplete runs
 

@@ -115,7 +115,7 @@ class FakeToolchain(pkg.Toolchain):
         (checkout / ".build").mkdir(parents=True, exist_ok=True)
         (checkout / ".build" / "product").write_bytes(b"x" * 1024)
 
-    def swift_product_runs(self, checkout: Path) -> bool:
+    def swift_product_runs(self, checkout: Path, product: str) -> bool:
         return True
 
 
@@ -1219,3 +1219,100 @@ def test_the_cli_hands_repair_and_dry_run_to_verify_and_purge(monkeypatch, capsy
         assert main(argv) == 0
         capsys.readouterr()
         assert seen[key] is expected, f"{' '.join(argv)} reached the provisioner as {seen[key]!r}"
+
+
+def test_every_built_package_pins_the_product_it_has_to_launch() -> None:
+    """The defect this catches: the executable's name living in a runner instead of the manifest.
+
+    `swift_product_runs` ran `swift run ... fluidaudio` while Package.swift at the pinned commit
+    declares `.executable(name: "fluidaudiocli")`, so the check answered "no executable product
+    named 'fluidaudio'" on a perfectly good build and could never return True. Pinning the name
+    beside the commit makes it reviewable when the commit moves.
+    """
+    built = {identifier: package for identifier, package in env.packages().items()
+             if package.source["type"] == "git+build"}
+    assert built, "no git+build package, so this invariant has nothing to hold"
+    for identifier, package in built.items():
+        assert package.source.get("product"), (
+            f"{identifier} is built from source but names no product to launch"
+        )
+
+
+def test_the_pinned_product_name_is_the_one_launched(tmp_path) -> None:
+    """A pinned name that the runner ignores would be decoration."""
+    launched: list[str] = []
+
+    class Recording(FakeToolchain):
+        def swift_product_runs(self, checkout: Path, product: str) -> bool:
+            launched.append(product)
+            return True
+
+    provisioner = pkg.Provisioner(toolchain=Recording(), fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    assert launched == [env.packages()["fluidaudio"].source["product"]]
+
+
+def test_a_build_whose_product_cannot_run_is_not_a_provisioned_package(tmp_path) -> None:
+    """The defect this catches: `product_runs: false` recorded and then ignored.
+
+    `pull` returned exit 0 with an empty `warnings`, `verify` reported `failed: []`, and the
+    environment read `ok`, while the one thing the package exists for was impossible.
+    """
+    class Broken(FakeToolchain):
+        def swift_product_runs(self, checkout: Path, product: str) -> bool:
+            return False
+
+    provisioner = pkg.Provisioner(toolchain=Broken(), fetcher=FakeFetcher(tmp_path))
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["fluidaudio"]))
+    assert caught.value.code == "package_build_unusable"
+    assert caught.value.exit_code == 3
+    assert caught.value.payload["product"] == "fluidaudiocli"
+    assert caught.value.payload["fix"] == "audio packages pull --repair fluidaudio"
+    # Fails closed: the entry never reaches `ready`, so `list` and `run` both call it absent.
+    assert not pkg.is_ready(pkg.load_registry(), "fluidaudio")
+
+
+def test_verify_fails_a_registry_that_recorded_an_unusable_build(tmp_path) -> None:
+    """Reachable from a registry written before `pull` started refusing this."""
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+
+    document = pkg.load_registry()
+    document["packages"]["fluidaudio"]["materialized"]["product_runs"] = False
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    failure = [entry for entry in report["failed"] if entry["package"] == "fluidaudio"]
+    assert failure, "verify passed a package whose product does not run"
+    assert failure[0]["code"] == "package_build_unusable"
+    assert failure[0]["fix"] == "audio packages pull --repair fluidaudio"
+    assert not [v for v in report["verified"] if v["package"] == "fluidaudio"], (
+        "the same package was both verified and failed"
+    )
+
+
+def test_the_real_toolchain_launches_the_product_it_was_given(tmp_path) -> None:
+    """The assertion that would have caught the original defect, and the one above does not.
+
+    A double that replaces `swift_product_runs` only proves `_materialize` passes the pinned name;
+    the bug was inside the method, which ignored its surroundings and ran a literal. So this
+    exercises the real body and overrides `run` alone.
+    """
+    commands: list[list[str]] = []
+
+    class RecordingRun(pkg.Toolchain):
+        def run(self, args, *, cwd=None, timeout=3600):
+            commands.append(list(args))
+
+            class Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return Result()
+
+    assert RecordingRun().swift_product_runs(tmp_path, "fluidaudiocli") is True
+    assert commands == [["swift", "run", "-c", "release", "fluidaudiocli", "--help"]], (
+        f"the product argument did not reach the command: {commands}"
+    )
