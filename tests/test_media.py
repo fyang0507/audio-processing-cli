@@ -12,7 +12,69 @@ from pathlib import Path
 
 import pytest
 
-from audio_cli.media import atomic_write_json
+import numpy as np
+
+from audio_cli.media import (
+    MediaError,
+    atomic_write_json,
+    render_loudness_normalized,
+    write_float_wav,
+)
+
+
+def normalize(tmp_path: Path, measurement: dict[str, float], *, duration_s: float):
+    """Drive the pre-flight check in `render_loudness_normalized` and nothing past it.
+
+    Every case here fails before ffmpeg is reached, so these need no runtime.
+    """
+    source = tmp_path / "source.wav"
+    write_float_wav(source, np.zeros((round(48_000 * duration_s), 1), dtype=np.float32), 48_000)
+    return render_loudness_normalized(
+        source,
+        tmp_path / "out.wav",
+        target_lufs=-23.0,
+        target_lra=7.0,
+        target_true_peak=-3.0,
+        measurement=measurement,
+        sample_rate=48_000,
+    )
+
+
+def test_a_clip_too_short_to_measure_is_not_reported_as_silent(tmp_path: Path) -> None:
+    """The defect this catches: one message for two conditions.
+
+    Integrated loudness is gated in 400 ms blocks, so a 50 ms clip has none however loud it is.
+    That was reported as "silent or non-finite audio", which sends a caller looking for silence
+    that is not there -- the measured true peak proves the signal exists.
+    """
+    with pytest.raises(MediaError) as caught:
+        normalize(
+            tmp_path,
+            {"input_i": float("-inf"), "input_lra": 0.0, "input_tp": -39.26,
+             "input_thresh": -70.0},
+            duration_s=0.05,
+        )
+    message = str(caught.value)
+    assert "50 ms" in message, f"the duration a caller needs is missing: {message}"
+    assert "400 ms" in message, "the reason -- the gating block -- is not stated"
+    assert "-39.26" in message, "the peak that proves it is not silent is not shown"
+    assert "not silent" in message
+    # The suggested correction has to be runnable, so it names a real flag and stage.
+    assert "--skip program-loudness" in message
+
+
+def test_genuine_silence_is_still_reported_as_silence(tmp_path: Path) -> None:
+    """A truly silent file has no finite peak either, which is what separates the two."""
+    with pytest.raises(MediaError) as caught:
+        normalize(
+            tmp_path,
+            {"input_i": float("-inf"), "input_lra": 0.0, "input_tp": float("-inf"),
+             "input_thresh": float("-inf")},
+            duration_s=5.0,
+        )
+    message = str(caught.value)
+    assert "silent" in message
+    assert "too short" not in message, "silence misreported as a duration problem"
 
 
 def reference_mode(directory: Path) -> int:
