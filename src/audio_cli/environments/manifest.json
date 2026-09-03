@@ -71,6 +71,18 @@
       "reason": "A Swift build product plus one Core ML model package. No interpreter, so no lock; absent `swift` blocks only these packages and is reported by `audio doctor` rather than being fatal."
     }
   },
+  "backends": {
+    "silero-vad": {"package": "silero-vad", "role": "vad"},
+    "qwen3-asr-1.7b-8bit": {"package": "qwen3-asr-1.7b-8bit", "role": "asr"},
+    "qwen3-asr-0.6b-8bit": {"package": "qwen3-asr-0.6b-8bit", "role": "asr"},
+    "qwen3-forcedaligner": {"package": "qwen3-forcedaligner", "role": "aligner"},
+    "vibevoice-asr-7b": {"package": "vibevoice-asr-7b", "role": "asr"},
+    "firered-vad": {"package": "firered-asr2s", "role": "vad"},
+    "firered-lid": {"package": "firered-asr2s", "role": "lid"},
+    "firered-asr2-aed": {"package": "firered-asr2s", "role": "asr"},
+    "firered-punc": {"package": "firered-asr2s", "role": "punctuator"},
+    "fluidaudio": {"package": "fluidaudio", "role": "diarizer"}
+  },
   "packages": {
     "silero-vad": {
       "environment": "core",

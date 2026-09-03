@@ -43,16 +43,15 @@ unconditional and its test must run the **no-hint** configuration, or it passes 
 configuration that never leaks. `mlx-audio` exposes `extract_language`
 (`qwen3_asr.py:899`) — the adapter calls it rather than matching a prefix by hand.
 
-**3. The aligner's `language` is a tokenizer selector with a Cantonese trap.**
-`qwen3_forced_aligner.py:256-266` lowercases the argument and branches four ways —
-`japanese`, `korean`, `chinese`, and everything else to `tokenize_space_lang`. Its checkpoint
-declares **eleven** supported languages including `Cantonese`, and there is no Cantonese
-branch, so `--language Cantonese` plumbed through would space-split CJK text into one "word"
-per segment and silently degenerate `word_timestamps` — on the exact configuration every
-recorded Cantonese figure used. This is why the recorded pipeline derives the aligner's
-language from a CJK regex (`run_mlx_forced_aligner_probe.py:55,94`) instead of passing the
-ASR's through, and why that rule is declared configuration here rather than an invisible
-heuristic.
+**3. The aligner's recorded `language` rule is not the ASR hint, and the pinned source does not
+support the previously claimed Cantonese trap.** The recorded pipeline derives `Chinese` or
+`English` from a CJK regex (`run_mlx_forced_aligner_probe.py:55,94`) instead of passing the ASR
+hint through. The pinned implementation branches only for `japanese` and `korean`; every other
+value, including `chinese`, `cantonese`, and `english`, uses `tokenize_space_lang`, whose own
+CJK splitter emits ideographs individually (`qwen3_forced_aligner.py:129-145,236-247`). The
+earlier claim that Chinese had a dedicated branch while Cantonese would collapse a segment to
+one word was false. The CJK rule remains declared configuration because it is what produced the
+recorded equivalence result, not because source proves it superior to the unmeasured alternative.
 
 **4. A truncated VibeVoice decode loses the whole transcript upstream, not just its tail.**
 `post_process_transcription` finds the closing bracket by counting (`:514-524`, commit
@@ -116,7 +115,7 @@ left open or corrects something the evidence pass found.
 | **FireRed runs as one subprocess**, four Hub repositories in one package, three or four models loaded by request. | Provisioning and residency are different questions and only the second was wrong. One package, one download, one process is the measured configuration; splitting into four subprocesses would reimplement `FireRedAsr2System.process`'s glue, pay four model loads, and invalidate every recorded FireRed figure. `execution.residency` is corrected to the granularity that holds instead. |
 | **No `--speakers` flag.** The diarizer estimates its own speaker count. | Simpler surface, and mechanically safe: `fluidaudiocli`'s offline options are "all optional" and `--num-speakers` merely overrides min/max. Cost, recorded rather than hidden: every cited diarization figure passed `--num-speakers 2`, so the shipped configuration is not the measured one. |
 | **`--language` stays, as a closed enum on the Qwen stacks only.** 30 declared names, matched case-insensitively, passed through verbatim, refused otherwise. | `_build_prompt` (`qwen3_asr.py:926-929`) falls back to the raw string when a name misses, so `--language EN` would interpolate `language EN<asr_text>` into the prompt with no error — a flag that parses and silently changes the decode. The accepted set is closed and readable, so refusing is possible without any translation table. Dropping the flag instead would return every recorded Qwen figure to a configuration no caller can request. |
-| **The language hint never reaches the aligner.** `roles.aligner.config.language_rule` declares the recorded CJK rule verbatim. | Finding 3. Two parameters answering one question can only disagree, and here one of the answers breaks CJK alignment. |
+| **The language hint never reaches the aligner.** `roles.aligner.config.language_rule` declares the recorded CJK rule verbatim. | Finding 3, corrected against the pinned source: the rule is measured provenance. Chinese and Cantonese share the same fallback tokenizer, so no relative quality claim is made without a comparison run. |
 | **A truncated VibeVoice run exits 4 with the prefix it decoded.** `failure_recovery.partial_results` gains `prefix_only`; `none` is retired. | Finding 4: at 6.30 tok/s the cap lands inside the target use case, and losing a forty-minute transcript to an unterminated bracket is the worst available outcome. The cost is that the adapter owns a salvage parse rather than reading a field. `none` is retired because `vibevoice` was its only holder, and an enum member nothing reaches is the `satisfaction: unavailable` mistake. |
 | **`--overlapping-segments` is passed only when `overlapped_speech` is requested.** | Owner's decision. It obliges an attribution fix rather than a note tweak: the 95.42 % participant-interval F1 *and* the 33.56 % MER both trace to a diarization run with the flag on, and that run shaped the turn set the MER was scored against — 589 raw segments to 195 accepted turns, 9 overlap abstentions, 33 short turns, 54 raw-fragment-only spans. The overlap-off configuration is unmeasured and the catalog says so. |
 | **`complete` is always present in a result.** `coverage` appears only when it is `false`. | The one place where absence would be dangerous rather than meaningful: a saved document outlives its exit code, and `export` has to branch on it when merging. Every other absence rule is unchanged. |
@@ -303,7 +302,7 @@ convention.
 
 *Acceptance.* `capabilities` and `plan` output diffed key-for-key against HAPPY_PATH §1.1,
 §1.2, §2.1, §3.1 by the `shape()` comparison `test_shipped_commands_match_the_document.py`
-already defines, extended to the new commands. Every refusal in §4.1–4.7 and CONTRACT §5
+already defines, extended to the new commands. Every refusal in §4.1–4.8 and CONTRACT §5
 reproduced field-for-field against the per-code table, with `capability_unknown`,
 `capability_unsatisfiable_on_stack`, and `capability_unsupported` distinct. `--language EN`
 returns `option_value_unsupported` with `did_you_mean: "English"`; `--language english`
@@ -374,7 +373,7 @@ target:
 
 | Where | Change |
 | --- | --- |
-| CONTRACT §1.1, §1.2 and HAPPY_PATH §1.2 (5 occurrences) | `bytes: 2463307541` → `2467859030`. The manifest carries the measured figure and `tests/test_environments.py:205` retires this exact number as illustrative. |
+| CONTRACT §1.1, §1.2 and HAPPY_PATH §1.2 (all occurrences) | `bytes: 2463307541` → `2467859030`. The manifest carries the measured figure and `tests/test_environments.py` retires this exact number as illustrative. |
 | HAPPY_PATH §1.1 `word_timestamps` note | "Adds Qwen3-ForcedAligner in the torch environment, so this request spans three" → the aligner runs in `mlx` beside the ASR and adds no runtime. |
 | HAPPY_PATH §2.1 `execution.note` | "both model stages share the torch environment" contradicts `environments_spanned: ["mlx", "torch-vibevoice"]` one line above. |
 | HAPPY_PATH §3.1 `execution` and `observed` | Residency corrected to environment granularity; illustrative peaks replaced by the measured 9.12 GiB (LID off) / 12.26 GiB (LID on) pair. |
@@ -396,7 +395,8 @@ Additions — names and rows this plan needs that no document yet carries:
   three-way capability split exists precisely so two different failures are not rendered alike.
 - The 30 accepted `--language` names, cited to `config.json:support_languages` at both pinned
   Qwen revisions, and FireRedLID's label vocabulary cited to `dict.txt`.
-- `roles.aligner.config.language_rule`, and the Cantonese trap as its reason.
+- `roles.aligner.config.language_rule`, with the recorded CJK selection rule and the explicit
+  source finding that Chinese and Cantonese share the same fallback tokenizer.
 
 ## Test strategy
 
@@ -435,8 +435,9 @@ New, from this pass:
 - **VibeVoice's 43-minute cap is a rate extrapolation**, not an observed truncation. No recorded
   run hit `hit_max_new_tokens`.
 - **The aligner's language rule is unmeasured against alternatives.** The CJK rule is the one the
-  equivalence probe used; whether a different rule would align better is untested, and the
-  Cantonese branch's absence is read from source rather than from a failed run.
+  equivalence probe used; whether a different rule would align better is untested. The pinned
+  source branches only for Japanese and Korean and sends both Chinese and Cantonese through the
+  same fallback, so it supplies no basis for preferring one of those names.
 
 Carried from [HANDOFF.md](HANDOFF.md), unchanged: boundary MAE/P95 for FireRed's native word
 times and for the aligner; filler recall on any stack; cross-process determinism for the Qwen

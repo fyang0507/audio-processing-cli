@@ -56,6 +56,7 @@ field not listed for its code, or missing one that is, is a defect:
 | `input_required` | 2 | `field`, `note` |
 | `capability_unknown` | 2 | `field`, `provided`, `available_on_stack`, `did_you_mean` when a near name exists |
 | `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
+| `option_value_unsupported` | 2 | `field`, `provided`, `allowed`, `did_you_mean` when a near value exists |
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty), `available_on_stack` |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
 | `pin_conflicts_with_native_capability` | 2 | `field`, `provided`, `allowed`, `capability` |
@@ -105,6 +106,18 @@ real second configuration, not a default: the model still emits a language label
 no hint, and the two Qwen sizes disagreed with each other on the same recording when
 run that way, which is an argument for stating the language you know and against
 trusting the label you get back.
+
+The accepted `--language` values are case-insensitive but are echoed with this exact spelling:
+`Chinese`, `English`, `Cantonese`, `Arabic`, `German`, `French`, `Spanish`, `Portuguese`,
+`Indonesian`, `Italian`, `Korean`, `Russian`, `Thai`, `Vietnamese`, `Japanese`, `Turkish`,
+`Hindi`, `Malay`, `Dutch`, `Swedish`, `Danish`, `Finnish`, `Polish`, `Czech`, `Filipino`,
+`Persian`, `Greek`, `Romanian`, `Hungarian`, and `Macedonian`. Those 30 names are the
+`support_languages` arrays in the pinned
+[`Qwen3-ASR-1.7B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit/blob/a8379a2e2f9e313c9292cdf1af4055ab56d50d55/config.json)
+and [`Qwen3-ASR-0.6B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/blob/89e96d92ba34aca20b3e29fb10cc284097d1219f/config.json),
+not a vocabulary invented by this CLI. FireRed accepts no language input; its `lid` output is
+the 115 labels after the five special tokens in the pinned
+[`FireRedLID` dictionary](https://huggingface.co/FireRedTeam/FireRedLID/blob/1bb4d285c8456429385d9c0810300df4297bc11b/dict.txt).
 
 ## Two questions, two commands
 
@@ -181,12 +194,12 @@ yet and `satisfaction` is defined only for a requested capability:
     "segment_timestamps": {"availability": "native",
                            "note": "Sentence extents from the punctuation stage. Unmeasured against labels."},
     "lid": {"availability": "native",
-            "note": "One label per VAD region, copied onto every sentence inside it, so per-sentence variation would be fabricated. Adds 78 s on a 139-second sample — 162 s with the stage against 84 s without — and about 16 s on this input. Its weights are fetched only when this capability is requested and their size is unrecorded."},
+            "note": "One label per VAD region, copied onto every sentence inside it, so per-sentence variation would be fabricated. On the same 139.284-second probe, LID on measured 162.09 s and 12.26 GiB peak RSS versus 84.24 s and 9.16 GiB with LID off. Its weights are fetched only when this capability is requested."},
     "diarization": {"availability": "requires_add_on",
-                    "note": "Adds FluidAudio, which needs a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample, and that same run also serves overlapped_speech. Produces speaker labels on the text and the turn intervals together, mapped onto the transcript by an exact partition of the timeline so no span is transcribed twice and no gap is invented. Measured 95.42% participant-interval F1 on a 30-minute interview but matched only 3 of 75 annotated speaker changes on a dense two-speaker conversation — strong on long turns, unsuitable where turns are short or overlapping. RSS excludes memory held by system Core ML services."
+                    "note": "Adds FluidAudio, which needs a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample. Produces speaker labels on the text and the turn intervals together, mapped onto the transcript by an exact partition of the timeline so no span is transcribed twice and no gap is invented. The published 95.42% participant-interval F1 and 3-of-75 speaker-change figures came from a run with a two-speaker prior and overlap detection enabled; the shipped default supplies no speaker-count prior and enables overlap detection only when overlapped_speech is requested, so its quality is unmeasured. RSS excludes memory held by system Core ML services."
                     },
     "overlapped_speech": {"availability": "requires_add_on",
-                          "note": "Comes out of the same FluidAudio run as diarization, so asking for both costs one stage. Unmeasured. Without it nothing in the plan detects overlap, so an empty abstention ledger means undetected rather than absent."},
+                          "note": "Enables FluidAudio's overlapping-segments mode in the same stage as diarization. The recorded 95.42% participant-interval F1 and downstream 33.56% MER used this mode plus a two-speaker prior; the shipped no-prior configuration is unmeasured. Without this request nothing in the plan detects overlap, so an empty abstention ledger means undetected rather than absent."},
     "token_lid": {"availability": "impossible", "reason": "no_backend_declares",
                   "note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them."}
   },
@@ -197,15 +210,16 @@ yet and `satisfaction` is defined only for a requested capability:
 `processing` and `failure_recovery` are why `--input` is required rather than optional.
 Neither is derivable from the stack: the unit a stack works in is a stack property, but
 how many units *this* file yields, what it will cost, and whether a failure is survivable
-are properties of the pair. `unit_count_known_at_plan_time: false` is the honest answer
-wherever the partition depends on content the plan has not decoded — VAD regions here,
-diarized turns on a Qwen plan that requests `diarization` — and it is stated
-rather than guessed, because a fabricated count is worse than an absent one.
+are properties of the pair. The fixed structural field is `unit_count: null` wherever the
+partition depends on content the plan has not decoded — VAD regions here, diarized turns on a
+Qwen plan that requests `diarization` — because a fabricated count is worse than an explicit
+unknown.
 
 `failure_recovery` varies by stack and is the field to read before committing to a long
-file. It is `per_unit` here and on Qwen; it is **`none` on `vibevoice`**, which is handed
-whole media in a single `generate` call, so there is no partition to salvage and a failure
-at minute forty of a forty-one-minute run yields nothing. See §5.1.
+file. It is `per_unit` here and on Qwen; it is **`prefix_only` on `vibevoice`**, which is handed
+whole media in a single `generate` call. A generation-cap truncation can salvage every complete
+segment before the cut and resume from that prefix watermark, while a model-load failure still
+leaves nothing. See §5.1.
 
 Everything in that document is there because a caller acts on it, and almost none of it is
 structured. Three enums carry the decisions a program branches on — `availability`,
@@ -300,7 +314,7 @@ floor the moment a consumer read it as measured. Real metadata that the plan
 genuinely has — duration, path — is populated rather than stubbed.
 
 Enum-valued fields are the one exception: they show one legal member rather than
-`null`, so a consumer can see the field is categorical. So `"reason": "overlap"` is
+`null`, so a consumer can see the field is categorical. So `"reason": "raw_fragment"` is
 shape, while `"text": null` is content withheld. Free-text and numeric fields are
 always `null`. One member is not the member set, so the sample is not where a
 consumer learns it: the plan warns when nothing in it can detect overlap, which is the
@@ -362,8 +376,8 @@ Exits 0 whether or not anything is provisioned:
                    "environment": "swift",
                    "config": {"preset": "quality", "step_ratio": 0.1,
                               "min_segment_duration": 0.0, "output": "regular",
-                              "threshold": 0.6, "num_speakers": 2},
-                   "config_note": "every cited diarization measurement used a known two-speaker prior; num_speakers must be supplied or the measured_limit figures do not apply",
+                              "threshold": 0.6},
+                   "config_note": "the shipped default supplies no speaker-count prior and enables overlapping_segments only when overlapped_speech is requested; the cited quality figures used both --num-speakers 2 and --overlapping-segments, so they do not measure this request",
                    "selected_by": "add_on_required_by:diarization"}
   },
   "execution": {
@@ -373,25 +387,26 @@ Exits 0 whether or not anything is provisioned:
   },
   "capabilities": {
     "diarization": {"satisfaction": "derived", "backend": "fluidaudio",
-                    "evidence": {"interface": "verified", "quality": "measured"},
-                    "note": "Anonymous labels reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. This preset matched 3 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap."
+                    "evidence": {"interface": "verified", "quality": "unmeasured"},
+                    "note": "Anonymous labels are reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. The shipped no-prior, overlap-off configuration is unmeasured; the 3-of-75 speaker-change result used a two-speaker prior with overlap detection enabled and does not apply to this request."
                     }
   },
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "kind": "weights",
-     "bytes": 2463307541, "provisioned": false},
+     "bytes": 2467859030, "provisioned": false},
     {"package": "fluidaudio", "environment": "swift", "kind": "toolchain",
      "requires_tool": ["swift"], "bytes": null, "provisioned": false},
     {"package": "speaker-diarization-coreml", "environment": "swift", "kind": "weights",
      "bytes": null, "provisioned": false}
   ],
-  "total_known_download_bytes": 2463307541,
+  "total_known_download_bytes": 2467859030,
   "unsized_packages": ["fluidaudio", "speaker-diarization-coreml"],
   "warnings": [],
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
+    "complete": true,
     "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null}
@@ -400,7 +415,7 @@ Exits 0 whether or not anything is provisioned:
       {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
     ],
     "abstentions": [
-      {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
+      {"abstention_id": "ab_0", "reason": "raw_fragment", "start": null, "end": null}
     ],
     "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
@@ -478,11 +493,11 @@ Exit 3. Nothing computed, nothing downloaded, stderr:
 {
   "code": "packages_not_provisioned",
   "missing": [
-    {"package": "qwen3-asr-1.7b-8bit", "kind": "weights", "bytes": 2463307541},
+    {"package": "qwen3-asr-1.7b-8bit", "kind": "weights", "bytes": 2467859030},
     {"package": "fluidaudio", "kind": "toolchain", "requires_tool": ["swift"], "bytes": null},
     {"package": "speaker-diarization-coreml", "kind": "weights", "bytes": null}
   ],
-  "total_known_download_bytes": 2463307541,
+  "total_known_download_bytes": 2467859030,
   "unsized_packages": ["fluidaudio", "speaker-diarization-coreml"],
   "fix": "audio packages pull --stack qwen-1.7b"
 }
@@ -545,7 +560,8 @@ the one package that auto-fetches:
                            "speech_pad_ms": 120},
                 "selected_by": "add_on_required_by:vad"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
-                "config": {"scope": "all_segments"},
+                "config": {"scope": "all_segments",
+                           "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
   "capabilities": {
@@ -645,7 +661,8 @@ fields that differ from §1.1** — the envelope, `packages`, and
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
-                "config": {"scope": "all_segments"},
+                "config": {"scope": "all_segments",
+                           "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
   "capabilities": {
@@ -670,6 +687,16 @@ fields that differ from §1.1** — the envelope, `packages`, and
   ]
 }
 ```
+
+The aligner rule is executable provenance, not a language-quality claim: the recorded probe
+selects `Chinese` when its text regex sees a CJK ideograph and `English` otherwise
+(`model_tests/benchmark/run_mlx_forced_aligner_probe.py:55,94`). It does not forward Qwen's
+`Cantonese` hint. The pinned aligner implementation branches only for Japanese and Korean;
+Chinese, Cantonese, English, and every other value use `tokenize_space_lang`, whose own CJK
+splitter handles ideographs (`qwen3_forced_aligner.py:129-145,236-247`). There is therefore no
+Chinese-only path and no Cantonese-specific tokenization failure. A future adapter declares
+this rule because it is the configuration the recorded probe actually ran, not because the
+pinned source proves it is better than forwarding the ASR hint.
 
 ```bash
 audio packages pull --stack vibevoice
@@ -751,6 +778,12 @@ from inside the stack rather than as an add-on. Abridged to `roles` and `executi
                    "config": {"batch_size": 4},
                    "selected_by": "floor:punctuated_sentence_segmented_text",
                    "recases_text": true}
+  },
+  "execution": {
+    "stage_order": ["decode", "vad", "asr", "punctuator"],
+    "residency": "one_environment_process_at_a_time",
+    "environments_spanned": ["torch-firered"],
+    "note": "FireRed runs one process with VAD, ASR and punctuator co-resident; requesting lid loads that model into the same process. The measured LID-off peak is 9830449152 bytes (9.16 GiB), not a maximum of imaginary per-role processes."
   }
 }
 ```
@@ -974,6 +1007,15 @@ flag that does nothing — which would let a caller believe it had constrained a
 it had not touched.
 
 ```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --language EN
+```
+
+Exit 2, `code: "option_value_unsupported"`, `field: "--language"`, `provided: "EN"`,
+`allowed` containing the exact 30-name Qwen vocabulary, and `did_you_mean: "English"`.
+This is distinct from `option_unsupported_on_stack`: Qwen accepts the option, but not that
+value. `english` is accepted case-insensitively and normalized to `English` in the plan.
+
+```bash
 audio transcribe plan --input meeting.m4a --stack firered --want token_lid
 ```
 
@@ -1122,10 +1164,12 @@ audio export --input meeting.partial.json --input meeting.rest.json \
   --format srt -o meeting.srt
 ```
 
-**On `vibevoice` none of this applies.** `failure_recovery.partial_results` is `none`
-there, because the stack is handed whole media in one call and has no partition to
-salvage. That is the sharpest reason `capabilities` reports the field: on a long file the
-most likely failure — memory — lands on the one stack that cannot resume.
+**On `vibevoice`, recovery is `prefix_only`.** The upstream parser yields no structured result
+when generation stops inside an unterminated segment, so the adapter must parse the raw output
+and retain every complete segment before the cut. That prefix is a conforming result with
+`complete: false`, a coverage watermark at its end, and a `--range` fix for the remainder.
+This does not turn every failure into a partial result: an OOM at model load has decoded no
+prefix, writes no result, and remains exit 1.
 
 ## 6. Teardown
 

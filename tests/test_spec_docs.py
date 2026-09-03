@@ -72,10 +72,20 @@ RETIRED_KEYS = frozenset({
     "measured",
     # deterministic glue is not a role
     "reconciler",
+    # contradicted the fixed processing.unit_count field
+    "unit_count_known_at_plan_time",
 })
 
-SAMPLE_META = frozenset({"sample", "note", "schema_version", "source", "segments",
+SAMPLE_META = frozenset({"sample", "note", "schema_version", "complete", "source", "segments",
                          "abstentions", "provenance"})
+
+QWEN_LANGUAGES = (
+    "Chinese", "English", "Cantonese", "Arabic", "German", "French", "Spanish",
+    "Portuguese", "Indonesian", "Italian", "Korean", "Russian", "Thai", "Vietnamese",
+    "Japanese", "Turkish", "Hindi", "Malay", "Dutch", "Swedish", "Danish", "Finnish",
+    "Polish", "Czech", "Filipino", "Persian", "Greek", "Romanian", "Hungarian",
+    "Macedonian",
+)
 
 
 def json_blocks(path: Path) -> list[tuple[int, object]]:
@@ -112,6 +122,14 @@ def is_result(doc) -> bool:
 
 def is_plan(doc) -> bool:
     return isinstance(doc, dict) and "sample_output" in doc
+
+
+def valid_completion_shape(doc: dict) -> bool:
+    """A result says whether it finished, and explains its gaps only when it did not."""
+    return (
+        isinstance(doc.get("complete"), bool)
+        and ("coverage" in doc) is (not doc["complete"])
+    )
 
 
 @pytest.mark.parametrize("path", SPEC_DOCS, ids=lambda p: p.name)
@@ -188,6 +206,61 @@ def test_most_fixes_are_runnable_commands() -> None:
     )
 
 
+def test_language_option_errors_keep_distinct_exact_shapes() -> None:
+    """A bad value and an unsupported option are different corrections."""
+    errors = {
+        doc["code"]: doc
+        for _, doc in json_blocks(HAPPY_PATH)
+        if isinstance(doc, dict) and "code" in doc
+    }
+    unsupported = errors["option_unsupported_on_stack"]
+    assert set(unsupported) == {
+        "code", "field", "provided", "allowed", "stacks_accepting", "fix",
+    }
+    assert unsupported["allowed"] == []
+
+    bad_value = errors["option_value_unsupported"]
+    assert set(bad_value) == {
+        "code", "field", "provided", "allowed", "did_you_mean", "fix",
+    }
+    assert tuple(bad_value["allowed"]) == QWEN_LANGUAGES
+    assert bad_value["did_you_mean"] == "English"
+
+
+@pytest.mark.parametrize("path", SPEC_DOCS, ids=lambda p: p.name)
+def test_results_and_samples_declare_completeness(path: Path) -> None:
+    """Saved output must carry its completion state after the exit code is gone."""
+    for index, doc in json_blocks(path):
+        candidates = []
+        if is_result(doc):
+            candidates.append(("result", doc))
+        if is_plan(doc):
+            candidates.append(("sample_output", doc["sample_output"]))
+        for kind, candidate in candidates:
+            assert valid_completion_shape(candidate), (
+                f"{path.name} block {index}: {kind} must carry coverage iff complete is false"
+            )
+
+
+@pytest.mark.parametrize("candidate", [
+    {"complete": True, "coverage": {}},
+    {"complete": False},
+    {"coverage": {}},
+])
+def test_completion_shape_rejects_each_invalid_state(candidate: dict) -> None:
+    """Both directions of the iff must be reachable even before an incomplete sample ships."""
+    assert not valid_completion_shape(candidate)
+
+
+@pytest.mark.parametrize("candidate", [
+    {"complete": True},
+    {"complete": False, "coverage": {}},
+])
+def test_completion_shape_accepts_each_valid_state(candidate: dict) -> None:
+    """The complete and incomplete forms are both legal, not just rejectable mutations."""
+    assert valid_completion_shape(candidate)
+
+
 @pytest.mark.parametrize("path", SPEC_DOCS, ids=lambda p: p.name)
 def test_results_carry_no_key_for_an_unrequested_capability(path: Path) -> None:
     """The anti-fabrication guarantee: absence is meaningful, so it must be exact."""
@@ -195,7 +268,10 @@ def test_results_carry_no_key_for_an_unrequested_capability(path: Path) -> None:
         if not is_result(doc):
             continue
         requested = set(doc["provenance"]["outcomes"])
-        body = set(doc) - {"schema_version", "source", "segments", "abstentions", "provenance"}
+        body = set(doc) - {
+            "schema_version", "complete", "coverage", "source", "segments", "abstentions",
+            "provenance",
+        }
         for capability, array in CAPABILITY_ARRAYS.items():
             if array in body:
                 assert capability in requested, (

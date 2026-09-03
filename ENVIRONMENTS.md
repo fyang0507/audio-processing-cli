@@ -319,22 +319,28 @@ registry's own `state`, which is a different fact — see VOCABULARY.md for both
 
 ## Running a stage in another environment
 
-The recorded evidence used **strictly sequential fresh subprocesses** — that is what
-`run_interview_pipeline.py` measured and what the per-stage memory figures assume. So:
+The recorded evidence used **strictly sequential environment processes** — that is what
+`run_interview_pipeline.py` measured for the composed stacks and what the process-level memory
+figures assume. So:
 
-- One subprocess per stage, spawned as `<root>/envs/<env>/bin/python <stage script> <request>
-  <result>`, where the stage script is a file inside the installed wheel, passed by absolute
-  path. `audio_cli` is *not* installed into provisioned environments: it would drag
-  onnxruntime and a conflicting numpy into each one.
+- Qwen, VibeVoice, and add-on stages use one subprocess per executable stage, spawned as
+  `<root>/envs/<env>/bin/python <stage script> <request> <result>`, where the stage script is a
+  file inside the installed wheel, passed by absolute path. FireRed is one deliberate exception:
+  its single `torch-firered` stage script loads VAD, optional LID, ASR, and punctuator models
+  co-resident, matching `model_tests/benchmark/run_firered.py:395-426` and the recorded artifacts.
+  Splitting those roles would be a new implementation with no supporting measurement.
+- `audio_cli` is *not* installed into provisioned environments: it would drag onnxruntime and a
+  conflicting numpy into each one.
 - Request in, result out, both as JSON files; progress on stderr; exit code as the signal.
-- Residency is enforced by process exit rather than by discipline. "No two model stages
-  resident at once" is a consequence of the transport, not a rule someone must remember.
+- Residency between environment processes is enforced by process exit rather than by discipline.
+  No two environment processes are resident together; models owned by one process may be, as
+  FireRed's measured 12.26 GiB LID-on and 9.16 GiB LID-off peaks demonstrate.
 
 This also makes the adapter-normalization floor structural. A model-specific object cannot
-cross a process boundary, so the stage script must serialize normalized output — the floor is
-satisfied by construction instead of by review. A persistent worker would give that up and
-would be outside what was measured; if one is ever needed for load time, it needs its own
-evidence.
+cross an environment-process boundary, so the stage script must serialize normalized output —
+the floor is satisfied by construction instead of by review. A persistent worker spanning
+requests would give that up and would be outside what was measured; if one is ever needed for
+load time, it needs its own evidence.
 
 `swift` has no interpreter, so its stage invokes the built product directly. That asymmetry is
 contained in one place: the transport chooses an executable per environment, and every

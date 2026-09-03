@@ -175,21 +175,21 @@ audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a
   },
   "capabilities": {
     "languages": {"availability": "native",
-                  "note": "Advertises 30 language labels and has no dialect selector; only Mandarin, English and Cantonese have actually been run here. The one accuracy figure is Cantonese at 33.56% mixed-token error on a 30-minute interview. Accepts a --language hint, which every recorded figure above was produced with; the label it returns without one is not a detector to route on."
+                  "note": "Accepts the 30 names published by both pinned Qwen config.json support_languages arrays, case-insensitively and with canonical spelling; has no dialect selector. Only Mandarin, English and Cantonese have actually been run here. The one accuracy figure is Cantonese at 33.56% mixed-token error on a 30-minute interview, using diarization with --num-speakers 2 and --overlapping-segments. The label it returns without a hint is not a detector to route on."
                   },
     "verbatim": {"availability": "native",
                  "note": "Does not clean disfluencies, but drops every spoken \"uh\" and sometimes fuses the neighbouring words. Filler recall is unmeasured on every stack."
                  },
     "diarization": {"availability": "requires_add_on",
-                    "note": "Adds FluidAudio, which needs a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample, and that same run also serves overlapped_speech. Produces speaker labels on the text and the turn intervals together, mapped onto the transcript by an exact partition of the timeline so no span is transcribed twice and no gap is invented. Measured 95.42% participant-interval F1 on a 30-minute interview but matched only 3 of 75 annotated speaker changes on a dense two-speaker conversation — strong on long turns, unsuitable where turns are short or overlapping. RSS excludes memory held by system Core ML services."
+                    "note": "Adds FluidAudio, which needs a Swift toolchain and a second environment: 15 s and 0.55 GiB peak on a 30-minute sample. Produces speaker labels on the text and the turn intervals together, mapped onto the transcript by an exact partition of the timeline so no span is transcribed twice and no gap is invented. The published 95.42% participant-interval F1 and 3-of-75 speaker-change figures used --num-speakers 2 plus --overlapping-segments; the shipped default supplies no speaker-count prior and enables overlap detection only when overlapped_speech is requested, so its quality is unmeasured. RSS excludes memory held by system Core ML services."
                     },
     "overlapped_speech": {"availability": "requires_add_on",
-                          "note": "Comes out of the same FluidAudio run as diarization, so asking for both costs one stage. Unmeasured. Without it nothing in the plan detects overlap, so an empty abstention ledger means undetected rather than absent."},
+                          "note": "Enables FluidAudio's overlapping-segments mode in the same stage as diarization. The recorded 95.42% participant-interval F1 and downstream 33.56% MER used this mode plus a two-speaker prior; the shipped no-prior configuration is unmeasured. Without this request nothing in the plan detects overlap, so an empty abstention ledger means undetected rather than absent."},
     "vad": {"availability": "requires_add_on",
             "note": "Adds Silero, a hash-pinned file that fetches itself, so it never returns exit 3: 0.4 s and 0.11 GiB peak on a 150-second sample, about 5 s on this input. Measured 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall, so the gate over-includes — it bounds activity, not speakers."
             },
     "word_timestamps": {"availability": "requires_add_on",
-                        "note": "Adds Qwen3-ForcedAligner in the torch environment, so this request spans three: 4.6 s of alignment on a 139-second sample excluding model load, about a minute on this input. Never scored against hand-labelled boundaries, and neither is FireRed's native timing, so switching stacks for accuracy would trade one unmeasured number for another. Absent on any segment with no speech to align."},
+                        "note": "Adds Qwen3-ForcedAligner beside ASR in the existing mlx environment, so with FluidAudio this request spans two environments: 4.6 s of alignment on a 139-second sample excluding model load, about a minute on this input. Never scored against hand-labelled boundaries, and neither is FireRed's native timing, so switching stacks for accuracy would trade one unmeasured number for another. Absent on any segment with no speech to align."},
     "segment_timestamps": {"availability": "impossible", "reason": "no_native_segment_extents",
                            "note": "This stack emits no segment extents. The chunk boundaries it works in are not speech timing and are never published as any."},
     "lid": {"availability": "impossible", "reason": "no_backend_declares_on_stack",
@@ -234,8 +234,8 @@ audio transcribe plan --input meeting.m4a \
                    "environment": "swift",
                    "config": {"preset": "quality", "step_ratio": 0.1,
                               "min_segment_duration": 0.0, "output": "regular",
-                              "threshold": 0.6, "num_speakers": 2},
-                   "config_note": "every cited diarization measurement used a known two-speaker prior; num_speakers must be supplied or the measured_limit figures do not apply",
+                              "threshold": 0.6},
+                   "config_note": "the shipped default supplies no speaker-count prior and enables overlapping_segments only when overlapped_speech is requested; the cited quality figures used both --num-speakers 2 and --overlapping-segments, so they do not measure this request",
                    "selected_by": "add_on_required_by:diarization"},
     "asr":        {"backend": "qwen3-asr-1.7b-8bit", "environment": "mlx",
                    "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
@@ -248,7 +248,8 @@ audio transcribe plan --input meeting.m4a \
                    "determinism_tolerance_ms": 0.0,
                    "determinism_basis": "argmax decode; back-to-back calls in one process produced byte-identical text, cross-process repetition untested"},
     "aligner":    {"backend": "qwen3-forcedaligner", "environment": "mlx",
-                   "config": {"scope": "all_segments"},
+                   "config": {"scope": "all_segments",
+                              "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                    "selected_by": "add_on_required_by:word_timestamps"}
   },
   "execution": {
@@ -259,8 +260,8 @@ audio transcribe plan --input meeting.m4a \
   },
   "capabilities": {
     "diarization":     {"satisfaction": "derived", "backend": "fluidaudio",
-                        "evidence": {"interface": "verified", "quality": "measured"},
-                        "note": "Anonymous labels reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. This preset matched 3 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap."
+                        "evidence": {"interface": "verified", "quality": "unmeasured"},
+                        "note": "Anonymous labels are reconciled sample-exactly onto the ASR text, plus the diarizer's turn intervals. The shipped no-prior, overlap-off configuration is unmeasured; the 3-of-75 speaker-change result used a two-speaker prior with overlap detection enabled and does not apply to this request."
                         },
     "word_timestamps": {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
@@ -268,7 +269,7 @@ audio transcribe plan --input meeting.m4a \
   },
   "packages": [
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "kind": "weights",
-     "bytes": 2463307541, "provisioned": false},
+     "bytes": 2467859030, "provisioned": false},
     {"package": "fluidaudio", "environment": "swift", "kind": "toolchain",
      "requires_tool": ["swift"], "bytes": null, "provisioned": false},
     {"package": "speaker-diarization-coreml", "environment": "swift", "kind": "weights",
@@ -276,13 +277,14 @@ audio transcribe plan --input meeting.m4a \
     {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
      "bytes": null, "provisioned": false}
   ],
-  "total_known_download_bytes": 2463307541,
+  "total_known_download_bytes": 2467859030,
   "unsized_packages": ["fluidaudio", "speaker-diarization-coreml", "qwen3-forcedaligner"],
   "warnings": [],
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
+    "complete": true,
     "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null,
@@ -292,7 +294,7 @@ audio transcribe plan --input meeting.m4a \
       {"turn_id": "turn_0", "speaker": null, "start": null, "end": null}
     ],
     "abstentions": [
-      {"abstention_id": "ab_0", "reason": "overlap", "start": null, "end": null}
+      {"abstention_id": "ab_0", "reason": "raw_fragment", "start": null, "end": null}
     ],
     "provenance": "<stack, outcomes, observed, and the executed plan; elided in print>"
   }
@@ -497,6 +499,7 @@ Exit 0. `meeting.timed.json`:
 ```json
 {
   "schema_version": 1,
+  "complete": true,
   "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "S1",
@@ -526,7 +529,7 @@ Exit 0. `meeting.timed.json`:
     {"turn_id": "turn_1", "speaker": "S2", "start": 5.06, "end": 7.51}
   ],
   "abstentions": [
-    {"abstention_id": "ab_0", "reason": "overlap", "start": 41.86, "end": 42.73},
+    {"abstention_id": "ab_0", "reason": "raw_fragment", "start": 41.86, "end": 42.07},
     {"abstention_id": "ab_1", "reason": "short_turn", "start": 118.44, "end": 118.79}
   ],
   "provenance": {
@@ -631,14 +634,15 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
-                "config": {"scope": "all_segments"},
+                "config": {"scope": "all_segments",
+                           "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
   "execution": {
     "stage_order": ["decode", "asr", "aligner"],
     "residency": "one_model_stage_at_a_time",
     "environments_spanned": ["mlx", "torch-vibevoice"],
-    "note": "both model stages share the torch environment and are still not resident together; VibeVoice and the aligner have never been measured co-resident and this plan does not do so"
+    "note": "VibeVoice runs in torch-vibevoice and the aligner runs later in mlx; the two environment processes are not resident together, so stage walls add and peaks do not"
   },
   "capabilities": {
     "verbatim":           {"satisfaction": "native",
@@ -671,6 +675,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
+    "complete": true,
     "source": {"path": "demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null,
@@ -705,6 +710,7 @@ Exit 0. `demo.transcript.json`:
 ```json
 {
   "schema_version": 1,
+  "complete": true,
   "source": {"path": "demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "0", "start": 0.0, "end": 4.52,
@@ -836,9 +842,9 @@ audio transcribe plan --input field.wav --stack firered \
   },
   "execution": {
     "stage_order": ["decode", "vad", "lid", "asr", "punctuator"],
-    "residency": "one_model_stage_at_a_time",
+    "residency": "one_environment_process_at_a_time",
     "environments_spanned": ["torch-firered"],
-    "note": "four model stages in one environment, none resident together"
+    "note": "FireRed runs one process that loads VAD, LID, ASR and punctuator together. On the same 139.284-second probe, LID on measured 162.09 s and 13169377280 bytes (12.26 GiB) peak RSS; LID off measured 84.24 s and 9830449152 bytes (9.16 GiB)."
   },
   "capabilities": {
     "verbatim":        {"satisfaction": "native",
@@ -854,7 +860,7 @@ audio transcribe plan --input field.wav --stack firered \
                         "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "lid": {"satisfaction": "native", "stage": "FireRedLID",
                         "evidence": {"interface": "verified", "quality": "unmeasured"},
-                        "note": "one label per VAD region, copied onto every sentence in that region; per-sentence variation would be fabricated"}
+                        "note": "one of the 115 labels after the five special tokens in the pinned FireRedLID dict.txt, emitted once per VAD region and copied onto every sentence in that region; per-sentence variation would be fabricated"}
   },
   "packages": [
     {"package": "firered-asr2s", "environment": "torch-firered", "kind": "weights",
@@ -862,14 +868,12 @@ audio transcribe plan --input field.wav --stack firered \
   ],
   "total_known_download_bytes": 0,
   "unsized_packages": ["firered-asr2s"],
-  "warnings": [
-    {"code": "measured_config_differs_from_plan", "blocking": false,
-     "detail": "the measured block above was recorded with lid off while this plan runs it; expect roughly double the inference time and no measured memory figure for the LID-on path"}
-  ],
+  "warnings": [],
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
+    "complete": true,
     "source": {"path": "field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "start": null, "end": null,
@@ -898,6 +902,7 @@ Exit 0. `field.transcript.json`:
 ```json
 {
   "schema_version": 1,
+  "complete": true,
   "source": {"path": "field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "start": 0.38, "end": 1.62,
@@ -936,9 +941,8 @@ Exit 0. `field.transcript.json`:
       "stage_wall_seconds": {"decode": 0.09, "vad": 0.61, "lid": 8.83, "asr": 9.14,
                              "punctuator": 1.07},
       "total_wall_seconds": 19.74,
-      "peak_rss_bytes_by_stage": {"vad": 1284407296, "lid": 5871104000,
-                                  "asr": 6903312384, "punctuator": 2415919104},
-      "peak_rss_bytes": 6903312384,
+      "peak_rss_bytes_by_stage": {"firered_process": 13169377280},
+      "peak_rss_bytes": 13169377280,
       "segments": 2,
       "words": 11,
       "vad_regions": 2,
@@ -1006,7 +1010,7 @@ Exit 2:
   "stacks": {
     "qwen-1.7b": "fast transcript, no native timing or speakers; the interview default",
     "qwen-0.6b": "same shape, smaller and faster, measurably worse text",
-    "vibevoice": "native speakers and segment bounds, highest memory, cannot resume a failed run",
+    "vibevoice": "native speakers and segment bounds, highest memory, prefix-only recovery after generation truncation",
     "firered": "native word timing, speech regions and region language; no speakers"
   },
   "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want diarization"
@@ -1016,7 +1020,8 @@ Exit 2:
 The `fix` names one stack rather than listing four again, because a fix a caller has to
 choose between is not a fix. `stacks` is there so the choice can be revisited deliberately,
 and the one-liners say what each stack costs as well as what it gives — including that
-`vibevoice` cannot resume, which is the kind of thing nobody discovers until a long run dies.
+`vibevoice` can salvage only a complete decoded prefix after generation truncation, while a
+model-load failure still leaves nothing.
 
 ### 4.2 No input
 
@@ -1140,7 +1145,31 @@ choice and the flag was the accident. `stacks_accepting` is there for the caller
 the opposite. Accepting the flag silently would be the real failure: a caller would believe
 it had constrained a decode it never touched.
 
-### 4.7 A pin the plan has no role for
+### 4.7 An unsupported option value
+
+```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --language EN
+```
+
+Exit 2:
+
+```json
+{
+  "code": "option_value_unsupported",
+  "field": "--language",
+  "provided": "EN",
+  "allowed": ["Chinese", "English", "Cantonese", "Arabic", "German", "French", "Spanish", "Portuguese", "Indonesian", "Italian", "Korean", "Russian", "Thai", "Vietnamese", "Japanese", "Turkish", "Hindi", "Malay", "Dutch", "Swedish", "Danish", "Finnish", "Polish", "Czech", "Filipino", "Persian", "Greek", "Romanian", "Hungarian", "Macedonian"],
+  "did_you_mean": "English",
+  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --language English"
+}
+```
+
+The value is matched case-insensitively but not by abbreviation: `english` resolves to the
+canonical `English`, while `EN` is not one of the checkpoint's declared names. `allowed` is the
+exact `support_languages` list published by both pinned Qwen configs; `did_you_mean` is optional
+and appears only for a near value.
+
+### 4.8 A pin the plan has no role for
 
 ```bash
 audio transcribe plan --input demo.mp4 --stack vibevoice --want diarization --diarizer fluidaudio
@@ -1162,7 +1191,7 @@ Exit 2:
 `vibevoice` satisfies `diarization` natively, so this plan contains no diarizer role for a
 pin to select among. Pins choose between implementations of a role that exists.
 
-### 4.8 The rest
+### 4.9 The rest
 
 | Code | Exit | Trigger | What `fix` says |
 | --- | --- | --- | --- |
