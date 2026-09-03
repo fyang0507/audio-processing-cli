@@ -196,8 +196,26 @@ def test_packages_for_rejects_a_backend_that_does_not_fill_the_role() -> None:
     """The mapping is only useful if a wrong pairing fails loudly rather than silently."""
     with pytest.raises(env.ManifestError, match="does not fill"):
         env.packages_for("qwen-1.7b", {"asr": "qwen3-forcedaligner"})
+    with pytest.raises(env.ManifestError, match="does not fill"):
+        env.packages_for("firered", {"asr": "firered-lid"})
     with pytest.raises(env.ManifestError, match="no package supplies"):
         env.packages_for("qwen-1.7b", {"asr": "whisper-large"})
+
+
+def test_packages_for_resolves_all_firered_backends_to_one_package() -> None:
+    selection = env.packages_for("firered", {
+        "decode": "ffmpeg",
+        "vad": "firered-vad",
+        "lid": "firered-lid",
+        "asr": "firered-asr2-aed",
+        "punctuator": "firered-punc",
+    })
+    assert [package.id for package in selection] == ["firered-asr2s"]
+
+
+def test_packages_for_rejects_a_backend_from_another_stack() -> None:
+    with pytest.raises(env.ManifestError, match="does not support stack"):
+        env.packages_for("qwen-1.7b", {"asr": "qwen3-asr-0.6b-8bit"})
 
 
 def test_manifest_byte_counts_are_not_the_illustrative_ones_the_specs_used() -> None:
@@ -208,6 +226,16 @@ def test_manifest_byte_counts_are_not_the_illustrative_ones_the_specs_used() -> 
             f"{package.id} carries {package.bytes}, one of the illustrative figures the spec "
             "documents used before real sizes were read from the Hub"
         )
+
+
+def test_spec_documents_do_not_quote_retired_package_byte_counts() -> None:
+    retired = {2463307541, 18253611008, 9878424576, 1932735283, 84279296}
+    for path in SPEC_DOCS:
+        body = path.read_text()
+        for byte_count in retired:
+            assert str(byte_count) not in body, (
+                f"{path.name} still quotes retired illustrative byte count {byte_count}"
+            )
 
 
 def test_silero_digest_matches_the_shipped_backend() -> None:

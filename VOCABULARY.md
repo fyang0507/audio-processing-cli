@@ -171,6 +171,13 @@ printed**, on the same reasoning as the floors: a caller cannot select any of it
 in every plan invited a reader to mistake it for a set of settings, and the thresholds are
 fixed by the tool version rather than by the request.
 
+The three thresholds are `raw_fragment_min_ms: 250`, `accepted_turn_min_ms: 500`, and
+`same_label_merge_max_ms: 300`, exactly as declared by
+`model_tests/benchmark/run_turn_attributed_mlx_asr.py:78-84`. A raw diarizer fragment below
+250 ms is not transcribed; same-label fragments separated by at most 300 ms are merged; a
+resulting turn below 500 ms is not transcribed. The two declined cases become `raw_fragment`
+and `short_turn` abstentions respectively. Ambiguous multi-speaker activity becomes `overlap`.
+
 The one part a caller must not miss is a trap, so it is surfaced where it is actionable rather
 than buried in a block: when nothing in a plan detects overlap, an empty abstention ledger
 means *undetected*, not *absent*. That is a plan warning and a line in the
@@ -213,16 +220,37 @@ are outputs that report one. A stack declares whether it accepts an input in its
 rather than a silently ignored argument. This is the only caller-settable model input
 in v1.
 
+Qwen accepts exactly these 30 names, case-insensitively and normalized to the spelling shown:
+`Chinese`, `English`, `Cantonese`, `Arabic`, `German`, `French`, `Spanish`, `Portuguese`,
+`Indonesian`, `Italian`, `Korean`, `Russian`, `Thai`, `Vietnamese`, `Japanese`, `Turkish`,
+`Hindi`, `Malay`, `Dutch`, `Swedish`, `Danish`, `Finnish`, `Polish`, `Czech`, `Filipino`,
+`Persian`, `Greek`, `Romanian`, `Hungarian`, `Macedonian`. The source is `support_languages`
+in both pinned checkpoint configs:
+[`Qwen3-ASR-1.7B-8bit`](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit/blob/a8379a2e2f9e313c9292cdf1af4055ab56d50d55/config.json)
+and [`Qwen3-ASR-0.6B-8bit`](https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/blob/89e96d92ba34aca20b3e29fb10cc284097d1219f/config.json).
+
+FireRed accepts no language input. Its `lid` output uses the 115 labels after the five special
+tokens in the pinned
+[`FireRedLID` dictionary](https://huggingface.co/FireRedTeam/FireRedLID/blob/1bb4d285c8456429385d9c0810300df4297bc11b/dict.txt):
+
+```text
+en es fr zh other xinan ja ko ru mandarin min wu xiang yue north de pt ab af am ar as az ba be bg bn br ca cs cy da el eo et eu fa gl gn ha iw hi ht hu hy ia id is it ka kk lo lt lv mk ml mn mr mt no ne nl nn oc pa pl ps ro sd sk sl sq sr sv sw ta te tg th tk tr tt uk ur uz vi yi yo kn so ceb jw mi hr bs tl ln my fi sn lb gu ms km bo fo gv haw la mg sa sco si su war
+```
+
+These vocabularies are not reconciled: Qwen calls its input `Cantonese`, while FireRed emits
+`yue`. Translating between them would be a separate declared policy, not spelling cleanup.
+
 **unit** — the piece of audio a stack actually works on, and the granularity at which a
 run can be partial. Qwen works in diarized turns when speaker structure is requested and
 in fixed chunks otherwise; FireRed works in VAD regions; VibeVoice is handed whole media
 in a single call and therefore has exactly one unit. The unit is a stack property, but
 *how many* units a given file yields is a property of the pair, which is why an input is
 required to plan. Where the count depends on content the plan has not decoded, it is
-reported absent rather than guessed.
+reported as the fixed structural field `unit_count: null` rather than guessed.
 
-**coverage** — which parts of the source a result actually covers, carried by any run that
-did not finish. It holds a `covered_through_seconds` watermark — the end of the longest
+**coverage** — which parts of the source a result actually covers. Every result carries the
+boolean `complete`; `coverage` is present if and only if `complete` is `false`. It holds a
+`covered_through_seconds` watermark — the end of the longest
 contiguous transcribed prefix, the one number a caller can act on without reasoning about
 gaps — plus explicit `covered_intervals` and `missing_intervals`, because completion is not
 necessarily contiguous in time: the recorded Qwen runner processes turns in
@@ -235,22 +263,26 @@ is arithmetic on timestamps performed outside the tool and precisely what the
 canonical-timeline floor exists to prevent.
 
 **failure_recovery** — a stack's declared answer to what a failure leaves behind:
-`partial_results` of `per_unit` or `none`, and whether it is `resumable`. It belongs in
-the `capabilities` report because it is a stack-choice input, not a run-time discovery. It is `none` on
-`vibevoice`, so on a long file the most likely failure lands on the one stack that cannot
-resume.
+`partial_results` of `per_unit` or `prefix_only`, and whether it is `resumable`. It belongs in
+the `capabilities` report because it is a stack-choice input, not a run-time discovery. Qwen
+and FireRed preserve completed independent units. VibeVoice is `prefix_only`: a generation-cap
+truncation can salvage complete parsed segments before the cut and resume the remainder, while
+a failure before any complete segment — including OOM at model load — leaves no result.
 
-**execution** — the plan's statement of stage order and model residency. Stages run
-strictly sequentially and no two model stages are resident at once, so a request costs
-the sum of the stage walls and the maximum of the stage peaks. This is declared rather
-than left implicit because every recorded figure was produced by strictly sequential
-fresh subprocesses whose record states that the stages did not overlap; per-stage memory
-peaks published without it invite summing. It is also what keeps the largest stack's
-memory claim honest, since VibeVoice and the aligner have never been measured resident
-together.
+**execution** — the plan's statement of stage order and residency at environment-process
+granularity. Environment processes run strictly sequentially, so a request costs the sum of
+their walls and the maximum of their peaks. Qwen and VibeVoice use one fresh process per model
+stage. FireRed is the deliberate exception: one `torch-firered` process loads its VAD, LID,
+ASR, and punctuator models co-resident, and only that process-level peak is meaningful. The
+plan must never turn one package or one environment into a claim that those models were loaded
+one at a time. VibeVoice and the later MLX aligner remain separate environment processes and
+have never been measured co-resident.
 
-**abstention** — a recorded refusal to assert, carrying an interval and a
-reason. Abstentions must survive to the output.
+**abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly
+three allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an
+accepted turn below 500 ms, and `raw_fragment` for a span whose only activity was a sub-250 ms
+diarizer fragment. Abstentions must survive to the output. Budget-unprocessed intervals are
+coverage, not abstentions, because the tool did not reach them rather than declining to assert.
 
 ## Floors
 
@@ -583,6 +615,11 @@ keeps a flat enum a caller can switch on rather than an object restating it.
   (`fireredasr2system.py:181-184`). What it does emit is `asr_confidence` per
   *sentence*, which is a different granularity and is not requestable in v1. Do
   not reintroduce the name for the sentence value.
+- **unit_count_known_at_plan_time** — retired because `processing` already has the fixed
+  `unit_count` field. Its unknown value is `null`; a second boolean can only disagree with it.
+- **none** under `failure_recovery.partial_results` — retired when VibeVoice gained
+  `prefix_only` salvage. Failures that produce no complete prefix still write no result; they
+  do not need an enum member in a catalog of what partial results can contain.
 
 ## Versioning
 

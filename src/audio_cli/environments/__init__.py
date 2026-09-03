@@ -76,6 +76,13 @@ class Package:
         return self.bytes is not None
 
 
+@dataclass(frozen=True)
+class Backend:
+    id: str
+    package: str
+    role: str
+
+
 @cache
 def _raw() -> dict:
     document = json.loads(MANIFEST.read_text())
@@ -127,6 +134,19 @@ def packages() -> dict[str, Package]:
     return out
 
 
+@cache
+def backends() -> dict[str, Backend]:
+    """Backend ids resolved by a plan, and the package and role each one supplies."""
+    return {
+        identifier: Backend(
+            id=identifier,
+            package=body["package"],
+            role=body["role"],
+        )
+        for identifier, body in _raw()["backends"].items()
+    }
+
+
 def packages_for(stack: str, roles: dict[str, str]) -> list[Package]:
     """Packages a resolved plan needs.
 
@@ -138,7 +158,8 @@ def packages_for(stack: str, roles: dict[str, str]) -> list[Package]:
     `audio doctor` rather than provisioned.
     """
     catalog = packages()
-    unknown = sorted(set(roles.values()) - set(catalog) - {"ffmpeg"})
+    backend_catalog = backends()
+    unknown = sorted(set(roles.values()) - set(backend_catalog) - {"ffmpeg"})
     if unknown:
         raise ManifestError(f"no package supplies backend(s) {unknown} for stack {stack!r}")
 
@@ -146,10 +167,17 @@ def packages_for(stack: str, roles: dict[str, str]) -> list[Package]:
     for role, backend in roles.items():
         if backend == "ffmpeg":
             continue
-        package = catalog[backend]
-        if role not in package.roles:
+        binding = backend_catalog[backend]
+        if role != binding.role:
             raise ManifestError(
-                f"{backend!r} does not fill the {role!r} role; manifest lists {package.roles}"
+                f"{backend!r} does not fill the {role!r} role; manifest maps it to "
+                f"{binding.role!r}"
+            )
+        package = catalog[binding.package]
+        if stack not in package.stacks:
+            raise ManifestError(
+                f"{backend!r} does not support stack {stack!r}; package {package.id!r} "
+                f"lists {package.stacks}"
             )
         wanted[package.id] = package
         # A Core ML model package rides along with the toolchain that loads it.
@@ -196,7 +224,8 @@ def validate() -> list[str]:
     """
     problems: list[str] = []
     known_environments = environments()
-    for package in packages().values():
+    known_packages = packages()
+    for package in known_packages.values():
         if package.environment not in known_environments:
             problems.append(f"{package.id}: unknown environment {package.environment!r}")
         for role in package.roles:
@@ -217,6 +246,19 @@ def validate() -> list[str]:
                     f"repos' bytes {declared}"
                 )
 
+    for backend in backends().values():
+        package = known_packages.get(backend.package)
+        if package is None:
+            problems.append(f"{backend.id}: unknown package {backend.package!r}")
+            continue
+        if backend.role not in ROLES:
+            problems.append(f"{backend.id}: {backend.role!r} is not a role")
+        elif backend.role not in package.roles:
+            problems.append(
+                f"{backend.id}: maps to role {backend.role!r}, but package {package.id!r} "
+                f"lists {package.roles}"
+            )
+
     for environment in known_environments.values():
         if environment.provisioned and environment.has_interpreter:
             if environment.lock is None:
@@ -225,7 +267,7 @@ def validate() -> list[str]:
                 problems.append(f"{environment.name}: lock {environment.lock.name} is missing")
         if not environment.provisioned and environment.lock is not None:
             problems.append(f"{environment.name}: not provisioned but names a lock")
-        members = [p for p in packages().values() if p.environment == environment.name]
+        members = [p for p in known_packages.values() if p.environment == environment.name]
         if environment.provisioned and not members:
             problems.append(f"{environment.name}: provisioned but no package targets it")
     return problems

@@ -75,9 +75,10 @@ you recognise a settled question when you meet one.
    capabilities, whether the planner is a pure function over a stack table — is yours.
    `src/audio_cli/` currently has no abstraction for this; `vad.py` is the only backend-shaped
    file and it predates the vocabulary.
-2. **Stage orchestration.** Stages run strictly sequentially with one model resident at a
-   time. The transport is settled — one fresh subprocess per stage against the environment's
-   own interpreter, JSON in and JSON out, residency enforced by process exit
+2. **Stage orchestration.** Environment processes run strictly sequentially. The transport is
+   settled — one fresh subprocess per executable stage against the environment's own interpreter,
+   except that FireRed's single process owns its co-resident VAD, optional LID, ASR, and
+   punctuator models; JSON in and JSON out, inter-environment residency enforced by process exit
    ([ENVIRONMENTS.md](ENVIRONMENTS.md)) — which also makes the adapter-normalization floor
    structural, since no model object can cross a process boundary. What remains is the
    orchestration above it: stage order, the observed-cost accounting, and the ledger.
@@ -124,10 +125,12 @@ you recognise a settled question when you meet one.
   all, while FireRed cannot leave PyTorch because `mlx-audio` has no punctuator and
   punctuation is a floor. See [ENVIRONMENTS.md](ENVIRONMENTS.md); issue
   [#11](https://github.com/fyang0507/audio-processing-cli/issues/11).
-- **`vibevoice` cannot resume.** It is handed whole media in a single `generate` call, so a
-  failure at minute forty of a forty-one-minute run yields nothing. It is also the stack most
-  likely to fail, having measured 20.28 GiB live MPS on thirty minutes and OOMed under a
-  strict 16 GiB cap. Do not design a recovery story that quietly assumes partitioning.
+- **`vibevoice` recovery is prefix-only.** It is handed whole media in a single `generate` call,
+  but when a generation cap truncates raw output the adapter can retain every complete parsed
+  segment before the cut and resume from that watermark. An OOM at model load still yields
+  nothing. It remains the stack most likely to fail, having measured 20.28 GiB live MPS on
+  thirty minutes and OOMed under a strict 16 GiB cap. Do not describe prefix salvage as
+  partitioned execution.
 - **A long Qwen run truncates silently today.** The recorded runner carries a global
   generation budget and stops between turns when it runs out. Every recorded run finished, but
   at the recorded token rate the budget exhausts near **1.6 hours** of comparable audio. Exit 4
