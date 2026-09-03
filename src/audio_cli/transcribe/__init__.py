@@ -1,7 +1,7 @@
-"""Pure transcription planning and result primitives.
+"""Pure transcription planning and normalized result primitives.
 
-Backends and command wiring land in later phases.  This package starts with the durable result
-shape so every later adapter has one normalization boundary to target.
+The commands in this phase stop after metadata probing and plan serialization. Backends and
+execution land later; every adapter will target the durable normalization boundary here.
 """
 
 from .result import (

@@ -13,6 +13,7 @@ from .packages import (
     ProvisioningError,
     doctor,
     list_report,
+    load_registry,
     path_report,
     select,
 )
@@ -25,6 +26,11 @@ from .pipeline import (
 )
 from .profiles import PROFILES, STAGE_ORDER, get_profile
 from .vad import SileroOnnxVad, VadError
+from .transcribe import catalog as transcribe_catalog
+from .transcribe import planner as transcribe_planner
+from .transcribe import refusals as transcribe_refusals
+from .transcribe import stacks as transcribe_stacks
+from .transcribe.plan import serialize_plan
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -129,6 +135,31 @@ def _parser() -> argparse.ArgumentParser:
     )
     purge_parser.add_argument(
         "--dry-run", action="store_true", help="Report reclaimable bytes and remove nothing."
+    )
+
+    transcribe_parser = subparsers.add_parser(
+        "transcribe",
+        help="Inspect transcription capabilities and resolve an execution plan.",
+    )
+    transcribe_commands = transcribe_parser.add_subparsers(
+        dest="transcribe_command", required=True
+    )
+    capabilities_parser = transcribe_commands.add_parser(
+        "capabilities", help="Report what one stack can do with one input."
+    )
+    capabilities_parser.add_argument("--stack")
+    capabilities_parser.add_argument("--input", type=Path)
+
+    plan_parser = transcribe_commands.add_parser(
+        "plan", help="Resolve requested capabilities to roles and packages."
+    )
+    plan_parser.add_argument("--stack")
+    plan_parser.add_argument("--input", type=Path)
+    plan_parser.add_argument("--want", help="Comma-separated capability names.")
+    plan_parser.add_argument("--language")
+    plan_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
+    plan_parser.add_argument(
+        "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
     return parser
 
@@ -268,6 +299,40 @@ def _run_packages(args: argparse.Namespace) -> int:
                             exit_code=2)
 
 
+def _run_transcribe(args: argparse.Namespace) -> int:
+    command = args.transcribe_command
+    wants = args.want if command == "plan" else None
+    request = transcribe_planner.resolve_request(
+        stack_id=args.stack,
+        input_path=args.input,
+        wants=wants,
+        language=getattr(args, "language", None),
+        vad=getattr(args, "vad", None),
+        diarizer=getattr(args, "diarizer", None),
+    )
+    # Validation above is deliberately complete before this probe, and the registry is read
+    # only after the probe.  No request refusal can be shadowed by provisioning state.
+    metadata = transcribe_catalog.input_metadata(
+        request.input_path, probe_media(request.input_path)
+    )
+    if command == "capabilities":
+        _print_json(transcribe_catalog.build_catalog(request.stack, metadata))
+        return 0
+    if command == "plan":
+        registry = load_registry()
+        ready = {
+            package_id
+            for package_id, entry in registry.get("packages", {}).items()
+            if entry.get("state") == "ready"
+        }
+        plan = transcribe_planner.build_plan(
+            request, metadata, provisioned_packages=ready
+        )
+        _print_json(serialize_plan(plan))
+        return 0
+    raise ValueError(f"unknown transcribe command {command!r}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -280,13 +345,24 @@ def main(argv: list[str] | None = None) -> int:
             return _run_doctor(args)
         if args.command == "packages":
             return _run_packages(args)
+        if args.command == "transcribe":
+            return _run_transcribe(args)
         parser.error(f"Unknown command: {args.command}")
+    except transcribe_refusals.Refusal as exc:
+        _print_json(exc.payload, stream=sys.stderr)
+        return exc.exit_code
     except ProvisioningError as exc:
         _print_json({"error": exc.as_dict()}, stream=sys.stderr)
         return exc.exit_code
     except ManifestError as exc:
         _print_json(
             {"error": {"code": "manifest_invalid", "detail": str(exc)}}, stream=sys.stderr
+        )
+        return 2
+    except transcribe_stacks.StackTableError as exc:
+        _print_json(
+            {"error": {"code": "stack_table_invalid", "detail": str(exc)}},
+            stream=sys.stderr,
         )
         return 2
     except AdjustmentError as exc:
