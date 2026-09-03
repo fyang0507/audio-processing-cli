@@ -991,7 +991,9 @@ def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys)
     capsys.readouterr()
     assert seen["stack"] == "firered"
     assert seen["repair"] is False
-    assert seen["packages"] == ["firered-asr2s", "fluidaudio", "speaker-diarization-coreml"]
+    assert seen["packages"] == [
+        "firered-asr2s", "fluidaudio", "silero-vad", "speaker-diarization-coreml",
+    ]
 
 
 def test_verify_does_not_call_an_environment_ok_when_its_toolchain_is_absent(

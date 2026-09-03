@@ -28,6 +28,10 @@ import pytest
 
 from audio_cli import environments as env
 from audio_cli import packages as pkg
+from audio_cli.transcribe.catalog import InputMetadata, build_catalog
+from audio_cli.transcribe.plan import serialize_plan
+from audio_cli.transcribe.planner import build_plan, resolve_request
+from audio_cli.transcribe.stacks import get_stack
 
 REPO = Path(__file__).resolve().parents[1]
 HAPPY_PATH = REPO / "TRANSCRIBE_HAPPY_PATH.md"
@@ -245,3 +249,98 @@ def test_the_comparison_can_fail() -> None:
     renamed = json.loads(json.dumps(baseline))
     renamed["external_tools"] = renamed.pop("tools")
     assert "tools.ffmpeg.present" not in shape(renamed)
+
+
+def assert_documented_shape(actual: dict, documented: dict, label: str) -> None:
+    actual_shape = shape(actual)
+    documented_shape = shape(documented)
+    assert sorted(set(actual_shape) - set(documented_shape)) == [], (
+        f"{label} emits undocumented fields: "
+        f"{sorted(set(actual_shape) - set(documented_shape))}"
+    )
+    assert sorted(set(documented_shape) - set(actual_shape)) == [], (
+        f"{label} omits documented fields: "
+        f"{sorted(set(documented_shape) - set(actual_shape))}"
+    )
+    for trail, expected in documented_shape.items():
+        found = actual_shape[trail]
+        if "NoneType" in (expected, found):
+            continue
+        if trail.endswith("[]") and "empty" in (expected, found):
+            # Cardinality is input and registry state, not part of an array's shape.
+            continue
+        if {expected, found} <= COMPATIBLE:
+            continue
+        assert found == expected, f"{label} {trail}: expected {expected}, found {found}"
+
+
+def test_transcribe_capabilities_emits_the_shape_happy_path_publishes() -> None:
+    metadata = InputMetadata("meeting.m4a", 1794.2, "m4a", 44100, 2)
+    actual = build_catalog(get_stack("qwen-1.7b"), metadata)
+    documented = documented_block(
+        "audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a"
+    )
+    assert_documented_shape(actual, documented, "audio transcribe capabilities")
+
+
+@pytest.mark.parametrize(
+    ("anchor", "input_name", "duration", "container", "sample_rate", "channels",
+     "stack", "wants", "language", "provisioned"),
+    [
+        (
+            "audio transcribe plan --input meeting.m4a \\",
+            "meeting.m4a", 1794.2, "m4a", 44100, 2, "qwen-1.7b",
+            "diarization,word_timestamps", "Cantonese", (),
+        ),
+        (
+            "audio transcribe plan --input demo.mp4 --stack vibevoice \\",
+            "demo.mp4", 112.4, "mp4", 48000, 2, "vibevoice",
+            "verbatim,diarization,segment_timestamps,word_timestamps", None,
+            ("qwen3-forcedaligner",),
+        ),
+        (
+            "audio transcribe plan --input field.wav --stack firered \\",
+            "field.wav", 27.8, "wav", 48000, 1, "firered",
+            "verbatim,word_timestamps,vad,segment_timestamps,lid", None, (),
+        ),
+    ],
+)
+def test_transcribe_plan_emits_the_shape_happy_path_publishes(
+    anchor: str,
+    input_name: str,
+    duration: float,
+    container: str,
+    sample_rate: int,
+    channels: int,
+    stack: str,
+    wants: str,
+    language: str | None,
+    provisioned: tuple[str, ...],
+) -> None:
+    metadata = InputMetadata(input_name, duration, container, sample_rate, channels)
+    request = resolve_request(
+        stack_id=stack,
+        input_path=Path(input_name),
+        wants=wants,
+        language=language,
+    )
+    actual = serialize_plan(
+        build_plan(request, metadata, provisioned_packages=provisioned)
+    )
+    documented = documented_block(anchor)
+
+    # The prose explicitly elides this recursive-sized object as a string. Phase A guarantees
+    # and tests its real structure; replace only its value so every surrounding plan/result key
+    # is still diffed against the published example.
+    assert set(actual["sample_output"]["provenance"]) == {
+        "stack", "outcomes", "observed", "plan",
+    }
+    assert actual["sample_output"]["provenance"]["outcomes"] == {}
+    actual["sample_output"]["provenance"] = documented["sample_output"]["provenance"]
+    assert_documented_shape(actual, documented, f"audio transcribe plan --stack {stack}")
+    if stack == "firered":
+        assert actual["execution"]["note"] == documented["execution"]["note"]
+        assert (
+            actual["capabilities"]["vad"]["note"]
+            == documented["capabilities"]["vad"]["note"]
+        )

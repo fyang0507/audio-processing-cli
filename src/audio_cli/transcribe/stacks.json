@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "capability_order": [
+    "languages",
+    "verbatim",
+    "diarization",
+    "overlapped_speech",
+    "vad",
+    "word_timestamps",
+    "segment_timestamps",
+    "lid",
+    "token_lid"
+  ],
+  "language_vocabularies": {
+    "qwen": [
+      "Chinese", "English", "Cantonese", "Arabic", "German", "French",
+      "Spanish", "Portuguese", "Indonesian", "Italian", "Korean", "Russian",
+      "Thai", "Vietnamese", "Japanese", "Turkish", "Hindi", "Malay", "Dutch",
+      "Swedish", "Danish", "Finnish", "Polish", "Czech", "Filipino", "Persian",
+      "Greek", "Romanian", "Hungarian", "Macedonian"
+    ]
+  },
+  "recommendations": {
+    "segment_timestamps": "firered",
+    "lid": "firered"
+  },
+  "stacks": {
+    "qwen-1.7b": {
+      "family": "Qwen3-ASR",
+      "environment": "mlx",
+      "roles": "asr only",
+      "characterization": "fast transcript, no native timing or speakers; the interview default",
+      "language_vocabulary": "qwen",
+      "base_roles": {"asr": "qwen3-asr-1.7b-8bit"},
+      "processing": {
+        "unit": "fixed_chunk",
+        "unit_count_rule": {"kind": "fixed_seconds", "seconds": 180},
+        "note": "180-second chunks, one at a time. Requesting diarization replaces them with the diarizer's turns, and that count is not known until the diarizer runs."
+      },
+      "failure_recovery": {
+        "partial_results": "per_unit",
+        "note": "Units are independent, so a failure leaves the finished ones usable and --range addresses the rest. The global generation budget stops between units rather than inside one."
+      },
+      "cost": {
+        "proved": "54 s and 3.0 GiB peak to transcribe a 30-minute Cantonese interview on an M4 Max, batch 1 with the MLX cache cleared per batch and a Cantonese language hint.",
+        "seconds_per_input_second": 0.0299,
+        "evidence_source": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"
+      },
+      "execution": {
+        "residency": "one_model_stage_at_a_time",
+        "note": "stages run strictly sequentially and no two model stages are resident together; wall time adds across stages, peak memory does not, and per-stage peaks must not be summed"
+      },
+      "warnings": [],
+      "capabilities": {
+        "languages": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Accepts the 30 names published by both pinned Qwen config.json support_languages arrays, case-insensitively and with canonical spelling. Only Mandarin, English and Cantonese have actually been run here.", "plan_note": "The language hint is optional and constrains the ASR decode without adding an output key.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "verbatim": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Emits disfluencies rather than cleaning them, but drops every spoken uh on the recorded probe. Filler recall remains unmeasured.", "plan_note": "Emits disfluencies rather than applying a cleanup pass; fidelity is not ranked from the small recorded probe.", "evidence_source": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+        "diarization": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Adds FluidAudio in a Swift environment and produces speaker labels on text together with turn intervals. The shipped no-speaker-prior configuration is unmeasured.", "plan_note": "Anonymous labels are reconciled sample-exactly onto ASR text together with the diarizer's turn intervals.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "overlapped_speech": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Enables FluidAudio overlapping-segments mode in the same stage as diarization. Without this request an empty abstention ledger means undetected rather than absent.", "plan_note": "FluidAudio supplies cross-speaker overlap intervals and licenses overlap abstentions.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "vad": {"resolution": "add_on", "package": "silero-vad", "quality": "measured", "catalog_note": "Adds the hash-pinned Silero VAD: 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall on one 150-second fixture.", "plan_note": "Measured as an activity gate against one union-of-speakers reference; it does not establish speaker or language quality.", "evidence_source": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
+        "word_timestamps": {"resolution": "add_on", "package": "qwen3-forcedaligner", "quality": "unmeasured", "catalog_note": "Adds Qwen3-ForcedAligner in the MLX environment. Boundary error against hand-labelled timing is unmeasured and a non-speech segment may have no word stream.", "plan_note": "Boundary error against labels is unmeasured, and words remain absent on a segment with no speech to align.", "evidence_source": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json"},
+        "segment_timestamps": {"resolution": "unsatisfiable_on_stack", "reason": "no_native_segment_extents", "quality": "unmeasured", "catalog_note": "This stack emits no segment extents. Its chunk boundaries are processing containers, not speech timing, and are never published as segment bounds.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "lid": {"resolution": "unsatisfiable_on_stack", "reason": "no_backend_declares_on_stack", "quality": "unmeasured", "catalog_note": "This stack exposes no region language labels. The capability is available on firered through its dedicated LID stage.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "token_lid": {"resolution": "unsupported", "reason": "no_backend_declares", "refusal_fix": "no stack or add-on satisfies this; code-switching support does not imply per-token language labels, and the nearest available output is lid, which labels a whole speech region", "quality": "unmeasured", "catalog_note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"}
+      }
+    },
+    "qwen-0.6b": {
+      "family": "Qwen3-ASR",
+      "environment": "mlx",
+      "roles": "asr only",
+      "characterization": "same shape, smaller and faster, measurably worse text",
+      "language_vocabulary": "qwen",
+      "base_roles": {"asr": "qwen3-asr-0.6b-8bit"},
+      "processing": {
+        "unit": "fixed_chunk",
+        "unit_count_rule": {"kind": "fixed_seconds", "seconds": 180},
+        "note": "180-second chunks, one at a time. Requesting diarization replaces them with the diarizer's turns, and that count is not known until the diarizer runs."
+      },
+      "failure_recovery": {
+        "partial_results": "per_unit",
+        "note": "Units are independent, so a failure leaves the finished ones usable and --range addresses the rest. The global generation budget stops between units rather than inside one."
+      },
+      "cost": {
+        "proved": "30 s and 1.7 GiB peak to transcribe a 30-minute Cantonese interview on an M4 Max, batch 1 with the MLX cache cleared per batch and a Cantonese language hint.",
+        "seconds_per_input_second": 0.0166,
+        "evidence_source": "model_tests/benchmark/results/2026-08-13-turn-attributed-fast-asr.json"
+      },
+      "execution": {
+        "residency": "one_model_stage_at_a_time",
+        "note": "stages run strictly sequentially and no two model stages are resident together; wall time adds across stages, peak memory does not, and per-stage peaks must not be summed"
+      },
+      "warnings": [],
+      "capabilities": {
+        "languages": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Accepts the same closed 30-name vocabulary as qwen-1.7b, case-insensitively and with canonical spelling; only three languages have actually been run here.", "plan_note": "The language hint is optional and constrains the ASR decode without adding an output key.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "verbatim": {"resolution": "native", "quality": "refuted", "catalog_note": "Emits disfluencies rather than cleaning them, but a recorded run normalized one dialect form that the larger Qwen and FireRed stacks retained.", "plan_note": "The interface emits disfluencies, while the recorded dialect-form probe refuted complete lexical fidelity.", "evidence_source": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+        "diarization": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Adds FluidAudio in a Swift environment and produces speaker labels on text together with turn intervals. The shipped no-speaker-prior configuration is unmeasured.", "plan_note": "Anonymous labels are reconciled sample-exactly onto ASR text together with the diarizer's turn intervals.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "overlapped_speech": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Enables FluidAudio overlapping-segments mode in the same stage as diarization. Without this request an empty abstention ledger means undetected rather than absent.", "plan_note": "FluidAudio supplies cross-speaker overlap intervals and licenses overlap abstentions.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "vad": {"resolution": "add_on", "package": "silero-vad", "quality": "measured", "catalog_note": "Adds the hash-pinned Silero VAD: 0.8505 frame-level F1 at 0.7655 precision and 0.9567 recall on one 150-second fixture.", "plan_note": "Measured as an activity gate against one union-of-speakers reference; it does not establish speaker or language quality.", "evidence_source": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
+        "word_timestamps": {"resolution": "add_on", "package": "qwen3-forcedaligner", "quality": "unmeasured", "catalog_note": "Adds Qwen3-ForcedAligner in the MLX environment. Boundary error against hand-labelled timing is unmeasured and a non-speech segment may have no word stream.", "plan_note": "Boundary error against labels is unmeasured, and words remain absent on a segment with no speech to align.", "evidence_source": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json"},
+        "segment_timestamps": {"resolution": "unsatisfiable_on_stack", "reason": "no_native_segment_extents", "quality": "unmeasured", "catalog_note": "This stack emits no segment extents. Its chunk boundaries are processing containers, not speech timing, and are never published as segment bounds.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "lid": {"resolution": "unsatisfiable_on_stack", "reason": "no_backend_declares_on_stack", "quality": "unmeasured", "catalog_note": "This stack exposes no region language labels. The capability is available on firered through its dedicated LID stage.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"},
+        "token_lid": {"resolution": "unsupported", "reason": "no_backend_declares", "refusal_fix": "no stack or add-on satisfies this; code-switching support does not imply per-token language labels, and the nearest available output is lid, which labels a whole speech region", "quality": "unmeasured", "catalog_note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"}
+      }
+    },
+    "vibevoice": {
+      "family": "VibeVoice-ASR",
+      "environment": "torch-vibevoice",
+      "roles": "asr with native speaker structure and segment bounds",
+      "characterization": "native speakers and segment bounds, highest memory, prefix-only recovery after generation truncation",
+      "language_vocabulary": null,
+      "base_roles": {"asr": "vibevoice-asr-7b"},
+      "processing": {
+        "unit": "whole_media",
+        "unit_count_rule": {"kind": "one"},
+        "note": "The whole input is handed to one generate call. Complete decoded segments can be salvaged from a generation truncation, but there are no independent units."
+      },
+      "failure_recovery": {
+        "partial_results": "prefix_only",
+        "note": "Generation truncation can preserve complete decoded segments before the cut and --range addresses the remainder; a failure before the first complete segment leaves nothing."
+      },
+      "cost": {
+        "proved": "About 14 min and 20.28 GiB live MPS allocation for a 30-minute sample on an M4 Max, seeded bfloat16 decode.",
+        "seconds_per_input_second": 0.47,
+        "evidence_source": "model_tests/benchmark/results/2026-08-12.json"
+      },
+      "execution": {
+        "residency": "one_model_stage_at_a_time",
+        "note": "VibeVoice runs in torch-vibevoice and any aligner runs later in mlx; the environment processes are not resident together, so stage walls add and peaks do not"
+      },
+      "warnings": [
+        {"code": "measured_peak_exceeds_target", "blocking": false, "detail": "measured 20.28 GiB live MPS allocation on spice-30min-participant; a strict 16 GiB MPS cap OOMs at model load, measured on a 27.8 s probe, while an 18 GiB cap passed that probe"}
+      ],
+      "capabilities": {
+        "languages": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Advertises multilingual and code-switching transcription, but accepts no language hint. Mandarin, English and Cantonese are the locally exercised set.", "plan_note": "Language handling is native and takes no caller hint on this stack.", "evidence_source": "model_tests/benchmark/results/2026-08-12-evidence.json"},
+        "verbatim": {"resolution": "native", "quality": "refuted", "catalog_note": "Emits disfluencies rather than cleaning them, but two recorded dialect forms were normalized relative to FireRed's output.", "plan_note": "Emits disfluencies, while two recorded lexical probes refuted complete dialect-form preservation.", "evidence_source": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+        "diarization": {"resolution": "native", "quality": "measured", "catalog_note": "Produces native anonymous speaker labels and segment bounds. It matched 39 of 75 annotated speaker changes on the dense recorded conversation.", "plan_note": "Native speaker labels and segment bounds are grouped into turns without inventing new bounds.", "evidence_source": "model_tests/benchmark/results/2026-08-13-cantomap-channel-structure.json"},
+        "overlapped_speech": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Adds FluidAudio overlapping-segments mode. Without this request nothing in the plan detects cross-speaker overlap.", "plan_note": "FluidAudio supplies cross-speaker overlap intervals and licenses overlap abstentions.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "vad": {"resolution": "add_on", "package": "silero-vad", "quality": "measured", "catalog_note": "Adds the hash-pinned Silero VAD with 0.8505 frame-level F1 on one 150-second fixture.", "plan_note": "Measured as an activity gate against one union-of-speakers reference.", "evidence_source": "model_tests/benchmark/results/2026-08-15-silero-vad.json"},
+        "word_timestamps": {"resolution": "add_on", "package": "qwen3-forcedaligner", "quality": "unmeasured", "catalog_note": "Adds Qwen3-ForcedAligner in a separate MLX environment. Boundary accuracy against labels is unmeasured.", "plan_note": "Boundary error against labels is unmeasured, and words remain absent on a segment with no speech to align.", "evidence_source": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json"},
+        "segment_timestamps": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Native segment extents are emitted with VibeVoice's structured transcript and have not been scored against hand labels.", "evidence_source": "model_tests/benchmark/results/2026-08-12-evidence.json"},
+        "lid": {"resolution": "unsatisfiable_on_stack", "reason": "no_backend_declares_on_stack", "quality": "unmeasured", "catalog_note": "This stack exposes no region language-label output. Firered is the stack that supplies the capability.", "evidence_source": "model_tests/benchmark/results/2026-08-12-evidence.json"},
+        "token_lid": {"resolution": "unsupported", "reason": "no_backend_declares", "refusal_fix": "no stack or add-on satisfies this; code-switching support does not imply per-token language labels, and the nearest available output is lid, which labels a whole speech region", "quality": "unmeasured", "catalog_note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them.", "evidence_source": "model_tests/benchmark/results/2026-08-16-qwen-capabilities.json"}
+      }
+    },
+    "firered": {
+      "family": "FireRedASR2S",
+      "environment": "torch-firered",
+      "roles": "vad, asr and punctuator always; lid as well when lid is requested",
+      "characterization": "native word timing, speech regions and region language; no speakers",
+      "language_vocabulary": null,
+      "base_roles": {"vad": "firered-vad", "asr": "firered-asr2-aed", "punctuator": "firered-punc"},
+      "processing": {
+        "unit": "vad_region",
+        "unit_count_rule": {"kind": "unknown"},
+        "note": "FireRedVAD segments the audio and every later stage runs per region, four at a time. The count depends on speech activity and is not known until VAD runs."
+      },
+      "failure_recovery": {
+        "partial_results": "per_unit",
+        "note": "Regions are independent, so a failure leaves the finished ones usable and --range addresses the rest."
+      },
+      "cost": {
+        "proved": "11 min 5 s and 9.1 GiB peak to transcribe a 30-minute sample on an M4 Max, CPU float32 with LID off and batch size 4. Peak is dominated by model weights.",
+        "seconds_per_input_second": 0.3694,
+        "evidence_source": "model_tests/benchmark/results/2026-08-12.json"
+      },
+      "execution": {
+        "residency": "one_environment_process_at_a_time",
+        "note": "FireRed runs one process with VAD, ASR and punctuator co-resident; requesting lid loads that model into the same process. The measured LID-off peak is 9830449152 bytes (9.16 GiB), not a maximum of imaginary per-role processes.",
+        "lid_note": "FireRed runs one process that loads VAD, LID, ASR and punctuator together. On the same 139.284-second probe, LID on measured 162.09 s and 13169377280 bytes (12.26 GiB) peak RSS; LID off measured 84.24 s and 9830449152 bytes (9.16 GiB)."
+      },
+      "warnings": [],
+      "capabilities": {
+        "languages": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Advertises Mandarin, English, code-switching and Chinese dialects; only Mandarin, English and Cantonese have run here. It takes no language hint.", "plan_note": "Language handling is native and takes no caller hint on this stack.", "evidence_source": "model_tests/benchmark/results/2026-08-15-codeswitch-lid.json"},
+        "verbatim": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Emits disfluencies rather than cleaning them and retained both recorded dialect forms. Two lexemes cannot rank varieties.", "plan_note": "Emits disfluencies and retained the dialect form on both recorded probes; broader fidelity is unmeasured.", "evidence_source": "model_tests/benchmark/results/2026-08-17-qwen-verbatim-probe.json"},
+        "diarization": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Adds FluidAudio in a Swift environment, producing text speaker labels and turn intervals together. The shipped no-prior configuration is unmeasured.", "plan_note": "Anonymous labels are reconciled sample-exactly onto ASR text together with the diarizer's turn intervals.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "overlapped_speech": {"resolution": "add_on", "package": "fluidaudio", "quality": "unmeasured", "catalog_note": "Enables FluidAudio overlapping-segments mode in the same stage as diarization. Without it an empty abstention ledger means undetected rather than absent.", "plan_note": "FluidAudio supplies cross-speaker overlap intervals and licenses overlap abstentions.", "evidence_source": "model_tests/benchmark/results/2026-08-12-diarization.json"},
+        "vad": {"resolution": "native_stage", "stage": "FireRedVAD", "backend": "firered-vad", "quality": "unmeasured", "catalog_note": "FireRedVAD supplies regions natively but has no measured accuracy. The Silero pin substitutes a separately measured activity gate.", "plan_note": "No measured accuracy for this stage; --vad silero-vad substitutes a path that has a measured 0.8505 frame-level F1.", "evidence_source": "model_tests/benchmark/run_firered.py"},
+        "word_timestamps": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Native word intervals were monotonic across recorded long runs but were never scored against hand-labelled boundaries.", "plan_note": "Monotonic on recorded runs, with boundary accuracy against labels unmeasured.", "evidence_source": "model_tests/benchmark/results/2026-08-12.json"},
+        "segment_timestamps": {"resolution": "native", "quality": "unmeasured", "catalog_note": "Sentence extents come from the punctuation stage and remain unmeasured against labelled boundaries.", "evidence_source": "model_tests/benchmark/run_firered.py"},
+        "lid": {"resolution": "native_stage", "stage": "FireRedLID", "backend": "firered-lid", "quality": "unmeasured", "catalog_note": "One language label and confidence are produced per VAD region. The LID-on recorded run roughly doubled inference time and increased the co-resident process peak.", "plan_note": "One of the pinned FireRedLID labels is emitted per VAD region; per-sentence variation would be fabricated.", "evidence_source": "model_tests/benchmark/results/2026-08-15-codeswitch-lid.json"},
+        "token_lid": {"resolution": "unsupported", "reason": "no_backend_declares", "refusal_fix": "no stack or add-on satisfies this; code-switching support does not imply per-token language labels, and the nearest available output is lid, which labels a whole speech region", "quality": "unmeasured", "catalog_note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them.", "evidence_source": "model_tests/benchmark/results/2026-08-15-codeswitch-lid.json"}
+      }
+    }
+  }
+}

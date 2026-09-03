@@ -93,7 +93,8 @@
       "stacks": [
         "qwen-1.7b",
         "qwen-0.6b",
-        "vibevoice"
+        "vibevoice",
+        "firered"
       ],
       "bytes": 2327524,
       "license_declared": "mit",
