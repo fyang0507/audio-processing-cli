@@ -25,12 +25,13 @@ from .pipeline import (
     write_report,
 )
 from .profiles import PROFILES, STAGE_ORDER, get_profile
-from .vad import SileroOnnxVad, VadError
 from .transcribe import catalog as transcribe_catalog
+from .transcribe import orchestrator as transcribe_orchestrator
 from .transcribe import planner as transcribe_planner
 from .transcribe import refusals as transcribe_refusals
 from .transcribe import stacks as transcribe_stacks
 from .transcribe.plan import serialize_plan
+from .vad import SileroOnnxVad, VadError
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -160,6 +161,25 @@ def _parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
     plan_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
+    )
+    run_parser = transcribe_commands.add_parser(
+        "run", help="Execute one resolved Qwen transcription request."
+    )
+    run_parser.add_argument("--stack")
+    run_parser.add_argument("--input", type=Path)
+    run_parser.add_argument("--want", help="Comma-separated capability names.")
+    run_parser.add_argument("--language")
+    run_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
+    run_parser.add_argument(
+        "--diarizer", help="Pin the diarizer backend when the request adds that role."
+    )
+    run_parser.add_argument(
+        "--range", dest="run_range", help="Process units intersecting START: or START:END."
+    )
+    run_parser.add_argument("--format", choices=("json", "md", "txt"), default="json")
+    run_parser.add_argument("-o", "--output", type=Path)
+    run_parser.add_argument(
+        "--force", action="store_true", help="Replace an existing output or partial result."
     )
     return parser
 
@@ -301,7 +321,7 @@ def _run_packages(args: argparse.Namespace) -> int:
 
 def _run_transcribe(args: argparse.Namespace) -> int:
     command = args.transcribe_command
-    wants = args.want if command == "plan" else None
+    wants = args.want if command in {"plan", "run"} else None
     request = transcribe_planner.resolve_request(
         stack_id=args.stack,
         input_path=args.input,
@@ -310,6 +330,32 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         vad=getattr(args, "vad", None),
         diarizer=getattr(args, "diarizer", None),
     )
+    if command == "run":
+        if request.stack.id not in {"qwen-1.7b", "qwen-0.6b"}:
+            issue = 22 if request.stack.id == "firered" else 23
+            raise transcribe_refusals.stack_run_unavailable(request.stack.id, issue)
+        try:
+            run_range = transcribe_orchestrator.parse_range(args.run_range)
+        except ValueError as exc:
+            raise transcribe_refusals.range_invalid(
+                request.input_path,
+                request.stack.id,
+                request.wants,
+                str(args.run_range),
+                str(exc),
+                language=request.language,
+                vad=request.vad,
+                diarizer=request.diarizer,
+            ) from exc
+        transcribe_orchestrator.validate_output_targets(
+            request,
+            args.output,
+            output_format=args.format,
+            run_range=run_range,
+            force=args.force,
+        )
+    else:
+        run_range = None
     # Validation above is deliberately complete before this probe, and the registry is read
     # only after the probe.  No request refusal can be shadowed by provisioning state.
     metadata = transcribe_catalog.input_metadata(
@@ -329,6 +375,22 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             request, metadata, provisioned_packages=ready
         )
         _print_json(serialize_plan(plan))
+        return 0
+    if command == "run":
+        product = transcribe_orchestrator.run(
+            request,
+            metadata,
+            output=args.output,
+            output_format=args.format,
+            run_range=run_range,
+            force=args.force,
+        )
+        if args.format == "json":
+            _print_json(product.payload)
+        else:
+            sys.stdout.write(
+                transcribe_orchestrator.render_human(product.payload, args.format)
+            )
         return 0
     raise ValueError(f"unknown transcribe command {command!r}")
 

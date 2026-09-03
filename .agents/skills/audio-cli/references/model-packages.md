@@ -1,10 +1,8 @@
 # Provisioning the models transcription needs
 
-The lane for *"transcribe this"*, *"what will this download?"*, and *"reclaim that disk"*.
-
-**The command that will use these models does not exist yet.** Provisioning shipped ahead of it, so
-today this lane is for getting a machine ready, reporting what a request would cost, and cleaning up
-— not for producing a transcript. Never describe `audio transcribe` as something someone can run.
+The lane for *"what will this download?"*, *"prepare this transcription stack"*, and *"reclaim
+that disk"*. For producing a transcript, read [transcribe.md](transcribe.md) first; only the two
+Qwen run adapters ship today.
 
 ## Nothing downloads itself
 

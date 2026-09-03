@@ -143,6 +143,12 @@ EXPECTED_KEYS = {
     "pin_conflicts_with_native_capability": {
         "code", "field", "provided", "allowed", "capability", "fix",
     },
+    "range_invalid": {"code", "field", "provided", "reason", "fix"},
+    "stack_run_unavailable": {"code", "stack", "issue", "fix"},
+    "output_exists": {"code", "field", "provided", "existing", "fix"},
+    "output_is_canonical_input": {
+        "code", "field", "provided", "resolved_target", "fix",
+    },
     "timing_required_for_format": {
         "code", "field", "provided", "requires_capability", "found", "note", "fix",
     },
@@ -162,6 +168,7 @@ def all_refusal_examples() -> list[refusals.Refusal]:
     qwen = stacks.get_stack("qwen-1.7b")
     vibe = stacks.get_stack("vibevoice")
     coverage = {
+        "scope_intervals": [[0.0, 2.0]],
         "covered_through_seconds": 1.0,
         "covered_fraction": 0.5,
         "covered_intervals": [[0.0, 1.0]],
@@ -193,11 +200,23 @@ def all_refusal_examples() -> list[refusals.Refusal]:
             vibe, "demo.mp4", "--diarizer", "fluidaudio", "diarization",
             ("diarization",),
         ),
+        refusals.range_invalid(
+            "meeting.m4a", "qwen-1.7b", ("diarization",), "bad",
+            "--range must be START: or START:END",
+        ),
+        refusals.stack_run_unavailable("firered", 22),
+        refusals.output_exists(
+            "meeting.m4a", "qwen-1.7b", ("diarization",),
+            "meeting.json", "meeting.json",
+        ),
+        refusals.output_is_canonical_input("meeting.m4a", "meeting.m4a"),
         refusals.timing_required_for_format(
             "meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)
         ),
         refusals.packages_not_provisioned(
-            "qwen-1.7b", ("qwen3-asr-1.7b-8bit",), 123, ()
+            "qwen-1.7b", ({
+                "package": "qwen3-asr-1.7b-8bit", "kind": "weights", "bytes": 123,
+            },), 123, ()
         ),
         refusals.package_integrity_failed(({
             "package": "qwen3-forcedaligner", "check": "weight_digest",
@@ -214,7 +233,7 @@ def all_refusal_examples() -> list[refusals.Refusal]:
 
 def test_every_current_contract_refusal_has_one_fixed_shape_builder() -> None:
     examples = all_refusal_examples()
-    assert len(examples) == 14
+    assert len(examples) == 18
     assert {item.payload["code"] for item in examples} == set(EXPECTED_KEYS)
     for item in examples:
         assert set(item.payload) == EXPECTED_KEYS[item.payload["code"]]

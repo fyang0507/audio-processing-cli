@@ -1,7 +1,8 @@
-# `transcribe` happy paths — mocked, per use case
+# `transcribe` happy paths — per use case
 
-**Status: mock.** Nothing here has been executed; no command below exists yet. This is
-the unabridged step-by-step an implementer can diff against and an agent can read as a
+**Status: Qwen execution shipped; FireRed, VibeVoice, and export remain specified.** The Qwen
+`run` and refusal blocks are exercised against real serializer output. This is the unabridged
+step-by-step an implementer can diff against and an agent can read as a
 worked example. [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is organized around
 *why* the surface looks like this and abridges output to whatever differs; this document
 does the opposite — it shows every command in order and the complete stdout of each, with no
@@ -232,8 +233,8 @@ audio transcribe plan --input meeting.m4a \
     "diarizer":   {"backend": "fluidaudio", "version": "0.15.5",
                    "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
                    "environment": "swift",
-                   "config": {"preset": "quality", "step_ratio": 0.1,
-                              "min_segment_duration": 0.0, "output": "regular",
+                   "config": {"step_ratio": 0.1,
+                              "min_segment_duration": 0.0,
                               "threshold": 0.6, "batch_size": 32},
                    "config_note": "the shipped default supplies no speaker-count prior and enables overlapping_segments only when overlapped_speech is requested; the cited quality figures used both --num-speakers 2 and --overlapping-segments, so they do not measure this request",
                    "selected_by": "add_on_required_by:diarization"},
@@ -539,11 +540,16 @@ Exit 0. `meeting.timed.json`:
       "stage_wall_seconds": {"decode": 3.91, "diarizer": 14.68,
                              "asr": 54.02, "aligner": 46.77},
       "total_wall_seconds": 119.38,
-      "peak_rss_bytes_by_stage": {"diarizer": 588251136, "asr": 3243020288,
+      "peak_rss_bytes_by_stage": {"decode": 52363264,
+                                  "diarizer": 588251136, "asr": 3243020288,
                                   "aligner": 2104492032},
       "peak_rss_bytes": 3243020288,
+      "peak_mps_live_bytes_by_stage": {"asr": 3028287488,
+                                        "aligner": 1987051520},
+      "peak_mps_live_bytes": 3028287488,
       "segments": 2,
       "words": 13,
+      "segments_without_words": 0,
       "turns": 2,
       "abstentions": 2
     }
@@ -560,7 +566,28 @@ not against these trimmed prints.
 
 Note `peak_rss_bytes` is the **maximum** of the per-stage peaks, not their sum — that is
 what `execution.residency` buys, and the per-stage numbers are kept so the claim is
-checkable rather than asserted.
+checkable rather than asserted. A per-stage RSS value is the total footprint of the process
+executing that stage, runtime and orchestration included; it is not backend-owned allocation.
+For in-process VAD it is the core process high-water mark observed through the stage.
+`peak_mps_live_bytes_by_stage` is the MLX allocator's device-memory high-water mark, excludes
+ordinary RSS and non-MLX processes, and its aggregate is likewise a maximum rather than a sum.
+
+The run recomputes `source.duration_seconds` from the canonical decode's PCM frame count so
+coverage uses the timeline actually processed. The path remains the original media path, and
+no temporary WAV format, sample-rate, or channel field enters the public `source` object.
+
+A run invoked with `--range 1402.88:` adds this exact subtree to
+`provenance.plan.execution`; an open end resolves to the canonical WAV duration, and selected
+scope may expand to whole processing-unit bounds:
+
+```json
+{
+  "range": {
+    "requested": [1402.88, 1794.2],
+    "selected_unit_scope": [1402.88, 1794.2]
+  }
+}
+```
 
 ### 1.5 Export subtitles
 
@@ -777,7 +804,9 @@ catch.
 
 It carries **no `words` array**, which is correct and is not an abstention: the aligner is
 not run on a segment with no speech to align. So `words` is absent on some segments while
-`word_timestamps` is `produced`, and `observed.segments_without_words` records how many.
+`word_timestamps` is `produced`, and `observed.segments_without_words` records how many segments
+carry no `words` key. A present empty array is a successful alignment with zero lexical tokens,
+not an abstention.
 
 ### 2.3 Export subtitles with speaker voice tags
 
@@ -1195,12 +1224,38 @@ pin to select among. Pins choose between implementations of a role that exists.
 
 ### 4.9 The rest
 
+Existing output is an actionable collision, so the refusal preserves the full request and adds
+the explicit overwrite decision:
+
+```json
+{
+  "code": "output_exists",
+  "field": "--output",
+  "provided": "meeting.timed.json",
+  "existing": "meeting.timed.json",
+  "fix": "audio transcribe run --input meeting.m4a --stack qwen-1.7b --want diarization,word_timestamps --language Cantonese -o meeting.timed.json --force"
+}
+```
+
+No force flag may target the source, including through the derived partial filename. The tool
+does not invent a replacement path owned by the caller:
+
+```json
+{
+  "code": "output_is_canonical_input",
+  "field": "--output",
+  "provided": "meeting.json",
+  "resolved_target": "meeting.partial.json",
+  "fix": "choose an --output whose transcript and derived partial paths do not resolve to the canonical input; --force cannot override this"
+}
+```
+
 | Code | Exit | Trigger | What `fix` says |
 | --- | --- | --- | --- |
 | `packages_not_provisioned` | 3 | `run` before `pull` | The `audio packages pull --stack` line for this stack — every package it can use, since narrowing a pull to a want set is reserved for the planner |
 | `package_integrity_failed` | 3 | a digest, size, or revision mismatch on something already provisioned | `audio packages pull --repair <package>` |
 | `timing_required_for_format` | 2 | `export --format srt` on a transcript with no word timing | The `transcribe run` line that would produce timing, with `word_timestamps` added |
-| `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing |
+| `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing; a sentence instead when zero units completed and no range can make progress |
 | `backend_failed` | 1 | a crash, most often out of memory | A suggestion — a smaller stack, or freeing memory — and it is a suggestion, not a guarantee |
 
 The last row is the honest exception. Everything above it has a correction the tool can
@@ -1211,6 +1266,28 @@ toolchain.
 Two further refusals belong to `audio packages pull` rather than to `transcribe`, and §1.3
 publishes both: `want_not_implemented` and `stack_conflicts_with_named_packages`, each exit 2 and
 each a refusal of an argument that used to be accepted and ignored.
+
+A Qwen budget stop emits this exit-4 shape and writes the conforming partial named by `output`:
+
+```json
+{
+  "code": "run_incomplete",
+  "role": "asr",
+  "backend": "qwen3-asr-1.7b-8bit",
+  "detail": "global generation budget exhausted after 148 of 195 turns",
+  "coverage": {
+    "scope_intervals": [[0.0, 1794.2]],
+    "covered_through_seconds": 1402.88,
+    "covered_fraction": 0.782,
+    "covered_intervals": [[0.0, 1402.88]],
+    "missing_intervals": [[1402.88, 1794.2]],
+    "units_total": 195,
+    "units_completed": 148
+  },
+  "output": "meeting.timed.partial.json",
+  "fix": "audio transcribe run --input meeting.m4a --stack qwen-1.7b --want diarization,word_timestamps --language Cantonese --range 1402.88: -o meeting.timed.rest.json"
+}
+```
 
 ## 5. Teardown
 

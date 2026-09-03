@@ -310,7 +310,7 @@ resolves to `English`; the 30 names equal the provisioned checkpoint's `support_
 the `mlx` environment exists, and the test skips when it does not. A plan carries no
 `outcomes`.
 
-### Phase C — transport, orchestration, and the Qwen stacks
+### Phase C — transport, orchestration, and the Qwen stacks (issue #21; implemented)
 
 `transport.py`, `orchestrator.py`, the `decode`, `silero`, `diarizer`, `qwen`, and `aligner`
 adapters, their stage scripts, and `audio transcribe run` for `qwen-1.7b` and `qwen-0.6b`. Five
@@ -330,7 +330,7 @@ turn bounds equal the first run's for the units they share. The scaffold strip i
 the **no-hint** configuration (finding 2). `peak_rss_bytes` is the maximum of the per-stage
 peaks, never their sum.
 
-### Phase D — FireRed
+### Phase D — FireRed (issue #22; next)
 
 One stage script for the whole stack, three or four models by request. Carries the word
 partition (finding 5), `lid_regions[]` by region grouping with the label-constancy assertion
@@ -342,7 +342,7 @@ when a word is dropped from the stream. `lid_regions[]` bounds equal `vad_region
 a region with two distinct labels fails. With LID off, no `lang` or `lang_confidence` key exists
 anywhere in the document. `words` never carries a confidence field.
 
-### Phase E — VibeVoice
+### Phase E — VibeVoice (issue #23)
 
 Both forms of "no speaker" — the literal `"N/A"` and the absent key — become an absent key.
 Non-speech event tags survive as segments with bounds and no words. The truncation salvage of
@@ -355,7 +355,7 @@ offset from a real artifact, yields every complete segment before the cut, exit 
 coverage watermark at the last complete segment's end — and yields nothing at all through
 `post_process_transcription`, which is the reason the salvage exists.
 
-### Phase F — `export`
+### Phase F — `export` (issue #24)
 
 `srt`, `vtt`, `md`, `txt`, `jsonl`; several `--input` documents merged in timeline order with
 re-numbered ids; `timing_required_for_format` when word timing is absent; cue policy hard-coded

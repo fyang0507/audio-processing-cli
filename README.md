@@ -12,7 +12,12 @@ original + profile
 
 The CLI reports what it measured, which versioned rule matched, the exact DSP parameters it resolved, and whether the result conforms to the selected profile. It does not label audio universally “good” or “bad,” and it abstains where a mixed track cannot be changed safely.
 
-The second implemented surface is provisioning: `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims the pinned model packages and runtimes that transcription will need. It is described under [Model packages](#model-packages). There is no `transcribe` command yet — provisioning shipped ahead of it deliberately, so nothing downloads a model behind a caller's back.
+The second implemented surface is transcription and its explicit provisioning layer.
+`audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact
+request, and `audio transcribe run` executes the `qwen-1.7b` and `qwen-0.6b` stacks. `audio
+doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims
+the pinned packages and runtimes. FireRed, VibeVoice, and deterministic export remain the next
+three implementation phases; the command never downloads a model behind a caller's back.
 
 This implements [Issue #4 — Profile-driven automatic audio enhancement](https://github.com/fyang0507/audio-processing-cli/issues/4) within the product boundary established by [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1).
 
@@ -180,12 +185,43 @@ audio packages purge --dry-run          # what a teardown would reclaim, reclaim
 
 Six behaviours to know before dispatching on the payloads:
 
-- `pull` accepts package ids **or** `--stack`, never both, and it refuses `--want` at exit 2 rather than accepting a capability filter it cannot honour until the planner lands.
+- `pull` accepts package ids **or** `--stack`, never both, and it refuses `--want` at exit 2 rather than accepting a capability filter it does not implement. Use `transcribe plan` to find the exact package set, then pull those ids, or pull the complete stack.
 - A package the registry already calls `ready` is reported under `skipped` and not re-materialized; it contributes nothing to `pulled_known_bytes`. `pull --repair PACKAGE` forces the work anyway, re-downloading a Hub snapshot and re-cloning a checkout rather than trusting what is on disk.
 - `--stack` tolerates a package its toolchain blocks: the rest of the stack provisions, the exit stays 0, and the blocked package appears in `warnings` with `blocking: true`. Naming that package on the command line is an instruction rather than a guess, so there an absent toolchain is exit 3.
 - `verify` publishes one verdict per environment — `ok`, `drifted`, `blocked`, or `absent`. Only `drifted` is repairable here, with `verify --repair`. `blocked` means a tool the environment requires is off `PATH`, so nothing in it can run; it exits 0 and says so rather than naming a fix this CLI cannot perform.
 - `digest: "ok"` is published only for a package pinned by content hash, which is `silero-vad` and nothing else. Hub packages publish the `revision` they pinned — a different claim, deliberately a different key.
 - `remove` resolves every name against the registry before deleting anything, and both teardowns drop a registry entry as that package's own bytes go. Weights live in a Hub cache shared with other tools, so a revision this root downloaded is deleted and one that pre-existed is retained; `purge --dry-run` reports the split before a caller promises a total.
+
+## Transcription
+
+The stack is an explicit quality choice. Inspect its capabilities, resolve the packages and
+stages for one request, provision what the plan names, then run:
+
+```bash
+audio transcribe capabilities --input meeting.m4a --stack qwen-1.7b
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
+  --want diarization,word_timestamps
+audio packages pull --stack qwen-1.7b
+audio transcribe run --input meeting.m4a --stack qwen-1.7b \
+  --want diarization,word_timestamps --language Cantonese \
+  --format json -o meeting.timed.json
+```
+
+Existing transcript and partial-result paths are preserved unless `--force` is explicit; no flag
+can make the output overwrite the canonical input.
+
+The Qwen runner decodes one temporary mono 16 kHz PCM WAV while preserving the original source,
+runs model stages strictly sequentially in fresh processes, and keeps every result bound on the
+source timeline. Derived diarization uses anonymous FluidAudio labels; overlap, sub-250 ms raw
+fragments, and sub-500 ms turns are recorded as abstentions rather than transcribed twice or
+silently discarded. A generation-budget stop writes a conforming partial JSON document at exit
+4; its refusal supplies an `audio transcribe run --range START:` command that re-decodes and
+re-diarizes the whole source before processing only intersecting units.
+
+Omitting `--want` is the floors-only request, not “everything.” `--language` is an optional closed
+Qwen hint and does not reach the forced aligner. Missing packages fail at exit 3 with an explicit
+`audio packages pull` fix before decode or model load. `firered` and `vibevoice` can already be
+inspected and planned, but their `run` adapters are tracked in issues #22 and #23; export is #24.
 
 ## Test
 

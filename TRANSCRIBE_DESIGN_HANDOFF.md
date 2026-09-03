@@ -1,10 +1,12 @@
 # `transcribe` — design handoff
 
-**You are picking this up to produce a technical design and an implementation plan.** The
-agent-facing surface is settled and signed off; none of it is built. Your job is the layer
-underneath: modules, interfaces, adapter boundaries, provisioning mechanics, test strategy,
-and a sequenced plan. This document tells you what is decided, what is deliberately open,
-what will bite you, and what the evidence actually supports.
+**Historical design handoff; implementation is in progress.** The agent-facing surface is
+settled and signed off. Phases 0–B are on `main`; phase C implements the transport, orchestrator,
+and both Qwen stacks. Issues #22–#24 are the remaining FireRed, VibeVoice, and export phases.
+Use [HANDOFF.md](HANDOFF.md) for current repository state and
+[TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) for phase boundaries.
+This document remains authoritative for the design decisions and evidence traps that produced
+that plan.
 
 Nothing here restates the three spec documents. Read them; they are authoritative.
 
@@ -92,9 +94,9 @@ you recognise a settled question when you meet one.
    the Swift product built and launched, and the `mlx-audio` private-API guard matching its pin.
    The suite still runs on a `FakeToolchain` and `FakeFetcher` in an isolated root, so treat a
    green suite as covering the rules and not the integration — the integration evidence is in
-   `fix/cli-provisioning-bugs`. `pull --want` is now **refused** rather than accepted and
-   ignored, until the planner lands
-   ([#12](https://github.com/fyang0507/audio-processing-cli/issues/12)); `--stack` still
+   `fix/cli-provisioning-bugs`. `pull --want` is **refused** rather than accepted and ignored;
+   the shipped planner names the exact packages and `pull` still accepts either those ids or a
+   deliberately over-provisioned stack. `--stack` still
    over-provisions, and now tolerates a package whose toolchain is missing instead of aborting
    the whole pull.
 4. **Partial results and resume.** Exit 4 writes a result with a coverage ledger. How work

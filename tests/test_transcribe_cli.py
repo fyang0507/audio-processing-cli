@@ -132,3 +132,152 @@ def test_globally_unsupported_capability_never_checks_provisioning(
             "labels a whole speech region"
         ),
     }
+
+
+def test_run_missing_package_is_bare_exit_three_after_probe_but_before_transport(
+    monkeypatch, capsys
+) -> None:
+    monkeypatch.setattr(cli, "probe_media", lambda path: probe())
+    monkeypatch.setattr(cli.transcribe_orchestrator, "load_registry", lambda: {
+        "packages": {}, "environments": {},
+    })
+
+    class ForbiddenTransport:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("exit 3 reached model transport")
+
+    monkeypatch.setattr(cli.transcribe_orchestrator, "StageTransport", ForbiddenTransport)
+    assert cli.main([
+        "transcribe", "run", "--input", "sample.wav", "--stack", "qwen-0.6b",
+    ]) == 3
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    error = json.loads(captured.err)
+    assert error == {
+        "code": "packages_not_provisioned",
+        "missing": [{
+            "package": "qwen3-asr-0.6b-8bit",
+            "kind": "weights",
+            "bytes": 1010773761,
+        }],
+        "total_known_download_bytes": 1010773761,
+        "unsized_packages": [],
+        "fix": "audio packages pull --stack qwen-0.6b",
+    }
+
+
+def test_run_resolves_stack_refusal_before_range_and_media(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli, "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("request refusal reached probe")),
+    )
+    assert cli.main([
+        "transcribe", "run", "--input", "sample.wav", "--range", "bad",
+    ]) == 2
+    assert json.loads(capsys.readouterr().err)["code"] == "stack_required"
+
+
+def test_run_malformed_range_is_bare_and_precedes_media(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli,
+        "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("range refusal reached probe")),
+    )
+    assert cli.main([
+        "transcribe", "run", "--input", "sample.wav", "--stack", "qwen-0.6b",
+        "--range", "not-a-range",
+    ]) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "range_invalid"
+    assert error["field"] == "--range"
+    assert error["provided"] == "not-a-range"
+    assert "error" not in error
+
+
+def test_run_refuses_existing_output_and_partial_before_media(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    source = tmp_path / "sample.wav"
+    source.write_bytes(b"source")
+    output = tmp_path / "result.json"
+    output.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(
+        cli, "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("collision reached probe")),
+    )
+    assert cli.main([
+        "transcribe", "run", "--input", str(source), "--stack", "qwen-0.6b",
+        "-o", str(output),
+    ]) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "output_exists"
+    assert error["existing"] == str(output)
+    assert error["fix"].endswith(f"-o {output} --force")
+    assert "error" not in error
+    assert output.read_text(encoding="utf-8") == "keep"
+
+    output.unlink()
+    partial = tmp_path / "result.partial.json"
+    partial.write_text("keep partial", encoding="utf-8")
+    assert cli.main([
+        "transcribe", "run", "--input", str(source), "--stack", "qwen-0.6b",
+        "-o", str(output),
+    ]) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "output_exists"
+    assert error["existing"] == str(partial)
+    assert error["fix"].endswith(f"-o {output} --force")
+    assert partial.read_text(encoding="utf-8") == "keep partial"
+
+
+def test_run_force_still_cannot_target_the_canonical_input(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    source = tmp_path / "sample.wav"
+    source.write_bytes(b"source")
+    monkeypatch.setattr(
+        cli, "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("source collision reached probe")),
+    )
+    assert cli.main([
+        "transcribe", "run", "--input", str(source), "--stack", "qwen-0.6b",
+        "-o", str(source), "--force",
+    ]) == 2
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "output_is_canonical_input"
+    assert error["resolved_target"] == str(source)
+    assert not error["fix"].startswith("audio ")
+    assert source.read_bytes() == b"source"
+
+
+def test_unimplemented_run_stack_refuses_before_media_or_provisioning(
+    monkeypatch, capsys
+) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unimplemented run reached external state")
+    monkeypatch.setattr(cli, "probe_media", forbidden)
+    monkeypatch.setattr(cli, "load_registry", forbidden)
+    assert cli.main([
+        "transcribe", "run", "--input", "sample.wav", "--stack", "firered",
+    ]) == 2
+    assert json.loads(capsys.readouterr().err) == {
+        "code": "stack_run_unavailable",
+        "stack": "firered",
+        "issue": 22,
+        "fix": (
+            "the firered run adapter is tracked in "
+            "https://github.com/fyang0507/audio-processing-cli/issues/22"
+        ),
+    }
+
+
+def test_unimplemented_run_stack_refuses_before_range_parsing(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        cli, "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("stack refusal reached probe")),
+    )
+    assert cli.main([
+        "transcribe", "run", "--input", "sample.wav", "--stack", "firered",
+        "--range", "not-a-range",
+    ]) == 2
+    assert json.loads(capsys.readouterr().err)["code"] == "stack_run_unavailable"

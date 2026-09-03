@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from audio_cli import packages as pkg
 from audio_cli.transcribe import stacks
-
 
 EXPECTED = {
     "qwen-1.7b": {
