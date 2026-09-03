@@ -63,7 +63,8 @@ remaining direct sequence is FireRed (#22), VibeVoice (#23), then export (#24).
   reconciliation, optional in-process Silero VAD, per-segment MLX alignment, exit-3 package
   preflight, and exit-4 partial/resume coverage. FireRed and VibeVoice remain deliberately
   unimplemented behind the same transport boundary.
-- Issue #21's release candidate is on `codex/issue-21`, based directly on
+- Issue #21's release candidate is [PR #29](https://github.com/fyang0507/audio-processing-cli/pull/29)
+  on `codex/issue-21`, based directly on
   `2e4e85662e24e4f6a6754de7a40d8f1cdd6c10f2` (`origin/main` when the branch was cut). Final
   verification collected and passed 408 tests; the targeted Ruff gate and `git diff --check`
   passed; `audio packages verify` reported all four environments `ok` with the pinned MLX private
