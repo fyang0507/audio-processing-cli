@@ -200,7 +200,10 @@ def test_most_fixes_are_runnable_commands() -> None:
         for _, doc in json_blocks(path):
             if isinstance(doc, dict) and "code" in doc and not doc["fix"].startswith("audio "):
                 sentence_fixes.add(doc["code"])
-    assert sentence_fixes == {"capability_unsupported", "backend_failed"}, (
+    assert sentence_fixes == {
+        "capability_unsupported", "backend_failed", "stack_run_unavailable",
+        "output_is_canonical_input",
+    }, (
         f"unexpected sentence-only fixes: {sorted(sentence_fixes)}. Every other code has a "
         "configuration that works, so its fix must be copy-pasteable."
     )

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import get_close_matches
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from audio_cli import environments as env
 
@@ -36,10 +37,8 @@ _FLUIDAUDIO = {
     "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
     "environment": "swift",
     "config": {
-        "preset": "quality",
         "step_ratio": 0.1,
         "min_segment_duration": 0.0,
-        "output": "regular",
         "threshold": 0.6,
         "batch_size": 32,
     },

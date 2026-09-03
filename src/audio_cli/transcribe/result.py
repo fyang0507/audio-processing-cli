@@ -11,6 +11,7 @@ import json
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
 
 SCHEMA_VERSION = 1
@@ -123,7 +124,9 @@ def _validate_source(source: JsonMapping) -> float:
     return duration
 
 
-def _validate_bounds(item: JsonMapping, field: str, *, sample: bool) -> None:
+def _validate_bounds(
+    item: JsonMapping, field: str, *, sample: bool, duration: float
+) -> None:
     has_start = "start" in item
     has_end = "end" in item
     if has_start != has_end:
@@ -137,11 +140,15 @@ def _validate_bounds(item: JsonMapping, field: str, *, sample: bool) -> None:
             raise ResultError(f"{field} placeholder bounds must be null")
         return
     assert start is not None and end is not None
-    if start < 0 or end < start:
-        raise ResultError(f"{field} bounds must satisfy 0 <= start <= end")
+    if start < 0 or end < start or end > duration:
+        raise ResultError(
+            f"{field} bounds must satisfy 0 <= start <= end <= source duration"
+        )
 
 
-def _validate_words(words: object, field: str, *, sample: bool) -> None:
+def _validate_words(
+    words: object, field: str, *, sample: bool, duration: float
+) -> None:
     if not isinstance(words, (list, tuple)):
         raise ResultError(f"{field} must be an array")
     for index, word in enumerate(words):
@@ -156,7 +163,7 @@ def _validate_words(words: object, field: str, *, sample: bool) -> None:
                 raise ResultError(f"{name}.text placeholder must be null")
         elif not isinstance(word["text"], str):
             raise ResultError(f"{name}.text must be a string")
-        _validate_bounds(word, name, sample=sample)
+        _validate_bounds(word, name, sample=sample, duration=duration)
 
 
 def _validate_segments(
@@ -164,6 +171,7 @@ def _validate_segments(
     requested: frozenset[str],
     *,
     sample: bool,
+    duration: float,
 ) -> None:
     for index, segment in enumerate(segments):
         if not isinstance(segment, Mapping):
@@ -193,8 +201,10 @@ def _validate_segments(
             if not sample and not isinstance(segment["speaker"], str):
                 raise ResultError(f"{field}.speaker must be a string when present")
         if "words" in segment:
-            _validate_words(segment["words"], f"{field}.words", sample=sample)
-        _validate_bounds(segment, field, sample=sample)
+            _validate_words(
+                segment["words"], f"{field}.words", sample=sample, duration=duration
+            )
+        _validate_bounds(segment, field, sample=sample, duration=duration)
 
 
 def _validate_span_array(
@@ -203,13 +213,14 @@ def _validate_span_array(
     expected: set[str],
     *,
     sample: bool,
+    duration: float,
 ) -> None:
     for index, item in enumerate(values):
         if not isinstance(item, Mapping):
             raise ResultError(f"{field}[{index}] must be an object")
         name = f"{field}[{index}]"
         _exact_keys(item, expected, name)
-        _validate_bounds(item, name, sample=sample)
+        _validate_bounds(item, name, sample=sample, duration=duration)
         for key in expected - {"start", "end"}:
             value = item[key]
             if sample and key not in {"turn_id", "overlap_id"} and value is not None:
@@ -233,9 +244,9 @@ def _validate_span_array(
 
 def _validate_abstentions(
     values: Sequence[JsonMapping],
-    requested: frozenset[str],
     *,
     sample: bool,
+    duration: float,
 ) -> None:
     for index, item in enumerate(values):
         if not isinstance(item, Mapping):
@@ -248,12 +259,7 @@ def _validate_abstentions(
             raise ResultError(
                 f"{name}.reason must be one of {sorted(ABSTENTION_REASONS)}"
             )
-        if item["reason"] in {"raw_fragment", "short_turn"} \
-                and "diarization" not in requested:
-            raise ResultError(f"{name}.reason {item['reason']!r} requires diarization")
-        if item["reason"] == "overlap" and "overlapped_speech" not in requested:
-            raise ResultError(f"{name}.reason 'overlap' requires overlapped_speech")
-        _validate_bounds(item, name, sample=sample)
+        _validate_bounds(item, name, sample=sample, duration=duration)
 
 
 def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
@@ -264,6 +270,7 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
             "covered_fraction",
             "covered_intervals",
             "missing_intervals",
+            "scope_intervals",
             "units_total",
             "units_completed",
         },
@@ -283,7 +290,7 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
     if coverage["units_completed"] > coverage["units_total"]:
         raise ResultError("coverage.units_completed exceeds coverage.units_total")
     parsed: dict[str, list[tuple[float, float]]] = {}
-    for key in ("covered_intervals", "missing_intervals"):
+    for key in ("scope_intervals", "covered_intervals", "missing_intervals"):
         intervals = coverage[key]
         if not isinstance(intervals, (list, tuple)):
             raise ResultError(f"coverage.{key} must be an array")
@@ -298,24 +305,39 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
                 raise ResultError(f"coverage.{key}[{index}] is not an ordered interval")
             parsed[key].append((start, end))
 
-    if duration == 0 or not parsed["missing_intervals"]:
+    if duration == 0 or not parsed["scope_intervals"] or not parsed["missing_intervals"]:
         raise ResultError("an incomplete result must have non-empty missing intervals")
     first_missing = min(start for start, _ in parsed["missing_intervals"])
     if not math.isclose(watermark, first_missing, abs_tol=1e-6):
         raise ResultError("covered_through_seconds must equal the first missing interval start")
 
+    scopes = parsed["scope_intervals"]
+    for left, right in pairwise(scopes):
+        if left[1] > right[0]:
+            raise ResultError("coverage scope intervals must not overlap")
     tiled = sorted(parsed["covered_intervals"] + parsed["missing_intervals"])
-    cursor = 0.0
-    for start, end in tiled:
-        if not math.isclose(start, cursor, abs_tol=1e-6):
-            raise ResultError("covered and missing intervals must tile the source without gaps")
-        cursor = end
-    if not math.isclose(cursor, duration, abs_tol=1e-6):
-        raise ResultError("covered and missing intervals must tile the complete source")
+    interval_index = 0
+    for scope_start, scope_end in scopes:
+        cursor = scope_start
+        while interval_index < len(tiled) and tiled[interval_index][0] < scope_end:
+            start, end = tiled[interval_index]
+            if not math.isclose(start, cursor, abs_tol=1e-6) or end > scope_end:
+                raise ResultError(
+                    "covered and missing intervals must tile the coverage scope without gaps"
+                )
+            cursor = end
+            interval_index += 1
+        if not math.isclose(cursor, scope_end, abs_tol=1e-6):
+            raise ResultError(
+                "covered and missing intervals must tile the coverage scope without gaps"
+            )
+    if interval_index != len(tiled):
+        raise ResultError("covered and missing intervals must stay inside the coverage scope")
 
     covered_seconds = sum(end - start for start, end in parsed["covered_intervals"])
-    if not math.isclose(fraction, covered_seconds / duration, abs_tol=0.0005):
-        raise ResultError("covered_fraction must equal covered duration over source duration")
+    scope_seconds = sum(end - start for start, end in scopes)
+    if not math.isclose(fraction, covered_seconds / scope_seconds, abs_tol=0.0005):
+        raise ResultError("covered_fraction must equal covered duration over coverage scope")
     if coverage["units_completed"] >= coverage["units_total"]:
         raise ResultError("an incomplete result must leave at least one unit incomplete")
 
@@ -389,10 +411,10 @@ def _validate_observed(observed: Mapping[str, Any], result: NormalizedResult) ->
     expected_counts = {
         "segments": len(result.segments),
         "words": sum(len(segment.get("words", [])) for segment in result.segments),
-        "turns": count_array(result.turns),
-        "segments_without_words": sum(
-            1 for segment in result.segments if not segment.get("words")
-        ),
+            "turns": count_array(result.turns),
+            "segments_without_words": sum(
+                1 for segment in result.segments if "words" not in segment
+            ),
         "abstentions": len(result.abstentions),
         "vad_regions": count_array(result.vad_regions),
         "lid_regions": count_array(result.lid_regions),
@@ -471,8 +493,12 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
     if has_coverage:
         assert isinstance(result.coverage, Mapping)
         _validate_coverage(result.coverage, duration=duration)
-    _validate_segments(result.segments, requested, sample=result.sample)
-    _validate_abstentions(result.abstentions, requested, sample=result.sample)
+    _validate_segments(
+        result.segments, requested, sample=result.sample, duration=duration
+    )
+    _validate_abstentions(
+        result.abstentions, sample=result.sample, duration=duration
+    )
     _validate_provenance(result.provenance, requested, result, sample=result.sample)
 
     arrays = {
@@ -494,7 +520,7 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
             if not isinstance(value, (list, tuple)):
                 raise ResultError(f"{field} must be an array")
             _validate_span_array(
-                value, field, expected_keys, sample=result.sample
+                value, field, expected_keys, sample=result.sample, duration=duration
             )
 
     payload: dict[str, Any] = {}

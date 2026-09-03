@@ -1,6 +1,6 @@
 ---
 name: audio-cli
-description: Do audio work on local media with the `audio` CLI — diagnose what is wrong with a recording, clean up and level speech in a video or podcast, render an ASR-ready proxy before transcribing, apply an evidence-backed fix to one region or one frequency, and provision the local models transcription needs. Use this whenever someone wants audio measured, cleaned up, made clearer or more consistent, or prepared for transcription, even if they never mention this CLI, a profile, or a model — every result comes back as JSON you can act on, and the failure modes here are the kind that produce confident wrong answers.
+description: Do audio work on local media with the `audio` CLI — diagnose what is wrong with a recording, clean up and level speech in a video or podcast, render an ASR-ready proxy, transcribe through a local Qwen stack, apply an evidence-backed targeted fix, and provision the models each request needs. Use this whenever someone wants audio measured, cleaned up, made clearer or more consistent, prepared for transcription, or transcribed, even if they never mention this CLI, a profile, or a model — results come back as structured data you can act on, and the failure modes here are the kind that produce confident wrong answers.
 ---
 
 # Audio work with the `audio` CLI
@@ -33,7 +33,8 @@ checkout of this repository, where `uv run audio ...` works from the root withou
 | "fix / clean up / level this recording or video" | inspect, resolve, render, verify | [references/enhance-audio.md](references/enhance-audio.md) |
 | "get this ready for transcription" | the same loop, transcription profile | [references/enhance-audio.md](references/enhance-audio.md) |
 | "this part is too quiet", "there's a hum at 60 Hz" | a scoped gain, authorized by evidence | [references/targeted-fixes.md](references/targeted-fixes.md) |
-| "transcribe this", "what will this download?" | provision models explicitly | [references/model-packages.md](references/model-packages.md) |
+| "transcribe this" | choose capabilities, plan, provision, run | [references/transcribe.md](references/transcribe.md) |
+| "what will this download?" | inspect and provision models explicitly | [references/model-packages.md](references/model-packages.md) |
 | "free up disk", or a command reports something missing | check state, then pull, repair, or reclaim | [references/model-packages.md](references/model-packages.md) |
 | the command is missing or will not run | install and verify | [references/install.md](references/install.md) |
 
@@ -47,8 +48,9 @@ has a way of producing a plausible wrong answer that `--help` cannot warn you ab
   measuring a measurement.
 - **Absence is meaningful.** A field the tool did not supply stays absent rather than becoming a
   null, a zero, or a default that reads like a measurement. Never fill one in when relaying results.
-- **stdout JSON belongs to the caller.** Pass it through unchanged and put interpretation in your
-  reply, not in the payload.
+- **Machine output belongs to the caller.** JSON is the default and must pass through unchanged;
+  put interpretation in your reply, not in the payload. Human transcript formats appear only when
+  the caller explicitly requests one.
 
 ## The honest limits
 
@@ -62,10 +64,12 @@ These are the four claims that get made wrongly. Knowing them is most of the ski
 - **Overlapping sources in one mixed track cannot be separated.** Gain and EQ move speech and music
   together when they overlap in time. Preserve the source or abstain; never imply independent
   control you do not have.
-- **Models arrive only when explicitly pulled, and there is no transcription command yet.**
-  Provisioning ships ahead of it, so never describe `audio transcribe` as runnable, and never
-  hand-download weights or hand-build an environment to work around a missing package.
+- **Models arrive only when explicitly pulled, and only the Qwen run adapters ship today.**
+  Capability discovery and planning cover all four stack ids, but FireRed and VibeVoice execution
+  remain work in progress. Never hand-download weights or hand-build an environment to work around
+  a missing package.
 
-When a command fails, it prints one JSON error object on stderr. If that object carries a `fix`,
-run that string verbatim — it is the tool naming its own remedy, and improvising instead is how one
-problem becomes two.
+When a command fails, its final stderr item is one JSON error object; `transcribe run` may stream
+plain-text progress before it. Parse the final object. If `fix` begins with `audio`, run that command
+verbatim; otherwise no working command exists, so report the sentence as the blocker instead of
+retrying blindly.

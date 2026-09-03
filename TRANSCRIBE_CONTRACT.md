@@ -1,9 +1,10 @@
 # `transcribe` command contract
 
-**Status: specification.** None of the commands below are implemented yet. This
-is the agent-facing sequence the v1 transcription work must produce, written end
-to end for all four v1 stack ids: from a machine with nothing installed, through
-provisioning and execution and export, to teardown. Terms are defined in
+**Status: implemented through phase C.** `capabilities` and `plan` work for all four stack ids,
+and `run` executes `qwen-1.7b` and `qwen-0.6b`. FireRed, VibeVoice, and `export` remain phases D,
+E, and F in issues #22–#24. This is the agent-facing sequence the complete v1 transcription
+surface must produce: from a machine with nothing installed, through provisioning and execution
+and export, to teardown. Terms are defined in
 [VOCABULARY.md](VOCABULARY.md); the backend evidence is in
 [model_tests/DECISION_REPORT.md](model_tests/DECISION_REPORT.md).
 
@@ -39,13 +40,13 @@ as the simplest command. The deviation is deliberate.
 | --- | --- |
 | 0 | Success. |
 | 1 | Runtime or backend failure with nothing salvageable. No result is written. Distinct from a principled abstention, which is a successful run. |
-| 2 | Request or validation error: missing stack or input, unknown capability, a capability the chosen stack cannot satisfy, an option the stack does not accept, a pin that conflicts with a requirement, absent word timing on export. |
+| 2 | Request or validation error: missing stack or input, unknown capability, a capability the chosen stack cannot satisfy, an option the stack does not accept, a pin that conflicts with a requirement, an unsafe output destination, absent word timing on export. |
 | 3 | A required package is not provisioned, or a provisioned one failed its integrity check. Only `run` can return these. |
-| 4 | Incomplete: some units were transcribed and some were not. A partial result **is** written, with a coverage ledger and a resume command. Only `run` can return this, and only on a stack whose work is partitioned. |
+| 4 | Incomplete: zero or more units were transcribed and at least one remains. A partial result **is** written, with a coverage ledger and a resume command. Only `run` can return this, and only on a stack whose work is partitioned. |
 
-Every error payload carries `code` and `fix`. **`fix` is a runnable command wherever a
-configuration exists that would work**, so a caller can copy one line and be right on the next
-attempt; where nothing would work it is a sentence saying so and naming the nearest available
+Every error payload carries `code` and `fix`. **`fix` is a runnable command wherever the current
+request can be repaired without inventing a caller-owned path**, so a caller can copy one line and
+be right on the next attempt; otherwise it is a sentence naming the decision or nearest available
 output. Emitting a plausible command that fails again is worse than admitting there is none.
 The remaining fields are fixed per code, and this table is the contract — a payload with a
 field not listed for its code, or missing one that is, is a defect:
@@ -60,6 +61,10 @@ field not listed for its code, or missing one that is, is a defect:
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty), `available_on_stack` |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
 | `pin_conflicts_with_native_capability` | 2 | `field`, `provided`, `allowed`, `capability` |
+| `range_invalid` | 2 | `field`, `provided`, `reason` |
+| `stack_run_unavailable` | 2 | `stack`, `issue` |
+| `output_exists` | 2 | `field`, `provided`, `existing` |
+| `output_is_canonical_input` | 2 | `field`, `provided`, `resolved_target` |
 | `timing_required_for_format` | 2 | `field`, `provided`, `requires_capability`, `found`, `note` |
 | `packages_not_provisioned` | 3 | `missing`, `total_known_download_bytes`, `unsized_packages` |
 | `package_integrity_failed` | 3 | `failed` (package, check, expected, actual) |
@@ -90,6 +95,10 @@ array, which is a stdout field of the plan document, not a stderr message.
 
 `run` defaults to `--format json` on stdout, matching the existing CLI's
 machine-readable convention. `--format md|txt` are for human consumption.
+An existing explicit output or its derived partial-result path is refused before decode unless
+`--force` is present. When `-o` is omitted, incomplete runs choose an unused sibling partial path
+instead of replacing an earlier attempt. Even with `--force`, `--output` may never resolve to the
+canonical input.
 
 `--language` is the one caller-settable model input, and it is a hint passed to the
 ASR rather than a capability. Only the Qwen stacks accept it; `vibevoice` advertises
@@ -374,8 +383,8 @@ Exits 0 whether or not anything is provisioned:
     "diarizer":   {"backend": "fluidaudio", "version": "0.15.5",
                    "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",
                    "environment": "swift",
-                   "config": {"preset": "quality", "step_ratio": 0.1,
-                              "min_segment_duration": 0.0, "output": "regular",
+                   "config": {"step_ratio": 0.1,
+                              "min_segment_duration": 0.0,
                               "threshold": 0.6, "batch_size": 32},
                    "config_note": "the shipped default supplies no speaker-count prior and enables overlapping_segments only when overlapped_speech is requested; the cited quality figures used both --num-speakers 2 and --overlapping-segments, so they do not measure this request",
                    "selected_by": "add_on_required_by:diarization"}
@@ -448,6 +457,10 @@ overlap-permitting output. Whether it fills depends on the audio.
 stubbing what it already knows. The value `1794.2` is illustrative — this document
 has no real `meeting.m4a` — and is deliberately not the 30-minute reference fixture behind
 the `capabilities` report's `cost.proved`, which describes a recorded run rather than this input.
+On `run`, the same source-audio duration is recomputed from the canonical decode's PCM frame
+count so range and coverage arithmetic use the timeline actually processed. `source.path` still
+names the original media, and `source` publishes no temporary format, sample-rate, or channel
+fields; the working WAV remains an unpublished transport artifact.
 
 There is no `measured` block here, and there was one. It restated the `capabilities` report's timing and
 memory figures inside every plan, which duplicated the one place those figures belong now
@@ -480,6 +493,13 @@ stage walls and the maximum of the stage peaks, not the sum of both; and strict
 sequencing is load-bearing for the memory story rather than an implementation detail,
 because `vibevoice` at 20.28 GiB and the aligner have never been measured resident at
 the same time and nothing here should imply they can be.
+
+Each RSS cell is the total resident footprint of the process executing that stage, including
+its runtime and orchestration overhead; it is not allocation attributed only to the backend.
+The in-process VAD cell is the core process high-water mark observed through that stage, while
+fresh model and Swift stage cells measure those child processes. `peak_mps_live_bytes_by_stage`
+is different: it is the MLX allocator's live-device-memory high-water mark inside each MLX
+stage, excludes ordinary RSS and non-MLX processes, and is also aggregated with `max`, never sum.
 
 ### 1.2 What `run` does with packages absent
 
@@ -1037,6 +1057,29 @@ Exit 2, `code: "pin_conflicts_with_native_capability"`, `field: "--diarizer"`,
 `vibevoice` satisfies it natively and no diarizer role exists in this plan. Pins
 select among implementations of a role the plan actually contains.
 
+A malformed or nonintersecting resume range is a request error, not an FFmpeg failure:
+
+```json
+{
+  "code": "range_invalid",
+  "field": "--range",
+  "provided": "400:",
+  "reason": "range does not intersect the source duration",
+  "fix": "audio transcribe run --input demo.mp4 --stack qwen-0.6b"
+}
+```
+
+A stack whose execution adapter has not shipped is also refused before media or package work:
+
+```json
+{
+  "code": "stack_run_unavailable",
+  "stack": "firered",
+  "issue": 22,
+  "fix": "the firered run adapter is tracked in https://github.com/fyang0507/audio-processing-cli/issues/22"
+}
+```
+
 A backend crash is the one failure that is not a refusal:
 
 ```json
@@ -1071,8 +1114,9 @@ Exit 3, and nothing loads. `run` does not hash multi-gigabyte weights on every
 invocation; it checks presence and the registry, so this surfaces either from an explicit
 `audio packages verify` or from the cheap check catching a size or revision mismatch. A
 corruption subtle enough to pass the cheap check fails at model load instead, which is
-`backend_failed` at exit 1 with `fix` pointing at `audio packages verify` — the same
-condition, found later, reported as what it looked like from where it was found.
+`backend_failed` at exit 1. Its `fix` is deliberately a sentence directing the caller to the
+reported runtime condition; a package verification command can legitimately print `ok` after
+an OOM or backend abort and therefore cannot be advertised as a repair.
 
 A built package has a fourth failure of its own: the build succeeded and the executable it
 produced does not launch.
@@ -1100,8 +1144,9 @@ recording `product_runs: false` and exiting 0.
 Long-form transcription has partial-completion mechanisms that are real and recorded, not
 hypothetical. Two are visible in the harness today:
 
-- **The Qwen path carries a global generation budget** and stops when it runs out, keeping
-  the turns it finished. The recorded runner tracks `input_turns`, `processed_turns`, and
+- **The Qwen path carries a global generation budget** and stops when it runs out. The stage
+  records every turn it finished; the partial document retains the longest chronological prefix
+  so its resume is disjoint. The recorded runner tracks `input_turns`, `processed_turns`, and
   `unprocessed_turns`, and every recorded run has `unprocessed_turns: []` — but the
   60-minute stress run consumed 10,169 of 16,384 tokens, so at that token rate the budget
   exhausts somewhere near **1.6 hours** of comparable material. A three-hour interview
@@ -1124,6 +1169,7 @@ incomplete run writes its result and exits 4 rather than throwing the work away:
   "backend": "qwen3-asr-1.7b-8bit",
   "detail": "global generation budget exhausted after 148 of 195 turns",
   "coverage": {
+    "scope_intervals": [[0.0, 1794.2]],
     "covered_through_seconds": 1402.88,
     "covered_fraction": 0.782,
     "covered_intervals": [[0.0, 1402.88]],
@@ -1138,13 +1184,19 @@ incomplete run writes its result and exits 4 rather than throwing the work away:
 
 Four properties that matter more than the shape.
 
+`scope_intervals` records the source-timeline extent this invocation selected. It is the whole
+source for an ordinary run and the complete processing-unit span selected by `--range` for a
+resumed run. Covered and missing intervals partition that scope exactly; material outside it is
+neither claimed nor counted in `covered_fraction`.
+
 `covered_through_seconds` is the end of the longest **contiguous prefix** that is fully
 transcribed, which is the number an agent can act on without reasoning about gaps. It is
-not the same as "the last unit that finished": the recorded runner processes turns in
-duration-bucketed order and restores chronological order afterwards, so completion is not
-contiguous in time. `covered_intervals` and `missing_intervals` therefore carry the exact
-truth, and a resume that only honours the watermark is correct but may redo work the
-ledger shows was already done.
+not the same as "the last unit that finished": the runner processes turns in duration-bucketed
+order and restores chronological order afterwards. On an incomplete Qwen run, completed units
+after the first gap are deliberately omitted from the partial document and counted as missing;
+the emitted resume therefore produces a disjoint suffix. `covered_intervals` and
+`missing_intervals` still carry the exact artifact truth, and the schema can represent
+non-contiguous coverage for later partitioned backends without pretending it is a prefix.
 
 `--range <start>[:<end>]` is the resume mechanism, and it exists so the agent does **not**
 clip the audio. Clipping shifts the timeline, which means every bound in the second result
@@ -1153,9 +1205,34 @@ timestamps, performed by a consumer, which is exactly what the canonical-timelin
 exists to prevent. With `--range`, bounds in the second result are already on the original
 timeline and merging is concatenation.
 
+A ranged run also records the selection in the embedded executed plan:
+
+```json
+{
+  "range": {
+    "requested": [1402.88, 1794.2],
+    "selected_unit_scope": [1402.88, 1794.2]
+  }
+}
+```
+
+`requested` is the validated interval (an open end resolves to the canonical WAV duration),
+while `selected_unit_scope` can expand to whole processing-unit boundaries. On an incomplete
+Qwen run, only the longest chronological prefix is published; later duration-bucketed successes
+are rerun so the `--range` continuation is disjoint rather than asking export to guess duplicates.
+Auxiliary VAD, overlap, and abstention spans use the same expanded scope and are owned by their
+start. An open range reaches the canonical duration even when the last diarized turn ends earlier,
+so tail evidence belongs to the continuation instead of disappearing between partial documents.
+For an incomplete hand-written range that begins in a diarization gap, coverage remains bounded to
+the selected processing units while auxiliary ownership begins at the requested bound; the gap's
+evidence is preserved without claiming it was transcribed.
+
 The partial result is a **conforming result document** with `complete: false` and the same
 `coverage` block, so every floor still holds inside it: no synthesized bounds, abstentions
 survive, punctuation invariant intact for the units that ran. It is not a debug dump.
+If `units_completed` is zero, `fix` is deliberately a sentence rather than a `--range` command:
+the deterministic run has no later unit to skip to, so replaying the same request cannot be
+presented as a remedy.
 
 Ids are document-scoped, so merging two results means re-numbering. `export` accepts
 several transcripts in timeline order and re-ids as it goes, which covers the subtitle

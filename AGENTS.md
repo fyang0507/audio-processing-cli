@@ -1,10 +1,11 @@
 # Working in this repository
 
 A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically,
-provision the model packages and runtimes transcription will need, and (in progress) transcribe it.
-`inspect`, `enhance`, `doctor`, and `packages` ship; `transcribe` does not exist yet. Every command
-prints JSON on stdout for a caller to dispatch on; prose interpretation belongs in your reply, not
-in the payload.
+provision model packages and runtimes, and transcribe through explicit stacks. `inspect`, `enhance`,
+`doctor`, and `packages` ship; `transcribe capabilities` and `transcribe plan` cover all four stack
+ids, while `transcribe run` currently executes the two Qwen stacks. FireRed, VibeVoice, and export
+are issues #22–#24. JSON is the machine-readable result format; prose interpretation belongs in
+your reply, not in the payload.
 
 ## The rule that matters most
 
@@ -45,7 +46,7 @@ the commands that already exist — `doctor`, `packages list`, `packages verify`
 real stdout against TRANSCRIBE_HAPPY_PATH.md, key set and nesting rather than values. All three
 had drifted when it was written. Where the documents disagree with each other it abstains and
 names the dispute instead of ratifying a side; the open one is the shape of `failed[]`, recorded
-in HANDOFF.md. Add a shipped command to it when you ship one.
+in HANDOFF.md. Add every newly shipped stack's `run` shape when its adapter lands.
 
 ## Evidence conventions
 

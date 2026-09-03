@@ -134,6 +134,7 @@ def test_languages_and_verbatim_add_no_result_key_and_cannot_abstain() -> None:
 
 def test_complete_and_coverage_are_bidirectional() -> None:
     coverage = {
+        "scope_intervals": [[0.0, 10.0]],
         "covered_through_seconds": 4.0,
         "covered_fraction": 0.4,
         "covered_intervals": [[0.0, 4.0]],
@@ -201,6 +202,25 @@ def test_real_attribution_and_lid_values_are_not_null_placeholders() -> None:
         ))
 
 
+def test_timed_output_cannot_leave_the_source_duration() -> None:
+    with pytest.raises(ResultError, match="source duration"):
+        serialize_result(base_result(
+            segments=[{
+                "segment_id": "seg_0",
+                "text": "Hello.",
+                "words": [{
+                    "word_id": "w_0", "text": "Hello", "start": 9.0, "end": 11.0,
+                }],
+            }],
+            requested_capabilities=frozenset({"word_timestamps"}),
+            provenance={
+                "stack": "qwen-1.7b",
+                "outcomes": {"word_timestamps": "produced"},
+                "observed": {},
+                "plan": {},
+            },
+        ))
+
 def test_overlap_id_is_a_non_empty_document_scoped_id() -> None:
     requested = frozenset({"overlapped_speech"})
     provenance = {
@@ -245,11 +265,11 @@ def test_abstention_reason_is_the_closed_recorded_enum() -> None:
 
 
 @pytest.mark.parametrize("reason", sorted(ABSTENTION_REASONS))
-def test_abstention_requires_the_capability_that_can_produce_it(reason: str) -> None:
-    with pytest.raises(ResultError, match="requires"):
-        serialize_result(base_result(abstentions=[{
-            "abstention_id": "ab_0", "reason": reason, "start": 0.0, "end": 0.2,
-        }]))
+def test_abstention_floor_is_not_gated_by_optional_capabilities(reason: str) -> None:
+    emitted = serialize_result(base_result(abstentions=[{
+        "abstention_id": "ab_0", "reason": reason, "start": 0.0, "end": 0.2,
+    }]))
+    assert emitted["abstentions"][0]["reason"] == reason
 
 
 def test_unknown_capability_and_model_specific_keys_are_rejected() -> None:
@@ -330,6 +350,7 @@ def test_observed_counts_are_reconciled_with_the_serialized_arrays() -> None:
 
 def test_coverage_cannot_leave_the_source_timeline() -> None:
     coverage = {
+        "scope_intervals": [[0.0, 10.0]],
         "covered_through_seconds": 4.0,
         "covered_fraction": 0.4,
         "covered_intervals": [[0.0, 4.0]],
@@ -349,12 +370,14 @@ def test_coverage_cannot_leave_the_source_timeline() -> None:
         ({"covered_through_seconds": 5.0, "missing_intervals": [[5.0, 10.0]]},
          "without gaps"),
         ({"units_completed": 2}, "leave at least one"),
+        ({"scope_intervals": [[0.0, 6.0], [5.0, 10.0]]}, "must not overlap"),
     ],
 )
 def test_coverage_ledger_must_be_internally_consistent(
     mutation: dict[str, object], message: str,
 ) -> None:
     coverage = {
+        "scope_intervals": [[0.0, 10.0]],
         "covered_through_seconds": 4.0,
         "covered_fraction": 0.4,
         "covered_intervals": [[0.0, 4.0]],
@@ -365,6 +388,20 @@ def test_coverage_ledger_must_be_internally_consistent(
     }
     with pytest.raises(ResultError, match=message):
         serialize_result(base_result(complete=False, coverage=coverage))
+
+
+def test_coverage_validator_exercises_multiple_disjoint_scopes() -> None:
+    coverage = {
+        "scope_intervals": [[0.0, 4.0], [6.0, 10.0]],
+        "covered_through_seconds": 2.0,
+        "covered_fraction": 0.5,
+        "covered_intervals": [[0.0, 2.0], [6.0, 8.0]],
+        "missing_intervals": [[2.0, 4.0], [8.0, 10.0]],
+        "units_total": 4,
+        "units_completed": 2,
+    }
+    payload = serialize_result(base_result(complete=False, coverage=coverage))
+    assert payload["coverage"] == coverage
 
 
 def test_absent_sentinel_is_not_serialized() -> None:

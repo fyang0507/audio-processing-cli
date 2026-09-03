@@ -1,9 +1,9 @@
 # Agent handoff
 
-Updated 2026-08-18. This repository currently has a production-oriented audio
-enhancement CLI and a completed ASR research/distillation phase. The next phase
-is to turn the ASR decisions into a transcription CLI where the caller picks a
-stack and states requirements, plus its associated agent skill.
+Updated 2026-09-03. This repository has a production-oriented audio enhancement CLI,
+explicit model provisioning, transcription capability discovery and planning, and the first
+executable transcription stacks. Phase C in issue #21 runs `qwen-1.7b` and `qwen-0.6b`; the
+remaining direct sequence is FireRed (#22), VibeVoice (#23), then export (#24).
 
 ## Current state
 
@@ -57,7 +57,22 @@ stack and states requirements, plus its associated agent skill.
 - The benchmark harness, manifests, compact results, and controlled research
   record live under `model_tests/`. Raw media, downloaded model weights, and
   local run directories are intentionally ignored.
-- No transcription command or ASR backend abstraction has been implemented yet.
+- `audio transcribe capabilities` and `audio transcribe plan` ship for all four stack ids.
+  `audio transcribe run` ships for `qwen-1.7b` and `qwen-0.6b`. It uses one canonical temporary
+  PCM WAV, strictly sequential fresh MLX/Swift processes, core-side adapters, exact anonymous-turn
+  reconciliation, optional in-process Silero VAD, per-segment MLX alignment, exit-3 package
+  preflight, and exit-4 partial/resume coverage. FireRed and VibeVoice remain deliberately
+  unimplemented behind the same transport boundary.
+- Issue #21's release candidate is [PR #29](https://github.com/fyang0507/audio-processing-cli/pull/29)
+  on `codex/issue-21`, based directly on
+  `2e4e85662e24e4f6a6754de7a40d8f1cdd6c10f2` (`origin/main` when the branch was cut). Final
+  verification collected and passed 408 tests; the targeted Ruff gate and `git diff --check`
+  passed; `audio packages verify` reported all four environments `ok` with the pinned MLX private
+  API hash and signature matching; a fresh floors-only Qwen 0.6B run produced 23 chronological
+  segments over the canonical 139.284-second fixture timeline; and a fresh sdist/wheel build
+  contained the environment stage scripts, core adapters, and shipped audio skill references.
+  Claude reviewed the full staged diff adversarially through twelve numbered passes (one hung pass
+  was discarded and rerun) and the terminal review returned exactly `CONVERGED`.
 - [VOCABULARY.md](VOCABULARY.md) settles the naming contract for that work:
   stack, role, backend, add-on, package, environment, capability, satisfaction,
   availability, evidence, plan, policy, and the floors that are never optional.
@@ -65,11 +80,46 @@ stack and states requirements, plus its associated agent skill.
 - [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is the command surface that contract
   must produce, end to end for all four stack ids including teardown, and
   [TRANSCRIBE_HAPPY_PATH.md](TRANSCRIBE_HAPPY_PATH.md) is the unabridged expected output per
-  use case plus all twelve refusals. Both are signed off; none of it is built.
-- [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is where the next phase starts:
-  what is decided, what is open design work, the risks worst-first, and a suggested build
-  order. Read it before designing anything under `src/`.
+  use case plus all refusals. Both are signed off; implementation is complete through phase C.
+- [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) owns the remaining phase
+  boundaries. [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is the historical design
+  record and still explains the risks and rejected alternatives.
 - `tests/test_spec_docs.py` holds the spec documents' invariants and runs in the normal suite.
+
+## Next agent: issues #22–#24
+
+Start only after issue #21's PR is merged, from a fresh branch based on the resulting
+`origin/main`. Do not carry the Phase C worktree or stack these phases on an unmerged local
+commit. The shared seam is now concrete:
+
+- Core orchestration is in `src/audio_cli/transcribe/orchestrator.py`; fresh-process invocation
+  and request/result JSON ownership are in `transport.py`.
+- Environment entry points under `transcribe/stages/` import no `audio_cli`. Backend-specific
+  objects and raw defaults stop at `transcribe/adapters/`; the normalized serializer remains the
+  only public result path.
+- `audio transcribe run --stack firered` and `--stack vibevoice` currently refuse without loading
+  a model. Replace only the matching refusal when its adapter lands.
+- Add every shipped `run` shape to `tests/test_shipped_commands_match_the_document.py`. Keep exit
+  3 before transport, exit 4 only when a conforming partial exists, and `peak_*` totals as maxima
+  across sequential stages.
+
+Issue #22 is next because FireRed exercises one co-resident stage process containing native VAD,
+optional LID, ASR, and punctuation. Its word objects have exactly `start_ms`, `end_ms`, and `text`;
+do not reintroduce per-word confidence from summaries. Assert the punctuation invariant per
+sentence, group LID at VAD-region granularity, and omit the backend's default-filled language
+fields when LID was not requested.
+
+Issue #23 then adds VibeVoice. Preserve complete segments from truncated raw text before exit 4,
+drop both literal `"N/A"` and absent speakers rather than turning either into an identity, and
+retain bounded non-speech event segments without a fabricated word stream.
+
+Issue #24 is deterministic post-processing only: SRT, VTT, Markdown, text, and JSONL; merge
+partial/resumed documents in source order and re-id them; refuse subtitle output without real
+word timing; never derive a cue from a processing-unit or segment container bound.
+
+For each issue, keep the established `plan -> implement -> verify -> adversarial review -> PR`
+loop. The acceptance text in the issue body is the checklist; backend claims must be checked
+against the named runner or recorded artifact, not this handoff.
 
 ## Read this first
 

@@ -50,6 +50,41 @@ def _plan_command(
     return shlex.join(parts)
 
 
+def _run_command(
+    input_path: str | Path,
+    stack: str,
+    wants: Sequence[str] = (),
+    *,
+    language: str | None = None,
+    vad: str | None = None,
+    diarizer: str | None = None,
+    run_range: str | None = None,
+    output_format: str = "json",
+    output: str | Path | None = None,
+    force: bool = False,
+) -> str:
+    parts = [
+        "audio", "transcribe", "run", "--input", str(input_path), "--stack", stack,
+    ]
+    if wants:
+        parts.extend(("--want", ",".join(wants)))
+    if language is not None:
+        parts.extend(("--language", language))
+    if vad is not None:
+        parts.extend(("--vad", vad))
+    if diarizer is not None:
+        parts.extend(("--diarizer", diarizer))
+    if run_range is not None:
+        parts.extend(("--range", run_range))
+    if output_format != "json":
+        parts.extend(("--format", output_format))
+    if output is not None:
+        parts.extend(("-o", str(output)))
+    if force:
+        parts.append("--force")
+    return shlex.join(parts)
+
+
 def stack_required(input_path: str | Path | None, wants: Sequence[str]) -> Refusal:
     chosen_input = input_path or "meeting.m4a"
     return _refusal(
@@ -212,6 +247,90 @@ def pin_conflicts_with_native_capability(
     )
 
 
+def range_invalid(
+    input_path: str | Path,
+    stack: str,
+    wants: Sequence[str],
+    provided: str,
+    reason: str,
+    *,
+    language: str | None = None,
+    vad: str | None = None,
+    diarizer: str | None = None,
+) -> Refusal:
+    return _refusal(
+        "range_invalid",
+        2,
+        _run_command(
+            input_path, stack, wants, language=language, vad=vad, diarizer=diarizer
+        ),
+        field="--range",
+        provided=provided,
+        reason=reason,
+    )
+
+
+def output_exists(
+    input_path: str | Path,
+    stack: str,
+    wants: Sequence[str],
+    output: str | Path,
+    existing: str | Path,
+    *,
+    language: str | None = None,
+    vad: str | None = None,
+    diarizer: str | None = None,
+    run_range: str | None = None,
+    output_format: str = "json",
+) -> Refusal:
+    return _refusal(
+        "output_exists",
+        2,
+        _run_command(
+            input_path,
+            stack,
+            wants,
+            language=language,
+            vad=vad,
+            diarizer=diarizer,
+            run_range=run_range,
+            output_format=output_format,
+            output=output,
+            force=True,
+        ),
+        field="--output",
+        provided=str(output),
+        existing=str(existing),
+    )
+
+
+def output_is_canonical_input(
+    output: str | Path, resolved_target: str | Path,
+) -> Refusal:
+    return _refusal(
+        "output_is_canonical_input",
+        2,
+        (
+            "choose an --output whose transcript and derived partial paths do not resolve "
+            "to the canonical input; --force cannot override this"
+        ),
+        field="--output",
+        provided=str(output),
+        resolved_target=str(resolved_target),
+    )
+
+
+def stack_run_unavailable(stack: str, issue: int) -> Refusal:
+    return _refusal(
+        "stack_run_unavailable",
+        2,
+        f"the {stack} run adapter is tracked in "
+        f"https://github.com/fyang0507/audio-processing-cli/issues/{issue}",
+        stack=stack,
+        issue=issue,
+    )
+
+
 def timing_required_for_format(
     input_path: str | Path,
     output_format: str,
@@ -237,7 +356,7 @@ def timing_required_for_format(
 
 def packages_not_provisioned(
     stack: str,
-    missing: Sequence[str],
+    missing: Sequence[Mapping[str, Any]],
     total_known_download_bytes: int,
     unsized_packages: Sequence[str],
 ) -> Refusal:
