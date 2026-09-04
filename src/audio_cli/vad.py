@@ -5,9 +5,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
 import numpy as np
 import onnxruntime as ort
@@ -21,6 +19,8 @@ from .media import (
     sha256_regular_file_at,
 )
 from .paths import models_dir, root
+from .vad_contract import SpeechRegion
+from .vad_contract import VadDetector as VadDetector
 
 MODEL_VERSION = "silero-vad-6.2.1"
 MODEL_URL = (
@@ -33,38 +33,6 @@ MODEL_FILENAME = f"{MODEL_VERSION}.onnx"
 
 class VadError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class SpeechRegion:
-    start: float
-    end: float
-    mean_probability: float
-    peak_probability: float
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "start": round(self.start, 6),
-            "end": round(self.end, 6),
-            "mean_probability": round(self.mean_probability, 6),
-            "peak_probability": round(self.peak_probability, 6),
-        }
-
-
-class VadDetector(Protocol):
-    model_version: str
-
-    def detect(
-        self,
-        samples: np.ndarray,
-        sample_rate: int,
-        *,
-        threshold: float,
-        exit_threshold: float,
-        min_speech_ms: int,
-        min_silence_ms: int,
-        speech_pad_ms: int,
-    ) -> list[SpeechRegion]: ...
 
 
 def _cache_root() -> Path:

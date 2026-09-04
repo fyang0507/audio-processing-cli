@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ast_test_support import stable_ast_source
 from vibevoice_test_support import (
     _PINNED_POST_PROCESS_TRANSCRIPTION,
     _fixture,
@@ -185,10 +186,8 @@ def test_pinned_upstream_postprocessor_loses_the_recorded_truncated_prefix() -> 
     # remains clean under ``git diff --check``.
     assert isinstance(function.body[0], ast.Expr)
     function.body = function.body[1:]
-    digest = hashlib.sha256(
-        ast.dump(function, annotate_fields=True, include_attributes=False).encode()
-    ).hexdigest()
-    assert digest == "1434126abf8ea90bc103972b07f0cdfb9e34a19144d9cc1e3e188f2d9091dd8b"
+    digest = hashlib.sha256(stable_ast_source(function).encode()).hexdigest()
+    assert digest == "92a1c4d9f19f7bf7865b98a2309bc7b87399f1b66cddb6f853027658dc1af0b3"
 
     logger = types.SimpleNamespace(warning=lambda *_args: None, debug=lambda *_args: None)
     namespace = {

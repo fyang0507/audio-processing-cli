@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
-import wave
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from audio_cli.media import capture_file_identity, temporary_directory
+from audio_cli.media import canonical_pcm_duration, capture_file_identity, temporary_directory
 from audio_cli.packages import load_registry
 
 from ..adapters.firered import normalize_firered_result
+from ..adapters.firered_ledger import (
+    _bind_supplied_firered_region_ledger,
+    _firered_intersects,
+    _firered_published_region_ledger,
+    _firered_published_vad_prefix,
+    _firered_region_ledger,
+)
 from ..catalog import InputMetadata
+from ..execution.materialization import _checkout, _materialized_role_paths
 from ..execution.preflight import preflight
 from ..execution.publication import (
     _backend_fix,
@@ -30,24 +37,14 @@ from ..transport.service import StageTransport
 from ..transport.types import StageFailure, StageOutcome
 from .common import (
     _diarizer_outputs,
-    _finish,
-    _run_diarizer,
-    _write_complete,
-)
-from .scope import (
-    _bind_supplied_firered_region_ledger,
-    _checkout,
-    _duration,
     _expanded_scope,
-    _firered_intersects,
-    _firered_published_region_ledger,
-    _firered_published_vad_prefix,
-    _firered_region_ledger,
+    _finish,
     _intersects,
     _intersects_any,
-    _materialized_role_paths,
+    _run_diarizer,
     _selected_scope,
     _speaker_for_span,
+    _write_complete,
 )
 
 
@@ -84,7 +81,7 @@ def _run_firered(
         canonical = directory / "canonical.wav"
         try:
             stage_outcomes.append(stage_transport.decode(source_identity, canonical))
-            duration = _duration(canonical)
+            duration = canonical_pcm_duration(canonical)
             run_range = _validate_range(request, run_range, duration)
             requested_scope = _selected_scope(run_range, duration)
 
@@ -204,7 +201,6 @@ def _run_firered(
             RuntimeError,
             TypeError,
             ValueError,
-            wave.Error,
         ) as exc:
             raise refusals.backend_failed(
                 active_role,

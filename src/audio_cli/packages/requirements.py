@@ -23,18 +23,6 @@ def _module_available(name: str) -> bool:
         return False
 
 
-def _module_of(dotted: str) -> str:
-    return dotted.rsplit(".", 2)[0]
-
-
-def _class_of(dotted: str) -> str:
-    return dotted.rsplit(".", 2)[1]
-
-
-def _method_of(dotted: str) -> str:
-    return dotted.rsplit(".", 1)[1]
-
-
 def _locked_versions(environment: Environment) -> dict[str, str]:
     versions: dict[str, str] = {}
     for line in environment.lock.read_text().splitlines():
@@ -61,7 +49,7 @@ def _direct_file_install_path(specification: str) -> Path | None:
     return Path(urllib.parse.unquote(parsed.path))
 
 
-def _managed_checkout_requirements(
+def managed_checkout_requirements(
     document: Mapping[str, Any],
     environment_name: str,
     package_ids: set[str] | None = None,
@@ -97,7 +85,7 @@ def _environment_drift(
     required_checkouts: Mapping[str, Path],
 ) -> dict[str, tuple[str | None, str | None]]:
     comparable = dict(frozen)
-    direct_drift = _checkout_install_drift(frozen, required_checkouts)
+    direct_drift = checkout_install_drift(frozen, required_checkouts)
     for name in required_checkouts:
         comparable.pop(name, None)
     locked_drift = {
@@ -108,7 +96,7 @@ def _environment_drift(
     return {**locked_drift, **direct_drift}
 
 
-def _checkout_install_drift(
+def checkout_install_drift(
     frozen: Mapping[str, str],
     required_checkouts: Mapping[str, Path],
 ) -> dict[str, tuple[str | None, str | None]]:

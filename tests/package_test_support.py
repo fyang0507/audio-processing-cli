@@ -122,8 +122,12 @@ class FakeToolchain(pkg.Toolchain):
         # Opt-in, because the default has to keep yielding *no* verdict: that is the path
         # `mlx_audio_private_api_error` covers, and the exemption for it in
         # tests/test_shipped_commands_match_the_document.py has to stay reachable. The only
-        # `-c` invocation in the tool is the private-API probe.
-        if self.private_api_hash is not None and list(args)[1:2] == ["-c"]:
+        # checked-in runtime-probe invocation in the tool is the private-API probe.
+        if (
+            self.private_api_hash is not None
+            and len(args) >= 2
+            and Path(str(args[1])).name == "runtime_probe.py"
+        ):
             guards = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}
             Result.stdout = json.dumps(
                 {

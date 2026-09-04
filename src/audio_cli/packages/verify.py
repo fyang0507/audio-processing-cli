@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from .. import paths
 from ..environments import environments
 from . import catalog, environment_verification, package_verification, registry
 from .locations import managed_environment_path
-from .requirements import (
-    _class_of,
-    _method_of,
-    _module_of,
-)
 from .toolchain import Toolchain
+
+_RUNTIME_PROBE = Path(__file__).with_name("runtime_probe.py")
 
 
 def _verify_mlx_guard(toolchain: Toolchain, document: dict) -> dict:
@@ -35,16 +33,7 @@ def _verify_mlx_guard(toolchain: Toolchain, document: dict) -> dict:
 
     target = guards["source_hash"]["target"]
     signature = guards["signature"]
-    probe = (
-        "import hashlib, inspect, json\n"
-        f"mod = __import__({_module_of(signature['target'])!r}, fromlist=['x'])\n"
-        "path = inspect.getfile(mod)\n"
-        f"cls = getattr(mod, {_class_of(signature['target'])!r})\n"
-        f"method = getattr(cls, {_method_of(signature['target'])!r})\n"
-        "print(json.dumps({'sha256': hashlib.sha256(open(path,'rb').read()).hexdigest(),"
-        " 'params': sorted(inspect.signature(method).parameters)}))\n"
-    )
-    result = toolchain.run([str(paths.env_python("mlx")), "-c", probe])
+    result = toolchain.run([str(paths.env_python("mlx")), str(_RUNTIME_PROBE), signature["target"]])
     if result.returncode != 0:
         report["mlx_audio_private_api_source_hash"] = None
         report["mlx_audio_private_api_matches_expected"] = False

@@ -185,29 +185,3 @@ def _missing_record(record: Mapping[str, Any]) -> dict[str, Any]:
     if "requires_tool" in record:
         item["requires_tool"] = list(record["requires_tool"])
     return item
-
-
-def _materialized_path(entries: Mapping[str, Mapping[str, Any]], identifier: str) -> Path:
-    value = entries[identifier].get("materialized", {}).get("path")
-    if not value:
-        raise refusals.package_integrity_failed(
-            (
-                {
-                    "package": identifier,
-                    "check": "materialized_path",
-                    "expected": "present",
-                    "actual": value,
-                },
-            )
-        )
-    return Path(str(value))
-
-
-def _paths_exist(materialized: Mapping[str, Any]) -> bool:
-    found = []
-    if materialized.get("path"):
-        found.append(Path(str(materialized["path"])))
-    values = materialized.get("paths")
-    if isinstance(values, Mapping):
-        found.extend(Path(str(value)) for value in values.values())
-    return bool(found) and all(path.exists() for path in found)

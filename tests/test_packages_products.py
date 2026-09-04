@@ -69,12 +69,13 @@ def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_p
     exactly like a clean run. §1.3 publishes `matches_expected: true`, so something has to be able
     to produce it. Found while scanning for the vacuous-flag shape; it is the same family.
     """
-    expected = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}["source_hash"][
-        "sha256"
-    ]
+    guards = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}
+    expected = guards["source_hash"]["sha256"]
 
+    toolchain = FakeToolchain(private_api_hash=expected)
     answering = pkg.Provisioner(
-        toolchain=FakeToolchain(private_api_hash=expected), fetcher=FakeFetcher(tmp_path)
+        toolchain=toolchain,
+        fetcher=FakeFetcher(tmp_path),
     )
     answering.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     report = answering.verify()
@@ -82,6 +83,10 @@ def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_p
     assert report["mlx_audio_private_api_matches_expected"] is True
     assert report["mlx_audio_private_api_signature_ok"] is True
     assert "mlx_audio_private_api_error" not in report
+    probe_calls = [
+        call for call in toolchain.calls if Path(str(call[1])).name == "runtime_probe.py"
+    ]
+    assert [call[2:] for call in probe_calls] == [[guards["signature"]["target"]]]
 
     # And it is a comparison rather than an echo: a source file that moved fails it, with both
     # values published so a reader can see why.

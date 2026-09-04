@@ -68,6 +68,15 @@ def test_stack_table_is_complete_and_cross_checked_with_the_manifest() -> None:
             assert cell["evidence_source"].startswith("model_tests/")
 
 
+def test_installed_stack_validation_keeps_safe_repository_citations(monkeypatch) -> None:
+    monkeypatch.setattr(stacks, "_source_checkout_root", lambda: None)
+
+    assert stacks.validate() == []
+    assert stacks._evidence_source_problem("../untracked.json") == (
+        "evidence_source '../untracked.json' is not a safe repository evidence path"
+    )
+
+
 @pytest.mark.parametrize(
     ("stack_id", "capability", "resolution"),
     [

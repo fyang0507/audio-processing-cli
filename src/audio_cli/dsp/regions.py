@@ -10,7 +10,7 @@ import numpy as np
 from scipy import signal
 
 from ..profiles import Profile
-from ..vad import SpeechRegion
+from ..vad_contract import SpeechRegion
 from .levels import EPSILON, rms_dbfs
 
 

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from audio_cli.media import ProtectedFileIdentity, capture_file_identity
+from audio_cli.media import ProtectedFileIdentity, capture_file_identity, resolve_path_identity
 
 from .cues import Cue, CueError, build_cues
 from .errors import IncompatibleResultsError, InvalidResultError, OutputWriteError
@@ -49,7 +49,7 @@ def export_documents(
                 "the transcript with the current audio CLI",
             )
         try:
-            source_path.resolve(strict=False)
+            resolve_path_identity(source_path)
             source_file_identity = capture_file_identity(source_path)
         except (OSError, RuntimeError, ValueError) as exc:
             raise InvalidResultError(

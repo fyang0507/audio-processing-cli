@@ -12,24 +12,22 @@ from audio_cli.environments import environments as environment_catalog
 from audio_cli.environments import packages as package_catalog
 from audio_cli.media import hash_file
 from audio_cli.packages import (
-    built_product_candidates,
     checkout_file_matches,
+    checkout_install_drift,
     checkout_patch_expectation,
     hub_materialization_issues,
     managed_checkout_path,
+    managed_checkout_requirements,
     managed_environment_path,
     managed_provisioning_root_issue,
     managed_url_artifact_path,
-    validated_built_product,
-)
-from audio_cli.packages.requirements import (
-    _checkout_install_drift,
-    _managed_checkout_requirements,
 )
 
 from ..plan import Plan
 from ..refusals import request as refusals
 from . import runtime
+from .materialization import _paths_exist
+from .product_validation import _validate_declared_product
 
 
 def preflight(
@@ -126,9 +124,9 @@ def preflight(
                     for record in plan.packages
                     if not record.get("auto_fetch")
                 }
-                requirements = _managed_checkout_requirements(registry, environment, selected_ids)
+                requirements = managed_checkout_requirements(registry, environment, selected_ids)
                 if requirements:
-                    install_drift = _checkout_install_drift(
+                    install_drift = checkout_install_drift(
                         frozen_packages_probe(interpreter), requirements
                     )
                     if install_drift:
@@ -199,7 +197,7 @@ def preflight(
         if catalog[identifier].environment in unusable_environments:
             continue
         materialized = entry.get("materialized", {})
-        if not isinstance(materialized, Mapping) or not runtime._paths_exist(materialized):
+        if not isinstance(materialized, Mapping) or not _paths_exist(materialized):
             failures.append(
                 {
                     "package": identifier,
@@ -359,127 +357,14 @@ def preflight(
                             "actual": list(checkout_state.untracked),
                         }
                     )
-        if identifier == "fluidaudio":
-            fluid_failures_before = len(failures)
-            product = str(source["product"])
-            # `built` and `product_runs` are pull history. The current trust boundary is the
-            # live checkout plus the exact executable path and digest recorded after the build.
-            package = catalog[identifier]
-            checkout, location_issue = managed_checkout_path(package, materialized.get("path"))
-            if location_issue is not None or checkout is None:
-                failures.append(
-                    {
-                        "package": identifier,
-                        "check": "built_checkout_path",
-                        "expected": str(paths.checkout_dir(package.environment, package.id)),
-                        "actual": location_issue,
-                    }
-                )
-                candidates = []
-            else:
-                try:
-                    state = runtime._inspect_checkout(checkout)
-                except ValueError as exc:
-                    failures.append(
-                        {
-                            "package": identifier,
-                            "check": "built_checkout_git_state",
-                            "expected": "inspectable pinned source checkout",
-                            "actual": str(exc),
-                        }
-                    )
-                else:
-                    try:
-                        expected_patches, expected_names, expected_digests = (
-                            checkout_patch_expectation(package)
-                        )
-                    except (OSError, ValueError) as exc:
-                        failures.append(
-                            {
-                                "package": identifier,
-                                "check": "built_checkout_patch",
-                                "expected": "readable installed patch",
-                                "actual": str(exc),
-                            }
-                        )
-                        expected_patches, expected_names, expected_digests = (), (), {}
-                    if state.head != source["commit"] or set(state.modified) != set(expected_names):
-                        failures.append(
-                            {
-                                "package": identifier,
-                                "check": "built_checkout_git_state",
-                                "expected": {
-                                    "head": source["commit"],
-                                    "modified": sorted(expected_names),
-                                },
-                                "actual": {
-                                    "head": state.head,
-                                    "modified": list(state.modified),
-                                },
-                            }
-                        )
-                    if materialized.get("patches_applied", []) != list(expected_patches):
-                        failures.append(
-                            {
-                                "package": identifier,
-                                "check": "built_checkout_patch_applied",
-                                "expected": list(expected_patches),
-                                "actual": materialized.get("patches_applied", []),
-                            }
-                        )
-                    if materialized.get("patched_file_digests", {}) != expected_digests:
-                        failures.append(
-                            {
-                                "package": identifier,
-                                "check": "built_checkout_patch_digests",
-                                "expected": expected_digests,
-                                "actual": materialized.get("patched_file_digests", {}),
-                            }
-                        )
-                    changed = [
-                        name
-                        for name, digest in expected_digests.items()
-                        if not checkout_file_matches(
-                            checkout,
-                            name,
-                            digest,
-                            runtime._checkout_file_digest,
-                        )
-                    ]
-                    if changed:
-                        failures.append(
-                            {
-                                "package": identifier,
-                                "check": "built_checkout_patch_integrity",
-                                "expected": "manifest-pinned post-patch hashes",
-                                "actual": changed,
-                            }
-                        )
-                candidates = built_product_candidates(checkout, product)
-            if len(candidates) != 1:
-                failures.append(
-                    {
-                        "package": identifier,
-                        "check": "built_product_executable",
-                        "expected": 1,
-                        "actual": len(candidates),
-                    }
-                )
-            elif len(failures) == fluid_failures_before:
-                executable, product_issue = validated_built_product(
-                    checkout, product, dict(materialized)
-                )
-                if product_issue is not None or executable is None:
-                    failures.append(
-                        {
-                            "package": identifier,
-                            "check": "built_product_digest",
-                            "expected": "pull-recorded path and sha256",
-                            "actual": product_issue,
-                        }
-                    )
-                elif not built_product_probe(executable):
-                    raise refusals.package_build_unusable(identifier, product)
+        if source.get("product") is not None:
+            _validate_declared_product(
+                identifier,
+                catalog[identifier],
+                materialized,
+                failures,
+                built_product_probe,
+            )
     if failures:
         raise refusals.package_integrity_failed(failures)
     return selected

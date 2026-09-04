@@ -20,7 +20,8 @@ from ..media import (
     require_runtime,
 )
 from ..profiles import PROFILES, Profile
-from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad, VadDetector
+from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad
+from ..vad_contract import VadDetector
 from .models import PipelineError, PreparedRun
 from .reporting import _program_observation, _region_manifest, _round_loudness
 

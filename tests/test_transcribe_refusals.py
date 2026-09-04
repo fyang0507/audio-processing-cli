@@ -11,6 +11,7 @@ import pytest
 from spec_document_loader import read_spec_document
 
 from audio_cli import cli
+from audio_cli.export import refusals as export_refusals
 from audio_cli.transcribe import refusals, stacks
 from audio_cli.transcribe.planner import resolve_request
 
@@ -310,12 +311,14 @@ def all_refusal_examples() -> list[refusals.Refusal]:
         ),
         refusals.output_is_canonical_input("meeting.m4a", "meeting.m4a"),
         refusals.output_path_invalid("meeting.json", "meeting.partial.json", "Symlink loop"),
-        refusals.output_required_for_force(),
-        refusals.export_input_invalid("meeting.json", "schema mismatch"),
-        refusals.export_inputs_incompatible(
+        export_refusals.output_required_for_force(),
+        export_refusals.export_input_invalid("meeting.json", "schema mismatch"),
+        export_refusals.export_inputs_incompatible(
             ("meeting.part1.json", "other.json"), "canonical sources differ"
         ),
-        refusals.timing_required_for_format("meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)),
+        export_refusals.timing_required_for_format(
+            "meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)
+        ),
         refusals.packages_not_provisioned(
             "qwen-1.7b",
             (
@@ -361,7 +364,7 @@ def test_every_current_contract_refusal_has_one_fixed_shape_builder() -> None:
 
 
 def test_timing_fix_is_runnable_for_an_option_like_transcript_filename() -> None:
-    refusal = refusals.timing_required_for_format(
+    refusal = export_refusals.timing_required_for_format(
         "--result.json", "srt", (), "qwen-1.7b", ("verbatim",)
     )
     arguments = shlex.split(refusal.payload["fix"])
@@ -384,7 +387,7 @@ def test_timing_refusal_stays_typed_when_no_sibling_path_can_be_probed(
         return original_exists(path)
 
     monkeypatch.setattr(Path, "exists", exists)
-    refusal = refusals.timing_required_for_format(
+    refusal = export_refusals.timing_required_for_format(
         transcript,
         "srt",
         (),

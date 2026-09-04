@@ -35,7 +35,8 @@ from ..media import (
     write_float_wav,
 )
 from ..profiles import PROFILES, STAGE_ORDER, Profile
-from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad, VadDetector
+from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad
+from ..vad_contract import VadDetector
 from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import inspect_source, prepare_run

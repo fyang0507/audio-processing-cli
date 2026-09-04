@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import stat
@@ -9,6 +10,26 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def _resolve_without_version_specific_loops(candidate: Path, *, strict: bool) -> Path:
+    try:
+        return candidate.resolve(strict=strict)
+    except RuntimeError as exc:
+        raise RuntimeError(f"Symlink loop from '{candidate}'") from exc
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise RuntimeError(f"Symlink loop from '{candidate}'") from exc
+        raise
+
+
+def resolve_path_identity(path: Path) -> Path:
+    """Resolve an existing or future path while rejecting loops on every Python 3.11+ runtime."""
+    candidate = Path(path)
+    try:
+        return _resolve_without_version_specific_loops(candidate, strict=True)
+    except FileNotFoundError:
+        return _resolve_without_version_specific_loops(candidate, strict=False)
 
 
 def hash_file(path: Path) -> str:

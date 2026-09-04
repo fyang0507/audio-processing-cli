@@ -38,6 +38,11 @@ packages = ["src/audio_cli"]
 include = [
   "/.agents/skills/audio-cli",
   "/.pre-commit-config.yaml",
+  "/*.md",
+  "/docs",
+  "/model_tests/*.md",
+  "/model_tests/benchmark",
+  "/model_tests/findings",
   "/src",
   "/tests",
   "/LICENSE",

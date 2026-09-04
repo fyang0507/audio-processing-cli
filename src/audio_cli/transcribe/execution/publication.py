@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import os
-import shlex
 import unicodedata
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from audio_cli.command import transcribe_run_command
 from audio_cli.media import (
     ProtectedFileIdentity,
     ProtectedOutputError,
     atomic_write_json,
     atomic_write_text,
+    resolve_path_identity,
 )
 
 from ..planner.request import ResolvedRequest
@@ -161,14 +162,14 @@ def validate_output_targets(
     if output is None:
         return
     try:
-        source_identity = source.resolve(strict=False)
+        source_identity = resolve_path_identity(source)
     except (OSError, RuntimeError) as exc:
         raise refusals.output_path_invalid(output, source, str(exc)) from exc
     for _, target in targets:
         if target is None:
             continue
         try:
-            target_identity = target.resolve(strict=False)
+            target_identity = resolve_path_identity(target)
         except (OSError, RuntimeError) as exc:
             raise refusals.output_path_invalid(output, target, str(exc)) from exc
         if source_identity == target_identity:
@@ -192,26 +193,6 @@ def _resume_command(
     if stem.endswith(".partial"):
         stem = stem.removesuffix(".partial")
     rest = output.with_name(f"{stem}.rest.json")
-    parts = [
-        "audio",
-        "transcribe",
-        "run",
-        "--input",
-        refusals.command_path_argument(request.input_path),
-        "--stack",
-        request.stack.id,
-    ]
-    if request.wants:
-        parts.extend(("--want", ",".join(request.wants)))
-    if request.language:
-        if request.language.startswith("-"):
-            parts.append(f"--language={request.language}")
-        else:
-            parts.extend(("--language", request.language))
-    if request.vad:
-        parts.extend(("--vad", request.vad))
-    if request.diarizer:
-        parts.extend(("--diarizer", request.diarizer))
     watermark = coverage["covered_through_seconds"]
     explicit_end = bool(run_range is not None and run_range.provided.partition(":")[2])
     range_value = (
@@ -219,15 +200,16 @@ def _resume_command(
         if explicit_end and run_range is not None
         else f"{watermark}:"
     )
-    parts.extend(
-        (
-            "--range",
-            range_value,
-            "-o",
-            refusals.command_path_argument(rest),
-        )
+    return transcribe_run_command(
+        request.input_path,
+        request.stack.id,
+        request.wants,
+        language=request.language,
+        vad=request.vad,
+        diarizer=request.diarizer,
+        run_range=range_value,
+        output=rest,
     )
-    return shlex.join(parts)
 
 
 def render_human(payload: Mapping[str, Any], output_format: str) -> str:

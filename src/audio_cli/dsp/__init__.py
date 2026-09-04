@@ -2,7 +2,7 @@
 
 from ..adjustments import GainAdjustment
 from ..profiles import Profile
-from ..vad import SpeechRegion
+from ..vad_contract import SpeechRegion
 from .analysis import analyze_signal, evaluate_profile
 from .dynamics import apply_voice_enhancement
 from .levels import EPSILON, amplitude_to_db, peak_dbfs, rms_dbfs

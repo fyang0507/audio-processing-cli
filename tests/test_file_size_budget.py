@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 MAX_LINES_EXCLUSIVE = 500
 
@@ -33,6 +35,8 @@ def _tracked_files() -> tuple[str, ...]:
         capture_output=True,
         check=False,
     )
+    if completed.returncode != 0 and not (REPO / ".git").exists():
+        pytest.skip("the tracked-file line budget is a Git-checkout-only repository gate")
     assert completed.returncode == 0, completed.stderr.decode(errors="replace")
     relative_paths = tuple(entry.decode() for entry in completed.stdout.split(b"\0") if entry)
     return tuple(

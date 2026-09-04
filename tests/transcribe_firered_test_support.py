@@ -24,7 +24,7 @@ FIXTURE = ROOT / "tests/fixtures/firered_lidon_first_vad_region.json"
 # Xiaohongshu/FireRedASR2S@4e7d9aaf4482a47cec1724807026b9b151926eb5,
 # fireredasr2s/fireredasr2system.py:46-200.  The full pinned file's SHA-256 is
 # 8bfada7cfc7ff424c73484a94150bc6fa5030a05b7146db983cb7ac374ad1782; the
-# body-AST digest below keeps the parity test source-backed when that ignored
+# canonical parsed-source digest below keeps the parity test source-backed when that ignored
 # upstream checkout is absent in CI.
 _PINNED_FIRERED_PROCESS = r"""
 def process(self, wav_path, uttid="tmpid"):

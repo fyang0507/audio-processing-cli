@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-import wave
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from audio_cli.media import capture_file_identity, temporary_directory
+from audio_cli.media import (
+    EmptyPcmRangeError,
+    canonical_pcm_duration,
+    capture_file_identity,
+    clip_canonical_pcm,
+    temporary_directory,
+)
 from audio_cli.packages import load_registry
 
 from ..adapters.aligner import normalize_aligned_words
 from ..adapters.vibevoice import normalize_vibevoice_alignment, normalize_vibevoice_result
 from ..catalog import InputMetadata
+from ..execution.materialization import _checkout, _materialized_path, _materialized_role_paths
 from ..execution.preflight import preflight
 from ..execution.publication import (
     _backend_fix,
@@ -20,7 +26,7 @@ from ..execution.publication import (
     _resume_command,
     validate_output_targets,
 )
-from ..execution.runtime import RunProduct, _materialized_path, _validate_range
+from ..execution.runtime import RunProduct, _validate_range
 from ..execution.vad import _detect_vad
 from ..planner.build import build_plan
 from ..planner.request import ResolvedRequest
@@ -31,20 +37,13 @@ from ..transport.types import StageFailure, StageOutcome
 from .common import (
     _diarizer_outputs,
     _finish,
-    _run_diarizer,
-    _write_complete,
-)
-from .scope import (
-    _checkout,
-    _clip_canonical,
-    _duration,
-    _EmptySampleRange,
     _intersects,
     _intersects_any,
-    _materialized_role_paths,
     _owned,
     _published_scope,
+    _run_diarizer,
     _selected_scope,
+    _write_complete,
 )
 
 
@@ -114,20 +113,20 @@ def _run_vibevoice(
         canonical = directory / "canonical.wav"
         try:
             stage_outcomes.append(stage_transport.decode(source_identity, canonical))
-            duration = _duration(canonical)
+            duration = canonical_pcm_duration(canonical)
             run_range = _validate_range(request, run_range, duration)
             scope = _selected_scope(run_range, duration)
             selected_audio = canonical
             requested_scope = scope
             if scope != (0.0, duration):
                 try:
-                    selected_audio, scope = _clip_canonical(
+                    selected_audio, scope = clip_canonical_pcm(
                         canonical,
                         directory / "vibevoice-range.wav",
                         start=scope[0],
                         end=scope[1],
                     )
-                except _EmptySampleRange as exc:
+                except EmptyPcmRangeError as exc:
                     raise refusals.range_invalid(
                         request.input_path,
                         request.stack.id,
@@ -246,7 +245,6 @@ def _run_vibevoice(
             RuntimeError,
             TypeError,
             ValueError,
-            wave.Error,
         ) as exc:
             raise refusals.backend_failed(
                 active_role,

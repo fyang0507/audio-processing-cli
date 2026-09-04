@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import ast
 import importlib
+import inspect
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPO_ROOT / "src" / "audio_cli"
@@ -65,6 +70,32 @@ TRANSCRIBE_FACADES = {
         "StageTransport",
         "SubprocessRunner",
     ],
+}
+EXPORT_REFUSALS = {
+    "export_input_invalid",
+    "export_inputs_incompatible",
+    "output_exists",
+    "output_is_canonical_input",
+    "output_path_invalid",
+    "output_required_for_force",
+    "timing_required_for_format",
+}
+EXPORT_COMPATIBILITY_REFUSALS = {
+    "export_input_invalid",
+    "export_inputs_incompatible",
+    "output_required_for_force",
+    "timing_required_for_format",
+}
+COMMAND_PRIMITIVES = {
+    "Refusal",
+    "build_refusal",
+    "command_path_argument",
+    "export_command",
+    "output_exists",
+    "output_is_canonical_input",
+    "output_path_invalid",
+    "transcribe_plan_command",
+    "transcribe_run_command",
 }
 DOCUMENT_FRAGMENT_LAYOUT = {
     "TRANSCRIBE_CONTRACT_": (
@@ -135,17 +166,86 @@ def test_transcribe_execution_families_use_packages_not_private_root_modules() -
         "transcription module families belong in real subpackages, not private "
         f"root modules: {private_root_modules}"
     )
+    assert not (TRANSCRIBE_ROOT / "transport" / "decode.py").exists()
+    assert not (TRANSCRIBE_ROOT / "adapters" / "decode.py").exists()
     assert (TRANSCRIBE_ROOT / "stages" / "_firered_protocol.py").is_file()
+
+
+def test_transcribe_has_one_deliberate_private_module() -> None:
+    private_modules = sorted(
+        str(path.relative_to(TRANSCRIBE_ROOT))
+        for pattern in ("_*.py", "_*.pyi")
+        for path in TRANSCRIBE_ROOT.rglob(pattern)
+        if path.name not in {"__init__.py", "__init__.pyi"}
+    )
+
+    assert private_modules == ["stages/_firered_protocol.py"]
 
 
 def test_provider_orchestration_has_one_package_owner() -> None:
     orchestrator = TRANSCRIBE_ROOT / "orchestrator"
-    for implementation in ("qwen.py", "firered.py", "vibevoice.py", "common.py", "scope.py"):
+    for implementation in ("qwen.py", "firered.py", "vibevoice.py", "common.py"):
         assert (orchestrator / implementation).is_file()
-    retired_owner = TRANSCRIBE_ROOT / "native"
-    assert not (TRANSCRIBE_ROOT / "native.py").exists()
-    assert not (retired_owner / "__init__.py").exists()
-    assert not list(retired_owner.rglob("*.py"))
+    assert not (orchestrator / "scope.py").exists()
+    assert not (TRANSCRIBE_ROOT / "execution" / "canonical.py").exists()
+    assert (PACKAGE_ROOT / "media" / "pcm.py").is_file()
+    assert (TRANSCRIBE_ROOT / "execution" / "materialization.py").is_file()
+    assert (TRANSCRIBE_ROOT / "adapters" / "firered_ledger.py").is_file()
+    compatibility_package = TRANSCRIBE_ROOT / "native"
+    assert (TRANSCRIBE_ROOT / "native.py").is_file()
+    assert not (compatibility_package / "__init__.py").exists()
+    assert not list(compatibility_package.rglob("*.py"))
+
+
+def test_native_compatibility_module_preserves_only_the_old_public_entry_point(
+    monkeypatch,
+) -> None:
+    native = importlib.import_module("audio_cli.transcribe.native")
+    assert native.__all__ == ["run_native"]
+    assert list(inspect.signature(native.run_native).parameters) == [
+        "request",
+        "metadata",
+        "output",
+        "output_format",
+        "run_range",
+        "registry",
+        "transport",
+        "vad_detector",
+        "force",
+    ]
+
+    forwarded: list[tuple[object, object, dict[str, object]]] = []
+
+    def fake_run(request, metadata, **kwargs):
+        forwarded.append((request, metadata, kwargs))
+        return "forwarded"
+
+    monkeypatch.setattr(native, "_run", fake_run)
+    metadata = object()
+    accepted: list[object] = []
+    for stack_id in ("firered", "vibevoice"):
+        request = SimpleNamespace(stack=SimpleNamespace(id=stack_id))
+        accepted.append(request)
+        assert native.run_native(request, metadata, force=True) == "forwarded"
+
+    forwarded_arguments = {
+        "output": None,
+        "output_format": "json",
+        "run_range": None,
+        "registry": None,
+        "transport": None,
+        "vad_detector": None,
+        "force": True,
+    }
+    assert forwarded == [(request, metadata, forwarded_arguments) for request in accepted]
+
+    for stack_id in ("qwen-0.6b", "qwen-1.7b", "unknown"):
+        request = SimpleNamespace(stack=SimpleNamespace(id=stack_id))
+        with pytest.raises(
+            ValueError,
+            match=rf"^{stack_id!r} is not a native-structure stack$",
+        ):
+            native.run_native(request, metadata)
 
 
 def test_transcribe_public_execution_imports_stay_stable() -> None:
@@ -155,6 +255,59 @@ def test_transcribe_public_execution_imports_stay_stable() -> None:
         assert all(hasattr(module, exported) for exported in expected)
 
     assert importlib.import_module("audio_cli.transcribe.execution").__all__ == []
+
+
+def test_export_owns_its_command_refusal_builders() -> None:
+    export = importlib.import_module("audio_cli.export")
+    transcribe_refusals = importlib.import_module("audio_cli.transcribe.refusals")
+
+    assert set(export.__all__) >= EXPORT_REFUSALS
+    assert set(transcribe_refusals.__all__) >= EXPORT_COMPATIBILITY_REFUSALS
+    for name in EXPORT_COMPATIBILITY_REFUSALS:
+        assert getattr(transcribe_refusals, name) is getattr(export, name)
+    assert (PACKAGE_ROOT / "export" / "refusals.py").is_file()
+    assert not (TRANSCRIBE_ROOT / "refusals" / "export.py").exists()
+
+    tree = ast.parse((TRANSCRIBE_ROOT / "refusals" / "__init__.py").read_text(encoding="utf-8"))
+    bridge_imports = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "audio_cli.export.refusals"
+    ]
+    assert [type(node) for node in tree.body] == [
+        ast.Expr,
+        ast.ImportFrom,
+        ast.ImportFrom,
+        ast.Assign,
+    ]
+    docstring = tree.body[0]
+    assert isinstance(docstring, ast.Expr)
+    assert isinstance(docstring.value, ast.Constant)
+    assert isinstance(docstring.value.value, str)
+    assert bridge_imports == [tree.body[1]]
+    assert {alias.name for alias in bridge_imports[0].names} == EXPORT_COMPATIBILITY_REFUSALS
+    assert all(alias.asname is None for alias in bridge_imports[0].names)
+    request_import = tree.body[2]
+    assert isinstance(request_import, ast.ImportFrom)
+    assert (request_import.level, request_import.module) == (1, "request")
+    exports = tree.body[3]
+    assert isinstance(exports, ast.Assign)
+    assert [target.id for target in exports.targets if isinstance(target, ast.Name)] == ["__all__"]
+    assert ast.literal_eval(exports.value) == transcribe_refusals.__all__
+
+
+def test_shared_command_primitives_have_one_package_owner() -> None:
+    command = importlib.import_module("audio_cli.command")
+    export = importlib.import_module("audio_cli.export")
+    transcribe_refusals = importlib.import_module("audio_cli.transcribe.refusals")
+
+    assert set(command.__all__) == COMMAND_PRIMITIVES
+    assert export.output_is_canonical_input is command.output_is_canonical_input
+    assert transcribe_refusals.output_is_canonical_input is command.output_is_canonical_input
+    assert export.output_path_invalid is command.output_path_invalid
+    assert transcribe_refusals.output_path_invalid is command.output_path_invalid
+    assert not (PACKAGE_ROOT / "cli_commands.py").exists()
+    assert not (PACKAGE_ROOT / "cli_refusals.py").exists()
 
 
 def test_document_fragment_families_use_directories() -> None:

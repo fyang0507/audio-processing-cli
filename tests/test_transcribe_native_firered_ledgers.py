@@ -18,7 +18,7 @@ from transcribe_native_test_support import (
     trusted_checkout_probe as trusted_checkout_probe,
 )
 
-from audio_cli.transcribe.orchestrator import scope as orchestration_scope
+from audio_cli.transcribe.adapters import firered_ledger
 
 
 @pytest.mark.parametrize(
@@ -72,7 +72,7 @@ def test_firered_region_ledger_rejects_untrusted_stage_mutations(
 ) -> None:
     scope = (1.0, 2.0) if "does not intersect" in detail else (0.0, 2.0)
     with pytest.raises((TypeError, ValueError), match=detail):
-        orchestration_scope._firered_region_ledger(
+        firered_ledger._firered_region_ledger(
             regions,
             source_duration=2.0,
             requested_scope=scope,
@@ -80,7 +80,7 @@ def test_firered_region_ledger_rejects_untrusted_stage_mutations(
 
 
 def test_firered_ledger_comparison_uses_the_stage_millisecond_truncation() -> None:
-    ledger = orchestration_scope._firered_published_region_ledger(
+    ledger = firered_ledger._firered_published_region_ledger(
         [
             {
                 "region_id": "vad_0",
@@ -96,9 +96,7 @@ def test_firered_ledger_comparison_uses_the_stage_millisecond_truncation() -> No
             },
         ]
     )
-    assert orchestration_scope._firered_published_vad_prefix(ledger) == (
-        {"start": 0.2, "end": 0.999},
-    )
+    assert firered_ledger._firered_published_vad_prefix(ledger) == ({"start": 0.2, "end": 0.999},)
 
 
 @pytest.mark.parametrize("mutation", ["dropped", "reordered_ids", "raw_bounds"])

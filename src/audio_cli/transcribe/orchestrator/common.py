@@ -10,6 +10,11 @@ from audio_cli.environments import packages as package_catalog
 
 from ..adapters.diarizer import reconcile_turns
 from ..catalog import InputMetadata, result_source
+from ..execution.materialization import (
+    _materialized_path,
+    _materialized_product_path,
+    _materialized_product_sha256,
+)
 from ..execution.publication import _outcomes, _publish_result, _record_metrics
 from ..execution.runtime import _core_plan
 from ..planner.request import ResolvedRequest
@@ -17,7 +22,57 @@ from ..result.serialization import serialize_result
 from ..result.types import ABSENT, NormalizedResult
 from ..transport.service import StageTransport
 from ..transport.types import StageOutcome
-from .scope import _owned
+
+
+def _selected_scope(run_range: Any, duration: float) -> tuple[float, float]:
+    return (
+        float(run_range.start) if run_range is not None else 0.0,
+        float(run_range.end) if run_range is not None else duration,
+    )
+
+
+def _published_scope(scope: tuple[float, float], duration: float) -> tuple[float, float]:
+    """Express exact processing bounds at the durable schema's precision."""
+    return (round(scope[0], 6), min(duration, round(scope[1], 6)))
+
+
+def _owned(span: Mapping[str, Any], scope: tuple[float, float]) -> bool:
+    return scope[0] <= float(span["start"]) < scope[1]
+
+
+def _intersects(span: Mapping[str, Any], scope: tuple[float, float]) -> bool:
+    """Select a whole native unit when any of it intersects the requested range."""
+    return float(span["end"]) > scope[0] and float(span["start"]) < scope[1]
+
+
+def _intersects_any(span: Mapping[str, Any], others: Sequence[Mapping[str, Any]]) -> bool:
+    start, end = float(span["start"]), float(span["end"])
+    return any(end > float(other["start"]) and start < float(other["end"]) for other in others)
+
+
+def _expanded_scope(
+    regions: Sequence[Mapping[str, Any]], requested: tuple[float, float]
+) -> tuple[float, float]:
+    if not regions:
+        return requested
+    return (
+        min(float(item["start"]) for item in regions),
+        max(float(item["end"]) for item in regions),
+    )
+
+
+def _speaker_for_span(span: Mapping[str, Any], turns: Sequence[Mapping[str, Any]]) -> str | None:
+    """Choose the label owning the most source time, without inventing a bound."""
+    start, end = float(span["start"]), float(span["end"])
+    scored = []
+    for index, turn in enumerate(turns):
+        overlap = max(
+            0.0,
+            min(end, float(turn["end"])) - max(start, float(turn["start"])),
+        )
+        if overlap > 0:
+            scored.append((overlap, -index, str(turn["speaker"])))
+    return max(scored)[2] if scored else None
 
 
 def _diarizer_outputs(
@@ -71,15 +126,13 @@ def _run_diarizer(
 ) -> Any:
     if "diarizer" not in plan.roles:
         return None
-    entry = entries["fluidaudio"]
-    model_entry = entries["speaker-diarization-coreml"]
     source = package_catalog()["fluidaudio"].source
     outcome = transport.diarize(
-        checkout=Path(str(entry["materialized"]["path"])),
+        checkout=_materialized_path(entries, "fluidaudio"),
         product=str(source["product"]),
-        product_path=str(entry["materialized"]["product_path"]),
-        product_sha256=str(entry["materialized"]["product_sha256"]),
-        model=Path(str(model_entry["materialized"]["path"])),
+        product_path=str(_materialized_product_path(entries, "fluidaudio")),
+        product_sha256=_materialized_product_sha256(entries, "fluidaudio"),
+        model=_materialized_path(entries, "speaker-diarization-coreml"),
         audio=canonical,
         config=plan.roles["diarizer"]["config"],
         overlap="overlapped_speech" in wants,

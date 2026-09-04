@@ -17,8 +17,10 @@ provisioning layer. `audio transcribe capabilities` describes a stack, `audio tr
 resolves an exact request, and `audio transcribe run` executes all four stacks: `qwen-1.7b`,
 `qwen-0.6b`, `firered`, and `vibevoice`. `audio export` renders normalized results without model
 work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies,
-and reclaims the pinned packages and runtimes; no command downloads a model behind a caller's
-back.
+and reclaims the pinned packages and runtimes. Provider ASR, alignment, and diarization downloads
+require an explicit `audio packages pull`. The small shared Silero VAD bootstrap used by
+inspection, enhancement, or transcription is the sole implicit model fetch and is described
+under Install.
 
 This implements [Issue #4 — Profile-driven automatic audio enhancement](https://github.com/fyang0507/audio-processing-cli/issues/4) within the product boundary established by [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1).
 
@@ -174,7 +176,11 @@ The report demonstrates deterministic profile conformance. Perceptual preference
 
 ## Model packages
 
-`audio packages pull` is the only thing that fetches a model or prepares a runtime for it. A missing package is a refusal carrying a `fix`, never a background download. [ENVIRONMENTS.md](ENVIRONMENTS.md) is authoritative for the four runtime environments, the pins, and why the layout is what it is.
+`audio packages pull` is the only operation that fetches provider models or prepares their
+runtimes. A missing provider package is a refusal carrying a `fix`, never a background download.
+The shared, hash-pinned Silero VAD bootstrap described under Install remains the sole implicit
+model fetch. [ENVIRONMENTS.md](ENVIRONMENTS.md) is authoritative for the four runtime
+environments, the pins, and why the layout is what it is.
 
 ```bash
 audio doctor                            # tools, toolchains, memory, disk, and provisioning state

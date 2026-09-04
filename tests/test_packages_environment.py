@@ -203,7 +203,10 @@ def test_verify_refuses_a_symlinked_environment_root_even_when_freeze_matches(
     assert report["failed"][0]["code"] == "environment_drifted"
     assert "environment path is a symlink" in report["failed"][0]["detail"]
     assert report["mlx_audio_private_api_matches_expected"] is False
-    assert not any("-c" in call for call in toolchain.calls)
+    assert not any(
+        any(Path(str(argument)).name == "runtime_probe.py" for argument in call)
+        for call in toolchain.calls
+    )
     repaired = provisioner.verify(repair=True)
     assert repaired["environments"]["mlx"] == "drifted"
     assert marker.read_text(encoding="utf-8") == "keep\n"

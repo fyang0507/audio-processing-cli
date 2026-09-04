@@ -20,6 +20,7 @@ from ..media import (
     cleanup_temporary_file,
     file_identity_from_descriptor,
     publish_temporary_file,
+    resolve_path_identity,
 )
 from .cues import Cue
 from .errors import OutputExistsError, OutputWriteError, UnsafeOutputError
@@ -116,7 +117,7 @@ def _resolved(path: Path) -> Path:
         # The CLI opens input and output paths literally.  Preserve that identity
         # here as well: a leading ``~name`` is a valid literal directory name and
         # must not become a late account lookup during the protected-path check.
-        return path.resolve(strict=False)
+        return resolve_path_identity(path)
     except (OSError, RuntimeError, ValueError) as exc:
         raise OutputWriteError(path, str(exc)) from exc
 

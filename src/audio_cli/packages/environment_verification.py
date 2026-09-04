@@ -14,7 +14,7 @@ from .products import _environment_built_runtime_runs
 from .requirements import (
     _environment_drift,
     _locked_versions,
-    _managed_checkout_requirements,
+    managed_checkout_requirements,
 )
 from .toolchain import Toolchain
 
@@ -102,7 +102,7 @@ def verify_environments(
             continue
         expected = _locked_versions(environment)
         frozen = toolchain.frozen_packages(paths.env_python(name))
-        required_checkouts = _managed_checkout_requirements(document, name)
+        required_checkouts = managed_checkout_requirements(document, name)
         drift = _environment_drift(expected, frozen, required_checkouts)
         if drift and repair:
             ready_checkouts: list[tuple[Package, Path]] = []

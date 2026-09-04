@@ -96,9 +96,14 @@ transcription stacks, and deterministic transcript export. Issue #21 is merged; 
   recover per-unit prefixes; VibeVoice recovers only complete decoded prefixes.
   Provider orchestration has one code owner under `src/audio_cli/transcribe/orchestrator/`:
   its dispatcher delegates directly to the Qwen, FireRed, or VibeVoice workflow. The previously
-  importable `audio_cli.transcribe.native.run_native` compatibility facade is intentionally
-  retired; callers use `audio_cli.transcribe.orchestrator.run`. Here, “native” remains a
-  capability or model-output property rather than a package boundary.
+  importable `audio_cli.transcribe.native.run_native` path remains as a thin, frozen compatibility
+  shim for FireRed and VibeVoice; new callers use `audio_cli.transcribe.orchestrator.run`. Here,
+  “native” remains a capability or model-output property rather than a package boundary.
+  The pre-release export-only builders formerly re-exported from
+  `audio_cli.transcribe.refusals` remain as direct compatibility aliases, while their owner and
+  preferred public import path is `audio_cli.export`. Shared refusal primitives retain one
+  implementation under `audio_cli.command`, and the command-line payloads and exit codes are
+  unchanged.
   `packages verify` also gates every ready package on a `ready` environment registry entry: a
   missing or non-ready entry keeps the environment verdict `absent`, emits
   `environment_not_ready`, and skips all checkout and runtime probes below that root.

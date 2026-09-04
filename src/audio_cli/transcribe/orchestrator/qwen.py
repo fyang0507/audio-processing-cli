@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import math
-import wave
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from audio_cli.environments import backends
-from audio_cli.environments import packages as package_catalog
-from audio_cli.media import capture_file_identity, temporary_directory
+from audio_cli.media import canonical_pcm_duration, capture_file_identity, temporary_directory
 from audio_cli.packages import load_registry
 from audio_cli.vad import VadError
 
 from ..adapters.aligner import normalize_aligned_words
-from ..adapters.diarizer import reconcile_turns
 from ..adapters.qwen import normalize_qwen_segments, sentence_segments
 from ..catalog import InputMetadata, result_source
+from ..execution.materialization import _materialized_path
 from ..execution.preflight import preflight
 from ..execution.publication import (
     _backend_fix,
@@ -35,7 +33,6 @@ from ..execution.runtime import (
     RunProduct,
     RunRange,
     _core_plan,
-    _materialized_path,
     _validate_range,
 )
 from ..execution.vad import _detect_vad
@@ -46,6 +43,7 @@ from ..result.serialization import serialize_result
 from ..result.types import ABSENT, NormalizedResult, ResultError
 from ..transport.service import StageTransport
 from ..transport.types import StageFailure, StageOutcome
+from .common import _run_diarizer
 
 
 def _fixed_units(duration: float, request: ResolvedRequest) -> list[dict[str, Any]]:
@@ -110,35 +108,23 @@ def _run_qwen(
         active_backend = "ffmpeg"
         try:
             outcomes.append(stage_transport.decode(source_identity, canonical))
-            with wave.open(str(canonical), "rb") as handle:
-                if (
-                    handle.getframerate() != 16_000
-                    or handle.getnchannels() != 1
-                    or handle.getsampwidth() != 2
-                ):
-                    raise ValueError("canonical decode is not mono 16 kHz PCM16")
-                canonical_duration = round(handle.getnframes() / float(handle.getframerate()), 6)
+            canonical_duration = canonical_pcm_duration(canonical)
             run_range = _validate_range(request, run_range, canonical_duration)
             diarization = None
             if "diarizer" in plan.roles:
                 active_role, active_backend = "diarizer", "fluidaudio"
                 entries = preflight(plan, document)
-                fluid_entry = entries["fluidaudio"]
-                fluid_models = entries["speaker-diarization-coreml"]
-                source = package_catalog()["fluidaudio"].source
-                outcome = stage_transport.diarize(
-                    checkout=Path(str(fluid_entry["materialized"]["path"])),
-                    product=str(source["product"]),
-                    product_path=str(fluid_entry["materialized"]["product_path"]),
-                    product_sha256=str(fluid_entry["materialized"]["product_sha256"]),
-                    model=Path(str(fluid_models["materialized"]["path"])),
-                    audio=canonical,
-                    config=plan.roles["diarizer"]["config"],
-                    overlap="overlapped_speech" in request.wants,
-                    directory=directory,
+                diarization = _run_diarizer(
+                    plan,
+                    entries,
+                    stage_transport,
+                    canonical,
+                    canonical_duration,
+                    directory,
+                    outcomes,
+                    request.wants,
                 )
-                outcomes.append(outcome)
-                diarization = reconcile_turns(outcome.payload, duration_seconds=canonical_duration)
+                assert diarization is not None
                 all_units = list(diarization.units)
             else:
                 all_units = _fixed_units(canonical_duration, request)
@@ -230,7 +216,6 @@ def _run_qwen(
             TypeError,
             ValueError,
             VadError,
-            wave.Error,
         ) as exc:
             raise refusals.backend_failed(
                 active_role,

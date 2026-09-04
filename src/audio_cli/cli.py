@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 import sys
 from pathlib import Path
 
 from .adjustments import AdjustmentError, load_adjustments
 from .cli_parser import build_parser
+from .command import Refusal
 from .environments import ManifestError
 from .media import MediaError, media_summary, probe_media
 from .packages import (
@@ -254,9 +254,10 @@ def _run_export(args: argparse.Namespace) -> int:
         UnsafeOutputError,
         export_documents,
     )
+    from .export import refusals as export_refusals
 
     if args.force and args.output is None:
-        raise transcribe_refusals.output_required_for_force()
+        raise export_refusals.output_required_for_force()
 
     try:
         product = export_documents(
@@ -293,7 +294,7 @@ def _run_export(args: argparse.Namespace) -> int:
             )
         ):
             run_range = f"{requested_range[0]}:{requested_range[1]}"
-        raise transcribe_refusals.timing_required_for_format(
+        raise export_refusals.timing_required_for_format(
             exc.input_path,
             args.format,
             exc.found,
@@ -306,48 +307,20 @@ def _run_export(args: argparse.Namespace) -> int:
             word_timing_outcome=exc.word_timing_outcome,
         ) from exc
     except OutputExistsError as exc:
-        if exc.replaceable:
-            parts = ["audio", "export"]
-            for input_path in args.inputs:
-                parts.extend(
-                    (
-                        "--input",
-                        transcribe_refusals.command_path_argument(input_path),
-                    )
-                )
-            parts.extend(
-                (
-                    "--format",
-                    args.format,
-                    "-o",
-                    transcribe_refusals.command_path_argument(exc.output),
-                    "--force",
-                )
-            )
-            fix = shlex.join(parts)
-        else:
-            fix = (
-                "choose a regular-file --output path; an existing directory cannot "
-                "be replaced by --force, and neither can a symlink or special file"
-            )
-        raise transcribe_refusals.Refusal(
-            {
-                "code": "output_exists",
-                "field": "--output",
-                "provided": str(exc.output),
-                "existing": str(exc.output),
-                "fix": fix,
-            },
-            exit_code=2,
+        raise export_refusals.output_exists(
+            args.inputs,
+            args.format,
+            exc.output,
+            replaceable=exc.replaceable,
         ) from exc
     except UnsafeOutputError as exc:
-        raise transcribe_refusals.output_is_canonical_input(exc.output, exc.protected) from exc
+        raise export_refusals.output_is_canonical_input(exc.output, exc.protected) from exc
     except OutputWriteError as exc:
-        raise transcribe_refusals.output_path_invalid(exc.output, exc.output, exc.reason) from exc
+        raise export_refusals.output_path_invalid(exc.output, exc.output, exc.reason) from exc
     except InvalidResultError as exc:
-        raise transcribe_refusals.export_input_invalid(exc.input_path, exc.reason) from exc
+        raise export_refusals.export_input_invalid(exc.input_path, exc.reason) from exc
     except IncompatibleResultsError as exc:
-        raise transcribe_refusals.export_inputs_incompatible(
+        raise export_refusals.export_inputs_incompatible(
             exc.input_paths, exc.reason, fix=exc.fix
         ) from exc
 
@@ -375,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "export":
             return _run_export(args)
         parser.error(f"Unknown command: {args.command}")
-    except transcribe_refusals.Refusal as exc:
+    except Refusal as exc:
         _print_json(exc.payload, stream=sys.stderr)
         return exc.exit_code
     except ProvisioningError as exc:

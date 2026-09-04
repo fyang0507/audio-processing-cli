@@ -10,6 +10,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from audio_cli.media import resolve_path_identity
+
 from .errors import IncompatibleResultsError
 from .models import (
     _VIBEVOICE_MULTI_INPUT_DIARIZATION_FIX,
@@ -74,7 +76,7 @@ def merge_documents(documents: Sequence[LoadedResult]) -> MergedTranscript:
         # Inputs were opened literally by ``load_result_document``.  Keep that exact
         # path semantics here: expanding a leading ``~name`` after the fact could
         # either crash for an unknown account or compare a different file identity.
-        resolved_paths = [path.resolve(strict=False) for path in paths]
+        resolved_paths = [resolve_path_identity(path) for path in paths]
     except (OSError, RuntimeError) as exc:
         raise IncompatibleResultsError(
             paths, f"input path identity could not be resolved: {exc}"

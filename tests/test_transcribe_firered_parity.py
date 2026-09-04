@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ast_test_support import stable_ast_source
 from transcribe_firered_test_support import (
     _PINNED_FIRERED_PROCESS,
     ROOT,
@@ -25,10 +26,8 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
     function = parsed.body[0]
     assert isinstance(function, ast.FunctionDef)
     body = ast.Module(body=function.body, type_ignores=[])
-    digest = hashlib.sha256(
-        ast.dump(body, annotate_fields=True, include_attributes=False).encode()
-    ).hexdigest()
-    assert digest == "525cffa63a7f1148d4568f56ef84e5f321ffbdf7890ffd30db6428fc2f3f60db"
+    digest = hashlib.sha256(stable_ast_source(body).encode()).hexdigest()
+    assert digest == "d5ad569f4ee772f29ef5c55298b31ad2881c8c28c34d52f816acf2c26c223d3c"
     upstream_path = ROOT / "model_tests/firered/FireRedASR2S/fireredasr2s/fireredasr2system.py"
     if upstream_path.is_file():
         upstream_source = upstream_path.read_text(encoding="utf-8")

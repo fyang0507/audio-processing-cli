@@ -8,7 +8,7 @@ from ..adjustments import GainAdjustment
 from ..dsp import apply_machine_region_corrections
 from ..media import atomic_write_json, temporary_directory
 from ..profiles import STAGE_ORDER, Profile
-from ..vad import VadDetector
+from ..vad_contract import VadDetector
 from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import prepare_run

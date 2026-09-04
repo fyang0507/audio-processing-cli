@@ -6,118 +6,30 @@ These payloads print bare on stderr.  The older shipped commands retain their hi
 
 from __future__ import annotations
 
-import shlex
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from audio_cli.command import (
+    Refusal,
+    build_refusal,
+    transcribe_plan_command,
+    transcribe_run_command,
+)
+from audio_cli.command import command_path_argument as command_path_argument
+from audio_cli.command import output_exists as _output_exists
+from audio_cli.command import output_is_canonical_input as output_is_canonical_input
+from audio_cli.command import output_path_invalid as output_path_invalid
+
 from .. import stacks
-
-
-class Refusal(RuntimeError):
-    """A request that can be rejected without loading or provisioning a model."""
-
-    def __init__(self, payload: Mapping[str, Any], *, exit_code: int) -> None:
-        self.payload = dict(payload)
-        self.exit_code = exit_code
-        super().__init__(str(self.payload["code"]))
-
-
-def _refusal(code: str, exit_code: int, fix: str, **fields: Any) -> Refusal:
-    return Refusal({"code": code, **fields, "fix": fix}, exit_code=exit_code)
-
-
-def command_path_argument(value: str | Path) -> str:
-    rendered = str(value)
-    return f"./{rendered}" if rendered.startswith("-") else rendered
-
-
-def _plan_command(
-    input_path: str | Path,
-    stack: str,
-    wants: Sequence[str] = (),
-    *,
-    language: str | None = None,
-    vad: str | None = None,
-    diarizer: str | None = None,
-) -> str:
-    parts = [
-        "audio",
-        "transcribe",
-        "plan",
-        "--input",
-        command_path_argument(input_path),
-    ]
-    if stack.startswith("-"):
-        parts.append(f"--stack={stack}")
-    else:
-        parts.extend(("--stack", stack))
-    if wants:
-        parts.extend(("--want", ",".join(wants)))
-    if language is not None:
-        if language.startswith("-"):
-            parts.append(f"--language={language}")
-        else:
-            parts.extend(("--language", language))
-    if vad is not None:
-        parts.extend(("--vad", vad))
-    if diarizer is not None:
-        parts.extend(("--diarizer", diarizer))
-    return shlex.join(parts)
-
-
-def _run_command(
-    input_path: str | Path,
-    stack: str,
-    wants: Sequence[str] = (),
-    *,
-    language: str | None = None,
-    vad: str | None = None,
-    diarizer: str | None = None,
-    run_range: str | None = None,
-    output_format: str = "json",
-    output: str | Path | None = None,
-    force: bool = False,
-) -> str:
-    parts = [
-        "audio",
-        "transcribe",
-        "run",
-        "--input",
-        command_path_argument(input_path),
-    ]
-    if stack.startswith("-"):
-        parts.append(f"--stack={stack}")
-    else:
-        parts.extend(("--stack", stack))
-    if wants:
-        parts.extend(("--want", ",".join(wants)))
-    if language is not None:
-        if language.startswith("-"):
-            parts.append(f"--language={language}")
-        else:
-            parts.extend(("--language", language))
-    if vad is not None:
-        parts.extend(("--vad", vad))
-    if diarizer is not None:
-        parts.extend(("--diarizer", diarizer))
-    if run_range is not None:
-        parts.extend(("--range", run_range))
-    if output_format != "json":
-        parts.extend(("--format", output_format))
-    if output is not None:
-        parts.extend(("-o", command_path_argument(output)))
-    if force:
-        parts.append("--force")
-    return shlex.join(parts)
 
 
 def stack_required(input_path: str | Path | None, wants: Sequence[str]) -> Refusal:
     chosen_input = input_path or "meeting.m4a"
-    return _refusal(
+    return build_refusal(
         "stack_required",
         2,
-        _plan_command(chosen_input, "qwen-1.7b", wants),
+        transcribe_plan_command(chosen_input, "qwen-1.7b", wants),
         field="--stack",
         allowed=list(stacks.stack_ids()),
         stacks={
@@ -128,10 +40,10 @@ def stack_required(input_path: str | Path | None, wants: Sequence[str]) -> Refus
 
 
 def input_required(stack: str, wants: Sequence[str]) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "input_required",
         2,
-        _plan_command("meeting.m4a", stack, wants),
+        transcribe_plan_command("meeting.m4a", stack, wants),
         field="--input",
         note=(
             "a stack alone cannot be planned: how the audio is partitioned, how many units "
@@ -160,10 +72,10 @@ def capability_unknown(
     if suggestion is not None:
         fields["did_you_mean"] = suggestion
     fields["available_on_stack"] = stacks.availability_groups(stack)
-    return _refusal(
+    return build_refusal(
         "capability_unknown",
         2,
-        _plan_command(input_path, stack.id, fixed),
+        transcribe_plan_command(input_path, stack.id, fixed),
         **fields,
     )
 
@@ -180,10 +92,10 @@ def capability_unsatisfiable_on_stack(
             f"{capability!r} is marked unsatisfiable_on_stack but has no alternative"
         )
     preferred = stacks.recommended_stack(capability) or allowed[0]
-    return _refusal(
+    return build_refusal(
         "capability_unsatisfiable_on_stack",
         2,
-        _plan_command(input_path, preferred, wants),
+        transcribe_plan_command(input_path, preferred, wants),
         capability=capability,
         allowed=allowed,
         available_on_stack=stacks.availability_groups(stack),
@@ -191,7 +103,7 @@ def capability_unsatisfiable_on_stack(
 
 
 def capability_unsupported(capability: str, reason: str, fix: str) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "capability_unsupported",
         2,
         fix,
@@ -208,10 +120,10 @@ def option_unsupported_on_stack(
     provided: str,
     wants: Sequence[str],
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "option_unsupported_on_stack",
         2,
-        _plan_command(input_path, stack.id, wants),
+        transcribe_plan_command(input_path, stack.id, wants),
         field=field,
         provided=provided,
         allowed=[],
@@ -247,10 +159,10 @@ def option_value_unsupported(
     }
     if suggestion is not None:
         fields["did_you_mean"] = suggestion
-    return _refusal(
+    return build_refusal(
         "option_value_unsupported",
         2,
-        _plan_command(input_path, stack.id, wants, **kwargs),
+        transcribe_plan_command(input_path, stack.id, wants, **kwargs),
         **fields,
     )
 
@@ -263,10 +175,10 @@ def pin_conflicts_with_native_capability(
     capability: str,
     wants: Sequence[str],
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "pin_conflicts_with_native_capability",
         2,
-        _plan_command(input_path, stack.id, wants),
+        transcribe_plan_command(input_path, stack.id, wants),
         field=field,
         provided=provided,
         allowed=[],
@@ -285,10 +197,17 @@ def range_invalid(
     vad: str | None = None,
     diarizer: str | None = None,
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "range_invalid",
         2,
-        _run_command(input_path, stack, wants, language=language, vad=vad, diarizer=diarizer),
+        transcribe_run_command(
+            input_path,
+            stack,
+            wants,
+            language=language,
+            vad=vad,
+            diarizer=diarizer,
+        ),
         field="--range",
         provided=provided,
         reason=reason,
@@ -308,10 +227,10 @@ def output_exists(
     run_range: str | None = None,
     output_format: str = "json",
 ) -> Refusal:
-    return _refusal(
-        "output_exists",
-        2,
-        _run_command(
+    return _output_exists(
+        output,
+        existing,
+        transcribe_run_command(
             input_path,
             stack,
             wants,
@@ -323,56 +242,6 @@ def output_exists(
             output=output,
             force=True,
         ),
-        field="--output",
-        provided=str(output),
-        existing=str(existing),
-    )
-
-
-def output_is_canonical_input(
-    output: str | Path,
-    resolved_target: str | Path,
-) -> Refusal:
-    return _refusal(
-        "output_is_canonical_input",
-        2,
-        (
-            "choose an --output that does not resolve to an input transcript, its derived "
-            "partial path, or canonical source media; --force cannot override this"
-        ),
-        field="--output",
-        provided=str(output),
-        resolved_target=str(resolved_target),
-    )
-
-
-def output_path_invalid(
-    output: str | Path,
-    target: str | Path,
-    reason: str,
-) -> Refusal:
-    return _refusal(
-        "output_path_invalid",
-        2,
-        (
-            "choose an --output whose destination and parent directory can be "
-            "resolved and written safely"
-        ),
-        field="--output",
-        provided=str(output),
-        target=str(target),
-        reason=reason,
-    )
-
-
-def output_required_for_force() -> Refusal:
-    return _refusal(
-        "output_required_for_force",
-        2,
-        "remove --force when writing to stdout, or add --output PATH",
-        field="--force",
-        provided=True,
-        requires="--output",
     )
 
 
@@ -382,7 +251,7 @@ def packages_not_provisioned(
     total_known_download_bytes: int,
     unsized_packages: Sequence[str],
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "packages_not_provisioned",
         3,
         f"audio packages pull --stack {stack}",
@@ -394,7 +263,7 @@ def packages_not_provisioned(
 
 def package_integrity_failed(failed: Sequence[Mapping[str, Any]]) -> Refusal:
     first = failed[0]["package"] if failed else "<package>"
-    return _refusal(
+    return build_refusal(
         "package_integrity_failed",
         3,
         f"audio packages pull --repair {first}",
@@ -403,7 +272,7 @@ def package_integrity_failed(failed: Sequence[Mapping[str, Any]]) -> Refusal:
 
 
 def package_build_unusable(package: str, product: str) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "package_build_unusable",
         3,
         f"audio packages pull --repair {package}",
@@ -414,7 +283,7 @@ def package_build_unusable(package: str, product: str) -> Refusal:
 
 
 def backend_failed(role: str, backend: str, detail: str, fix: str) -> Refusal:
-    return _refusal("backend_failed", 1, fix, role=role, backend=backend, detail=detail)
+    return build_refusal("backend_failed", 1, fix, role=role, backend=backend, detail=detail)
 
 
 def run_incomplete(
@@ -425,7 +294,7 @@ def run_incomplete(
     output: str | Path,
     fix: str,
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "run_incomplete",
         4,
         fix,

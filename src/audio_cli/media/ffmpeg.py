@@ -108,6 +108,32 @@ def is_enhanced_media(probe: dict[str, object]) -> bool:
     return ENHANCED_MARKER in text
 
 
+def canonical_decode_command(source: Path, target: Path) -> list[str]:
+    """Build the one lossless decode used by transcription host processes."""
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-c:a",
+        "pcm_s16le",
+        str(target),
+    ]
+
+
 def decode_audio(path: Path, *, sample_rate: int = 48_000) -> tuple[np.ndarray, int]:
     probe = probe_media(path)
     stream = probe["primary_audio_stream"]

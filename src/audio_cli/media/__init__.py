@@ -3,6 +3,7 @@
 from .errors import MediaError
 from .ffmpeg import (
     ENHANCED_MARKER,
+    canonical_decode_command,
     decode_audio,
     encode_output,
     ffmpeg_version,
@@ -19,6 +20,7 @@ from .files import (
     assert_resolved_directory_binding,
     bound_directory,
     hash_file,
+    resolve_path_identity,
     sha256_regular_file_at,
     temporary_directory,
     temporary_output_path,
@@ -30,6 +32,12 @@ from .identity import (
     file_identity_from_descriptor,
     matching_protected_identity,
 )
+from .pcm import (
+    EmptyPcmRangeError,
+    canonical_pcm_duration,
+    clip_canonical_pcm,
+    read_canonical_pcm16,
+)
 from .publication import (
     ProtectedOutputError,
     atomic_write_json,
@@ -40,6 +48,7 @@ from .publication import (
 
 __all__ = [
     "ENHANCED_MARKER",
+    "EmptyPcmRangeError",
     "MediaError",
     "ProtectedFileIdentity",
     "ProtectedOutputError",
@@ -48,8 +57,11 @@ __all__ = [
     "atomic_write_json",
     "atomic_write_text",
     "bound_directory",
+    "canonical_decode_command",
+    "canonical_pcm_duration",
     "capture_file_identity",
     "cleanup_temporary_file",
+    "clip_canonical_pcm",
     "decode_audio",
     "encode_output",
     "entry_matches_file_identity",
@@ -62,8 +74,10 @@ __all__ = [
     "media_summary",
     "probe_media",
     "publish_temporary_file",
+    "read_canonical_pcm16",
     "render_loudness_normalized",
     "require_runtime",
+    "resolve_path_identity",
     "sha256_regular_file_at",
     "temporary_directory",
     "temporary_output_path",

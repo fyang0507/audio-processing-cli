@@ -135,6 +135,25 @@ def recommended_stack(capability: str) -> str | None:
     return _raw().get("recommendations", {}).get(capability)
 
 
+def _source_checkout_root() -> Path | None:
+    candidate = HERE.parents[2]
+    if (candidate / "pyproject.toml").is_file() and (candidate / "model_tests").is_dir():
+        return candidate
+    return None
+
+
+def _evidence_source_problem(evidence: object) -> str | None:
+    if not isinstance(evidence, str):
+        return f"evidence_source {evidence!r} is not a safe repository evidence path"
+    relative = Path(evidence)
+    if relative.is_absolute() or not evidence.startswith("model_tests/") or ".." in relative.parts:
+        return f"evidence_source {evidence!r} is not a safe repository evidence path"
+    repository = _source_checkout_root()
+    if repository is not None and not (repository / relative).is_file():
+        return f"evidence_source {evidence!r} is not tracked"
+    return None
+
+
 def validate() -> list[str]:
     """Return every table/manifest disagreement rather than failing at the first one."""
     problems: list[str] = []
@@ -193,10 +212,8 @@ def validate() -> list[str]:
             if not isinstance(cell.get("catalog_note"), str) or len(cell["catalog_note"]) < 20:
                 problems.append(f"{stack.id}/{capability}: catalog_note is not substantive")
             evidence = cell.get("evidence_source")
-            if not isinstance(evidence, str) or not (HERE.parents[2] / evidence).is_file():
-                problems.append(
-                    f"{stack.id}/{capability}: evidence_source {evidence!r} is not tracked"
-                )
+            if evidence_problem := _evidence_source_problem(evidence):
+                problems.append(f"{stack.id}/{capability}: {evidence_problem}")
             if resolution == "add_on":
                 package_id = cell.get("package")
                 if package_id not in manifest_packages:

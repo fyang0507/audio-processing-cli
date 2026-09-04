@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from ..dsp import SignalAnalysis
-from ..vad import VadDetector
+from ..vad_contract import VadDetector
 
 
 class PipelineError(RuntimeError):

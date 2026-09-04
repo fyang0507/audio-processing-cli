@@ -1,4 +1,4 @@
-"""Fixed-shape refusals specific to deterministic transcript export."""
+"""Fixed-shape command refusals specific to deterministic transcript export."""
 
 from __future__ import annotations
 
@@ -7,11 +7,48 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from .request import Refusal, _refusal, _run_command
+from audio_cli.command import (
+    Refusal,
+    build_refusal,
+    export_command,
+    transcribe_run_command,
+)
+from audio_cli.command import output_exists as _output_exists
+from audio_cli.command import output_is_canonical_input as output_is_canonical_input
+from audio_cli.command import output_path_invalid as output_path_invalid
+from audio_cli.media import resolve_path_identity
+
+
+def output_required_for_force() -> Refusal:
+    return build_refusal(
+        "output_required_for_force",
+        2,
+        "remove --force when writing to stdout, or add --output PATH",
+        field="--force",
+        provided=True,
+        requires="--output",
+    )
+
+
+def output_exists(
+    input_paths: Sequence[str | Path],
+    output_format: str,
+    output: str | Path,
+    *,
+    replaceable: bool,
+) -> Refusal:
+    if replaceable:
+        fix = export_command(input_paths, output_format, output, force=True)
+    else:
+        fix = (
+            "choose a regular-file --output path; an existing directory cannot "
+            "be replaced by --force, and neither can a symlink or special file"
+        )
+    return _output_exists(output, output, fix)
 
 
 def export_input_invalid(input_path: str | Path, reason: str) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "export_input_invalid",
         2,
         "regenerate or repair the input transcript before exporting it",
@@ -27,7 +64,7 @@ def export_inputs_incompatible(
     *,
     fix: str | None = None,
 ) -> Refusal:
-    return _refusal(
+    return build_refusal(
         "export_inputs_incompatible",
         2,
         fix
@@ -76,8 +113,8 @@ def _unused_timed_output(transcript: Path, source_path: Path | None) -> Path:
         if not occupied:
             try:
                 protected = {
-                    candidate.resolve(strict=False),
-                    partial.resolve(strict=False),
+                    resolve_path_identity(candidate),
+                    resolve_path_identity(partial),
                 }
             except (OSError, RuntimeError) as exc:
                 raise ValueError(
@@ -146,7 +183,7 @@ def timing_required_for_format(
                     "fits beside this transcript"
                 )
         if output_path is not None:
-            fix = _run_command(
+            fix = transcribe_run_command(
                 source_path or input_path,
                 stack,
                 requested,
@@ -155,7 +192,7 @@ def timing_required_for_format(
                 run_range=run_range,
                 output=output_path,
             )
-    return _refusal(
+    return build_refusal(
         "timing_required_for_format",
         2,
         fix,

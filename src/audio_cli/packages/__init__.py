@@ -45,6 +45,7 @@ from .products import (
 )
 from .registry import blank_registry, load_registry, save_registry
 from .reports import is_ready, list_report, missing_packages, path_report, select
+from .requirements import checkout_install_drift, managed_checkout_requirements
 from .service import Provisioner
 from .toolchain import Toolchain
 
@@ -64,6 +65,7 @@ __all__ = [
     "blank_registry",
     "built_product_candidates",
     "checkout_file_matches",
+    "checkout_install_drift",
     "checkout_patch_expectation",
     "doctor",
     "environments",
@@ -72,6 +74,7 @@ __all__ = [
     "list_report",
     "load_registry",
     "managed_checkout_path",
+    "managed_checkout_requirements",
     "managed_environment_creation_target_issue",
     "managed_environment_path",
     "managed_provisioning_root_issue",

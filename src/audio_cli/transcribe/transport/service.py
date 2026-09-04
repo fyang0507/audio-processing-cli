@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from audio_cli import paths
+from audio_cli.media import canonical_decode_command
 from audio_cli.packages import managed_environment_path, validated_built_product
 
-from ..adapters.decode import command as decode_command
 from .process_runner import SubprocessRunner
 from .types import ProcessRunner, StageFailure, StageOutcome
 
@@ -44,7 +44,7 @@ class StageTransport:
     def decode(self, source: Path, target: Path) -> StageOutcome:
         self._notice("transcribe: decode started")
         started = time.perf_counter()
-        completed = self.runner.run(decode_command(source, target))
+        completed = self.runner.run(canonical_decode_command(source, target))
         wall = time.perf_counter() - started
         if completed.returncode != 0 or not target.is_file():
             detail = completed.stderr.strip() or "ffmpeg did not write the canonical WAV"
