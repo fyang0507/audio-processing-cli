@@ -28,7 +28,12 @@ CAPABILITY_NAMES = frozenset({
     "token_lid",
 })
 
-ABSTENTION_REASONS = frozenset({"overlap", "short_turn", "raw_fragment"})
+ABSTENTION_REASONS = frozenset({
+    "alignment_unavailable",
+    "overlap",
+    "short_turn",
+    "raw_fragment",
+})
 
 _ARRAY_CAPABILITIES = {
     "diarization": "turns",
@@ -43,6 +48,12 @@ _SEGMENT_CAPABILITIES = {
     "start": "segment_timestamps",
     "end": "segment_timestamps",
 }
+
+# FireRed's recorded native artifacts contain six sentence/word edges where the
+# millisecond-quantized final word ends exactly 1 ms after the sentence.  Treat that
+# measured quantization seam as internally consistent, without scaling tolerance for
+# long source timelines.
+_SEGMENT_WORD_EDGE_TOLERANCE_SECONDS = 0.001 + 1e-9
 
 
 class ResultError(ValueError):
@@ -97,7 +108,10 @@ def _number(value: object, field: str, *, nullable: bool = False) -> float | Non
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ResultError(f"{field} must be a finite number")
-    found = float(value)
+    try:
+        found = float(value)
+    except OverflowError as exc:
+        raise ResultError(f"{field} must be a finite number") from exc
     if not math.isfinite(found):
         raise ResultError(f"{field} must be a finite number")
     return found
@@ -205,6 +219,26 @@ def _validate_segments(
                 segment["words"], f"{field}.words", sample=sample, duration=duration
             )
         _validate_bounds(segment, field, sample=sample, duration=duration)
+        words = segment.get("words")
+        if (
+            not sample
+            and isinstance(words, (list, tuple))
+            and words
+            and "start" in segment
+            and "end" in segment
+        ):
+            segment_start = float(segment["start"])
+            segment_end = float(segment["end"])
+            if any(
+                float(word["start"])
+                < segment_start - _SEGMENT_WORD_EDGE_TOLERANCE_SECONDS
+                or float(word["end"])
+                > segment_end + _SEGMENT_WORD_EDGE_TOLERANCE_SECONDS
+                for word in words
+            ):
+                raise ResultError(
+                    f"{field}.words must fall inside the segment bounds"
+                )
 
 
 def _validate_span_array(
@@ -303,12 +337,16 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
             assert start is not None and end is not None
             if start < 0 or end <= start or end > duration:
                 raise ResultError(f"coverage.{key}[{index}] is not an ordered interval")
+            if parsed[key] and start < parsed[key][-1][1]:
+                raise ResultError(
+                    f"coverage.{key} must be chronological and non-overlapping"
+                )
             parsed[key].append((start, end))
 
     if duration == 0 or not parsed["scope_intervals"] or not parsed["missing_intervals"]:
         raise ResultError("an incomplete result must have non-empty missing intervals")
     first_missing = min(start for start, _ in parsed["missing_intervals"])
-    if not math.isclose(watermark, first_missing, abs_tol=1e-6):
+    if not math.isclose(watermark, first_missing, rel_tol=0.0, abs_tol=1e-6):
         raise ResultError("covered_through_seconds must equal the first missing interval start")
 
     scopes = parsed["scope_intervals"]
@@ -321,13 +359,15 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
         cursor = scope_start
         while interval_index < len(tiled) and tiled[interval_index][0] < scope_end:
             start, end = tiled[interval_index]
-            if not math.isclose(start, cursor, abs_tol=1e-6) or end > scope_end:
+            if not math.isclose(
+                start, cursor, rel_tol=0.0, abs_tol=1e-6
+            ) or end > scope_end:
                 raise ResultError(
                     "covered and missing intervals must tile the coverage scope without gaps"
                 )
             cursor = end
             interval_index += 1
-        if not math.isclose(cursor, scope_end, abs_tol=1e-6):
+        if not math.isclose(cursor, scope_end, rel_tol=0.0, abs_tol=1e-6):
             raise ResultError(
                 "covered and missing intervals must tile the coverage scope without gaps"
             )
@@ -336,7 +376,9 @@ def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
 
     covered_seconds = sum(end - start for start, end in parsed["covered_intervals"])
     scope_seconds = sum(end - start for start, end in scopes)
-    if not math.isclose(fraction, covered_seconds / scope_seconds, abs_tol=0.0005):
+    if not math.isclose(
+        fraction, covered_seconds / scope_seconds, rel_tol=0.0, abs_tol=0.0005
+    ):
         raise ResultError("covered_fraction must equal covered duration over coverage scope")
     if coverage["units_completed"] >= coverage["units_total"]:
         raise ResultError("an incomplete result must leave at least one unit incomplete")
@@ -382,7 +424,7 @@ def _validate_observed(observed: Mapping[str, Any], result: NormalizedResult) ->
             stage_total += found
         stated = _number(total_wall, "provenance.observed.total_wall_seconds")
         assert stated is not None
-        if not math.isclose(stage_total, stated, abs_tol=0.005):
+        if not math.isclose(stage_total, stated, rel_tol=0.0, abs_tol=0.005):
             raise ResultError("total_wall_seconds must equal the sum of stage_wall_seconds")
 
     for by_stage in ("peak_rss_bytes_by_stage", "peak_mps_live_bytes_by_stage"):

@@ -9,13 +9,16 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 import numpy as np
 
+from audio_cli import media as media_module
 from audio_cli.media import (
     MediaError,
+    ProtectedOutputError,
     atomic_write_json,
     render_loudness_normalized,
     write_float_wav,
@@ -135,9 +138,204 @@ def test_the_parent_directory_is_created(tmp_path: Path) -> None:
     assert json.loads(target.read_text(encoding="utf-8")) == {"ok": True}
 
 
-def test_concurrent_writers_do_not_share_a_temporary_name(tmp_path: Path) -> None:
-    """The temporary is pid-suffixed, so two processes writing the same report cannot collide on
-    it. Asserted on the naming rule rather than by forking, which would not be deterministic."""
+def test_nonforce_json_publication_never_clobbers_an_existing_entry(tmp_path: Path) -> None:
     target = tmp_path / "report.json"
-    atomic_write_json(target, {"ok": True})
-    assert str(os.getpid()) in f".{target.name}.{os.getpid()}.tmp"
+    target.write_text("owner\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError):
+        atomic_write_json(target, {"ok": True}, force=False)
+
+    assert target.read_text(encoding="utf-8") == "owner\n"
+
+
+def test_exclusive_temporary_does_not_follow_a_precreated_symlink(
+    tmp_path: Path, monkeypatch
+) -> None:
+    canonical = tmp_path / "canonical.wav"
+    canonical.write_bytes(b"canonical")
+    target = tmp_path / "report.json"
+    monkeypatch.setattr(
+        "audio_cli.media.uuid.uuid4", lambda: SimpleNamespace(hex="fixed")
+    )
+    temporary = tmp_path / f".audio-write-{os.getpid()}-fixed.tmp"
+    temporary.symlink_to(canonical)
+
+    with pytest.raises(FileExistsError):
+        atomic_write_json(target, {"ok": True})
+
+    assert canonical.read_bytes() == b"canonical"
+    assert temporary.is_symlink()
+    assert not target.exists()
+
+
+def test_atomic_writer_closes_descriptor_when_temporary_identity_capture_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "report.json"
+    captured_descriptor: int | None = None
+
+    def fail_identity(descriptor: int, _path: Path):
+        nonlocal captured_descriptor
+        captured_descriptor = descriptor
+        raise OSError("identity unavailable")
+
+    monkeypatch.setattr(media_module, "file_identity_from_descriptor", fail_identity)
+
+    with pytest.raises(OSError, match="identity unavailable"):
+        atomic_write_json(target, {"ok": True})
+
+    assert captured_descriptor is not None
+    with pytest.raises(OSError):
+        os.fstat(captured_descriptor)
+    assert not target.exists()
+
+
+def test_atomic_writer_cannot_follow_a_parent_swapped_after_open(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    safe = tmp_path / "safe"
+    safe.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    external = outside / "report.json"
+    external.write_bytes(b"canonical")
+
+    def swap_parent():
+        safe.rename(tmp_path / "safe-old")
+        safe.symlink_to(outside, target_is_directory=True)
+        return SimpleNamespace(hex="fixed")
+
+    monkeypatch.setattr("audio_cli.media.uuid.uuid4", swap_parent)
+    with pytest.raises(OSError, match="directory identity changed"):
+        atomic_write_json(safe / "report.json", {"destroyed": True})
+
+    assert external.read_bytes() == b"canonical"
+
+
+def test_force_writer_does_not_have_an_identity_check_replace_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"canonical")
+    output = tmp_path / "report.json"
+    output.write_bytes(b"replaceable")
+    real_exchange = media_module._rename_exchange
+    raced = False
+
+    def race_at_exchange(directory_descriptor, left_name, right_name):
+        nonlocal raced
+        if not raced:
+            raced = True
+            os.replace(source, output)
+        return real_exchange(directory_descriptor, left_name, right_name)
+
+    monkeypatch.setattr(media_module, "_rename_exchange", race_at_exchange)
+    with pytest.raises(ProtectedOutputError):
+        atomic_write_json(
+            output,
+            {"destroyed": True},
+            force=True,
+            protected_paths=(source,),
+        )
+
+    assert raced is True
+    assert not source.exists()
+    assert output.read_bytes() == b"canonical"
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["report.json"]
+
+
+def test_force_writer_keeps_an_existing_destination_continuously_addressable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "report.json"
+    output.write_bytes(b"previous")
+    real_exchange = media_module._rename_exchange
+    observations: list[bool] = []
+
+    def observe_exchange(directory_descriptor, left_name, right_name):
+        observations.append(output.exists())
+        real_exchange(directory_descriptor, left_name, right_name)
+        observations.append(output.exists())
+
+    monkeypatch.setattr(media_module, "_rename_exchange", observe_exchange)
+    atomic_write_json(output, {"generation": "next"}, force=True)
+
+    assert observations == [True, True]
+    assert json.loads(output.read_text(encoding="utf-8")) == {
+        "generation": "next"
+    }
+
+
+def test_force_writer_rejects_a_substituted_private_temporary_at_exchange(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "report.json"
+    output.write_bytes(b"previous")
+    real_exchange = media_module._rename_exchange
+    raced = False
+    substituted_name: str | None = None
+
+    def substitute_temporary(directory_descriptor, left_name, right_name):
+        nonlocal raced, substituted_name
+        if not raced:
+            raced = True
+            substituted_name = left_name
+            os.rename(
+                left_name,
+                "held-legitimate.tmp",
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+            descriptor = os.open(
+                left_name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory_descriptor,
+            )
+            try:
+                os.write(descriptor, b"substituted")
+            finally:
+                os.close(descriptor)
+        return real_exchange(directory_descriptor, left_name, right_name)
+
+    monkeypatch.setattr(media_module, "_rename_exchange", substitute_temporary)
+    with pytest.raises(OSError, match="temporary changed identity during publication"):
+        atomic_write_json(output, {"generation": "next"}, force=True)
+
+    assert raced is True
+    assert output.read_bytes() == b"previous"
+    assert (tmp_path / "held-legitimate.tmp").read_bytes().startswith(b"{")
+    assert substituted_name is not None
+    assert (tmp_path / substituted_name).read_bytes() == b"substituted"
+
+
+def test_failed_atomic_rollback_preserves_the_observed_protected_inode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"canonical")
+    output = tmp_path / "report.json"
+    output.write_bytes(b"replaceable")
+    real_exchange = media_module._rename_exchange
+    calls = 0
+
+    def fail_rollback(directory_descriptor, left_name, right_name):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            os.replace(source, output)
+            return real_exchange(directory_descriptor, left_name, right_name)
+        raise OSError("synthetic rollback failure")
+
+    monkeypatch.setattr(media_module, "_rename_exchange", fail_rollback)
+    with pytest.raises(ProtectedOutputError) as caught:
+        atomic_write_json(
+            output,
+            {"generation": "new"},
+            force=True,
+            protected_paths=(source,),
+        )
+
+    assert calls == 2
+    assert caught.value.preserved_at is not None
+    assert caught.value.preserved_at.read_bytes() == b"canonical"

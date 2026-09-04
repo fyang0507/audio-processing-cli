@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from pathlib import Path
 
@@ -163,7 +164,7 @@ def _parser() -> argparse.ArgumentParser:
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
     run_parser = transcribe_commands.add_parser(
-        "run", help="Execute one resolved Qwen transcription request."
+        "run", help="Execute one resolved transcription request."
     )
     run_parser.add_argument("--stack")
     run_parser.add_argument("--input", type=Path)
@@ -180,6 +181,21 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("-o", "--output", type=Path)
     run_parser.add_argument(
         "--force", action="store_true", help="Replace an existing output or partial result."
+    )
+
+    export_parser = subparsers.add_parser(
+        "export", help="Render one or more normalized transcripts for people or editors."
+    )
+    export_parser.add_argument(
+        "--input", dest="inputs", action="append", type=Path, required=True,
+        help="Normalized result JSON; repeat in source-timeline order to merge continuations.",
+    )
+    export_parser.add_argument(
+        "--format", choices=("srt", "vtt", "md", "txt", "jsonl"), required=True
+    )
+    export_parser.add_argument("-o", "--output", type=Path)
+    export_parser.add_argument(
+        "--force", action="store_true", help="Replace an existing export destination."
     )
     return parser
 
@@ -282,14 +298,13 @@ def _run_packages(args: argparse.Namespace) -> int:
         _print_json(path_report())
         return 0
 
-    provisioner = Provisioner()
     if command == "pull":
-        if args.want and not args.stack:
+        if args.want is not None and not args.stack:
             raise ProvisioningError(
                 "stack_required", "--want needs --stack: capabilities are resolved per stack",
                 exit_code=2, fix="audio packages pull --stack <stack>",
             )
-        if args.want:
+        if args.want is not None:
             # Refused rather than ignored. Nothing downstream of here reads `--want`: resolving
             # capabilities to a package set is the planner's job (#12), and a stack still
             # provisions every package it can use. Accepting the flag silently would be the real
@@ -302,8 +317,10 @@ def _run_packages(args: argparse.Namespace) -> int:
                 fix=f"audio packages pull --stack {args.stack}",
             )
         selection = select(args.packages, stack=args.stack)
+        provisioner = Provisioner()
         _print_json(provisioner.pull(selection, repair=args.repair, stack=args.stack))
         return 0
+    provisioner = Provisioner()
     if command == "verify":
         report = provisioner.verify(repair=args.repair)
         _print_json(report)
@@ -331,9 +348,6 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         diarizer=getattr(args, "diarizer", None),
     )
     if command == "run":
-        if request.stack.id not in {"qwen-1.7b", "qwen-0.6b"}:
-            issue = 22 if request.stack.id == "firered" else 23
-            raise transcribe_refusals.stack_run_unavailable(request.stack.id, issue)
         try:
             run_range = transcribe_orchestrator.parse_range(args.run_range)
         except ValueError as exc:
@@ -395,6 +409,120 @@ def _run_transcribe(args: argparse.Namespace) -> int:
     raise ValueError(f"unknown transcribe command {command!r}")
 
 
+def _run_export(args: argparse.Namespace) -> int:
+    from .export import (
+        IncompatibleResultsError,
+        InvalidResultError,
+        OutputExistsError,
+        OutputWriteError,
+        TimingRequiredError,
+        UnsafeOutputError,
+        export_documents,
+    )
+
+    if args.force and args.output is None:
+        raise transcribe_refusals.output_required_for_force()
+
+    try:
+        product = export_documents(
+            args.inputs,
+            args.format,
+            output=args.output,
+            force=args.force,
+        )
+    except TimingRequiredError as exc:
+        roles = exc.plan.get("roles", {}) if isinstance(exc.plan, dict) else {}
+        asr = roles.get("asr", {}) if isinstance(roles, dict) else {}
+        config = asr.get("config", {}) if isinstance(asr, dict) else {}
+        language = config.get("language") if isinstance(config, dict) else None
+        vad_role = roles.get("vad", {}) if isinstance(roles, dict) else {}
+        vad = None
+        if (
+            isinstance(vad_role, dict)
+            and vad_role.get("selected_by") == "pin:--vad"
+            and isinstance(vad_role.get("backend"), str)
+        ):
+            vad = vad_role["backend"]
+        execution = exc.plan.get("execution", {}) if isinstance(exc.plan, dict) else {}
+        selected_range = execution.get("range", {}) if isinstance(execution, dict) else {}
+        requested_range = (
+            selected_range.get("requested")
+            if isinstance(selected_range, dict) else None
+        )
+        run_range = None
+        if (
+            isinstance(requested_range, (list, tuple))
+            and len(requested_range) == 2
+            and all(
+                isinstance(value, (int, float)) and not isinstance(value, bool)
+                for value in requested_range
+            )
+        ):
+            run_range = f"{requested_range[0]}:{requested_range[1]}"
+        raise transcribe_refusals.timing_required_for_format(
+            exc.input_path,
+            args.format,
+            exc.found,
+            exc.stack,
+            exc.wants,
+            source_path=exc.source_path,
+            language=language if isinstance(language, str) else None,
+            vad=vad,
+            run_range=run_range,
+            word_timing_outcome=exc.word_timing_outcome,
+        ) from exc
+    except OutputExistsError as exc:
+        if exc.replaceable:
+            parts = ["audio", "export"]
+            for input_path in args.inputs:
+                parts.extend((
+                    "--input", transcribe_refusals.command_path_argument(input_path),
+                ))
+            parts.extend((
+                "--format", args.format,
+                "-o", transcribe_refusals.command_path_argument(exc.output),
+                "--force",
+            ))
+            fix = shlex.join(parts)
+        else:
+            fix = (
+                "choose a regular-file --output path; an existing directory cannot "
+                "be replaced by --force, and neither can a symlink or special file"
+            )
+        raise transcribe_refusals.Refusal(
+            {
+                "code": "output_exists",
+                "field": "--output",
+                "provided": str(exc.output),
+                "existing": str(exc.output),
+                "fix": fix,
+            },
+            exit_code=2,
+        ) from exc
+    except UnsafeOutputError as exc:
+        raise transcribe_refusals.output_is_canonical_input(
+            exc.output, exc.protected
+        ) from exc
+    except OutputWriteError as exc:
+        raise transcribe_refusals.output_path_invalid(
+            exc.output, exc.output, exc.reason
+        ) from exc
+    except InvalidResultError as exc:
+        raise transcribe_refusals.export_input_invalid(
+            exc.input_path, exc.reason
+        ) from exc
+    except IncompatibleResultsError as exc:
+        raise transcribe_refusals.export_inputs_incompatible(
+            exc.input_paths, exc.reason, fix=exc.fix
+        ) from exc
+
+    if args.output is None:
+        sys.stdout.write(product.content)
+    else:
+        _print_json(product.summary(args.output))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -409,6 +537,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_packages(args)
         if args.command == "transcribe":
             return _run_transcribe(args)
+        if args.command == "export":
+            return _run_export(args)
         parser.error(f"Unknown command: {args.command}")
     except transcribe_refusals.Refusal as exc:
         _print_json(exc.payload, stream=sys.stderr)

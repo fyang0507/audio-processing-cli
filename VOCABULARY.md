@@ -165,8 +165,8 @@ accepts, split into native, requires-an-add-on, and impossible — because a cal
 `--want` wrong needs the menu for the stack it picked, not a second command to go find it.
 
 **policy** — the decisions the tool makes that no caller can change: abstain on ambiguous
-overlap, the three recorded turn thresholds and what happens below each, and whether anything
-in a plan can detect overlap at all. Recorded here and in the research record, and **not
+overlap or an unavailable requested alignment, the three recorded turn thresholds and what
+happens below each, and whether anything in a plan can detect overlap at all. Recorded here and in the research record, and **not
 printed**, on the same reasoning as the floors: a caller cannot select any of it, so putting it
 in every plan invited a reader to mistake it for a set of settings, and the thresholds are
 fixed by the tool version rather than by the request.
@@ -279,10 +279,15 @@ one at a time. VibeVoice and the later MLX aligner remain separate environment p
 have never been measured co-resident.
 
 **abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly
-three allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an
-accepted turn below 500 ms, and `raw_fragment` for a span whose only activity was a sub-250 ms
-diarizer fragment. Abstentions must survive to the output. Budget-unprocessed intervals are
-coverage, not abstentions, because the tool did not reach them rather than declining to assert.
+four allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an
+accepted turn below 500 ms, `raw_fragment` for a span whose only activity was a sub-250 ms
+diarizer fragment, and `alignment_unavailable` for an ordinary VibeVoice speech segment whose
+requested aligner result is absent, invalid, or does not reproduce the segment text after
+punctuation and whitespace are removed. The last uses the segment's native bounds, preserves
+its text, omits `words`, and makes the run-level `word_timestamps` outcome `abstained`; bracketed
+non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must
+survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the
+tool did not reach them rather than declining to assert.
 
 ## Floors
 
@@ -329,6 +334,11 @@ test suite as assertions. Encoding an invariant as a field would make it look li
   transcription path never modifies the source.
 - **No synthesized bounds.** A timing field absent from the backend stays absent.
 - **Abstentions survive to the output.**
+- **Known overlap has no sole-speaker attribution.** When `overlapped_speech` is requested,
+  any transcript segment intersecting a detected overlap that intersects this document's scope
+  keeps its text and bounds but omits `speaker`, even when the overlap began before the range.
+  Publishing the overlap interval and its `overlap` abstention remains start-owned, independently
+  of that intersection-based masking.
 - **Normalization at the adapter boundary.** No model-specific object travels past
   it, no backend scaffolding survives it, and a backend's default-filled field is not a
   value. Three verified instances, one per stack. Qwen's private batched API returns the
@@ -355,11 +365,11 @@ because they come out of one stage and neither is useful alone.
 | --- | --- | --- |
 | `languages` | Which languages the stack handles, separating what it advertises from what a recorded run here actually exercised, and whether it takes a `--language` hint. | The first stack-choice question and the one most easily answered with a marketing number. Advertised counts are 30, 50+, and 100+; the set verified locally is Mandarin, English, and Cantonese on every stack. |
 | `verbatim` | The stack **can produce** verbatim text: it emits what it heard, disfluencies included, rather than a cleaned rendering. How faithfully it does so is the quality axis, not this one. | Interface verified on all four stacks — 24 to 28 filler hits on one probe, none of them cleaning and none of them complete. No backend exposes a verbatim switch and nothing in v1 cleans, so requesting this asserts an interface rather than selecting a mode, and the plan answers for fidelity separately: `quality: "refuted"` on the two stacks a recorded run caught normalizing a dialect form. |
-| `diarization` | Anonymous speaker labels on transcript text **and** the speaker turn intervals, as `segments[].speaker` and `turns[]`. | One request, because there is no use for either half alone: intervals without text say "three people spoke" and never who said what, and text-without-intervals is not even purchasable, since punctuated text is a floor. Both fall out of one diarizer run, so splitting them would price one stage twice. Whether the labels were native or reconciled from a diarizer is provenance, not a separate request. |
+| `diarization` | Anonymous speaker labels on transcript text **and** the speaker turn intervals, as `segments[].speaker` and `turns[]`. A known-overlap segment deliberately lacks a sole-speaker label. | One request, because there is no use for either half alone: intervals without text say "three people spoke" and never who said what, and text-without-intervals is not even purchasable, since punctuated text is a floor. Both fall out of one diarizer run, so splitting them would price one stage twice. Whether the labels were native or reconciled from a diarizer is provenance, not a separate request. |
 | `overlapped_speech` | Cross-speaker overlap. | Feeds the abstention ledger; also the basis for refusing to attribute overlapping speech. |
 | `vad` | Speech-activity regions. | Speech activity only; not turns and not events. |
 | `segment_timestamps` | ASR segment extents. | Cheap coarse timing where a stack emits it natively. Cannot produce subtitle-grade cues. |
-| `word_timestamps` | Word or character intervals. | The only timing that supports subtitle cues or word-level editing. Never inferred from a stack's internal chunk boundaries. May be legitimately absent on a segment that has no speech to align. |
+| `word_timestamps` | Word or character intervals. | The only timing that supports subtitle cues or word-level editing. Never inferred from a stack's internal chunk boundaries. It is absent without abstention on a non-speech event; on an ordinary speech segment it may be absent only with `alignment_unavailable`. |
 | `lid` | Region language label and confidence. | Region-level; cannot locate a switch. Costs roughly double inference on FireRed. FireRed carries the label on each *sentence*, but it is produced once per VAD region and copied onto the sentences inside it (`fireredasr2system.py:129-155`), so per-sentence variation would be fabricated. |
 | `token_lid` | Per-token language. | **No backend provides this.** Named so the catalog can report it `impossible` and a request for it can fail loudly with `capability_unsupported`, rather than the assumption being drawn silently from code-switching support. |
 
@@ -496,8 +506,9 @@ ships, it becomes a package and gets its own registry entry.
 Licenses are a registry field, reported by `audio packages list` and not by a plan —
 a plan resolves a pipeline, not a redistribution question. Every package now carries
 the license its model card states at the pinned revision: Qwen ASR and the aligner
-Apache-2.0, FireRed's four checkpoints Apache-2.0, VibeVoice MIT, and Silero MIT read
-from the tagged `LICENSE` rather than a card. Two were read rather than reported — the
+Apache-2.0, FireRed's four checkpoints Apache-2.0, the combined VibeVoice package
+`mixed: mit + apache-2.0` because it carries a pinned Qwen tokenizer subset, and Silero MIT
+read from the tagged `LICENSE` rather than a card. Two were read rather than reported — the
 FluidAudio SDK is Apache-2.0 and `speaker-diarization-coreml` is CC-BY-4.0
 (`model_tests/benchmark/DIARIZATION.md`).
 
@@ -514,18 +525,23 @@ Rules:
   a lock; it never resolves "latest". This is what keeps the `mlx-audio` private
   batched API at the one version the source-hash guard expects.
 - Hub weights stay in the Hugging Face cache. The registry records which
-  revisions this tool materialized rather than duplicating a snapshot.
+  revisions this tool materialized rather than duplicating a snapshot, while the live cache
+  index binds each repository and pinned revision to its recorded snapshot path.
 - Applying the VibeVoice patch and building the FluidAudio product happen in
   `pull` and nowhere else. Neither is ever triggered by a transcription request.
-- `remove` is reference-counted: an environment survives while another
-  provisioned package still needs it. It deletes only the Hub revisions the
-  registry records as materialized here, and says so, because the Hugging Face
-  cache may be shared with other tools.
+- `remove` is reference-counted from installed-manifest package identities: an environment
+  survives while another provisioned package still needs it. Local deletion targets also come
+  from that manifest, never from mutable registry paths. A Hub revision is deletion-eligible only
+  when the receipt records that this root downloaded it, the current manifest still pins it for
+  that package, and it was not recorded as pre-existing; everything else is retained because the
+  Hugging Face cache may be shared with other tools.
 - `purge` reads `registry.json`, not shell history, so a session that never ran
-  `pull` can still find and free everything. It reports reclaimable bytes before
-  removing anything.
-- `verify` re-checks artifact digests, the `mlx-audio` private-API source hash,
-  whether tracked patches are applied, and that the Swift product runs.
+  `pull` can still enumerate its recorded state and safely reclaim manifest-owned artifacts.
+  It reports reclaimable package bytes before removing anything.
+- `verify` re-checks artifact digests, Hub cache identity, the `mlx-audio` private-API source
+  hash, exact source-checkout HEAD and tracked names, manifest-owned post-patch hashes plus their
+  receipt copy, ordinary and ignored untracked files, and that the one contained FluidAudio
+  product from its exact managed checkout runs.
 
 Lifecycle: `audio packages list | pull | verify | remove | purge | path`. `pull`
 accepts package ids **or** `--stack`, never both, and it does not accept `--want`:
@@ -552,16 +568,23 @@ absent to a run and as reclaimable to `purge`.
 | --- | --- |
 | `ok` | every check that applies to this environment passed. |
 | `drifted` | its installed set differs from its lock. Repairable: `verify --repair` re-syncs it. |
-| `blocked` | a tool in its `requires_tool` is not on `PATH`, so nothing in it can run whatever the registry holds. Not repairable by this tool — installing a toolchain is not something `audio` does. |
-| `absent` | this root has not provisioned it. |
+| `blocked` | a provisioning or repair tool is not on `PATH` and no ready built runtime can substitute for it. Not repairable by this tool — installing a toolchain is not something `audio` does. |
+| `absent` | its environment registry entry is missing or not `ready`. |
+
+A `ready` package cannot promote that verdict. When one depends on an `absent` environment,
+`verify` emits the typed failure `environment_not_ready` with `packages` and `fix`, and performs
+no freeze, checkout, interpreter, or built-product probe beneath that environment root.
 
 `blocked` exists because the two enumerations answer different questions and only the second
 one is a claim about usability. A stack pull provisions the packages that need no toolchain and
 reports the blocked one, so `swift` can legitimately be `ready` in the registry while holding
-nothing that can execute — `doctor` says so by publishing `blocked_by_missing_tool` beside the
-state, and a bare `ok` from `verify` cannot. The word is the one this tool already uses for the
-condition, in `doctor`'s `blocked_by_missing_tool` and in a pull warning's `blocking: true`; it
-is not a new concept, only a missing spelling.
+only model weights and no executable. Once FluidAudio has been built, runtime and `verify` launch
+that product directly: a live product makes the environment usable even if Swift later leaves
+`PATH`; an absent or nonlaunching product does not. `doctor` says whether the current filesystem
+has that built-runtime substitute when publishing `blocked_by_missing_tool`, and a bare `ok` from
+`verify` requires the direct launch to succeed. The word is the one this tool already uses for
+the condition, in `doctor`'s `blocked_by_missing_tool` and in a pull warning's `blocking: true`;
+it is not a new concept, only a missing spelling.
 
 A registry-state field is **not** restated as `blocked`. It reports what the registry holds,
 which is a different and still-useful fact, and three commands publish it — rewriting one of
@@ -631,9 +654,11 @@ compatibility surfaces where there is one.
 
 A plan also does not echo the request back. The caller just typed it, `source.path` records the
 input, and the requested capabilities are the keys of the `capabilities` block — so a `request`
-field restated three things the document already contained. What a saved result does need, and
-could not otherwise state plainly, is which stack produced it, so `provenance.stack` carries
-that one value.
+field restated three things the document already contained. Catalog and plan paths preserve the
+caller's spelling; a durable run result resolves `source.path` to an absolute identity so
+`export` can refuse to overwrite canonical media even from another working directory. What a
+saved result does need, and could not otherwise state plainly, is which stack produced it, so
+`provenance.stack` carries that one value.
 
 Stacks are named, not versioned: a different model size is a different stack id.
 `enhance --profile transcription@3` keeps its own versioning.

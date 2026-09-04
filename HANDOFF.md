@@ -1,9 +1,9 @@
 # Agent handoff
 
-Updated 2026-09-03. This repository has a production-oriented audio enhancement CLI,
-explicit model provisioning, transcription capability discovery and planning, and the first
-executable transcription stacks. Phase C in issue #21 runs `qwen-1.7b` and `qwen-0.6b`; the
-remaining direct sequence is FireRed (#22), VibeVoice (#23), then export (#24).
+Updated 2026-09-04. This repository has a production-oriented audio enhancement CLI,
+explicit model provisioning, transcription capability discovery and planning, four executable
+transcription stacks, and deterministic transcript export. Issue #21 is merged; the candidate on
+`codex/issues-22-24` completes FireRed (#22), VibeVoice (#23), and export (#24).
 
 ## Current state
 
@@ -57,15 +57,48 @@ remaining direct sequence is FireRed (#22), VibeVoice (#23), then export (#24).
 - The benchmark harness, manifests, compact results, and controlled research
   record live under `model_tests/`. Raw media, downloaded model weights, and
   local run directories are intentionally ignored.
-- `audio transcribe capabilities` and `audio transcribe plan` ship for all four stack ids.
-  `audio transcribe run` ships for `qwen-1.7b` and `qwen-0.6b`. It uses one canonical temporary
-  PCM WAV, strictly sequential fresh MLX/Swift processes, core-side adapters, exact anonymous-turn
-  reconciliation, optional in-process Silero VAD, per-segment MLX alignment, exit-3 package
-  preflight, and exit-4 partial/resume coverage. FireRed and VibeVoice remain deliberately
-  unimplemented behind the same transport boundary.
-- Issue #21's release candidate is [PR #29](https://github.com/fyang0507/audio-processing-cli/pull/29)
-  on `codex/issue-21`, based directly on
-  `2e4e85662e24e4f6a6754de7a40d8f1cdd6c10f2` (`origin/main` when the branch was cut). Final
+- `audio transcribe capabilities`, `plan`, and `run` ship for all four stack ids. Every run uses
+  one canonical temporary PCM WAV and keeps public bounds on the source timeline. Qwen uses
+  strictly sequential fresh MLX/Swift stages; FireRed keeps native VAD, optional LID, ASR, and
+  punctuation in one measured CPU process; VibeVoice makes one whole-media MPS generation call
+  and invokes the MLX aligner only for requested word timing. Exit-3 preflight now verifies pinned
+  weight revisions, Hub snapshot paths, every manifest allowlist pattern, and the pull receipt's
+  recorded byte measurement, with repository/revision/path identity bound through the Hub cache
+  index. For each live source checkout it also reads the full Git HEAD, derives the exact tracked set
+  from the installed patch, checks manifest-owned post-patch hashes and matching receipt hashes,
+  and rejects both ordinary and Git-ignored untracked artifacts before decode; ignored bytecode or
+  extensions remain importable and therefore provenance-relevant. A legacy receipt may repeat the
+  manifest's short commit alias or its full resolution, but the live HEAD must always be the full
+  resolved commit. The two checkout-backed Python packages must also freeze under their
+  manifest-pinned distribution names as direct `file://` installs of their exact managed checkout;
+  verify repair validates those checkouts before syncing the lock, reinstalls them afterward, and
+  freezes again. Managed Python interpreters and the contained, non-symlink
+  FluidAudio product from its exact managed checkout are launched before decode rather than
+  accepted from executable bits or receipt booleans. FluidAudio's pinned source patch requires
+  the exact managed speaker-model directory and disables ModelHub downloads; pull records the
+  product path and SHA256, and verify/run require the same live digest plus the manifest-owned
+  post-patch source hash. The single URL artifact is accepted only at
+  its contained, non-symlink manifest models path, both on pull's hash fast path and after download;
+  Silero auto-fetch uses the same boundary. Pull refuses redirected `envs` parents or environment
+  leaves before creation/install, while verify and run require every ready environment root to be
+  the exact contained, non-symlink manifest directory before freeze or decode. A venv's inner
+  `bin/python` symlink remains normal. Registry reads are descriptor-bound and a redirected
+  provisioning-root leaf is `registry_unreadable` before `verify` probes subordinate state.
+  Publication, downloads, and managed removal operate through
+  already-opened non-symlink directory descriptors, so a concurrent parent-path swap cannot
+  redirect an overwrite or deletion. URL and Silero downloads additionally bind publication and
+  cleanup to the exact private temporary inode opened before transfer; managed leaf symlinks are
+  replaced without following them, while directories are preserved. This guards accidental and
+  public-destination retargeting; it does not claim protection from another same-credential
+  process that discovers and changes a random private sibling between its final identity check
+  and unlink, because that process can already unlink canonical user files directly and POSIX has
+  no portable conditional-unlink primitive. Qwen and FireRed
+  recover per-unit prefixes; VibeVoice recovers only complete decoded prefixes.
+  `packages verify` also gates every ready package on a `ready` environment registry entry: a
+  missing or non-ready entry keeps the environment verdict `absent`, emits
+  `environment_not_ready`, and skips all checkout and runtime probes below that root.
+- Issue #21 merged as [PR #29](https://github.com/fyang0507/audio-processing-cli/pull/29) at
+  `1e8b979671273b04e677ef2e325c7796806fdcf5`. Its final
   verification collected and passed 408 tests; the targeted Ruff gate and `git diff --check`
   passed; `audio packages verify` reported all four environments `ok` with the pinned MLX private
   API hash and signature matching; a fresh floors-only Qwen 0.6B run produced 23 chronological
@@ -80,46 +113,71 @@ remaining direct sequence is FireRed (#22), VibeVoice (#23), then export (#24).
 - [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is the command surface that contract
   must produce, end to end for all four stack ids including teardown, and
   [TRANSCRIBE_HAPPY_PATH.md](TRANSCRIBE_HAPPY_PATH.md) is the unabridged expected output per
-  use case plus all refusals. Both are signed off; implementation is complete through phase C.
-- [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) owns the remaining phase
+  use case plus all refusals. Both now describe the implemented v1 surface.
+- [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) records the completed phase
   boundaries. [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is the historical design
   record and still explains the risks and rejected alternatives.
 - `tests/test_spec_docs.py` holds the spec documents' invariants and runs in the normal suite.
 
-## Next agent: issues #22–#24
+## Current candidate: issues #22–#24
 
-Start only after issue #21's PR is merged, from a fresh branch based on the resulting
-`origin/main`. Do not carry the Phase C worktree or stack these phases on an unmerged local
-commit. The shared seam is now concrete:
-
-- Core orchestration is in `src/audio_cli/transcribe/orchestrator.py`; fresh-process invocation
-  and request/result JSON ownership are in `transport.py`.
-- Environment entry points under `transcribe/stages/` import no `audio_cli`. Backend-specific
-  objects and raw defaults stop at `transcribe/adapters/`; the normalized serializer remains the
-  only public result path.
-- `audio transcribe run --stack firered` and `--stack vibevoice` currently refuse without loading
-  a model. Replace only the matching refusal when its adapter lands.
-- Add every shipped `run` shape to `tests/test_shipped_commands_match_the_document.py`. Keep exit
-  3 before transport, exit 4 only when a conforming partial exists, and `peak_*` totals as maxima
-  across sequential stages.
-
-Issue #22 is next because FireRed exercises one co-resident stage process containing native VAD,
-optional LID, ASR, and punctuation. Its word objects have exactly `start_ms`, `end_ms`, and `text`;
-do not reintroduce per-word confidence from summaries. Assert the punctuation invariant per
-sentence, group LID at VAD-region granularity, and omit the backend's default-filled language
-fields when LID was not requested.
-
-Issue #23 then adds VibeVoice. Preserve complete segments from truncated raw text before exit 4,
-drop both literal `"N/A"` and absent speakers rather than turning either into an identity, and
-retain bounded non-speech event segments without a fabricated word stream.
-
-Issue #24 is deterministic post-processing only: SRT, VTT, Markdown, text, and JSONL; merge
-partial/resumed documents in source order and re-id them; refuse subtitle output without real
-word timing; never derive a cue from a processing-unit or segment container bound.
-
-For each issue, keep the established `plan -> implement -> verify -> adversarial review -> PR`
-loop. The acceptance text in the issue body is the checklist; backend claims must be checked
-against the named runner or recorded artifact, not this handoff.
+- FireRed's adapter is asserted against recorded artifact excerpts and, when the local untracked
+  artifacts exist, all five raw results: 1,896 sentences, 12,370 words, zero partition failures.
+  Its stage loads the pinned system once and intentionally mirrors the pinned `process()` phases
+  inside that same co-resident process because upstream exposes neither injected external VAD nor
+  a per-region completion ledger. An executable test pins the exact `4e7d9aa` method body and proves
+  the mirror matches its successful `sentences`, `words`, and `vad_segments_ms` on the same
+  stateful components across multiple ASR and punctuation batches, including upstream blank
+  filtering with LID off and the requested LID phase with no blank. A separate fail-closed case
+  retains a conforming prefix when blank ASR would leave an unpublishable LID region. The stage
+  preserves the global post-filter punctuation stream, emits only completed
+  VAD-region prefixes on failure, and never manufactures per-word confidence.
+  Result validation accepts the measured integer-millisecond edge where a final word ends at most
+  1 ms after its sentence, but rejects a larger escape. The six observed seams are in raw runner
+  artifacts `firered_lidoff_batch4_spice30m_participant.json` (sentence/word pairs 26/177 and
+  359/2346) and `firered_lidoff_batch4_spice60m_participant_concat.json` (the same two plus
+  597/4010 and 930/6179) under `model_tests/benchmark_runs/`; none of the five raw results has a
+  larger end escape or a word beginning before its sentence.
+- VibeVoice explicitly provisions both the ASR checkpoint and its pinned Qwen tokenizer subset.
+  The adapter omits both `"N/A"` and absent speakers, preserves bounded event tags without words,
+  and salvages complete JSON objects before a generation truncation. When requested alignment is
+  absent or nonconforming for an ordinary speech segment, it preserves that segment without
+  `words`, records an `alignment_unavailable` abstention over the segment's native bounds, and
+  marks the run-level word-timing outcome `abstained`; valid segment word streams remain, while
+  bracketed event tags are excluded from alignment and are not abstentions. Each bounded speech
+  segment forms its own native turn, so no same-speaker grouping fills a gap or event. When a
+  requested detected overlap intersects a segment and document scope, text/bounds remain but sole
+  `speaker` attribution is omitted even across a range boundary; overlap and abstention rows remain
+  start-owned. The stage samples live MPS allocation through load and
+  inference and always stops its sampler on success or failure.
+- `audio export` strictly validates and merges compatible v1 results, re-ids segments and words,
+  derives subtitle cues only from word bounds, renders real VTT voice tags, and writes SRT, VTT,
+  Markdown, text, and JSONL atomically. A bounded bracketed non-speech event may be omitted from
+  subtitles; a bounded ordinary segment may be omitted beside real cues only when an exact
+  same-bounds `alignment_unavailable` abstention records the failure. Unbounded ordinary text
+  refuses SRT/VTT because schema v1 cannot associate it with a unit ledger row. A nonempty
+  transcript with no real word stream fails closed unless every segment is a
+  positive-duration bracketed event with bounds and no speaker, in which case the intentionally
+  event-free subtitle is empty rather than fabricated from container extents. On-disk output is
+  atomic UTF-8 and cannot target an input transcript or canonical source even with `--force`;
+  publication carries descriptor-captured input device/inode identity across rendering or model
+  work. Forced replacement atomically exchanges directory entries, inspects the displaced inode,
+  and rolls back when it is protected or non-regular, so renaming a protected file onto the output
+  does not evade the check or create a missing-output window.
+  Independently generated VibeVoice documents that requested native diarization are intentionally
+  not merge-compatible: their anonymous speaker labels are generation-local, so equal label text
+  cannot be treated as a shared identity. Single-input and non-diarized ranged export remain
+  supported.
+- Every shipped run shape is checked against [TRANSCRIBE_HAPPY_PATH.md](TRANSCRIBE_HAPPY_PATH.md).
+  The dead `stack_run_unavailable` refusal is retired. Final candidate verification passed all 903
+  tests, the critical Ruff and compile gates, `git diff --check`, live verification of all four
+  managed environments, skill validation, fresh sdist/wheel builds, and an isolated wheel-install
+  smoke test. The established `plan -> implement -> adversarial review -> fix -> re-review` loop
+  continued until both final audit streams returned exactly `CONVERGED` with no reproducible P0-P2
+  finding. The implementation is commit
+  `b5e6a55cd975779c06c300e590d57e6874cf8cad` in
+  [PR #30](https://github.com/fyang0507/audio-processing-cli/pull/30), which closes issues #22,
+  #23, and #24 when merged; the PR remains open for human review.
 
 ## Read this first
 
@@ -190,16 +248,18 @@ Keep three kinds of statement separate in code and documentation:
   weights, builds the FluidAudio Swift product, or applies the VibeVoice patch.
   A transcription request resolves its plan, then fails closed with the exact
   fix command when a package is missing. Only the small hash-pinned artifacts
-  auto-fetch, as the Silero backend already does.
+  auto-fetch, as the Silero backend already does; its managed auto-fetch target is never accepted
+  through a symlink even when the target bytes hash correctly.
 - For interviews, prefer **FluidAudio or trusted capture channels → reconciled
   external turns → persistent Qwen3-ASR 1.7B 8-bit**, with 0.6B as the explicit
   latency and memory tradeoff. This is a recommendation for the caller, not a
   default the planner applies.
 - Use **VibeVoice 7B → Qwen3-ForcedAligner** when editing structure,
-  speaker-labelled segments, code switches, and fillers matter. Word-level
-  alignment is a required v1 output, so `transcribe` aligns the whole transcript
-  when asked; selective per-segment alignment belongs to the Observation Store's
-  lazy enrichment. VibeVoice needs a fixed internal seed because its acoustic
+  speaker-labelled segments, code switches, and fillers matter. When word timing is requested,
+  `transcribe` attempts every alignable speech segment; event tags are excluded, and a missing or
+  nonconforming per-segment stream becomes a bounded `alignment_unavailable` abstention rather
+  than erasing otherwise valid text. Choosing only selected speech segments for alignment belongs
+  to the Observation Store's lazy enrichment. VibeVoice needs a fixed internal seed because its acoustic
   tokenizer samples a Gaussian latent; unseeded runs disagree and no downstream
   `word_id` would be stable.
 - Expose **FireRedASR2S as its full pipeline**. Prefer it for dialect form,
@@ -247,14 +307,20 @@ stack that produces subtitle-grade timing natively.
 
 Subtitle generation itself lives in `export`, which is deterministic
 post-processing with no packages and no `plan`/`run` split. It fails closed when
-the transcript has no word timing rather than inventing cue bounds. Cue
+the transcript has no real word stream rather than inventing cue bounds. The narrow exception is
+a bounded-event-only result that already records produced word timing: bracketed non-speech events
+carry no alignable words, so an empty subtitle is honest while a cue from their segment extents
+would not be. Ordinary wordless sentences still refuse. Cue
 segmentation is real work — duration and line limits, CJK versus Latin character
 widths, breaking at punctuation, never spanning a speaker change — and its tuning
 options are parked as a follow-up issue. Two constraints on it come from the
 recorded artifacts rather than from convention: breaking at punctuation means
 mapping a mark's position in the sentence text to a word index, which is sound only
-case-insensitively; and a segment can carry text with no word stream at all, which
-is how VibeVoice's non-speech event tags arrive. Timing quality is unvalidated:
+case-insensitively; and a segment can carry text with no word stream at all, either because a
+VibeVoice event is deliberately not alignable or because ordinary alignment abstained with
+`alignment_unavailable`. Only bounded ordinary segments with a same-bounds abstention may be
+omitted beside real subtitle cues; an unbounded Qwen failure refuses SRT/VTT because schema v1
+cannot associate that segment with a processing-unit ledger row. Timing quality is unvalidated:
 boundary MAE/P95 is unmeasured for both FireRed's native times and the aligner.
 
 Risk sits earliest in the schema, so it is worth settling before any heavyweight

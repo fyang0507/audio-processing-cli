@@ -1,9 +1,10 @@
 # `transcribe` — design handoff
 
-**Historical design handoff; implementation is in progress.** The agent-facing surface is
-settled and signed off. Phases 0–B are on `main`; phase C implements the transport, orchestrator,
-and both Qwen stacks. Issues #22–#24 are the remaining FireRed, VibeVoice, and export phases.
-Use [HANDOFF.md](HANDOFF.md) for current repository state and
+**Historical design handoff captured after phase C.** The agent-facing surface was settled and
+signed off; at this snapshot, phases 0–B were on `main`, phase C implemented the transport,
+orchestrator, and both Qwen stacks, and issues #22–#24 were still the FireRed, VibeVoice, and
+export phases. Those phases have since landed in the current implementation candidate. Use
+[HANDOFF.md](HANDOFF.md) for current repository state and
 [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) for phase boundaries.
 This document remains authoritative for the design decisions and evidence traps that produced
 that plan.

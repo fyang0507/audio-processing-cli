@@ -1,11 +1,10 @@
 # Working in this repository
 
 A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically,
-provision model packages and runtimes, and transcribe through explicit stacks. `inspect`, `enhance`,
-`doctor`, and `packages` ship; `transcribe capabilities` and `transcribe plan` cover all four stack
-ids, while `transcribe run` currently executes the two Qwen stacks. FireRed, VibeVoice, and export
-are issues #22–#24. JSON is the machine-readable result format; prose interpretation belongs in
-your reply, not in the payload.
+provision model packages and runtimes, transcribe through four explicit stacks, and export saved
+results deterministically. `inspect`, `enhance`, `doctor`, `packages`, `transcribe capabilities`,
+`transcribe plan`, `transcribe run`, and `export` ship. JSON is the machine-readable result format;
+prose interpretation belongs in your reply, not in the payload.
 
 ## The rule that matters most
 

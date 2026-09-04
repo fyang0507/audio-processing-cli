@@ -2,6 +2,7 @@
 
 from .aligner import normalize_aligned_words
 from .diarizer import DiarizationPlan, reconcile_turns
+from .firered import FireRedResult, normalize_firered_result
 from .qwen import (
     normalize_qwen_segments,
     sentence_segments,
@@ -9,12 +10,22 @@ from .qwen import (
     strip_qwen_scaffold,
 )
 from .silero import normalize_vad_regions
+from .vibevoice import (
+    VibeVoiceResult,
+    normalize_vibevoice_alignment,
+    normalize_vibevoice_result,
+)
 
 __all__ = [
     "DiarizationPlan",
+    "FireRedResult",
+    "VibeVoiceResult",
     "normalize_aligned_words",
+    "normalize_firered_result",
     "normalize_qwen_segments",
     "normalize_vad_regions",
+    "normalize_vibevoice_alignment",
+    "normalize_vibevoice_result",
     "reconcile_turns",
     "sentence_segments",
     "split_sentences",

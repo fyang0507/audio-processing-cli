@@ -1,0 +1,36 @@
+{
+  "fixture_schema_version": 1,
+  "provenance": {
+    "source_artifact": "model_tests/benchmark_runs/firered_lidon_batch4_multispeaker_codeswitch_20260815.json",
+    "source_sha256": "df32268dad30a0322745c1df85653240fc65ab7c87b428463e8e7abd65308b9d",
+    "excerpt_rule": "output.result.vad_segments_ms[0], every output.result sentence contained by that region, and the leading output.result words that reproduce those sentences"
+  },
+  "raw": {
+    "sentences": [
+      {
+        "start_ms": 590,
+        "end_ms": 810,
+        "text": "好，",
+        "asr_confidence": 0.977,
+        "lang": "zh xinan",
+        "lang_confidence": 0.958
+      },
+      {
+        "start_ms": 810,
+        "end_ms": 1810,
+        "text": "现在开始。",
+        "asr_confidence": 0.977,
+        "lang": "zh xinan",
+        "lang_confidence": 0.958
+      }
+    ],
+    "vad_segments_ms": [[590, 1810]],
+    "words": [
+      {"start_ms": 650, "end_ms": 810, "text": "好"},
+      {"start_ms": 810, "end_ms": 970, "text": "现"},
+      {"start_ms": 970, "end_ms": 1090, "text": "在"},
+      {"start_ms": 1090, "end_ms": 1290, "text": "开"},
+      {"start_ms": 1290, "end_ms": 1621, "text": "始"}
+    ]
+  }
+}

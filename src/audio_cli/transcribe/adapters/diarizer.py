@@ -59,29 +59,75 @@ def _seconds(samples: int) -> float:
 
 
 def _raw_segments(payload: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
-    values = payload.get("segments")
-    if values is None and isinstance(payload.get("output"), Mapping):
-        values = payload["output"].get("segments")
+    nested = payload.get("output")
+    top_level = "segments" in payload
+    nested_level = isinstance(nested, Mapping) and "segments" in nested
+    if top_level == nested_level:
+        raise ValueError(
+            "FluidAudio result must carry segments at exactly one accepted location"
+        )
+    values = payload["segments"] if top_level else nested["segments"]
     if not isinstance(values, list):
         raise TypeError("FluidAudio result lacks a segments array")
+    if any(not isinstance(item, Mapping) for item in values):
+        raise TypeError("FluidAudio segments must be objects")
     return values
+
+
+def _finite_json_number(value: Any, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"FluidAudio {field} must be a JSON number")
+    try:
+        parsed = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"FluidAudio {field} must be a finite JSON number") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"FluidAudio {field} must be a finite JSON number")
+    return parsed
+
+
+def _speaker_label(value: Any) -> str:
+    # Recorded FluidAudio output uses string labels (for example ``"S1"``), while
+    # the benchmark normalization also treats integer speaker ids as opaque labels.
+    # Do not stringify arbitrary JSON values into plausible-looking identities.
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise ValueError("FluidAudio speaker label must be a string or integer")
+    if isinstance(value, str):
+        if not value.strip():
+            raise ValueError("FluidAudio speaker label must not be empty")
+        return value
+    return str(value)
+
+
+def _one_alias(
+    item: Mapping[str, Any], aliases: tuple[str, str], field: str
+) -> Any:
+    present = [name for name in aliases if name in item]
+    if len(present) != 1:
+        raise ValueError(
+            f"FluidAudio segment must carry exactly one {field} field"
+        )
+    return item[present[0]]
 
 
 def _normalize(item: Mapping[str, Any], total: int) -> dict[str, Any]:
     # FluidAudio 0.15.5 emits camelCase.  The snake-case variant is accepted for runner
     # artifacts and test doubles.  Nothing else, notably its 256-float embedding, crosses.
-    start_raw = item.get("startTimeSeconds", item.get("start_s"))
-    end_raw = item.get("endTimeSeconds", item.get("end_s"))
-    speaker_raw = item.get("speakerId", item.get("speaker"))
-    start_s, end_s = float(start_raw), float(end_raw)
-    if not math.isfinite(start_s) or not math.isfinite(end_s) or speaker_raw is None \
-            or not str(speaker_raw):
-        raise ValueError("FluidAudio returned invalid fields")
-    start = max(0, min(total, round(start_s * SAMPLE_RATE)))
-    end = max(0, min(total, round(end_s * SAMPLE_RATE)))
+    start_raw = _one_alias(item, ("startTimeSeconds", "start_s"), "start")
+    end_raw = _one_alias(item, ("endTimeSeconds", "end_s"), "end")
+    speaker_raw = _one_alias(item, ("speakerId", "speaker"), "speaker")
+    start_s = _finite_json_number(start_raw, "segment start")
+    end_s = _finite_json_number(end_raw, "segment end")
+    speaker = _speaker_label(speaker_raw)
+    # Crop in seconds before converting to samples. Besides matching the existing
+    # source crop, this keeps a finite but enormous backend value from overflowing
+    # during multiplication and leaking an untyped exception.
+    duration_s = total / SAMPLE_RATE
+    start = round(max(0.0, min(duration_s, start_s)) * SAMPLE_RATE)
+    end = round(max(0.0, min(duration_s, end_s)) * SAMPLE_RATE)
     if end <= start:
         raise ValueError("FluidAudio returned an empty interval after source crop")
-    return {"start": start, "end": end, "speaker": str(speaker_raw)}
+    return {"start": start, "end": end, "speaker": speaker}
 
 
 def _spans(kept: list[dict[str, Any]], filtered: list[dict[str, Any]], total: int) -> list[_Span]:
@@ -150,10 +196,19 @@ def _turns(spans: list[_Span]) -> list[_Turn]:
 
 
 def reconcile_turns(payload: Mapping[str, Any], *, duration_seconds: float) -> DiarizationPlan:
-    total = max(0, round(duration_seconds * SAMPLE_RATE))
+    duration = _finite_json_number(duration_seconds, "source duration")
+    if duration < 0:
+        raise ValueError("FluidAudio source duration must be non-negative")
+    try:
+        total = round(duration * SAMPLE_RATE)
+    except OverflowError as exc:
+        raise ValueError("FluidAudio source duration is too large") from exc
     normalized = [_normalize(item, total) for item in _raw_segments(payload)]
     kept = [item for item in normalized if item["end"] - item["start"] >= RAW_FRAGMENT_MIN_SAMPLES]
-    filtered = [item for item in normalized if item["end"] - item["start"] < RAW_FRAGMENT_MIN_SAMPLES]
+    filtered = [
+        item for item in normalized
+        if item["end"] - item["start"] < RAW_FRAGMENT_MIN_SAMPLES
+    ]
     spans = _spans(kept, filtered, total)
     turns = _turns(spans)
     accepted = [item for item in turns if item.end - item.start >= TURN_MIN_SAMPLES]

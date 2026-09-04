@@ -22,29 +22,61 @@ network or a toolchain.
 from __future__ import annotations
 
 import hashlib
+import fnmatch
 import json
 import os
 import platform
+import re
 import shutil
+import stat
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
+import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from . import paths
-from .environments import Environment, ManifestError, Package, environments, packages
+from .media import (
+    assert_directory_binding,
+    bound_directory,
+    cleanup_temporary_file,
+    file_identity_from_descriptor,
+    publish_temporary_file,
+    sha256_regular_file_at,
+)
+from .environments import (
+    HERE as ENVIRONMENTS_DIR,
+    Environment,
+    ManifestError,
+    Package,
+    environments,
+    packages,
+)
 
 REGISTRY_SCHEMA_VERSION = 1
 
 HUB_CACHE_NOTE = (
     "weights live in the shared Hugging Face cache, not under this root. Only revisions this "
-    "pull actually downloaded were deleted; a revision that was already cached is retained, "
-    "because it may belong to another tool, another provisioning root, or an earlier experiment"
+    "root recorded as downloaded and the current manifest still pins for that package are "
+    "eligible for deletion; pre-existing and out-of-manifest revisions are retained because "
+    "they may belong to another tool, another provisioning root, or an earlier experiment"
 )
 UNTOUCHED = ["user media", "transcript and subtitle outputs"]
+
+
+@dataclass(frozen=True)
+class CheckoutState:
+    """Live Git state for a source checkout used by an executable backend."""
+
+    head: str
+    modified: tuple[str, ...]
+    untracked: tuple[str, ...]
 
 
 class ProvisioningError(RuntimeError):
@@ -89,6 +121,149 @@ def _tree_bytes(path: Path) -> int:
     return total
 
 
+def _hub_snapshot_index() -> dict[tuple[str, str], Path]:
+    """Map canonical Hub cache identity to the snapshot path reported by its cache index."""
+    from huggingface_hub import scan_cache_dir
+
+    cache = scan_cache_dir()
+    return {
+        (repository.repo_id, revision.commit_hash): Path(revision.snapshot_path)
+        for repository in cache.repos
+        for revision in repository.revisions
+    }
+
+
+def _inspect_hub_snapshot(
+    repository: str,
+    revision: str,
+    snapshot: Path | None,
+    patterns: tuple[str, ...],
+    snapshot_index: Mapping[tuple[str, str], Path],
+) -> tuple[list[str], int | None]:
+    """Bind one returned Hub path before reading any bytes below it."""
+    if snapshot is None:
+        return [f"{repository} snapshot is not a non-symlink directory: {snapshot}"], None
+    expected = snapshot_index.get((repository, revision))
+    if expected is None:
+        return [
+            f"{repository} revision {revision} is absent from the Hugging Face cache index"
+        ], None
+    # Refuse a caller-returned path that is not lexically the indexed path before
+    # resolving or walking it.  A bad downloader return must not make pull inspect an
+    # unrelated tree merely to discover that it was unrelated.
+    if Path(os.path.abspath(snapshot)) != Path(os.path.abspath(expected)):
+        return [
+            f"{repository} snapshot path {snapshot} does not equal cache-indexed "
+            f"revision path {expected}"
+        ], None
+    if (
+        expected.is_symlink()
+        or expected.parent.is_symlink()
+        or expected.parent.parent.is_symlink()
+    ):
+        return [f"{repository} snapshot is not the exact non-symlink cache-index path"], None
+    if not expected.is_dir():
+        return [
+            f"{repository} snapshot is not a non-symlink directory: {expected}"
+        ], None
+    try:
+        expected_resolved = expected.resolve(strict=True)
+        repository_cache_root = expected.parent.parent.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return [f"{repository} indexed snapshot cannot be resolved: {exc}"], None
+
+    unsafe_entries: list[str] = []
+    snapshot_files: list[str] = []
+    try:
+        for entry in expected_resolved.rglob("*"):
+            if entry.is_symlink():
+                target = entry.resolve(strict=True)
+                if not target.is_file() or not target.is_relative_to(
+                    repository_cache_root
+                ):
+                    unsafe_entries.append(str(entry.relative_to(expected_resolved)))
+            elif entry.is_file():
+                target = entry.resolve(strict=True)
+                if not target.is_relative_to(repository_cache_root):
+                    unsafe_entries.append(str(entry.relative_to(expected_resolved)))
+            if entry.is_file():
+                snapshot_files.append(entry.relative_to(expected_resolved).as_posix())
+    except (OSError, RuntimeError) as exc:
+        return [f"{repository} snapshot tree cannot be resolved safely: {exc}"], None
+    if unsafe_entries:
+        return [
+            f"{repository} snapshot entries resolve outside its repository cache: "
+            f"{sorted(unsafe_entries)!r}"
+        ], None
+
+    issues = [
+        f"{repository} is missing allow_pattern {pattern}"
+        for pattern in patterns
+        if not any(fnmatch.fnmatch(name, pattern) for name in snapshot_files)
+    ]
+    if issues:
+        return issues, None
+    try:
+        return [], _tree_bytes(expected_resolved)
+    except OSError as exc:
+        return [f"{repository} snapshot bytes cannot be measured safely: {exc}"], None
+
+
+def hub_materialization_issues(
+    package: Package, materialized: dict,
+) -> list[str]:
+    """Return cheap live integrity failures for revision-pinned Hub snapshots."""
+    kind = package.source["type"]
+    if kind not in {"huggingface", "huggingface_multi"}:
+        return []
+
+    snapshots: list[tuple[str, str, Path | None, tuple[str, ...]]] = []
+    if kind == "huggingface":
+        value = materialized.get("path")
+        snapshots.append((
+            package.source["repo"],
+            package.source["revision"],
+            Path(str(value)) if value else None,
+            tuple(package.source.get("allow_patterns", ())),
+        ))
+    else:
+        values = materialized.get("paths")
+        values = values if isinstance(values, dict) else {}
+        for repository in package.source["repos"]:
+            value = values.get(repository["repo"])
+            snapshots.append((
+                repository["repo"],
+                repository["revision"],
+                Path(str(value)) if value else None,
+                tuple(repository.get("allow_patterns", ())),
+            ))
+
+    try:
+        snapshot_index = _hub_snapshot_index()
+    except Exception as exc:  # noqa: BLE001 - no cache identity means no trusted snapshot
+        return [f"Hugging Face cache identity cannot be inspected: {exc}"]
+    issues: list[str] = []
+    actual_bytes = 0
+    all_usable = True
+    for repository, revision, snapshot, patterns in snapshots:
+        snapshot_issues, byte_count = _inspect_hub_snapshot(
+            repository, revision, snapshot, patterns, snapshot_index
+        )
+        issues.extend(snapshot_issues)
+        if byte_count is None:
+            all_usable = False
+        else:
+            actual_bytes += byte_count
+    recorded_bytes = materialized.get("bytes")
+    if isinstance(recorded_bytes, bool) or not isinstance(recorded_bytes, int):
+        issues.append("materialization receipt has no integer bytes measurement")
+    elif all_usable and actual_bytes != recorded_bytes:
+        issues.append(
+            f"snapshot bytes changed: recorded {recorded_bytes}, current {actual_bytes}"
+        )
+    return issues
+
+
 # --------------------------------------------------------------------------------------
 # Injected external surfaces
 # --------------------------------------------------------------------------------------
@@ -104,6 +279,10 @@ class Toolchain:
     def run(self, args: list[str], *, cwd: Path | None = None,
             timeout: int = 3600) -> subprocess.CompletedProcess:
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+
+    def file_digest(self, path: Path) -> str:
+        """Hash a checkout file; injectable so tests can model pinned upstream bytes."""
+        return sha256_file(path)
 
     def create_environment(self, environment: Environment, target: Path) -> None:
         """`uv venv` then `uv pip sync` — no resolution at provisioning time, ever."""
@@ -133,10 +312,29 @@ class Toolchain:
         if result.returncode != 0:
             return {}
         frozen: dict[str, str] = {}
-        for line in result.stdout.splitlines():
-            if "==" in line and not line.startswith("#"):
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("-e "):
+                source = line[3:].strip()
+                try:
+                    fragment = urllib.parse.urlsplit(source).fragment
+                except ValueError:
+                    fragment = ""
+                egg = urllib.parse.parse_qs(fragment).get("egg", [])
+                name = _distribution_name(egg[0]) if egg else f"<editable:{source}>"
+                frozen[name] = f"-e {source}"
+            elif " @ " in line:
+                name, _, source = line.partition(" @ ")
+                frozen[_distribution_name(name)] = f"@ {source.strip()}"
+            elif "==" in line:
                 name, _, version = line.partition("==")
-                frozen[name.strip().lower().replace("_", "-")] = version.strip()
+                frozen[_distribution_name(name)] = version.strip()
+            else:
+                # Unknown freeze syntax is installed state too. A stable synthetic name makes
+                # equality fail closed instead of silently discarding the distribution.
+                frozen[f"<unparsed:{line}>"] = line
         return frozen
 
     def clone(self, repo: str, commit: str, target: Path) -> None:
@@ -177,6 +375,53 @@ class Toolchain:
                 f"{result.stderr.strip()}",
             )
 
+    def clean_ignored_checkout(self, checkout: Path) -> None:
+        """Remove install-time ignored artifacts before the checkout becomes executable."""
+        result = self.run(["git", "clean", "-fdX"], cwd=checkout)
+        if result.returncode != 0:
+            raise ProvisioningError(
+                "checkout_cleanup_failed",
+                f"could not remove ignored build artifacts from {checkout.name}: "
+                f"{result.stderr.strip()}",
+            )
+
+    def inspect_checkout(self, checkout: Path) -> CheckoutState:
+        """Read HEAD plus every provenance-relevant tracked and untracked path.
+
+        Ignored bytecode and extension modules can still be imported from a checkout, so the
+        second ``ls-files`` invocation is intentional.  A default ``git status`` would hide
+        exactly the files this check exists to catch.
+        """
+
+        def git(*arguments: str) -> str:
+            try:
+                result = self.run(["git", *arguments], cwd=checkout)
+            except OSError as exc:
+                raise ValueError(f"could not inspect source checkout: {exc}") from exc
+            if result.returncode != 0:
+                detail = result.stderr.strip() or result.stdout.strip()
+                raise ValueError(
+                    f"git {' '.join(arguments)} failed for {checkout}: {detail}"
+                )
+            return result.stdout
+
+        head = git("rev-parse", "--verify", "HEAD^{commit}").strip()
+        modified = tuple(sorted(filter(None, git(
+            "diff", "--name-only", "--no-ext-diff", "--no-textconv", "--no-renames",
+            "HEAD", "--",
+        ).splitlines())))
+        ordinary_untracked = filter(None, git(
+            "ls-files", "--others", "--exclude-standard",
+        ).splitlines())
+        ignored_untracked = filter(None, git(
+            "ls-files", "--others", "--ignored", "--exclude-standard",
+        ).splitlines())
+        return CheckoutState(
+            head=head,
+            modified=modified,
+            untracked=tuple(sorted({*ordinary_untracked, *ignored_untracked})),
+        )
+
     def swift_build(self, checkout: Path) -> None:
         if self.which("swift") is None:
             raise ProvisioningError(
@@ -202,6 +447,11 @@ class Toolchain:
                           cwd=checkout, timeout=600)
         return result.returncode == 0
 
+    def built_product_runs(self, executable: Path) -> bool:
+        """Probe an already-built product without requiring its provisioning toolchain."""
+        result = self.run([str(executable), "--help"], cwd=executable.parent, timeout=600)
+        return result.returncode == 0
+
 
 @dataclass
 class Fetcher:
@@ -219,7 +469,14 @@ class Fetcher:
             return set()
         return {revision.commit_hash for repo in cache.repos for revision in repo.revisions}
 
-    def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
+    def hf_snapshot(
+        self,
+        repo: str,
+        revision: str,
+        *,
+        force: bool = False,
+        allow_patterns: tuple[str, ...] | None = None,
+    ) -> Path:
         """Materialize a revision into the shared Hub cache, resuming a partial download.
 
         `force` re-downloads what the cache already holds, and it is what makes `pull --repair`
@@ -236,7 +493,12 @@ class Fetcher:
                 missing_tool="huggingface_hub",
                 fix="uv pip install huggingface_hub",
             ) from exc
-        return Path(snapshot_download(repo, revision=revision, force_download=force))
+        return Path(snapshot_download(
+            repo,
+            revision=revision,
+            force_download=force,
+            allow_patterns=list(allow_patterns) if allow_patterns is not None else None,
+        ))
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Delete exactly these revisions from the Hub cache. Returns what went, and its size.
@@ -270,31 +532,87 @@ class Fetcher:
         return deletable, freed
 
     def url_file(self, url: str, sha256: str, target: Path) -> Path:
-        """The vad.py pattern: digest check and atomic rename, kept identical on purpose."""
-        if target.is_file() and sha256_file(target) == sha256:
-            return target
-        target.parent.mkdir(parents=True, exist_ok=True)
-        partial = target.with_name(f".{target.name}.{os.getpid()}.part")
+        """Hash and publish through one no-follow descriptor bound to the managed parent."""
         try:
-            request = urllib.request.Request(
-                url, headers={"User-Agent": "audio-processing-cli/0.1"})
-            with (urllib.request.urlopen(request, timeout=60) as response,
-                  partial.open("wb") as output):
-                while chunk := response.read(1024 * 1024):
-                    output.write(chunk)
-            actual = sha256_file(partial)
-            if actual != sha256:
-                raise ProvisioningError(
-                    "package_integrity_failed",
-                    f"{target.name} checksum mismatch: expected {sha256}, got {actual}",
-                    expected=sha256, actual=actual,
+            with bound_directory(
+                target.parent,
+                root=paths.root(),
+                create=True,
+            ) as parent_descriptor:
+                try:
+                    existing = sha256_regular_file_at(
+                        parent_descriptor, target.name
+                    )
+                except OSError:
+                    # An unreadable cache entry cannot earn the fast path. Replacement is
+                    # descriptor-relative, so retrying the download does not follow it.
+                    existing = None
+                if existing == sha256:
+                    return target
+                partial_name = (
+                    f".audio-download-{os.getpid()}-{uuid.uuid4().hex}.part"
                 )
-            os.replace(partial, target)
+                created = False
+                temporary_identity = None
+                try:
+                    descriptor = os.open(
+                        partial_name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                        | getattr(os, "O_NOFOLLOW", 0)
+                        | getattr(os, "O_CLOEXEC", 0),
+                        0o666,
+                        dir_fd=parent_descriptor,
+                    )
+                    created = True
+                    try:
+                        temporary_identity = file_identity_from_descriptor(
+                            descriptor, target.parent / partial_name
+                        )
+                    finally:
+                        if temporary_identity is None:
+                            os.close(descriptor)
+                    if temporary_identity is None:
+                        raise OSError(
+                            f"download temporary is not a regular file: "
+                            f"{target.parent / partial_name}"
+                        )
+                    request = urllib.request.Request(
+                        url, headers={"User-Agent": "audio-processing-cli/0.1"})
+                    with os.fdopen(descriptor, "wb") as output:
+                        response = urllib.request.urlopen(request, timeout=60)
+                        with response:
+                            digest = hashlib.sha256()
+                            while chunk := response.read(1024 * 1024):
+                                output.write(chunk)
+                                digest.update(chunk)
+                            output.flush()
+                            os.fsync(output.fileno())
+                    actual = digest.hexdigest()
+                    if actual != sha256:
+                        raise ProvisioningError(
+                            "package_integrity_failed",
+                            f"{target.name} checksum mismatch: expected {sha256}, got {actual}",
+                            expected=sha256, actual=actual,
+                        )
+                    assert_directory_binding(parent_descriptor, target.parent)
+                    publish_temporary_file(
+                        parent_descriptor,
+                        partial_name,
+                        target.name,
+                        output_path=target,
+                        force=True,
+                        temporary_identity=temporary_identity,
+                        replace_non_directory=True,
+                    )
+                    created = False
+                finally:
+                    if created and temporary_identity is not None:
+                        cleanup_temporary_file(
+                            parent_descriptor, partial_name, temporary_identity
+                        )
         except (OSError, urllib.error.URLError) as exc:
             raise ProvisioningError("download_failed",
                                     f"could not download {url}: {exc}") from exc
-        finally:
-            partial.unlink(missing_ok=True)
         return target
 
 
@@ -315,35 +633,276 @@ def blank_registry() -> dict:
     }
 
 
+def _reject_duplicate_registry_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key {key!r}")
+        value[key] = item
+    return value
+
+
 def load_registry() -> dict:
     target = paths.registry_path()
-    if not target.is_file():
-        return blank_registry()
     try:
-        document = json.loads(target.read_text())
-    except json.JSONDecodeError as exc:
+        with bound_directory(
+            target.parent,
+            root=paths.root(),
+            create=False,
+        ) as parent_descriptor:
+            try:
+                state = os.stat(
+                    target.name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                return blank_registry()
+            if stat.S_ISLNK(state.st_mode):
+                raise ProvisioningError(
+                    "registry_unreadable",
+                    f"{target} is a symlink, not this root's registry",
+                    fix=f"Move {target} aside and run audio packages pull again",
+                )
+            if not stat.S_ISREG(state.st_mode):
+                raise ProvisioningError(
+                    "registry_unreadable",
+                    f"{target} exists but is not a regular file",
+                    fix=f"Move {target} aside and run audio packages pull again",
+                )
+            descriptor = os.open(
+                target.name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=parent_descriptor,
+            )
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                opened = os.fstat(handle.fileno())
+                if not stat.S_ISREG(opened.st_mode):
+                    raise ProvisioningError(
+                        "registry_unreadable",
+                        f"{target} exists but is not a regular file",
+                        fix=f"Move {target} aside and run audio packages pull again",
+                    )
+                raw = handle.read()
+    except FileNotFoundError:
+        # An absent root is the initial, unprovisioned state.  It is different
+        # from a present redirected or unreadable root, which fails below.
+        return blank_registry()
+    except ProvisioningError:
+        raise
+    except (OSError, UnicodeError) as exc:
+        raise ProvisioningError(
+            "registry_unreadable", f"could not read {target}: {exc}",
+            fix=f"Restore access to {target}, or move it aside and run audio packages pull again",
+        ) from exc
+    try:
+        document = json.loads(
+            raw, object_pairs_hook=_reject_duplicate_registry_keys
+        )
+    except (json.JSONDecodeError, ValueError) as exc:
         raise ProvisioningError(
             "registry_unreadable", f"{target} is not valid JSON: {exc}",
             fix=f"Move {target} aside and run audio packages pull again",
         ) from exc
+    if not isinstance(document, dict):
+        raise ProvisioningError(
+            "registry_unreadable", f"{target} must contain a JSON object",
+            fix=f"Move {target} aside and run audio packages pull again",
+        )
     if document.get("schema_version") != REGISTRY_SCHEMA_VERSION:
         raise ProvisioningError(
             "registry_unreadable",
             f"{target} has schema_version {document.get('schema_version')!r}, expected "
             f"{REGISTRY_SCHEMA_VERSION}",
         )
-    document.setdefault("environments", {})
-    document.setdefault("packages", {})
+    expected_root = str(paths.root())
+    if document.get("root") != expected_root:
+        raise ProvisioningError(
+            "registry_unreadable",
+            f"{target} records provisioning root {document.get('root')!r}, expected "
+            f"{expected_root!r}",
+            fix=f"Restore {target} from this root, or move it aside and pull again",
+        )
+    for key in ("environments", "packages"):
+        value = document.setdefault(key, {})
+        if not isinstance(value, dict) or any(
+            not isinstance(identifier, str) or not isinstance(entry, dict)
+            for identifier, entry in value.items()
+        ):
+            raise ProvisioningError(
+                "registry_unreadable",
+                f"{target} field {key!r} must be an object of object entries",
+                fix=f"Move {target} aside and run audio packages pull again",
+            )
+        if key == "packages":
+            malformed = sorted(
+                identifier
+                for identifier, entry in value.items()
+                if "materialized" in entry
+                and not isinstance(entry["materialized"], dict)
+            )
+            if malformed:
+                raise ProvisioningError(
+                    "registry_unreadable",
+                    f"{target} package materialized fields must be objects: {malformed}",
+                    fix=f"Move {target} aside and run audio packages pull again",
+                )
+            for identifier, entry in value.items():
+                retry_revisions = entry.get("hub_revisions_pre_existing")
+                if retry_revisions is not None and (
+                    not isinstance(retry_revisions, list)
+                    or any(not isinstance(revision, str) for revision in retry_revisions)
+                ):
+                    raise ProvisioningError(
+                        "registry_unreadable",
+                        f"{target} package {identifier!r} hub_revisions_pre_existing "
+                        "must be an array of strings",
+                        fix=f"Move {target} aside and run audio packages pull again",
+                    )
+                materialized = entry.get("materialized", {})
+                byte_count = materialized.get("bytes")
+                if byte_count is not None and (
+                    isinstance(byte_count, bool)
+                    or not isinstance(byte_count, int)
+                    or byte_count < 0
+                ):
+                    raise ProvisioningError(
+                        "registry_unreadable",
+                        f"{target} package {identifier!r} materialized bytes must be a "
+                        "non-negative integer",
+                        fix=f"Move {target} aside and run audio packages pull again",
+                    )
+                for location_key in ("path", "checkout"):
+                    location = materialized.get(location_key)
+                    if location is not None and not isinstance(location, str):
+                        raise ProvisioningError(
+                            "registry_unreadable",
+                            f"{target} package {identifier!r} materialized "
+                            f"{location_key} must be a string",
+                            fix=f"Move {target} aside and run audio packages pull again",
+                        )
+                locations = materialized.get("paths")
+                if locations is not None and (
+                    not isinstance(locations, dict)
+                    or any(
+                        not isinstance(repo, str) or not isinstance(location, str)
+                        for repo, location in locations.items()
+                    )
+                ):
+                    raise ProvisioningError(
+                        "registry_unreadable",
+                        f"{target} package {identifier!r} materialized paths must map "
+                        "strings to strings",
+                        fix=f"Move {target} aside and run audio packages pull again",
+                    )
+                for revisions_key in (
+                    "hub_revisions", "hub_revisions_pre_existing",
+                ):
+                    revisions = materialized.get(revisions_key)
+                    if revisions is not None and (
+                        not isinstance(revisions, list)
+                        or any(not isinstance(revision, str) for revision in revisions)
+                    ):
+                        raise ProvisioningError(
+                            "registry_unreadable",
+                            f"{target} package {identifier!r} materialized "
+                            f"{revisions_key} must be an array of strings",
+                            fix=f"Move {target} aside and run audio packages pull again",
+                        )
     return document
 
 
 def save_registry(document: dict) -> None:
-    """Atomic rename, so a registry is never observed half-written."""
+    """Atomically publish through one descriptor bound to the managed root."""
     target = paths.registry_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    partial = target.with_name(f".{target.name}.{os.getpid()}.tmp")
-    partial.write_text(json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
-    os.replace(partial, target)
+    try:
+        with bound_directory(
+            target.parent,
+            root=paths.root(),
+            create=True,
+        ) as parent_descriptor:
+            try:
+                existing = os.stat(
+                    target.name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                existing = None
+            if existing is not None and not stat.S_ISREG(existing.st_mode):
+                raise ProvisioningError(
+                    "registry_unreadable",
+                    f"{target} exists but is not a regular file",
+                    fix=f"Move {target} aside and run audio packages pull again",
+                )
+
+            partial_name = (
+                f".audio-registry-{os.getpid()}-{uuid.uuid4().hex}.tmp"
+            )
+            created = False
+            temporary_identity = None
+            try:
+                descriptor = os.open(
+                    partial_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o666,
+                    dir_fd=parent_descriptor,
+                )
+                created = True
+                try:
+                    temporary_identity = file_identity_from_descriptor(
+                        descriptor, target.parent / partial_name
+                    )
+                finally:
+                    if temporary_identity is None:
+                        os.close(descriptor)
+                if temporary_identity is None:
+                    raise OSError(
+                        f"registry temporary is not a regular file: "
+                        f"{target.parent / partial_name}"
+                    )
+                with os.fdopen(
+                    descriptor, "w", encoding="utf-8", newline="\n"
+                ) as handle:
+                    handle.write(
+                        json.dumps(
+                            document,
+                            indent=2,
+                            sort_keys=True,
+                            ensure_ascii=False,
+                        ) + "\n"
+                    )
+                    handle.flush()
+                    os.fsync(handle.fileno())
+
+                assert_directory_binding(parent_descriptor, target.parent)
+                publish_temporary_file(
+                    parent_descriptor,
+                    partial_name,
+                    target.name,
+                    output_path=target,
+                    force=True,
+                    temporary_identity=temporary_identity,
+                )
+                created = False
+            finally:
+                if created and temporary_identity is not None:
+                    cleanup_temporary_file(
+                        parent_descriptor, partial_name, temporary_identity
+                    )
+    except ProvisioningError:
+        raise
+    except (OSError, UnicodeError) as exc:
+        raise ProvisioningError(
+            "registry_unreadable",
+            f"could not write {target} safely: {exc}",
+            fix=f"Restore access to {target}, or move it aside and pull again",
+        ) from exc
 
 
 def is_ready(document: dict, package_id: str) -> bool:
@@ -389,7 +948,11 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
                 "package_unknown", f"no such package: {', '.join(unknown)}", exit_code=2,
                 allowed=sorted(catalog),
             )
-        return [catalog[identifier] for identifier in package_ids]
+        # A repeated positional id is still one package selection.  Besides duplicating the
+        # receipt, preserving duplicates is destructive under ``--repair``: the same weights are
+        # force-downloaded or the same checkout is rebuilt twice.  ``dict`` retains the caller's
+        # first-occurrence order while making the selection a stable set.
+        return [catalog[identifier] for identifier in dict.fromkeys(package_ids)]
     if stack is not None:
         chosen = [package for package in catalog.values() if stack in package.stacks]
         if not chosen:
@@ -401,6 +964,22 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
     raise ProvisioningError("nothing_selected", "name packages, or pass --stack", exit_code=2)
 
 
+def _path_location_fields(entry: dict) -> dict:
+    """The one location shape a materialization actually has; absent keys stay absent."""
+    materialized = entry.get("materialized", {})
+    locations = materialized.get("paths")
+    fields: dict = {}
+    if isinstance(locations, dict):
+        fields["locations"] = dict(sorted(locations.items()))
+    else:
+        location = materialized.get("path")
+        if location is not None:
+            fields["location"] = location
+    if materialized.get("checkout") is not None:
+        fields["checkout"] = materialized["checkout"]
+    return fields
+
+
 # --------------------------------------------------------------------------------------
 # Operations
 # --------------------------------------------------------------------------------------
@@ -409,6 +988,7 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
 def path_report() -> dict:
     """Where everything is, so a session with no provisioning history can still find it."""
     document = load_registry()
+    catalog = packages()
     return {
         "root": str(paths.root()),
         "registry": str(paths.registry_path()),
@@ -417,8 +997,8 @@ def path_report() -> dict:
         # the models directory is for rather than printing a path that is often absent.
         "weights": {
             "location": "the Hugging Face cache, shared with other tools",
-            "note": "per-package `location` below is authoritative; the registry records the "
-                    "revisions this root materialized there",
+            "note": "per-package `location` or `locations` below is authoritative; the "
+                    "registry records the revisions this root materialized there",
         },
         "models": {
             "path": str(paths.models_dir()),
@@ -434,7 +1014,14 @@ def path_report() -> dict:
         "packages": {
             identifier: {
                 "state": entry.get("state", "absent"),
-                "location": entry.get("materialized", {}).get("path"),
+                **(
+                    {"location": str(
+                        paths.models_dir() / str(catalog[identifier].source["filename"])
+                    )}
+                    if identifier in catalog
+                    and catalog[identifier].source["type"] == "url"
+                    else _path_location_fields(entry)
+                ),
             }
             for identifier, entry in sorted(document["packages"].items())
         },
@@ -458,11 +1045,16 @@ def list_report() -> dict:
             total_known += size
         listed.append({
             "package": identifier,
-            "environment": entry.get("environment"),
+            "environment": package.environment if package else entry.get("environment"),
             "state": entry.get("state"),
             "bytes": size,
-            "license_declared": entry.get("license_declared"),
-            "license_reviewed": entry.get("license_reviewed", False),
+            "license_declared": (
+                package.license_declared if package else entry.get("license_declared")
+            ),
+            "license_reviewed": (
+                package.license_reviewed
+                if package else entry.get("license_reviewed", False)
+            ),
             "used_by_stacks": list(package.stacks) if package else [],
         })
     return {
@@ -489,6 +1081,18 @@ class Provisioner:
         environment = environments()[name]
         if not environment.provisioned:
             return False
+        target = paths.env_dir(name)
+        target_issue = managed_environment_creation_target_issue(name)
+        if target_issue is not None:
+            raise ProvisioningError(
+                "environment_drifted",
+                target_issue,
+                environment=name,
+                fix=(
+                    f"Replace the redirected environment path {target} and run "
+                    "audio packages verify --repair"
+                ),
+            )
 
         if not environment.has_interpreter:
             # `swift` has no interpreter and so nothing to sync, but it still holds a build
@@ -497,7 +1101,6 @@ class Provisioner:
             # untracked directory is one nothing can reclaim.
             if document["environments"].get(name, {}).get("state") == "ready":
                 return False
-            target = paths.env_dir(name)
             target.mkdir(parents=True, exist_ok=True)
             document["environments"][name] = {
                 "state": "ready", "path": str(target), "python": None, "lock_sha256": None,
@@ -511,7 +1114,6 @@ class Provisioner:
         if entry.get("state") == "ready" and entry.get("lock_sha256") == lock_digest:
             return False
 
-        target = paths.env_dir(name)
         # Intent first: a crash between here and the flip leaves a `creating` entry, which
         # reads as absent and as reclaimable rather than as a working environment.
         document["environments"][name] = {
@@ -548,6 +1150,19 @@ class Provisioner:
         an instruction, so there the missing tool is still exit 3: silently skipping what a caller
         asked for by name is worse than refusing.
         """
+        root_issue = managed_provisioning_root_issue()
+        if root_issue is not None:
+            raise ProvisioningError(
+                "environment_drifted",
+                root_issue,
+                fix=(
+                    f"Replace the redirected provisioning root {paths.root()} and run "
+                    "audio packages verify --repair"
+                ),
+            )
+        # Refuse a redirected root before even reading its registry.  Reading first
+        # crosses the same ownership boundary as writing and can also surface attacker-
+        # controlled JSON as a misleading registry error instead of the root failure.
         document = load_registry()
         # Read the cache once, before anything downloads. Everything after this point works
         # from that snapshot, so a revision fetched by this pull is never mistaken for one that
@@ -714,14 +1329,39 @@ class Provisioner:
             # would spend the bytes to arrive at the same file.
             resolved = self.fetcher.url_file(package.source["url"], package.source["sha256"],
                                              target)
+            _managed, location_issue = managed_url_artifact_path(package, resolved)
+            if location_issue is not None:
+                raise ProvisioningError(
+                    "package_integrity_failed",
+                    location_issue,
+                    fix=f"audio packages pull --repair {package.id}",
+                )
             return {"path": str(resolved), "bytes": _tree_bytes(resolved),
                     "digest_verified": True}
 
         if kind == "huggingface":
             revision = package.source["revision"]
-            snapshot = self.fetcher.hf_snapshot(package.source["repo"], revision, force=repair)
+            patterns = package.source.get("allow_patterns")
+            if patterns is None:
+                snapshot = self.fetcher.hf_snapshot(
+                    package.source["repo"], revision, force=repair
+                )
+            else:
+                snapshot = self.fetcher.hf_snapshot(
+                    package.source["repo"],
+                    revision,
+                    force=repair,
+                    allow_patterns=tuple(patterns),
+                )
+            snapshot_bytes = self._require_hub_snapshot(
+                package,
+                package.source["repo"],
+                revision,
+                snapshot,
+                tuple(patterns or ()),
+            )
             result = {
-                "path": str(snapshot), "bytes": _tree_bytes(snapshot),
+                "path": str(snapshot), "bytes": snapshot_bytes,
                 "revision": revision,
                 # Only what this pull fetched is ours to delete later, decided before the
                 # download rather than after it — see _pre_existing_revisions.
@@ -736,10 +1376,22 @@ class Provisioner:
             total = 0
             ours: list[str] = []
             for repo in package.source["repos"]:
-                snapshot = self.fetcher.hf_snapshot(repo["repo"], repo["revision"],
-                                                    force=repair)
+                patterns = repo.get("allow_patterns")
+                snapshot = self.fetcher.hf_snapshot(
+                    repo["repo"],
+                    repo["revision"],
+                    force=repair,
+                    allow_patterns=tuple(patterns) if patterns is not None else None,
+                )
+                snapshot_bytes = self._require_hub_snapshot(
+                    package,
+                    repo["repo"],
+                    repo["revision"],
+                    snapshot,
+                    tuple(patterns or ()),
+                )
                 snapshots[repo["repo"]] = str(snapshot)
-                total += _tree_bytes(snapshot)
+                total += snapshot_bytes
                 if repo["revision"] not in pre_existing:
                     ours.append(repo["revision"])
             result = {
@@ -755,12 +1407,47 @@ class Provisioner:
 
         if kind == "git+build":
             checkout = paths.checkout_dir(package.environment, package.id)
-            if repair:
-                # Rebuilding in place would trust the checkout whose state is what is in doubt:
-                # `clone` skips an existing directory, so a dirty or half-built tree survives.
-                _delete(checkout)
+            # This method only runs for a non-ready package or an explicit repair. Reusing a
+            # prior tree would let an interrupted pull's untracked build hook run before verify.
+            _delete_managed(checkout)
             checkout.parent.mkdir(parents=True, exist_ok=True)
             self.toolchain.clone(package.source["repo"], package.source["commit"], checkout)
+            applied, digests = materialize_checkout_patch(
+                package, checkout, self.toolchain
+            )
+            try:
+                state = self.toolchain.inspect_checkout(checkout)
+            except ValueError as exc:
+                raise ProvisioningError(
+                    "checkout_integrity_failed",
+                    f"could not inspect fresh checkout: {exc}",
+                    package=package.id,
+                    fix=f"audio packages pull --repair {package.id}",
+                ) from exc
+            _expected_patches, expected_names, _expected_digests = (
+                checkout_patch_expectation(package)
+            )
+            if (
+                state.head != package.source["commit"]
+                or set(state.modified) != set(expected_names)
+                or state.untracked
+            ):
+                raise ProvisioningError(
+                    "checkout_integrity_failed",
+                    f"{package.id} checkout was not exact before build",
+                    package=package.id,
+                    expected={
+                        "head": package.source["commit"],
+                        "modified": sorted(expected_names),
+                        "untracked": [],
+                    },
+                    actual={
+                        "head": state.head,
+                        "modified": list(state.modified),
+                        "untracked": list(state.untracked),
+                    },
+                    fix=f"audio packages pull --repair {package.id}",
+                )
             self.toolchain.swift_build(checkout)
             product = package.source["product"]
             runs = self.toolchain.swift_product_runs(checkout, product)
@@ -777,42 +1464,105 @@ class Provisioner:
                     package=package.id, product=product, built=True,
                     fix=f"audio packages pull --repair {package.id}",
                 )
+            candidates = built_product_candidates(checkout, product)
+            if len(candidates) != 1:
+                raise ProvisioningError(
+                    "package_build_unusable",
+                    f"{package.id} built, but expected one contained executable product "
+                    f"{product!r} and found {len(candidates)}",
+                    package=package.id, product=product, built=True,
+                    fix=f"audio packages pull --repair {package.id}",
+                )
+            executable = candidates[0]
+            product_path = executable.relative_to(checkout.resolve(strict=True)).as_posix()
             return {"path": str(checkout), "bytes": _tree_bytes(checkout / ".build"),
                     "revision": package.source["commit"], "built": True,
-                    "product_runs": runs}
+                    "product_runs": runs, "product_path": product_path,
+                    "product_sha256": sha256_file(executable),
+                    "patches_applied": applied,
+                    "patched_file_digests": digests}
 
         raise ManifestError(f"{package.id}: unsupported source type {kind!r}")
+
+    @staticmethod
+    def _require_hub_snapshot(
+        package: Package,
+        repository: str,
+        revision: str,
+        snapshot: Path,
+        patterns: tuple[str, ...],
+    ) -> int:
+        """Bind and measure one download before pull performs any subsequent work."""
+        try:
+            snapshot_index = _hub_snapshot_index()
+        except Exception as exc:  # noqa: BLE001 - no index means no trusted materialization
+            issues = [f"Hugging Face cache identity cannot be inspected: {exc}"]
+        else:
+            issues, byte_count = _inspect_hub_snapshot(
+                repository, revision, snapshot, patterns, snapshot_index
+            )
+        if issues:
+            raise ProvisioningError(
+                "package_integrity_failed",
+                "; ".join(issues),
+                package=package.id,
+                fix=f"audio packages pull --repair {package.id}",
+            )
+        assert byte_count is not None
+        return byte_count
 
     def _checkout_and_install(self, package: Package, *, repair: bool = False) -> dict:
         """Pinned source checkout, patch, and a --no-deps install into the environment."""
         if package.checkout is None:
             return {}
         checkout = paths.checkout_dir(package.environment, package.id)
-        if repair:
-            # Same reason as the Swift build: a repair of `patch_not_applied` must not re-patch a
-            # tree that may also be at the wrong commit. Re-clone, then patch.
-            _delete(checkout)
+        # A ready package is skipped before this method. Every invocation therefore represents
+        # a fresh materialization or explicit repair and starts from an absent checkout; otherwise
+        # an ordinary untracked setup hook could execute during install before later verification.
+        _delete_managed(checkout)
         checkout.parent.mkdir(parents=True, exist_ok=True)
-        self.toolchain.clone(package.checkout["repo"], package.checkout["commit"], checkout)
+        resolved_commit = package.checkout.get(
+            "resolved_commit", package.checkout["commit"])
+        self.toolchain.clone(package.checkout["repo"], resolved_commit, checkout)
 
-        applied: list[str] = []
-        digests: dict[str, str] = {}
-        patch_name = package.checkout.get("patch")
-        if patch_name:
-            from .environments import HERE
-
-            patch = HERE / patch_name
-            if not patch.is_file():
-                raise ProvisioningError("patch_missing", f"{patch} is not in the installed wheel",
-                                        patch=patch_name, package=package.id)
-            self.toolchain.apply_patch(checkout, patch)
-            applied.append(Path(patch_name).name)
-            for touched in _patched_files(patch, checkout):
-                if touched.is_file():
-                    digests[str(touched.relative_to(checkout))] = sha256_file(touched)
+        applied, digests = materialize_checkout_patch(
+            package, checkout, self.toolchain
+        )
+        _expected_patches, expected_names, _expected_digests = (
+            checkout_patch_expectation(package)
+        )
+        try:
+            state = self.toolchain.inspect_checkout(checkout)
+        except ValueError as exc:
+            raise ProvisioningError(
+                "checkout_integrity_failed", f"could not inspect fresh checkout: {exc}",
+                package=package.id, fix=f"audio packages pull --repair {package.id}",
+            ) from exc
+        if state.head != resolved_commit or set(state.modified) != set(expected_names) \
+                or state.untracked:
+            raise ProvisioningError(
+                "checkout_integrity_failed",
+                f"{package.id} checkout was not exact before install",
+                package=package.id,
+                expected={
+                    "head": resolved_commit,
+                    "modified": sorted(expected_names),
+                    "untracked": [],
+                },
+                actual={
+                    "head": state.head,
+                    "modified": list(state.modified),
+                    "untracked": list(state.untracked),
+                },
+                fix=f"audio packages pull --repair {package.id}",
+            )
 
         self.toolchain.install_checkout(paths.env_python(package.environment), checkout)
-        return {"checkout": str(checkout), "checkout_commit": package.checkout["commit"],
+        # Stage interpreters use ``-B`` so they never recreate ignored bytecode.  Cleaning
+        # anything the wheel build left in the source tree makes a successful pull start
+        # from the same inspectable state that run preflight requires.
+        self.toolchain.clean_ignored_checkout(checkout)
+        return {"checkout": str(checkout), "checkout_commit": resolved_commit,
                 "patches_applied": applied, "patched_file_digests": digests}
 
     # -- verify ------------------------------------------------------------------------
@@ -823,6 +1573,15 @@ class Provisioner:
         verified: list[dict] = []
         failed: list[dict] = []
         environment_states: dict[str, str] = {}
+        built_runtime_probes: dict[str, bool] = {}
+        invalid_environment_roots: set[str] = set()
+        ready_packages_by_environment: dict[str, list[str]] = {}
+        for identifier, package_entry in document["packages"].items():
+            package = catalog.get(identifier)
+            if package is not None and package_entry.get("state") == "ready":
+                ready_packages_by_environment.setdefault(package.environment, []).append(
+                    identifier
+                )
 
         for name, environment in environments().items():
             if not environment.provisioned:
@@ -830,20 +1589,55 @@ class Provisioner:
             entry = document["environments"].get(name)
             if entry is None or entry.get("state") != "ready":
                 environment_states[name] = "absent"
+                dependents = sorted(ready_packages_by_environment.get(name, ()))
+                if dependents:
+                    invalid_environment_roots.add(name)
+                    actual_state = entry.get("state") if isinstance(entry, dict) else None
+                    failed.append({
+                        "environment": name,
+                        "code": "environment_not_ready",
+                        "detail": (
+                            f"registry state is {actual_state or 'absent'!r} while ready "
+                            f"package(s) depend on it: {', '.join(dependents)}"
+                        ),
+                        "packages": dependents,
+                        "fix": (
+                            "audio packages pull --repair " + " ".join(dependents)
+                        ),
+                    })
                 continue
-            # A missing toolchain is a property of the environment, not of what is inside it.
-            # This tool launches the Swift product through `swift run`, so with no toolchain
-            # nothing in that environment can execute whatever the registry holds — and the
-            # registry can legitimately hold something, because a stack pull provisions the
-            # packages that need no toolchain and reports the blocked one. `ok` there would tell
-            # a caller diarization is available on a machine that cannot run it. Not a `failed`
-            # entry: nothing provisioned is broken, the gap is a package `list` already reports
-            # as absent, and no `audio` command installs a toolchain for a `fix` to name.
+            environment_path, environment_path_issue = managed_environment_path(name)
+            if environment_path_issue is not None:
+                invalid_environment_roots.add(name)
+                environment_states[name] = "drifted"
+                failed.append({
+                    "environment": name,
+                    "code": "environment_drifted",
+                    "detail": environment_path_issue,
+                    "examples": {
+                        "environment_root": {
+                            "locked": str(paths.env_dir(name)),
+                            "installed": str(environment_path),
+                        }
+                    },
+                    "fix": (
+                        f"Replace the redirected environment path {paths.env_dir(name)} and "
+                        "run audio packages verify --repair"
+                    ),
+                })
+                continue
+            # Swift is a provisioning dependency until its product exists.  Once the executable
+            # is ready, runtime and verify launch it directly, so removing Swift from PATH must
+            # not turn a still-runnable environment into `blocked`.
             blocked_by = [tool for tool in environment.requires_tool
                           if self.toolchain.which(tool) is None]
             if blocked_by:
-                environment_states[name] = "blocked"
-                continue
+                built_runtime_probes[name] = _environment_built_runtime_runs(
+                    name, document, self.toolchain,
+                )
+                if not built_runtime_probes[name]:
+                    environment_states[name] = "blocked"
+                    continue
             if not environment.has_interpreter:
                 # No interpreter means no lock to compare against. Its packages carry the
                 # checks that apply — that the product builds and runs — so reporting `ok`
@@ -852,12 +1646,56 @@ class Provisioner:
                 continue
             expected = _locked_versions(environment)
             frozen = self.toolchain.frozen_packages(paths.env_python(name))
-            drift = {n: (v, frozen.get(n)) for n, v in expected.items() if frozen.get(n) != v}
+            required_checkouts = _managed_checkout_requirements(document, name)
+            drift = _environment_drift(expected, frozen, required_checkouts)
             if drift and repair:
-                self.toolchain.create_environment(environment, paths.env_dir(name))
-                frozen = self.toolchain.frozen_packages(paths.env_python(name))
-                drift = {n: (v, frozen.get(n)) for n, v in expected.items()
-                         if frozen.get(n) != v}
+                ready_checkouts: list[tuple[Package, Path]] = []
+                checkouts_are_safe = True
+                for identifier, package_entry in sorted(document["packages"].items()):
+                    package = catalog.get(identifier)
+                    if (
+                        package is None
+                        or package.environment != name
+                        or package.checkout is None
+                        or package_entry.get("state") != "ready"
+                    ):
+                        continue
+                    materialized = package_entry.get("materialized", {})
+                    if not isinstance(materialized, dict):
+                        checkouts_are_safe = False
+                        continue
+                    issues = _checkout_integrity_issues(
+                        package, materialized, self.toolchain
+                    )
+                    checkout, checkout_issue = managed_checkout_path(
+                        package, materialized.get("checkout")
+                    )
+                    if issues or checkout_issue is not None or checkout is None:
+                        checkouts_are_safe = False
+                        continue
+                    ready_checkouts.append((package, checkout))
+                if checkouts_are_safe:
+                    lock_digest = sha256_file(environment.lock)
+                    document["environments"][name] = {
+                        "state": "creating",
+                        "path": str(paths.env_dir(name)),
+                        "python": environment.python,
+                        "lock_sha256": lock_digest,
+                        "created_utc": _now(),
+                    }
+                    save_registry(document)
+                    self.toolchain.create_environment(environment, paths.env_dir(name))
+                    for _package, checkout in ready_checkouts:
+                        self.toolchain.install_checkout(
+                            paths.env_python(name), checkout
+                        )
+                        self.toolchain.clean_ignored_checkout(checkout)
+                    document["environments"][name]["state"] = "ready"
+                    save_registry(document)
+                    frozen = self.toolchain.frozen_packages(paths.env_python(name))
+                    drift = _environment_drift(
+                        expected, frozen, required_checkouts
+                    )
             if drift:
                 environment_states[name] = "drifted"
                 failed.append({
@@ -877,34 +1715,160 @@ class Provisioner:
                                "fix": f"audio packages pull --repair {identifier}"})
                 continue
             package = catalog.get(identifier)
+            if package is None:
+                failed.append({
+                    "package": identifier,
+                    "code": "package_unknown",
+                    "detail": "ready registry entry is not present in the installed manifest",
+                    "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
+                })
+                continue
+            # The environment-root verdict owns every path below it.  Once that root is
+            # redirected, do not inspect a checkout or launch a product reached through it;
+            # the environment failure above is the complete, safe diagnosis.
+            if package.environment in invalid_environment_roots:
+                continue
             record: dict = {"package": identifier}
             materialized = entry.get("materialized", {})
+            if not isinstance(materialized, dict):
+                failed.append({
+                    "package": identifier,
+                    "code": "package_integrity_failed",
+                    "detail": "materialized receipt is not an object",
+                    "fix": f"audio packages pull --repair {identifier}",
+                })
+                continue
             # `digest: "ok"` is reserved for the one kind that has something to hash against.
-            if package is not None and package.source["type"] == "url":
-                location = Path(materialized.get("path", ""))
-                if location.is_file() and sha256_file(location) == package.source["sha256"]:
+            if package.source["type"] == "url":
+                location, location_issue = managed_url_artifact_path(
+                    package, materialized.get("path")
+                )
+                digest_matches = False
+                if location_issue is None and location is not None:
+                    try:
+                        digest_matches = (
+                            sha256_file(location) == package.source["sha256"]
+                        )
+                    except OSError as exc:
+                        location_issue = f"could not hash managed artifact {location}: {exc}"
+                if digest_matches:
                     record["digest"] = "ok"
                 else:
                     failed.append({
                         "package": identifier, "code": "package_integrity_failed",
-                        "detail": f"{location} is missing or its digest changed",
+                        "detail": location_issue or (
+                            f"{location} is missing or its digest changed"
+                        ),
                         "fix": f"audio packages pull --repair {identifier}",
                     })
                     continue
-            elif "product_runs" in materialized:
-                if not materialized["product_runs"]:
-                    # Reachable from a registry written before `pull` started refusing this, and
-                    # the reason it has to fail rather than report: the package's whole purpose is
-                    # that executable, so `verified` would otherwise list a package that cannot do
-                    # the one thing it is for.
+            elif package.source["type"] in {
+                "huggingface", "huggingface_multi",
+            }:
+                issues = hub_materialization_issues(package, materialized)
+                if issues:
+                    failed.append({
+                        "package": identifier, "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    })
+                    continue
+                # The receipt is not the pin.  It is mutable local history and may predate a
+                # manifest correction; only the manifest revisions can be republished as the
+                # revisions this verification actually required above.
+                record.update(_source_revision_report(package))
+            elif package.source["type"] == "git+build":
+                checkout_value = materialized.get("path")
+                checkout, location_issue = managed_checkout_path(package, checkout_value)
+                product = str(package.source["product"])
+                issues: list[str] = []
+                if location_issue is not None:
+                    issues.append(location_issue)
+                elif checkout is None or not checkout.is_dir():
+                    issues.append(f"built checkout is not a directory: {checkout}")
+                else:
+                    try:
+                        state = self.toolchain.inspect_checkout(checkout)
+                    except ValueError as exc:
+                        issues.append(str(exc))
+                    else:
+                        if state.head != package.source["commit"]:
+                            issues.append(
+                                f"checkout HEAD is {state.head!r}, expected exact commit "
+                                f"{package.source['commit']!r}"
+                            )
+                        try:
+                            expected_patches, expected_names, expected_digests = (
+                                checkout_patch_expectation(package)
+                            )
+                        except (OSError, ValueError) as exc:
+                            issues.append(f"shipped checkout patch cannot be read: {exc}")
+                            expected_patches, expected_names, expected_digests = (), (), {}
+                        if set(state.modified) != set(expected_names):
+                            issues.append(
+                                f"built checkout tracked changes are "
+                                f"{list(state.modified)!r}, expected "
+                                f"{sorted(expected_names)!r}"
+                            )
+                        applied = materialized.get("patches_applied", [])
+                        if applied != list(expected_patches):
+                            issues.append(
+                                f"recorded patches are {applied!r}, expected exactly "
+                                f"{list(expected_patches)!r}"
+                            )
+                        recorded_digests = materialized.get(
+                            "patched_file_digests", {}
+                        )
+                        if recorded_digests != expected_digests:
+                            issues.append(
+                                "recorded patched-file digests differ from manifest"
+                            )
+                        changed = [
+                            name for name, digest in expected_digests.items()
+                            if not checkout_file_matches(
+                                checkout, name, digest, self.toolchain.file_digest
+                            )
+                        ]
+                        if changed:
+                            issues.append(
+                                f"live patched-file hashes changed for {sorted(changed)!r}"
+                            )
+                    candidates = built_product_candidates(checkout, product)
+                    if len(candidates) != 1:
+                        issues.append(
+                            f"expected one executable built product {product!r}, found "
+                            f"{len(candidates)}"
+                        )
+                    else:
+                        _executable, product_issue = validated_built_product(
+                            checkout, product, materialized
+                        )
+                        if product_issue is not None:
+                            issues.append(product_issue)
+                if issues:
+                    failed.append({
+                        "package": identifier, "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    })
+                    continue
+                if package.environment in built_runtime_probes:
+                    product_runs = built_runtime_probes[package.environment]
+                else:
+                    try:
+                        product_runs = self.toolchain.built_product_runs(candidates[0])
+                    except OSError:
+                        product_runs = False
+                if not product_runs:
                     failed.append({
                         "package": identifier, "code": "package_build_unusable",
-                        "detail": "built, but its product does not run",
+                        "detail": f"built product {product!r} does not run",
                         "fix": f"audio packages pull --repair {identifier}",
                     })
                     continue
-                record["product_runs"] = materialized["product_runs"]
-                record["patches_applied"] = materialized.get("patches_applied", [])
+                record["product_runs"] = True
+                record["product_digest"] = "ok"
+                record["patches_applied"] = list(expected_patches)
             else:
                 locations = [Path(p) for p in (
                     [materialized["path"]] if materialized.get("path")
@@ -920,18 +1884,13 @@ class Provisioner:
                         "fix": f"audio packages pull --repair {identifier}",
                     })
                     continue
-                record.update(_pinned_revisions(materialized))
 
-            digests = materialized.get("patched_file_digests") or {}
-            if digests:
-                checkout = Path(materialized["checkout"])
-                reverted = [name for name, expected in digests.items()
-                            if not (checkout / name).is_file()
-                            or sha256_file(checkout / name) != expected]
-                if reverted:
+            if package.checkout is not None:
+                issues = _checkout_integrity_issues(package, materialized, self.toolchain)
+                if issues:
                     failed.append({
-                        "package": identifier, "code": "patch_not_applied",
-                        "detail": f"patched file(s) no longer match: {', '.join(reverted)}",
+                        "package": identifier, "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
                         "fix": f"audio packages pull --repair {identifier}",
                     })
                     continue
@@ -952,6 +1911,12 @@ class Provisioner:
         if document["environments"].get("mlx", {}).get("state") != "ready":
             report["mlx_audio_private_api_source_hash"] = None
             report["mlx_audio_private_api_matches_expected"] = None
+            return report
+        _managed, environment_issue = managed_environment_path("mlx")
+        if environment_issue is not None:
+            report["mlx_audio_private_api_source_hash"] = None
+            report["mlx_audio_private_api_matches_expected"] = False
+            report["mlx_audio_private_api_error"] = environment_issue
             return report
 
         target = guards["source_hash"]["target"]
@@ -1024,16 +1989,18 @@ class Provisioner:
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
+        catalog = packages()
 
         for identifier in targets:
             materialized = document["packages"][identifier].get("materialized", {})
-            hub_revisions.extend(materialized.get("hub_revisions", []))
-            retained.extend(materialized.get("hub_revisions_pre_existing", []))
-            # Measured before deleting, not read off the registry: what a teardown reports as
-            # reclaimed has to be what the filesystem actually gave back.
-            for location in _locations(materialized):
-                local_freed += _tree_bytes(location) if location.exists() else 0
-                _delete(location)
+            materialized = materialized if isinstance(materialized, dict) else {}
+            owned, kept_revisions = _teardown_revisions(
+                catalog.get(identifier), materialized
+            )
+            hub_revisions.extend(owned)
+            retained.extend(kept_revisions)
+            for location in _managed_package_locations(catalog.get(identifier)):
+                local_freed += _delete_managed(location)
             document["packages"].pop(identifier)
             removed.append(identifier)
             save_registry(document)
@@ -1057,8 +2024,8 @@ class Provisioner:
         }
         if retained:
             report["hub_revisions_retained_reason"] = (
-                "already in the Hugging Face cache before this root pulled them, so they are "
-                "not this root's to delete"
+                "not owned by this root under the current package manifest, so they are not "
+                "this root's to delete"
             )
         if dropped:
             report["environments_removed_reason"] = (
@@ -1075,13 +2042,13 @@ class Provisioner:
         """Reference counting, derived from the package table each time it is asked."""
         users = _users_by_environment(document)
         kept, dropped, freed = [], [], 0
+        known = environments()
         for name in sorted(document["environments"]):
             if users.get(name):
                 kept.append(name)
                 continue
-            target = paths.env_dir(name)
-            freed += _tree_bytes(target) if target.exists() else 0
-            _delete(target)
+            if name in known:
+                freed += _delete_managed(paths.env_dir(name))
             document["environments"].pop(name)
             dropped.append(name)
         return kept, dropped, freed
@@ -1095,10 +2062,15 @@ class Provisioner:
 
         if dry_run:
             deletable, keeping = [], []
+            catalog = packages()
             for identifier in package_ids:
                 materialized = document["packages"][identifier].get("materialized", {})
-                deletable.extend(materialized.get("hub_revisions", []))
-                keeping.extend(materialized.get("hub_revisions_pre_existing", []))
+                materialized = materialized if isinstance(materialized, dict) else {}
+                owned, retained_revisions = _teardown_revisions(
+                    catalog.get(identifier), materialized
+                )
+                deletable.extend(owned)
+                keeping.extend(retained_revisions)
             return {
                 "would_remove": {"packages": package_ids, "environments": environment_names,
                                  "root": str(paths.root()),
@@ -1107,8 +2079,9 @@ class Provisioner:
                 "hub_cache_note": HUB_CACHE_NOTE,
                 "reclaimable_known_bytes": known,
                 "reclaimable_note": (
-                    "projected from the registry, and it counts weights this root downloaded "
-                    "plus what is under the root; a retained revision is not included"
+                    "projected from manifest-bounded registry receipts and package sizes; "
+                    "it counts deletion-eligible Hub weights and recorded local package "
+                    "artifacts, but excludes retained revisions and environment bytes"
                 ),
                 "unsized_packages": unsized,
                 "untouched": UNTOUCHED,
@@ -1117,6 +2090,7 @@ class Provisioner:
         hub_revisions: list[str] = []
         retained: list[str] = []
         local_freed = 0
+        catalog = packages()
         # `purge` cannot take a name that is not in the registry — it reads the list *from* the
         # registry — so it never had `remove`'s validation defect. It shared the narrower half:
         # every local file was deleted and the registry was cleared in one write afterwards, so
@@ -1124,16 +2098,20 @@ class Provisioner:
         # behind it. Same rule as `remove`, then: an entry goes as soon as its own bytes do.
         for identifier in package_ids:
             materialized = document["packages"][identifier].get("materialized", {})
-            hub_revisions.extend(materialized.get("hub_revisions", []))
-            retained.extend(materialized.get("hub_revisions_pre_existing", []))
-            for location in _locations(materialized):
-                local_freed += _tree_bytes(location) if location.exists() else 0
-                _delete(location)
+            materialized = materialized if isinstance(materialized, dict) else {}
+            owned, kept_revisions = _teardown_revisions(
+                catalog.get(identifier), materialized
+            )
+            hub_revisions.extend(owned)
+            retained.extend(kept_revisions)
+            for location in _managed_package_locations(catalog.get(identifier)):
+                local_freed += _delete_managed(location)
             document["packages"].pop(identifier)
             save_registry(document)
+        known_environments = environments()
         for name in environment_names:
-            local_freed += _tree_bytes(paths.env_dir(name)) if paths.env_dir(name).exists() else 0
-            _delete(paths.env_dir(name))
+            if name in known_environments:
+                local_freed += _delete_managed(paths.env_dir(name))
             document["environments"].pop(name, None)
             save_registry(document)
         deleted, hub_freed = self.fetcher.delete_hub_revisions(hub_revisions)
@@ -1185,7 +2163,9 @@ def doctor(toolchain: Toolchain | None = None) -> dict:
                 "python": environment.python,
                 "requires_tool": list(environment.requires_tool),
                 "blocked_by_missing_tool": [
-                    tool for tool in environment.requires_tool if not tools[tool]["present"]
+                    tool for tool in environment.requires_tool
+                    if not tools[tool]["present"]
+                    and not _environment_has_built_runtime(name, document)
                 ],
                 "provisional": environment.provisional,
             }
@@ -1196,8 +2176,8 @@ def doctor(toolchain: Toolchain | None = None) -> dict:
             for identifier in sorted(packages())
         },
         "note": (
-            "An absent swift blocks only the packages that need it; it is reported rather than "
-            "fatal."
+            "Swift is required to build or repair FluidAudio; a ready built product runs "
+            "directly without Swift. Missing provisioning tools are reported rather than fatal."
         ),
     }
 
@@ -1261,20 +2241,528 @@ def _locked_versions(environment: Environment) -> dict[str, str]:
         if line.startswith((" ", "#")) or "==" not in line:
             continue
         name, _, rest = line.partition("==")
-        versions[name.strip().lower().replace("_", "-")] = rest.split()[0].strip(" \\")
+        versions[_distribution_name(name)] = rest.split()[0].strip(" \\")
     return versions
 
 
-def _patched_files(patch: Path, checkout: Path) -> list[Path]:
-    """Files a unified diff touches, so verify can detect a reverted patch."""
-    touched = []
+def _distribution_name(value: str) -> str:
+    return re.sub(r"[-_.]+", "-", value.strip().lower())
+
+
+def _direct_file_install_path(specification: str) -> Path | None:
+    if not specification.startswith("@ "):
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(specification[2:].strip())
+    except ValueError:
+        return None
+    if parsed.scheme != "file" or parsed.netloc not in {"", "localhost"}:
+        return None
+    return Path(urllib.parse.unquote(parsed.path))
+
+
+def _managed_checkout_requirements(
+    document: Mapping[str, Any],
+    environment_name: str,
+    package_ids: set[str] | None = None,
+) -> dict[str, Path]:
+    """Required direct installs, keyed by manifest-pinned distribution name."""
+    catalog = packages()
+    entries = document.get("packages", {})
+    if not isinstance(entries, Mapping):
+        return {}
+    required: dict[str, Path] = {}
+    for identifier, entry in entries.items():
+        if package_ids is not None and identifier not in package_ids:
+            continue
+        package = catalog.get(identifier)
+        if (
+            not isinstance(entry, Mapping)
+            or entry.get("state") != "ready"
+            or package is None
+            or package.environment != environment_name
+            or package.checkout is None
+        ):
+            continue
+        distribution = _distribution_name(str(package.checkout["distribution"]))
+        required[distribution] = Path(os.path.abspath(
+            paths.checkout_dir(package.environment, identifier)
+        ))
+    return required
+
+
+def _environment_drift(
+    expected: dict[str, str],
+    frozen: dict[str, str],
+    required_checkouts: Mapping[str, Path],
+) -> dict[str, tuple[str | None, str | None]]:
+    comparable = dict(frozen)
+    direct_drift = _checkout_install_drift(frozen, required_checkouts)
+    for name in required_checkouts:
+        comparable.pop(name, None)
+    locked_drift = {
+        name: (expected.get(name), comparable.get(name))
+        for name in expected.keys() | comparable.keys()
+        if expected.get(name) != comparable.get(name)
+    }
+    return {**locked_drift, **direct_drift}
+
+
+def _checkout_install_drift(
+    frozen: Mapping[str, str],
+    required_checkouts: Mapping[str, Path],
+) -> dict[str, tuple[str | None, str | None]]:
+    drift: dict[str, tuple[str | None, str | None]] = {}
+    for name, required_path in required_checkouts.items():
+        installed = frozen.get(name)
+        direct_path = (
+            _direct_file_install_path(installed) if installed is not None else None
+        )
+        if direct_path is None or Path(os.path.abspath(direct_path)) != required_path:
+            drift[name] = (f"@ {required_path.as_uri()}", installed)
+    return drift
+
+
+def _patch_touched_names(patch: Path) -> tuple[str, ...]:
+    """Repository-relative files touched by one shipped unified diff."""
+    touched: list[str] = []
     for line in patch.read_text(errors="replace").splitlines():
         if line.startswith("+++ ") and not line.endswith("/dev/null"):
             target = line[4:].strip()
             if target.startswith("b/"):
                 target = target[2:]
-            touched.append(checkout / target)
-    return touched
+            touched.append(target)
+    return tuple(touched)
+
+
+def _patched_files(patch: Path, checkout: Path) -> list[Path]:
+    """Files a unified diff touches, so verify can detect a reverted patch."""
+    return [checkout / name for name in _patch_touched_names(patch)]
+
+
+def checkout_patch_expectation(
+    package: Package,
+) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, str]]:
+    """Exact receipt, tracked-file set, and post-patch hashes owned by the manifest.
+
+    The registry is mutable history, not an integrity root.  The manifest binds the
+    exact post-patch bytes independently of Git diff presentation and receipt values.
+    """
+    specification = (
+        package.source
+        if package.source.get("type") == "git+build"
+        else package.checkout
+    )
+    if specification is None:
+        return (), (), {}
+    expected = dict(specification.get("patched_file_sha256", {}))
+    patch_name = specification.get("patch")
+    if not patch_name:
+        return (), (), expected
+    patch = ENVIRONMENTS_DIR / str(patch_name)
+    names = _patch_touched_names(patch)
+    if set(expected) != set(names):
+        raise ValueError(
+            f"manifest patched_file_sha256 paths {sorted(expected)!r} do not equal "
+            f"shipped patch targets {sorted(names)!r}"
+        )
+    return (Path(str(patch_name)).name,), names, expected
+
+
+def materialize_checkout_patch(
+    package: Package,
+    checkout: Path,
+    toolchain: Toolchain,
+) -> tuple[list[str], dict[str, str]]:
+    """Apply and prove the manifest-owned patch before install or build executes."""
+    expected_patches, expected_names, expected_digests = (
+        checkout_patch_expectation(package)
+    )
+    applied: list[str] = []
+    digests: dict[str, str] = {}
+    if expected_patches:
+        specification = (
+            package.source
+            if package.source.get("type") == "git+build"
+            else package.checkout
+        )
+        assert specification is not None
+        patch_name = str(specification["patch"])
+        patch = ENVIRONMENTS_DIR / patch_name
+        if not patch.is_file():
+            raise ProvisioningError(
+                "patch_missing", f"{patch} is not in the installed wheel",
+                patch=patch_name, package=package.id,
+            )
+        toolchain.apply_patch(checkout, patch)
+        applied.append(Path(patch_name).name)
+        for touched in _patched_files(patch, checkout):
+            if touched.is_file():
+                digests[str(touched.relative_to(checkout))] = (
+                    toolchain.file_digest(touched)
+                )
+    if (
+        applied != list(expected_patches)
+        or set(digests) != set(expected_names)
+        or digests != expected_digests
+    ):
+        raise ProvisioningError(
+            "patch_integrity_failed",
+            f"{package.id} did not materialize the manifest-pinned patched file hashes",
+            package=package.id,
+            expected=expected_digests,
+            actual=digests,
+            fix=f"audio packages pull --repair {package.id}",
+        )
+    return applied, digests
+
+
+def managed_checkout_path(
+    package: Package, value: object,
+) -> tuple[Path | None, str | None]:
+    """Resolve only the manifest-derived checkout, rejecting symlink/parent escapes."""
+    expected = paths.checkout_dir(package.environment, package.id)
+    candidate = Path(str(value)) if value else None
+    if candidate is None:
+        return None, "checkout path is absent"
+    _environment_path, environment_issue = managed_environment_path(package.environment)
+    if environment_issue is not None:
+        return candidate, f"package environment is not managed: {environment_issue}"
+    if Path(os.path.abspath(candidate)) != Path(os.path.abspath(expected)):
+        return candidate, f"checkout path {candidate} is not managed path {expected}"
+    if candidate.is_symlink():
+        return candidate, f"managed checkout path is a symlink: {candidate}"
+    try:
+        resolved = candidate.resolve(strict=True)
+        root = paths.root().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return candidate, f"managed checkout path cannot be resolved: {exc}"
+    if not resolved.is_relative_to(root):
+        return candidate, f"managed checkout resolves outside provisioning root: {resolved}"
+    return candidate, None
+
+
+def managed_provisioning_root_issue(*, create: bool = False) -> str | None:
+    """Require the configured provisioning-root leaf to be a real directory."""
+
+    root = paths.root()
+    try:
+        state = os.stat(root, follow_symlinks=False)
+    except FileNotFoundError:
+        if not create:
+            return None
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            state = os.stat(root, follow_symlinks=False)
+        except (OSError, RuntimeError) as exc:
+            return f"provisioning root cannot be created safely: {root}: {exc}"
+    except (OSError, RuntimeError) as exc:
+        return f"provisioning root cannot be inspected safely: {root}: {exc}"
+    if stat.S_ISLNK(state.st_mode):
+        return f"provisioning root is a symlink: {root}"
+    if not stat.S_ISDIR(state.st_mode):
+        return f"provisioning root is not a directory: {root}"
+    return None
+
+
+def managed_environment_path(name: str) -> tuple[Path, str | None]:
+    """Require the manifest-derived environment root without following an inner symlink."""
+    expected = paths.env_dir(name)
+    root_issue = managed_provisioning_root_issue()
+    if root_issue is not None:
+        return expected, root_issue
+    if expected.parent.is_symlink():
+        return expected, f"managed environment parent is a symlink: {expected.parent}"
+    if expected.is_symlink():
+        return expected, f"managed environment path is a symlink: {expected}"
+    try:
+        resolved = expected.resolve(strict=True)
+        root = paths.root().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return expected, f"managed environment path cannot be resolved: {exc}"
+    if not expected.is_dir() or not resolved.is_relative_to(root):
+        return expected, f"managed environment is not a contained directory: {resolved}"
+    return expected, None
+
+
+def managed_environment_creation_target_issue(name: str) -> str | None:
+    """Refuse provisioning through a redirected envs parent or environment leaf."""
+    target = paths.env_dir(name)
+    root_issue = managed_provisioning_root_issue(create=True)
+    if root_issue is not None:
+        return root_issue
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        parent = target.parent.resolve(strict=True)
+        root = paths.root().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return f"managed environment parent cannot be resolved: {exc}"
+    if target.parent.is_symlink() or not parent.is_relative_to(root):
+        return f"managed environment parent is redirected outside provisioning root: {parent}"
+    if target.is_symlink():
+        return f"managed environment path is a symlink: {target}"
+    if target.exists() and not target.is_dir():
+        return f"managed environment path is not a directory: {target}"
+    return None
+
+
+def managed_url_artifact_path(
+    package: Package, value: object,
+) -> tuple[Path | None, str | None]:
+    """Bind a single-file receipt to its manifest-owned path and provisioning root."""
+    expected = paths.models_dir() / str(package.source["filename"])
+    candidate = Path(str(value)) if value else None
+    if candidate is None:
+        return None, "artifact path is absent"
+    root_issue = managed_provisioning_root_issue()
+    if root_issue is not None:
+        return candidate, root_issue
+    if Path(os.path.abspath(candidate)) != Path(os.path.abspath(expected)):
+        return candidate, f"artifact path {candidate} is not managed path {expected}"
+    if expected.parent.is_symlink():
+        return candidate, f"managed artifact parent is a symlink: {expected.parent}"
+    if candidate.is_symlink():
+        return candidate, f"managed artifact path is a symlink: {candidate}"
+    try:
+        parent = expected.parent.resolve(strict=True)
+        resolved = candidate.resolve(strict=True)
+        root = paths.root().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return candidate, f"managed artifact path cannot be resolved: {exc}"
+    if (
+        not expected.parent.is_dir()
+        or not parent.is_relative_to(root)
+        or not candidate.is_file()
+        or not resolved.is_relative_to(root)
+    ):
+        return candidate, f"managed artifact is not a contained regular file: {resolved}"
+    return candidate, None
+
+
+def checkout_file_matches(
+    checkout: Path, name: str, digest: str, hasher=sha256_file,
+) -> bool:
+    """Require a real in-checkout regular file before comparing its pinned digest."""
+    target = checkout / name
+    try:
+        checkout_root = checkout.resolve(strict=True)
+        resolved = target.resolve(strict=True)
+        return (
+            target.is_file()
+            and not target.is_symlink()
+            and resolved.is_relative_to(checkout_root)
+            and hasher(target) == digest
+        )
+    except (OSError, RuntimeError):
+        return False
+
+
+def _checkout_integrity_issues(
+    package: Package,
+    materialized: dict,
+    toolchain: Toolchain,
+) -> list[str]:
+    """Verify a native backend's live checkout instead of trusting its pull receipt."""
+    specification = package.checkout
+    if specification is None:
+        return []
+
+    issues: list[str] = []
+    checkout, location_issue = managed_checkout_path(
+        package, materialized.get("checkout")
+    )
+    if location_issue is not None:
+        return [location_issue]
+    assert checkout is not None
+    if not checkout.is_dir():
+        return [f"source checkout is not a directory: {checkout}"]
+
+    expected_commit = specification.get("resolved_commit", specification["commit"])
+    accepted_receipts = (specification["commit"], expected_commit)
+    recorded_commit = materialized.get("checkout_commit")
+    if recorded_commit not in accepted_receipts:
+        issues.append(
+            f"recorded checkout commit is {recorded_commit!r}, expected one of "
+            f"{list(accepted_receipts)!r}"
+        )
+    try:
+        state = toolchain.inspect_checkout(checkout)
+    except ValueError as exc:
+        return [str(exc)]
+    if state.head != expected_commit:
+        issues.append(
+            f"checkout HEAD is {state.head!r}, expected exact commit {expected_commit!r}"
+        )
+
+    try:
+        expected_patches, expected_names, expected_digests = (
+            checkout_patch_expectation(package)
+        )
+    except (OSError, ValueError) as exc:
+        return [f"shipped checkout patch cannot be read: {exc}"]
+    applied = materialized.get("patches_applied", [])
+    if not isinstance(applied, list) or applied != list(expected_patches):
+        issues.append(
+            f"recorded patches are {applied!r}, expected exactly {list(expected_patches)!r}"
+        )
+
+    expected_modified = set(expected_names)
+    recorded = materialized.get("patched_file_digests", {})
+    if not isinstance(recorded, dict) or recorded != expected_digests:
+        issues.append(
+            f"recorded patched-file digests are {recorded!r}, expected manifest values "
+            f"{expected_digests!r}"
+        )
+    changed: list[str] = []
+    for name, digest in expected_digests.items():
+        if not checkout_file_matches(checkout, name, digest, toolchain.file_digest):
+            changed.append(name)
+    if changed:
+        issues.append(f"live patched-file hashes changed for {sorted(changed)!r}")
+
+    # Exact Git names reject added changes while manifest-owned hashes bind the permitted files'
+    # contents without depending on Git's configurable/version-dependent diff presentation.
+    if set(state.modified) != expected_modified:
+        issues.append(
+            f"tracked checkout changes are {list(state.modified)!r}, expected exactly "
+            f"{sorted(expected_modified)!r}"
+        )
+    if state.untracked:
+        issues.append(
+            f"checkout has ordinary or ignored untracked files: {list(state.untracked)!r}"
+        )
+    return issues
+
+
+def built_product_candidates(checkout: Path, product: str) -> list[Path]:
+    """Contained non-symlink executable products from the pinned release build."""
+    try:
+        checkout_root = checkout.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return []
+    found: set[Path] = set()
+    for path in checkout.glob(f".build/**/release/{product}"):
+        try:
+            resolved = path.resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and resolved.is_relative_to(checkout_root)
+            and os.access(path, os.X_OK)
+        ):
+            found.add(resolved)
+    return sorted(found)
+
+
+def validated_built_product(
+    checkout: Path,
+    product: str,
+    materialized: dict,
+) -> tuple[Path | None, str | None]:
+    """Bind the launchable product to the exact bytes recorded after `pull` built it."""
+    recorded_path = materialized.get("product_path")
+    recorded_digest = materialized.get("product_sha256")
+    if not isinstance(recorded_path, str) or not recorded_path:
+        return None, "built product receipt has no non-empty product_path"
+    if (
+        not isinstance(recorded_digest, str)
+        or re.fullmatch(r"[0-9a-f]{64}", recorded_digest) is None
+    ):
+        return None, "built product receipt has no valid product_sha256"
+    candidates = built_product_candidates(checkout, product)
+    if len(candidates) != 1:
+        return None, (
+            f"expected one executable built product {product!r}, found {len(candidates)}"
+        )
+    executable = candidates[0]
+    try:
+        relative = executable.relative_to(checkout.resolve(strict=True)).as_posix()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return None, f"built product path cannot be bound to its checkout: {exc}"
+    if relative != recorded_path:
+        return None, (
+            f"built product path is {relative!r}, expected receipt path {recorded_path!r}"
+        )
+    try:
+        actual_digest = sha256_file(executable)
+    except OSError as exc:
+        return None, f"built product digest could not be read: {exc}"
+    if actual_digest != recorded_digest:
+        return None, (
+            f"built product sha256 is {actual_digest!r}, expected receipt digest "
+            f"{recorded_digest!r}"
+        )
+    return executable, None
+
+
+def _environment_has_built_runtime(name: str, document: dict) -> bool:
+    """Whether an environment can run without the tool that provisioned its product."""
+    if name != "swift":
+        return False
+    entry = document.get("packages", {}).get("fluidaudio", {})
+    if entry.get("state") != "ready":
+        return False
+    materialized = entry.get("materialized", {})
+    checkout_value = materialized.get("path")
+    if not checkout_value:
+        return False
+    package = packages()["fluidaudio"]
+    checkout, issue = managed_checkout_path(package, checkout_value)
+    if issue is not None or checkout is None:
+        return False
+    executable, product_issue = validated_built_product(
+        checkout, str(package.source["product"]), materialized
+    )
+    return product_issue is None and executable is not None
+
+
+def _environment_built_runtime_runs(
+    name: str,
+    document: dict,
+    toolchain: Toolchain,
+) -> bool:
+    """Live runtime exemption from a missing provisioning tool."""
+    if not _environment_has_built_runtime(name, document):
+        return False
+    entry = document["packages"]["fluidaudio"]
+    package = packages()["fluidaudio"]
+    checkout, issue = managed_checkout_path(package, entry["materialized"].get("path"))
+    if issue is not None or checkout is None:
+        return False
+    try:
+        state = toolchain.inspect_checkout(checkout)
+    except ValueError:
+        return False
+    try:
+        expected_patches, expected_names, expected_digests = (
+            checkout_patch_expectation(package)
+        )
+    except (OSError, ValueError):
+        return False
+    materialized = entry["materialized"]
+    if (
+        state.head != package.source["commit"]
+        or set(state.modified) != set(expected_names)
+        or materialized.get("patches_applied", []) != list(expected_patches)
+        or materialized.get("patched_file_digests", {}) != expected_digests
+        or any(
+            not checkout_file_matches(checkout, name, digest, toolchain.file_digest)
+            for name, digest in expected_digests.items()
+        )
+    ):
+        return False
+    product = str(package.source["product"])
+    executable, product_issue = validated_built_product(
+        checkout, product, materialized
+    )
+    if product_issue is not None or executable is None:
+        return False
+    try:
+        return toolchain.built_product_runs(executable)
+    except OSError:
+        return False
 
 
 def _toolchain_missing(package: Package, tool: str) -> ProvisioningError:
@@ -1285,7 +2773,7 @@ def _toolchain_missing(package: Package, tool: str) -> ProvisioningError:
     )
 
 
-def _pinned_revisions(materialized: dict) -> dict:
+def _source_revision_report(package: Package) -> dict:
     """What a Hub package's `verify` entry can honestly claim, which is not a digest.
 
     Nothing here hashes a snapshot. The manifest pins a revision and carries no `sha256` for a Hub
@@ -1295,10 +2783,11 @@ def _pinned_revisions(materialized: dict) -> dict:
     contents were hashed against a manifest pin, `revision`/`revisions` where a revision is pinned
     and the snapshot is present — rather than by a `digest_verified: false` confession.
     """
-    if "revision" in materialized:
-        return {"revision": materialized["revision"]}
-    if "revisions" in materialized:
-        return {"revisions": list(materialized["revisions"])}
+    revisions = _source_revisions(package)
+    if len(revisions) == 1:
+        return {"revision": revisions[0]}
+    if revisions:
+        return {"revisions": revisions}
     return {}
 
 
@@ -1312,44 +2801,165 @@ def _source_revisions(package: Package) -> list[str]:
     return []
 
 
-def _locations(materialized: dict) -> list[Path]:
-    """Filesystem locations this tool created. Hub snapshots are excluded on purpose.
-
-    Deleting a Hub snapshot directory would reach into a cache other tools may share; the
-    revisions are reported instead, which is what `hub_cache_note` says.
-    """
-    found = []
-    for key in ("checkout",):
-        if materialized.get(key):
-            found.append(Path(materialized[key]))
-    path = materialized.get("path")
-    if path and _inside(Path(path), paths.models_dir()):
-        found.append(Path(path))
+def _managed_package_locations(package: Package | None) -> list[Path]:
+    """Local deletion targets derived only from the installed manifest."""
+    if package is None:
+        return []
+    found: list[Path] = []
+    if package.checkout is not None or package.source["type"] == "git+build":
+        found.append(paths.checkout_dir(package.environment, package.id))
+    if package.source["type"] == "url":
+        found.append(paths.models_dir() / str(package.source["filename"]))
     return found
 
 
-def _inside(candidate: Path, directory: Path) -> bool:
-    """Real path containment, because the substring test this replaces was not one.
+def _owned_tree_bytes(target: Path) -> int:
+    """Bytes below a managed target without following any symlink."""
+    try:
+        if target.is_symlink():
+            return target.lstat().st_size
+        if target.is_file():
+            return target.stat().st_size
+        if not target.is_dir():
+            return 0
+    except OSError:
+        return 0
+    total = 0
+    for directory, directories, filenames in os.walk(target, followlinks=False):
+        base = Path(directory)
+        for name in [*directories, *filenames]:
+            item = base / name
+            try:
+                if item.is_symlink():
+                    total += item.lstat().st_size
+                elif item.is_file():
+                    total += item.stat().st_size
+            except OSError:
+                continue
+    return total
 
-    `str(models_dir) in path` also matched a *sibling* whose name starts with the models
-    directory's — point `HF_HOME` at `<root>/models_hub` and every snapshot path under it tests
-    positive, so teardown would delete directories inside the shared Hub cache that
-    `_locations` exists to keep its hands off.
-    """
-    return candidate != directory and candidate.is_relative_to(directory)
+
+def _owned_tree_bytes_at(parent_descriptor: int, name: str) -> int:
+    """Measure one descriptor-relative tree without following any symlink."""
+
+    try:
+        found = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return 0
+    if stat.S_ISLNK(found.st_mode) or stat.S_ISREG(found.st_mode):
+        return found.st_size
+    if not stat.S_ISDIR(found.st_mode):
+        return 0
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
+    directory_descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    try:
+        total = 0
+        with os.scandir(directory_descriptor) as entries:
+            for entry in entries:
+                try:
+                    total += _owned_tree_bytes_at(
+                        directory_descriptor, entry.name
+                    )
+                except FileNotFoundError:
+                    continue
+        return total
+    finally:
+        os.close(directory_descriptor)
 
 
-def _delete(target: Path) -> None:
-    if target.is_dir() and not target.is_symlink():
-        shutil.rmtree(target, ignore_errors=True)
-    elif target.exists() or target.is_symlink():
-        target.unlink(missing_ok=True)
+def _delete_at(parent_descriptor: int, name: str) -> None:
+    """Delete one descriptor-relative leaf without following it outside its parent."""
+
+    try:
+        found = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if stat.S_ISDIR(found.st_mode):
+        if not shutil.rmtree.avoids_symlink_attacks:
+            raise OSError("platform recursive deletion is not symlink-attack resistant")
+        shutil.rmtree(name, dir_fd=parent_descriptor)
+    else:
+        os.unlink(name, dir_fd=parent_descriptor)
+
+
+def _delete_managed(target: Path) -> int:
+    """Delete through a no-follow parent descriptor, then confirm descriptor-relative absence."""
+    root = Path(os.path.abspath(paths.root()))
+    absolute = Path(os.path.abspath(target))
+    if absolute == root or not absolute.is_relative_to(root):
+        raise ProvisioningError(
+            "delete_refused", f"managed deletion target is outside the provisioning root: {target}",
+            target=str(target), fix="Inspect the provisioning registry and managed cache root",
+        )
+    opened = False
+    try:
+        with bound_directory(
+            absolute.parent,
+            root=root,
+            create=False,
+            # Once opened, the descriptor owns the safe operation. If an attacker renames
+            # the parent afterward, deleting from that original directory is still contained;
+            # following its replacement pathname would not be.
+            verify_on_exit=False,
+        ) as parent_descriptor:
+            opened = True
+            before = _owned_tree_bytes_at(parent_descriptor, absolute.name)
+            _delete_at(parent_descriptor, absolute.name)
+            try:
+                os.stat(
+                    absolute.name,
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                return before
+            raise OSError("managed target still exists after deletion")
+    except FileNotFoundError:
+        return 0
+    except OSError as exc:
+        if not opened:
+            raise ProvisioningError(
+                "delete_refused",
+                f"managed deletion target cannot be opened without following links: {target}: "
+                f"{exc}",
+                target=str(target),
+                fix=f"Remove or replace redirected parent paths for {target} and retry",
+            ) from exc
+        raise ProvisioningError(
+            "delete_failed", f"could not delete managed target {target}: {exc}",
+            target=str(target), fix=f"Restore access to {target} and retry",
+        ) from exc
+
+
+def _teardown_revisions(
+    package: Package | None, materialized: dict,
+) -> tuple[list[str], list[str]]:
+    """Bound mutable ownership receipts to revisions shipped for one known package."""
+    allowed = set(_source_revisions(package)) if package is not None else set()
+
+    def strings(value: object) -> set[str]:
+        return {item for item in value if isinstance(item, str)} \
+            if isinstance(value, list) else set()
+
+    claimed = strings(materialized.get("hub_revisions"))
+    pre_existing = strings(materialized.get("hub_revisions_pre_existing"))
+    deletable = (claimed & allowed) - pre_existing
+    retained = pre_existing | (claimed - allowed)
+    return sorted(deletable), sorted(retained)
 
 
 def _users_by_environment(document: dict) -> dict[str, set[str]]:
     users: dict[str, set[str]] = {}
-    for identifier, entry in document["packages"].items():
-        users.setdefault(entry.get("environment", ""), set()).add(identifier)
+    catalog = packages()
+    for identifier in document["packages"]:
+        package = catalog.get(identifier)
+        if package is not None:
+            users.setdefault(package.environment, set()).add(identifier)
     return users
 
 
@@ -1357,7 +2967,21 @@ def _selection_bytes(selection: list[Package], document: dict) -> tuple[int, lis
     known = 0
     unsized: list[str] = []
     for package in selection:
-        recorded = document["packages"].get(package.id, {}).get("materialized", {}).get("bytes")
+        materialized = document["packages"].get(package.id, {}).get("materialized", {})
+        materialized = materialized if isinstance(materialized, dict) else {}
+        if package.source["type"] in {"huggingface", "huggingface_multi"}:
+            owned, _retained = _teardown_revisions(package, materialized)
+            if package.source["type"] == "huggingface":
+                if package.source["revision"] in owned and package.bytes is not None:
+                    known += package.bytes
+            else:
+                known += sum(
+                    int(repository.get("bytes") or 0)
+                    for repository in package.source["repos"]
+                    if repository["revision"] in owned
+                )
+            continue
+        recorded = materialized.get("bytes")
         size = recorded if recorded is not None else package.bytes
         if size is None:
             unsized.append(package.id)

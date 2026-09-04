@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -225,6 +226,7 @@ def validate() -> list[str]:
     problems: list[str] = []
     known_environments = environments()
     known_packages = packages()
+    checkout_distributions: dict[tuple[str, str], str] = {}
     for package in known_packages.values():
         if package.environment not in known_environments:
             problems.append(f"{package.id}: unknown environment {package.environment!r}")
@@ -239,11 +241,94 @@ def validate() -> list[str]:
                 "pull and the backend that reads it will disagree"
             )
         if package.source.get("type") == "huggingface_multi":
-            declared = sum(repo.get("bytes") or 0 for repo in package.source["repos"])
+            repositories = package.source["repos"]
+            declared = sum(repo.get("bytes") or 0 for repo in repositories)
             if package.bytes != declared:
                 problems.append(
                     f"{package.id}: bytes {package.bytes} does not equal the sum of its "
                     f"repos' bytes {declared}"
+                )
+            repository_roles = [repo.get("role") for repo in repositories]
+            if any(not isinstance(role, str) or not role for role in repository_roles) \
+                    or len(repository_roles) != len(set(repository_roles)):
+                problems.append(
+                    f"{package.id}: every multi-repo source needs a unique non-empty role"
+                )
+            for repository in repositories:
+                patterns = repository.get("allow_patterns")
+                if patterns is not None and (
+                    not isinstance(patterns, list)
+                    or not patterns
+                    or any(not isinstance(pattern, str) or not pattern for pattern in patterns)
+                    or len(patterns) != len(set(patterns))
+                ):
+                    problems.append(
+                        f"{package.id}: allow_patterns must be unique non-empty strings"
+                    )
+        if package.checkout is not None:
+            distribution = package.checkout.get("distribution")
+            normalized_distribution = (
+                re.sub(r"[-_.]+", "-", distribution.strip().lower())
+                if isinstance(distribution, str) else ""
+            )
+            if not normalized_distribution or distribution != normalized_distribution:
+                problems.append(
+                    f"{package.id}: checkout distribution must be a non-empty normalized "
+                    "distribution name"
+                )
+            else:
+                owner = checkout_distributions.setdefault(
+                    (package.environment, normalized_distribution), package.id
+                )
+                if owner != package.id:
+                    problems.append(
+                        f"{package.id}: checkout distribution {normalized_distribution!r} "
+                        f"collides with {owner!r} in environment {package.environment!r}"
+                    )
+            resolved_commit = package.checkout.get("resolved_commit")
+            if not isinstance(resolved_commit, str) or re.fullmatch(
+                r"[0-9a-f]{40}", resolved_commit,
+            ) is None:
+                problems.append(
+                    f"{package.id}: checkout resolved_commit must be a full 40-hex Git SHA"
+                )
+            elif not isinstance(package.checkout.get("commit"), str) \
+                    or len(package.checkout["commit"]) < 7 \
+                    or not resolved_commit.startswith(package.checkout["commit"]):
+                problems.append(
+                    f"{package.id}: checkout commit must be a prefix of resolved_commit"
+                )
+            digests = package.checkout.get("patched_file_sha256")
+            if not isinstance(digests, dict) or any(
+                not isinstance(name, str)
+                or not name
+                or Path(name).is_absolute()
+                or ".." in Path(name).parts
+                or not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                for name, digest in (digests.items() if isinstance(digests, dict) else ())
+            ):
+                problems.append(
+                    f"{package.id}: checkout patched_file_sha256 must map safe relative paths "
+                    "to lowercase SHA256 values"
+                )
+            patch_name = package.checkout.get("patch")
+            touched: set[str] = set()
+            if patch_name:
+                patch_path = HERE / str(patch_name)
+                if not patch_path.is_file():
+                    problems.append(
+                        f"{package.id}: checkout patch {patch_name!r} is missing"
+                    )
+                else:
+                    for line in patch_path.read_text(encoding="utf-8").splitlines():
+                        if line.startswith("+++ ") and not line.endswith("/dev/null"):
+                            name = line[4:].strip()
+                            touched.add(name[2:] if name.startswith("b/") else name)
+            if isinstance(digests, dict) and set(digests) != touched:
+                problems.append(
+                    f"{package.id}: checkout patched_file_sha256 paths must exactly equal "
+                    f"the patch targets {sorted(touched)!r}"
                 )
 
     for backend in backends().values():

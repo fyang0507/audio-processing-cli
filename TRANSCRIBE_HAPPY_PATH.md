@@ -1,7 +1,7 @@
 # `transcribe` happy paths — per use case
 
-**Status: Qwen execution shipped; FireRed, VibeVoice, and export remain specified.** The Qwen
-`run` and refusal blocks are exercised against real serializer output. This is the unabridged
+**Status: all four execution stacks and export ship.** Every `run` shape and the refusal blocks
+are exercised against real serializer output. This is the unabridged
 step-by-step an implementer can diff against and an agent can read as a
 worked example. [TRANSCRIBE_CONTRACT.md](TRANSCRIBE_CONTRACT.md) is organized around
 *why* the surface looks like this and abridges output to whatever differs; this document
@@ -23,14 +23,19 @@ Three use cases, one per recommended stack row in
 Every value below is one of three things, and they are never mixed:
 
 - **Measured.** Traceable to a recorded artifact. All of these appear inside
-  `cost.proved`, the `capabilities[].note` sentences, package byte counts, revisions, and
-  configuration. Every one is checkable against `model_tests/`.
+  `cost.proved`, the `capabilities[].note` sentences, manifest-fixed package byte estimates,
+  revisions, and configuration. Every one is checkable against `model_tests/`.
 - **Illustrative.** Transcript text, speaker labels, timestamps, cue text, and input
   durations. These are made up. They are internally consistent — bounds are monotonic,
-  words fall inside their segment, nothing exceeds the source duration — so the shapes
-  are usable, but no number here is a claim about any real recording. Input durations
+  words fall inside their segment, and nothing exceeds the source duration. The runtime
+  validator additionally accepts the recorded FireRed integer-millisecond seam where a
+  final word ends at most 1 ms after its sentence; none of these illustrative blocks use
+  that allowance. The shapes are therefore usable, but no number here is a claim about any
+  real recording. Input durations
   borrow the real local fixture durations (1794.2 s is illustrative; 112.4 s and 27.8 s
-  match actual local media) purely so they are plausible.
+  match actual local media) purely so they are plausible. Machine-specific FluidAudio build and
+  teardown-byte examples are also illustrative; their integer fields are structural, while a live
+  pull or teardown measures the value for that root.
 - **Structural.** Key sets, nesting, enum members, and which fields are absent. These
   are the part that must match a real run exactly, and they are the reason this document
   exists.
@@ -44,8 +49,8 @@ this document is meant to support.
 ### Names this document introduces
 
 The contract pins the plan document and the envelope of a result. It does not name every
-result field, because it never printed a full result. The following names appear here
-first and should be read as **proposed, pending confirmation**, not as already settled:
+result field, because it never printed a full result. The following settled names appear here
+first:
 
 | Name | Carries | Requested by | Shown below |
 | --- | --- | --- | --- |
@@ -57,6 +62,11 @@ first and should be read as **proposed, pending confirmation**, not as already s
 
 `overlapped_speech[]` is the one result key this document does not demonstrate: none of the
 three use cases requests it. `TRANSCRIBE_CONTRACT.md` §1.4 is where it is requested.
+When it is requested, any transcript segment intersecting a detected overlap that intersects this
+document's selected scope keeps its text and bounds but omits `speaker`, even when the overlap began
+before the range. Masking is intersection-based, while the overlap interval and `overlap`
+abstention themselves remain start-owned. The tool does not turn known multi-speaker activity into
+one anonymous attribution.
 
 `turns[]` arrives with `diarization` rather than as a separate request, because there is no
 use for one without the other — labelling a transcript "three people spoke here" while
@@ -121,7 +131,7 @@ audio doctor
     "qwen3-forcedaligner": "absent", "silero-vad": "absent",
     "speaker-diarization-coreml": "absent", "vibevoice-asr-7b": "absent"
   },
-  "note": "An absent swift blocks only the packages that need it; it is reported rather than fatal."
+  "note": "Swift is required to build or repair FluidAudio; a ready built product runs directly without Swift. Missing provisioning tools are reported rather than fatal."
 }
 ```
 
@@ -132,10 +142,12 @@ Exit 0, and unlike every other block in this document this one is **real output*
 ship. Values remain illustrative: paths, versions, and the memory and disk counters are this
 machine's.
 
-`swift` is present here. Absent, it would report `present: false` and appear in the
-`blocked_by_missing_tool` list of the `swift` environment — reported rather than fatal, blocking
-only the packages that need it. That per-environment list is why there is no top-level
-`warnings` array: a blocked environment says so where a caller is already looking.
+`swift` is present here. Absent before FluidAudio has been built, it would report `present: false`
+and appear in the `blocked_by_missing_tool` list of the `swift` environment — reported rather
+than fatal, blocking provisioning or repair of the package that needs it. Once a ready built
+product exists, runtime executes that binary directly and the environment is no longer blocked
+by Swift leaving `PATH`. That per-environment list is why there is no top-level `warnings` array:
+a blocked environment says so where a caller is already looking.
 
 `environments` reports the four *provisioned* environments and not `core`, which is the CLI's own
 and always present. `packages` is a state per package rather than a count, because a caller
@@ -249,6 +261,7 @@ audio transcribe plan --input meeting.m4a \
                    "determinism_tolerance_ms": 0.0,
                    "determinism_basis": "argmax decode; back-to-back calls in one process produced byte-identical text, cross-process repetition untested"},
     "aligner":    {"backend": "qwen3-forcedaligner", "environment": "mlx",
+                   "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
                    "config": {"scope": "all_segments",
                               "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                    "selected_by": "add_on_required_by:word_timestamps"}
@@ -274,12 +287,12 @@ audio transcribe plan --input meeting.m4a \
     {"package": "fluidaudio", "environment": "swift", "kind": "toolchain",
      "requires_tool": ["swift"], "bytes": null, "provisioned": false},
     {"package": "speaker-diarization-coreml", "environment": "swift", "kind": "weights",
-     "bytes": null, "provisioned": false},
+     "bytes": 21599417, "provisioned": false},
     {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
-     "bytes": null, "provisioned": false}
+     "bytes": 1276475979, "provisioned": false}
   ],
-  "total_known_download_bytes": 2467859030,
-  "unsized_packages": ["fluidaudio", "speaker-diarization-coreml", "qwen3-forcedaligner"],
+  "total_known_download_bytes": 3765934426,
+  "unsized_packages": [],
   "warnings": [],
   "sample_output": {
     "sample": true,
@@ -334,13 +347,13 @@ Progress goes to stderr; stdout is the receipt:
      "bytes": 2327524, "digest_verified": true},
     {"package": "speaker-diarization-coreml", "environment": "swift",
      "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
-     "bytes": 129243647}
+     "bytes": 21599417}
   ],
   "skipped": [],
   "environments_created": ["mlx", "swift"],
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
-  "pulled_known_bytes": 4347110020,
+  "pulled_known_bytes": 4239465790,
   "unsized_packages": [],
   "warnings": [
     {"code": "license_unreviewed", "blocking": false,
@@ -399,7 +412,8 @@ audio packages verify
 ```json
 {
   "verified": [
-    {"package": "fluidaudio", "product_runs": true, "patches_applied": []},
+    {"package": "fluidaudio", "product_runs": true, "product_digest": "ok",
+     "patches_applied": ["fluidaudio-pinned-model-dir.patch"]},
     {"package": "qwen3-asr-1.7b-8bit", "revision": "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"},
     {"package": "qwen3-forcedaligner", "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15"},
     {"package": "silero-vad", "digest": "ok"},
@@ -416,7 +430,8 @@ audio packages verify
 }
 ```
 
-Exit 0. On the Swift-less machine above, the same command instead reports:
+Exit 0. After a partial stack pull on a Swift-less machine — where the Core ML weights
+provisioned but FluidAudio could not be built — the command instead reports:
 
 ```json
 {
@@ -426,14 +441,39 @@ Exit 0. On the Swift-less machine above, the same command instead reports:
 ```
 
 `blocked` rather than `ok`, and still exit 0. `speaker-diarization-coreml` needs no toolchain of
-its own, so it provisioned and left the `swift` environment `ready` in the registry — while
-nothing in that environment can run, because the built product is launched through `swift run`.
-`ok` there would tell a caller diarization is available on a machine that cannot do it. It is not
-a `failed` entry either: nothing provisioned is broken, the gap is a package `list` already
-reports as absent, and no `audio` command installs a toolchain for a `fix` to name. The registry
+its own, so it provisioned and left the `swift` environment `ready` in the registry, but no built
+runtime exists and Swift is absent to create or repair one. It is not a `failed` entry either:
+nothing provisioned is broken, the gap is a package `list` already reports as absent, and no
+`audio` command installs a toolchain for a `fix` to name. If a ready FluidAudio executable does
+exist, `verify` launches it directly; a successful launch makes the same Swift-less environment
+`ok`, while a nonlaunching binary leaves it `blocked` and fails the package check. The registry
 state stays `ready` in `doctor` and `list`, which report what the registry holds and publish
 `blocked_by_missing_tool` beside it; only `verify` states a verdict, so only `verify` needed the
 fourth word. VOCABULARY.md has the two enumerations.
+
+A registry contradiction fails closed instead. In a minimal root where `fluidaudio` is the only
+`ready` package while its `swift` environment entry is still `creating`, the relevant fields are:
+
+```json
+{
+  "verified": [],
+  "environments": {"swift": "absent"},
+  "failed": [
+    {
+      "environment": "swift",
+      "code": "environment_not_ready",
+      "detail": "registry state is 'creating' while ready package(s) depend on it: fluidaudio",
+      "packages": ["fluidaudio"],
+      "fix": "audio packages pull --repair fluidaudio"
+    }
+  ]
+}
+```
+
+A missing environment entry has the same verdict and code, with `absent` in `detail`. The
+environment gate runs before package verification: no dependent package appears in `verified`,
+and `verify` does not inspect its source checkout or launch its interpreter or built product. The
+typed failure makes the command exit 3.
 
 Which key an entry carries *is* the claim, and the two are not the same claim. `digest: "ok"`
 means the bytes on disk were hashed and match the manifest's pin. `revision` means that revision is
@@ -442,6 +482,42 @@ hashed, and there is nothing to hash them against. The absent key is the honest 
 `digest_verified: false` beside a `revision` would confess a check that was never designed rather
 than state the one that was. A four-repository package reports `revisions` for the same reason the
 receipt does: no one of them is *the* revision.
+
+Revision-pinned does not mean path-only. For each Hub package, `verify` and the run preflight also
+require the Hub cache index to bind each repository and revision to the recorded snapshot path,
+every manifest-filtered `allow_patterns` match, and the same total tree bytes recorded by pull.
+Those checks catch redirected or missing tokenizer files and size drift
+without pretending to be a cryptographic digest. Source-backed native packages add a live Git
+check before decode: HEAD, the exact tracked file set derived from the installed patch, every
+manifest-owned post-patch SHA256, matching receipt hashes, and zero ordinary **or ignored**
+untracked files. An unpatched checkout must have empty patch history, an empty hash map, and no
+tracked changes. An ignored `.pyc` or extension can still be imported, so Git's default decision to hide it
+is not a provenance exemption. A legacy receipt's `checkout_commit` may be the manifest's short
+`commit` alias or its full `resolved_commit`; new pulls record the full value and the live HEAD
+must always equal that full resolved commit. Selected managed Python interpreters are launched
+before decode. A selected native source checkout must also be installed under its exact
+manifest-pinned distribution name as a direct `file://` reference to that checkout; an
+interpreter that launches after sync but no longer imports the checkout is not ready. FluidAudio
+additionally requires exactly one contained, non-symlink executable
+product under its exact managed checkout. Its live SHA256 must match the pull receipt before it
+is launched; an executable bit or old receipt boolean is not liveness. The pinned source patch
+makes offline mode require `--model-dir` and disables ModelHub downloads, so run binds the
+product to the exact managed `speaker-diarization-coreml` directory rather than an implicit
+user cache.
+
+The hash-pinned URL package has no checkout or Hub index. Pull accepts its fast-path hit only when
+the exact manifest `<root>/models` target is a contained, non-symlink regular file, then applies the
+same check after download; a hash-matching symlink is replaced, not trusted. Silero's runtime
+auto-fetch uses the same target rule.
+
+An environment is trusted from its manifest-derived root outward, not from `registry.json` inward.
+Pull refuses a redirected `envs` parent or environment leaf before creation or install. For a ready
+root, `verify` checks that exact path is a non-symlink directory resolving under the provisioning
+root before freeze; a redirect makes `environments.<name>` `"drifted"` and adds an
+`environment_drifted` failure with `examples.environment_root` and a fix to replace the path before
+`verify --repair`. Run performs the same root check before interpreter launch or decode and reports
+`environment_<name>_managed_root` in `package_integrity_failed`. The normal venv `bin/python`
+symlink remains allowed inside the trusted environment root.
 
 `verify` reports every provisioned environment, not only the ones this pull touched, so the
 two `torch` environments appear as `absent` rather than being omitted — an environment missing from
@@ -501,7 +577,7 @@ Exit 0. `meeting.timed.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "S1",
      "text": "好，我們今天想聊一下你的工作。",
@@ -573,8 +649,9 @@ For in-process VAD it is the core process high-water mark observed through the s
 ordinary RSS and non-MLX processes, and its aggregate is likewise a maximum rather than a sum.
 
 The run recomputes `source.duration_seconds` from the canonical decode's PCM frame count so
-coverage uses the timeline actually processed. The path remains the original media path, and
-no temporary WAV format, sample-rate, or channel field enters the public `source` object.
+coverage uses the timeline actually processed. The path is the resolved absolute path of the
+original media, which lets a later export protect it across working directories; no temporary WAV
+format, sample-rate, or channel field enters the public `source` object.
 
 A run invoked with `--range 1402.88:` adds this exact subtree to
 `provenance.plan.execution`; an open end resolves to the canonical WAV duration, and selected
@@ -608,7 +685,7 @@ audio export --input meeting.timed.json --format srt -o meeting.srt
                  "never_spans_speaker_change": true, "quantization_ms": 1},
   "warnings": [
     {"code": "cue_timing_unvalidated", "blocking": false,
-     "detail": "boundary MAE/P95 is unmeasured for the aligner that produced this timing, so cue placement is producible but not claimed broadcast-acceptable"}
+     "detail": "boundary MAE/P95 is unmeasured for the backend that produced this timing, so cue placement is producible but not claimed broadcast-acceptable"}
   ]
 }
 ```
@@ -623,6 +700,47 @@ Exit 0. `meeting.srt`:
 2
 00:00:05,120 --> 00:00:07,440
 嗯，好啊，我做咗五年設計。
+```
+
+An on-disk untimed format reports segments rather than subtitle-only cue fields:
+
+```bash
+audio export --input meeting.transcript.json --format txt -o meeting.txt
+audio export --input meeting.transcript.json --format md -o meeting.md
+audio export --input meeting.transcript.json --format jsonl -o meeting.jsonl
+```
+
+```json
+{
+  "input": "meeting.transcript.json",
+  "output": "meeting.txt",
+  "format": "txt",
+  "segments": 2
+}
+```
+
+For a two-segment result, the three untimed files are exact deterministic projections of the
+normalized segment array. Exit 0, `meeting.txt`:
+
+```text
+First.
+Second.
+```
+
+Exit 0, `meeting.md`:
+
+```markdown
+# Transcript
+
+First.
+Second.
+```
+
+Exit 0, `meeting.jsonl`:
+
+```jsonl
+{"segment_id":"seg_0","text":"First."}
+{"segment_id":"seg_1","text":"Second."}
 ```
 
 Cue bounds come from the first and last word of each segment, not from the segment — this
@@ -651,6 +769,9 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
     "asr":     {"backend": "vibevoice-asr-7b", "environment": "torch-vibevoice",
                 "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
+                "tokenizer": {"materialized_role": "tokenizer",
+                              "repository": "Qwen/Qwen2.5-7B",
+                              "revision": "d149729398750b98c0af14eb82c78cfe92750796"},
                 "source_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
                 "patch": "vibevoice-logits-to-keep",
                 "config": {"device": "mps", "dtype": "bfloat16", "attention": "sdpa",
@@ -661,6 +782,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
+                "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
                 "config": {"scope": "all_segments",
                            "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
@@ -678,22 +800,22 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                            },
     "diarization":        {"satisfaction": "native",
                            "evidence": {"interface": "verified", "quality": "measured"},
-                           "note": "Native speaker labels and segment bounds; turns group adjacent same-speaker segments, so no bound is synthesized. Matched 39 of 75 annotated speaker changes on a dense conversation and is not validated for rapid backchannels, interruptions, or dense overlap."
+                           "note": "Each bounded speech segment forms its own native turn, so no gap or non-speech event is filled."
                            },
     "segment_timestamps": {"satisfaction": "native",
                            "evidence": {"interface": "verified", "quality": "unmeasured"}},
     "word_timestamps":         {"satisfaction": "derived", "backend": "qwen3-forcedaligner",
                             "evidence": {"interface": "verified", "quality": "unmeasured"},
-                            "note": "boundary MAE/P95 unlabeled; absent on any segment with no speech to align"}
+                            "note": "Boundary error against labels is unmeasured; non-speech events remain wordless, while unavailable ordinary-speech alignment records alignment_unavailable."}
   },
   "packages": [
     {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "kind": "weights",
-     "bytes": null, "provisioned": false},
+     "bytes": 17361048135, "provisioned": false},
     {"package": "qwen3-forcedaligner", "environment": "mlx", "kind": "weights",
-     "bytes": null, "provisioned": true}
+     "bytes": 1276475979, "provisioned": true}
   ],
-  "total_known_download_bytes": 0,
-  "unsized_packages": ["vibevoice-asr-7b"],
+  "total_known_download_bytes": 17361048135,
+  "unsized_packages": [],
   "warnings": [
     {"code": "measured_peak_exceeds_target", "blocking": false,
      "detail": "measured 20.28 GiB live MPS allocation on spice-30min-participant; a strict 16 GiB MPS cap OOMs at model load, measured on a 27.8 s probe, while an 18 GiB cap passed that probe"}
@@ -723,6 +845,12 @@ Exit 0. `qwen3-forcedaligner` is already `provisioned: true` from §1, so
 empty array rather than absent: it is a floor artifact, and the plan's warning that nothing
 here detects overlap is what says it cannot fill.
 
+The `vibevoice` capabilities payload carries the same source-scoped truncation risk in
+`failure_recovery.note`: on `spice-30min-participant`, 11,345 generated tokens over 1,800
+seconds is 6.30 tokens/second, so at that observed rate the declared 16,384-token cap
+projects to about 43 minutes of comparable audio. This is a rate extrapolation, not an
+observed truncation.
+
 ### 2.2 Provision and run
 
 ```bash
@@ -738,7 +866,7 @@ Exit 0. `demo.transcript.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "0", "start": 0.0, "end": 4.52,
      "text": "So, um, this is the new editor. You can, like, drag a clip here.",
@@ -808,6 +936,13 @@ not run on a segment with no speech to align. So `words` is absent on some segme
 carry no `words` key. A present empty array is a successful alignment with zero lexical tokens,
 not an abstention.
 
+An ordinary speech segment is different. If its requested alignment result is absent or
+nonconforming, its text and native bounds remain, `words` is absent, and one
+`alignment_unavailable` abstention carries those exact bounds. The run-level
+`word_timestamps` outcome becomes `abstained` while valid word streams on other segments remain.
+VibeVoice turns likewise do not bridge silence or a wordless event: every bounded speech segment
+gets its own native turn, even when an adjacent segment carries the same anonymous label.
+
 ### 2.3 Export subtitles with speaker voice tags
 
 ```bash
@@ -820,17 +955,29 @@ Exit 0. `demo.vtt`:
 WEBVTT
 
 1
-00:00:00.310 --> 00:00:04.520
-<v Speaker 0>So, um, this is the new editor. You can, like, drag a clip here.
+00:00:00.310 --> 00:00:02.210
+<v 0>So, um, this is the new editor.
 
 2
+00:00:02.580 --> 00:00:04.520
+<v 0>You can, like, drag a clip here.
+
+3
 00:00:06.220 --> 00:00:07.860
-<v Speaker 1>And it renders straight away?
+<v 1>And it renders straight away?
 ```
 
 The `[Environmental Sounds]` segment produced no cue: it has no word stream, and cue
 bounds come from words. Whether a non-speech event tag *should* render as an SDH cue is a
 subtitle-convention question parked in issue #10, not a transcription one.
+The same omission rule applies to a **bounded** ordinary speech segment carrying a same-bounds
+`alignment_unavailable` abstention when at least one other segment has real timed words; its
+ledger entry and abstained capability outcome preserve the warning. An unbounded Qwen segment
+cannot be associated safely with a unit-level abstention because schema v1 carries no
+segment-to-unit link, so SRT/VTT refuse that mixed result rather than silently dropping text.
+With no real word stream anywhere,
+subtitle export refuses instead of inventing bounds, except for an all-bounded-event result whose
+timing provenance is already `produced`, which deliberately renders an empty subtitle.
 
 ## 3. Dialect field recording
 
@@ -851,22 +998,30 @@ audio transcribe plan --input field.wav --stack firered \
     "decode":     {"backend": "ffmpeg",
                    "config": {"sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"}},
     "vad":        {"backend": "firered-vad", "environment": "torch-firered",
+                   "revision": "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+                   "source_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
                    "selected_by": "stack"},
     "lid":        {"backend": "firered-lid", "environment": "torch-firered",
+                   "revision": "1bb4d285c8456429385d9c0810300df4297bc11b",
+                   "source_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
                    "config": {"batch_size": 4},
                    "selected_by": "requirement:lid",
                    "granularity": "vad_region",
                    "cost_note": "162.09 s with LID versus 84.24 s without, on the 139.284 s probe"},
     "asr":        {"backend": "firered-asr2-aed", "environment": "torch-firered",
+                   "revision": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+                   "source_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
                    "config": {"device": "cpu", "dtype": "float32", "batch_size": 4,
                               "return_timestamp": true, "beam_size": 3, "nbest": 1,
                               "decode_max_len": 0, "softmax_smoothing": 1.25,
                               "aed_length_penalty": 0.6, "eos_penalty": 1.0},
                    "selected_by": "stack",
                    "deterministic": true,
-                   "determinism_tolerance_ms": 1.0,
-                   "determinism_basis": "exact-repeat 60-minute fixture: both halves' text sequences equal the standalone 30-minute run, maximum rebased timestamp drift 1.0 ms within a declared 2.0 ms tolerance; normalized segments are therefore not byte-equal"},
+                   "determinism_tolerance_ms": 2.0,
+                   "determinism_basis": "exact-repeat 60-minute fixture repeated the text and speaker-null sequences; maximum rebased timestamp drift was 1.0000000000002037 ms, within the frozen 2.0 ms tolerance, so normalized segments were not byte-equal"},
     "punctuator": {"backend": "firered-punc", "environment": "torch-firered",
+                   "revision": "e448fd967f44182a1c323cc30f5d89f2400c28da",
+                   "source_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
                    "config": {"batch_size": 4},
                    "selected_by": "floor:punctuated_sentence_segmented_text",
                    "recases_text": true}
@@ -895,10 +1050,10 @@ audio transcribe plan --input field.wav --stack firered \
   },
   "packages": [
     {"package": "firered-asr2s", "environment": "torch-firered", "kind": "weights",
-     "bytes": null, "provisioned": false, "includes_lid_weights": true}
+     "bytes": 9583893873, "provisioned": false, "includes_lid_weights": true}
   ],
-  "total_known_download_bytes": 0,
-  "unsized_packages": ["firered-asr2s"],
+  "total_known_download_bytes": 9583893873,
+  "unsized_packages": [],
   "warnings": [],
   "sample_output": {
     "sample": true,
@@ -934,7 +1089,7 @@ Exit 0. `field.transcript.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
   "segments": [
     {"segment_id": "seg_0", "start": 0.38, "end": 1.62,
      "text": "This is a测试。",
@@ -970,12 +1125,13 @@ Exit 0. `field.transcript.json`:
     "outcomes": {"verbatim": "produced", "word_timestamps": "produced", "vad": "produced", "segment_timestamps": "produced", "lid": "produced"},
     "observed": {
       "stage_wall_seconds": {"decode": 0.09, "vad": 0.61, "lid": 8.83, "asr": 9.14,
-                             "punctuator": 1.07},
-      "total_wall_seconds": 19.74,
+                             "punctuator": 1.07, "firered_process_overhead": 1.0},
+      "total_wall_seconds": 20.74,
       "peak_rss_bytes_by_stage": {"firered_process": 13169377280},
       "peak_rss_bytes": 13169377280,
       "segments": 2,
       "words": 11,
+      "segments_without_words": 0,
       "vad_regions": 2,
       "lid_regions": 2,
       "abstentions": 0,
@@ -992,6 +1148,12 @@ two segments happen to sit one per region here. And `word_timestamps` covers onl
 six words of `seg_1` in this printout for length; a real result has one word object per
 non-punctuation token of every segment, which is what the
 `punctuation_invariant_checked` flag asserts.
+
+`firered_process_overhead` is the measured residual between the one FireRed process wall and its
+explicitly timed VAD/LID/ASR/punctuator phases. It keeps imports, model loading, audio I/O, and
+framework overhead visible so `total_wall_seconds` still equals the real non-overlapping wall
+sum; it is not a sixth backend stage or an estimated allocation. A negative residual beyond the
+measurement tolerance is invalid rather than silently clamped into a plausible total.
 
 ### 3.2 Export
 
@@ -1237,8 +1399,8 @@ the explicit overwrite decision:
 }
 ```
 
-No force flag may target the source, including through the derived partial filename. The tool
-does not invent a replacement path owned by the caller:
+No force flag may target an input transcript or canonical source media, including through a
+derived partial filename. The tool does not invent a replacement path owned by the caller:
 
 ```json
 {
@@ -1246,22 +1408,88 @@ does not invent a replacement path owned by the caller:
   "field": "--output",
   "provided": "meeting.json",
   "resolved_target": "meeting.partial.json",
-  "fix": "choose an --output whose transcript and derived partial paths do not resolve to the canonical input; --force cannot override this"
+  "fix": "choose an --output that does not resolve to an input transcript, its derived partial path, or canonical source media; --force cannot override this"
 }
 ```
+
+An output or derived partial path whose identity cannot be resolved fails before decode, and an
+export destination whose parent or final file cannot be resolved and written safely reports the
+same typed refusal rather than surfacing an untyped filesystem exception:
+
+```json
+{
+  "code": "output_path_invalid",
+  "field": "--output",
+  "provided": "meeting.json",
+  "target": "meeting.partial.json",
+  "reason": "Symlink loop from 'meeting.partial.json'",
+  "fix": "choose an --output whose destination and parent directory can be resolved and written safely"
+}
+```
+
+Three export validation refusals are fixed-shape exit-2 payloads. `--force` has no effect when an
+export is going to stdout, so it must be removed or paired with an explicit destination:
+
+```json
+{
+  "code": "output_required_for_force",
+  "field": "--force",
+  "provided": true,
+  "requires": "--output",
+  "fix": "remove --force when writing to stdout, or add --output PATH"
+}
+```
+
+An input that is not the exact normalized result schema is refused at the input boundary:
+
+```json
+{
+  "code": "export_input_invalid",
+  "field": "--input",
+  "provided": "invalid.json",
+  "reason": "document is not the exact current normalized result shape",
+  "fix": "regenerate or repair the input transcript before exporting it"
+}
+```
+
+Valid result documents still cannot be merged when doing so would guess across different source
+identities or overlapping ownership. Two inputs with different canonical sources report:
+
+```json
+{
+  "code": "export_inputs_incompatible",
+  "field": "--input",
+  "provided": ["meeting.part1.json", "other.json"],
+  "reason": "source identity, duration, or timebase differs",
+  "fix": "export these inputs separately, or select results with the same canonical source and non-overlapping ranges"
+}
+```
+
+The same typed refusal protects an evidence boundary specific to VibeVoice. Native anonymous
+speaker labels are local to one generation, so independently generated partial and resumed
+documents that requested `diarization` cannot be merged without falsely equating their labels.
+Its `reason` is `VibeVoice native speaker labels are local to each independent generation and
+cannot be reconciled across multiple input documents`, and its actionable `fix` is `export these
+VibeVoice documents separately, or rerun the desired ranges together as one generation`.
 
 | Code | Exit | Trigger | What `fix` says |
 | --- | --- | --- | --- |
 | `packages_not_provisioned` | 3 | `run` before `pull` | The `audio packages pull --stack` line for this stack — every package it can use, since narrowing a pull to a want set is reserved for the planner |
-| `package_integrity_failed` | 3 | a digest, size, or revision mismatch on something already provisioned | `audio packages pull --repair <package>` |
-| `timing_required_for_format` | 2 | `export --format srt` on a transcript with no word timing | The `transcribe run` line that would produce timing, with `word_timestamps` added |
+| `package_integrity_failed` | 3 | a digest/revision/Hub cache identity/allowlist/recorded-size mismatch; a URL artifact that is not the contained non-symlink manifest file; a nonlaunching interpreter or redirected managed environment root; or a live source checkout whose HEAD, tracked-name set, manifest hashes, receipt shape/hashes, or ordinary/ignored untracked files differ | `audio packages pull --repair <package>`; for a redirected environment, first replace the path named by `actual` |
+| `timing_required_for_format` | 2 | subtitle export with no recorded word timing and a safe absolute source identity | The `transcribe run` line that would produce timing, with `word_timestamps` added |
+| `timing_required_for_format` | 2 | `word_timestamps` is already `produced`, but no segment contains usable timed words | A sentence choosing `md`/`txt`/`jsonl` or a different transcript with real timed words; rerunning the same request would be inert |
+| `timing_required_for_format` | 2 | word timing is missing and a legacy result's `source.path` is relative, missing, non-file, or unresolvable | A sentence to regenerate the transcript with the current CLI; it cannot safely name an original-media rerun |
 | `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing; a sentence instead when zero units completed and no range can make progress |
 | `backend_failed` | 1 | a crash, most often out of memory | A suggestion — a smaller stack, or freeing memory — and it is a suggestion, not a guarantee |
 
-The last row is the honest exception. Everything above it has a correction the tool can
-compute; a crash does not, so `fix` proposes rather than instructs, and the payload says
-which `role` and `backend` failed so a caller can tell a memory ceiling from a missing
-toolchain.
+The sentence remedies are the honest exceptions. Output safety and export validation require the
+caller to choose a destination, remove an inert flag, repair a transcript, or separate incompatible
+inputs; the CLI cannot invent those decisions. Replaying an already-produced timing outcome cannot
+create words it did not contain; a legacy relative or vanished `source.path` cannot safely identify
+the original media from another working directory; and a crash has no deterministic repair. In
+each case `fix` says what is true rather than printing a command that only looks executable. A
+backend failure also names the `role` and `backend` so a caller can tell a memory ceiling from a
+missing toolchain.
 
 Two further refusals belong to `audio packages pull` rather than to `transcribe`, and §1.3
 publishes both: `want_not_implemented` and `stack_conflicts_with_named_packages`, each exit 2 and
@@ -1289,6 +1517,30 @@ A Qwen budget stop emits this exit-4 shape and writes the conforming partial nam
 }
 ```
 
+After the ranged resume finishes, multi-input export preserves the caller's source-timeline
+order and reports that ordered input list rather than collapsing it to one path:
+
+```bash
+audio export --input meeting.timed.partial.json --input meeting.timed.rest.json \
+  --format jsonl -o meeting.timed.merged.jsonl
+```
+
+```json
+{
+  "input": ["meeting.timed.partial.json", "meeting.timed.rest.json"],
+  "output": "meeting.timed.merged.jsonl",
+  "format": "jsonl",
+  "segments": 4
+}
+```
+
+Segment and word ids are document-scoped. The two inputs may both begin at `seg_0`; export
+validates disjoint owned intervals, concatenates them in the supplied order, and re-ids the
+merged stream once so the output has no duplicate ids. It never sorts away an incorrect input
+order or guesses through overlapping coverage. This example applies to Qwen, FireRed, and
+non-diarized VibeVoice results; independently generated VibeVoice results with native diarization
+use the refusal above because their anonymous labels have no cross-generation identity.
+
 ## 5. Teardown
 
 ```bash
@@ -1302,17 +1554,17 @@ audio packages list
     {"package": "qwen3-asr-1.7b-8bit", "environment": "mlx", "bytes": 2467859030,
      "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b"]},
-    {"package": "fluidaudio", "environment": "swift", "bytes": null,
+    {"package": "fluidaudio", "environment": "swift", "bytes": 368187472,
      "state": "ready", "license_declared": "apache-2.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
-    {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 129243647,
+    {"package": "speaker-diarization-coreml", "environment": "swift", "bytes": 21599417,
      "state": "ready", "license_declared": "cc-by-4.0", "license_reviewed": true,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice", "firered"]},
     {"package": "qwen3-forcedaligner", "environment": "mlx", "bytes": 1276475979,
      "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["qwen-1.7b", "qwen-0.6b", "vibevoice"]},
-    {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "bytes": 17349559904,
-     "state": "ready", "license_declared": "mit", "license_reviewed": false,
+    {"package": "vibevoice-asr-7b", "environment": "torch-vibevoice", "bytes": 17361048135,
+     "state": "ready", "license_declared": "mixed: mit + apache-2.0", "license_reviewed": false,
      "used_by_stacks": ["vibevoice"]},
     {"package": "firered-asr2s", "environment": "torch-firered", "bytes": 9583893873,
      "state": "ready", "license_declared": "apache-2.0", "license_reviewed": false,
@@ -1320,16 +1572,16 @@ audio packages list
   ],
   "environments": {"mlx": "ready", "torch-firered": "ready", "torch-vibevoice": "ready",
                    "swift": "ready"},
-  "total_known_bytes": 30807032433,
-  "unsized_packages": ["fluidaudio"]
+  "total_known_bytes": 31186708136,
+  "unsized_packages": []
 }
 ```
 
-Every byte count here is real, read from the Hub at the revision each package pins.
-`fluidaudio` is the one that stays `null`: it is a build product, so its size depends on the
-toolchain that produced it, and `pull` records the measured value afterwards. `total_known_bytes`
-is named for what it is, because a total that silently omitted an unsized package would
-understate the disk a `purge` reclaims.
+The Hub byte counts are the recorded revision measurements. FluidAudio is different: the manifest
+has no pre-build estimate, but pull records the live build bytes, so a ready `list` entry carries
+an integer and `unsized_packages` is empty. Its illustrated value varies with the toolchain.
+`total_known_bytes` is named for what it is because a total must not silently omit an unsized
+package when one is actually present.
 
 `license` became two fields. `license_declared` is what the model card says at the pinned
 revision; `license_reviewed` is whether anyone read the terms. Only FluidAudio and
@@ -1348,10 +1600,11 @@ audio packages remove vibevoice-asr-7b
   "environments_removed_reason": "no other provisioned package targets torch-vibevoice",
   "environments_kept": ["mlx", "swift", "torch-firered"],
   "environments_kept_reason": "qwen3-asr-1.7b-8bit, qwen3-forcedaligner still need mlx; fluidaudio, speaker-diarization-coreml still need swift; firered-asr2s still needs torch-firered",
-  "hub_revisions_deleted": ["d0c9efdb8d614685062c04425d91e01b6f37d944"],
+  "hub_revisions_deleted": ["d0c9efdb8d614685062c04425d91e01b6f37d944", "d149729398750b98c0af14eb82c78cfe92750796"],
   "hub_revisions_not_found": [],
-  "hub_cache_note": "only revisions this tool recorded as materialized here were deleted; the Hugging Face cache may be shared with other tools",
-  "reclaimed_bytes": 17349559904
+  "hub_revisions_retained": [],
+  "hub_cache_note": "weights live in the shared Hugging Face cache, not under this root. Only revisions this root recorded as downloaded and the current manifest still pins for that package are eligible for deletion; pre-existing and out-of-manifest revisions are retained because they may belong to another tool, another provisioning root, or an earlier experiment",
+  "reclaimed_bytes": 18000000000
 }
 ```
 
@@ -1362,14 +1615,17 @@ still reading as `ready`.
 
 Reference counting cuts both ways here, which is the point of showing it: `torch-vibevoice`
 held exactly one package and dies with it, while `mlx` survives because the aligner and the
-ASR checkpoint are still provisioned there. The count is derived from the package table each
-time rather than stored, so it cannot drift out of agreement with what is actually on disk.
+ASR checkpoint are still provisioned there. Package-to-environment identity comes from the
+installed manifest rather than a mutable registry field, so the count cannot be redirected.
 
 `reclaimed_bytes` is measured, not projected. Most of it is a Hub revision rather than anything
-under the root, so `remove` deletes exactly the commit hashes the registry recorded — by hash,
-through the Hub cache's own revision-scoped deletion, leaving any sibling revision of the same
-repository alone. A revision the cache no longer holds appears in `hub_revisions_not_found`
-rather than being counted as freed.
+under the root. A revision is deletion-eligible only when the receipt records it as downloaded by
+this root, the installed manifest still pins it for that package, and it was not pre-existing;
+everything else appears in `hub_revisions_retained` and, when nonempty, gets a
+`hub_revisions_retained_reason`. Local deletion targets and environment references also come from
+the installed manifest. An unknown registry package is dropped without following its paths, and a
+failed local deletion leaves its registry owner intact and contributes no reclaimed bytes. A
+revision the cache no longer holds appears in `hub_revisions_not_found`, not as deleted.
 
 ```bash
 audio packages purge --dry-run
@@ -1378,24 +1634,57 @@ audio packages purge --dry-run
 ```json
 {
   "would_remove": {
-    "packages": ["qwen3-asr-1.7b-8bit", "fluidaudio", "speaker-diarization-coreml",
-                 "qwen3-forcedaligner", "firered-asr2s"],
-    "environments": ["mlx", "torch-firered", "swift"],
-    "root": "/Users/you/Library/Caches/audio-processing-cli"
+    "packages": ["firered-asr2s", "fluidaudio", "qwen3-asr-1.7b-8bit",
+                 "qwen3-forcedaligner", "speaker-diarization-coreml"],
+    "environments": ["mlx", "swift", "torch-firered"],
+    "root": "/Users/you/Library/Caches/audio-processing-cli",
+    "hub_revisions": ["0e1a68e91d815300c7c9754b2a7639378b23db15",
+                      "1bb4d285c8456429385d9c0810300df4297bc11b",
+                      "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+                      "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+                      "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+                      "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
+                      "e448fd967f44182a1c323cc30f5d89f2400c28da"]
   },
-  "reclaimable_known_bytes": 13457472529,
-  "unsized_packages": ["fluidaudio"],
+  "would_keep": {"hub_revisions": []},
+  "hub_cache_note": "weights live in the shared Hugging Face cache, not under this root. Only revisions this root recorded as downloaded and the current manifest still pins for that package are eligible for deletion; pre-existing and out-of-manifest revisions are retained because they may belong to another tool, another provisioning root, or an earlier experiment",
+  "reclaimable_known_bytes": 13825660001,
+  "reclaimable_note": "projected from manifest-bounded registry receipts and package sizes; it counts deletion-eligible Hub weights and recorded local package artifacts, but excludes retained revisions and environment bytes",
+  "unsized_packages": [],
   "untouched": ["user media", "transcript and subtitle outputs"]
 }
 ```
 
-`--dry-run` projects from the registry, so it reports `reclaimable_known_bytes` and names what
-it could not size. The real `purge` reports `reclaimed_bytes`, which is what the filesystem and
-the Hub cache actually gave back. The two are related and deliberately not the same field.
+`--dry-run` projects from manifest-bounded receipts, so it reports both the revisions eligible
+for deletion and those it will retain, `reclaimable_known_bytes`, and what it could not size. The
+real `purge` reports what actually happened:
 
 ```json
-{"note": "the real run's shape follows the same keys, with reclaimed_bytes in place of the projection"}
+{
+  "removed": {
+    "packages": ["firered-asr2s", "fluidaudio", "qwen3-asr-1.7b-8bit",
+                 "qwen3-forcedaligner", "speaker-diarization-coreml"],
+    "environments": ["mlx", "swift", "torch-firered"]
+  },
+  "hub_revisions_deleted": ["0e1a68e91d815300c7c9754b2a7639378b23db15",
+                            "1bb4d285c8456429385d9c0810300df4297bc11b",
+                            "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+                            "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+                            "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
+                            "a8379a2e2f9e313c9292cdf1af4055ab56d50d55",
+                            "e448fd967f44182a1c323cc30f5d89f2400c28da"],
+  "hub_revisions_not_found": [],
+  "hub_revisions_retained": [],
+  "hub_cache_note": "weights live in the shared Hugging Face cache, not under this root. Only revisions this root recorded as downloaded and the current manifest still pins for that package are eligible for deletion; pre-existing and out-of-manifest revisions are retained because they may belong to another tool, another provisioning root, or an earlier experiment",
+  "reclaimed_bytes": 14500000000,
+  "unsized_packages": [],
+  "untouched": ["user media", "transcript and subtitle outputs"]
+}
 ```
+
+The real response deliberately has no `would_remove`, `would_keep`, `reclaimable_known_bytes`,
+or `reclaimable_note`. Its `reclaimed_bytes` integer is measured from the managed filesystem and
+what the Hub cache actually returned, so its value can differ from the dry-run projection.
 
 ```bash
 audio packages purge

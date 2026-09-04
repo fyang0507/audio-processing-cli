@@ -221,6 +221,74 @@ def test_timed_output_cannot_leave_the_source_duration() -> None:
             },
         ))
 
+
+@pytest.mark.parametrize(
+    ("word_start", "word_end"),
+    [(0.998, 2.0), (2.0, 3.002)],
+)
+def test_words_must_stay_inside_explicit_segment_bounds(
+    word_start: float,
+    word_end: float,
+) -> None:
+    requested = frozenset({"segment_timestamps", "word_timestamps"})
+    with pytest.raises(ResultError, match="words must fall inside the segment bounds"):
+        serialize_result(base_result(
+            segments=[{
+                "segment_id": "seg_0",
+                "text": "Hello.",
+                "start": 1.0,
+                "end": 3.0,
+                "words": [{
+                    "word_id": "w_0",
+                    "text": "Hello",
+                    "start": word_start,
+                    "end": word_end,
+                }],
+            }],
+            requested_capabilities=requested,
+            provenance={
+                "stack": "firered",
+                "outcomes": {
+                    "segment_timestamps": "produced",
+                    "word_timestamps": "produced",
+                },
+                "observed": {},
+                "plan": {},
+            },
+        ))
+
+
+def test_words_preserve_the_recorded_one_millisecond_firered_end_seam() -> None:
+    requested = frozenset({"segment_timestamps", "word_timestamps"})
+    payload = serialize_result(base_result(
+        segments=[{
+            "segment_id": "seg_0",
+            "text": "Hello.",
+            "start": 1.0,
+            "end": 3.0,
+            "words": [{
+                "word_id": "w_0",
+                "text": "Hello",
+                "start": 2.0,
+                "end": 3.001,
+            }],
+        }],
+        requested_capabilities=requested,
+        provenance={
+            "stack": "firered",
+            "outcomes": {
+                "segment_timestamps": "produced",
+                "word_timestamps": "produced",
+            },
+            "observed": {},
+            "plan": {},
+        },
+    ))
+
+    assert payload["segments"][0]["end"] == 3.0
+    assert payload["segments"][0]["words"][0]["end"] == 3.001
+
+
 def test_overlap_id_is_a_non_empty_document_scoped_id() -> None:
     requested = frozenset({"overlapped_speech"})
     provenance = {
@@ -240,10 +308,22 @@ def test_overlap_id_is_a_non_empty_document_scoped_id() -> None:
             ))
 
 def test_abstention_reason_is_the_closed_recorded_enum() -> None:
-    assert ABSTENTION_REASONS == {"overlap", "short_turn", "raw_fragment"}
+    assert ABSTENTION_REASONS == {
+        "alignment_unavailable", "overlap", "short_turn", "raw_fragment",
+    }
     for reason in ABSTENTION_REASONS:
-        capability = "overlapped_speech" if reason == "overlap" else "diarization"
-        optional = {"overlapped_speech": []} if reason == "overlap" else {"turns": []}
+        if reason == "alignment_unavailable":
+            capability = "word_timestamps"
+            optional = {}
+            outcome = "abstained"
+        elif reason == "overlap":
+            capability = "overlapped_speech"
+            optional = {"overlapped_speech": []}
+            outcome = "produced"
+        else:
+            capability = "diarization"
+            optional = {"turns": []}
+            outcome = "produced"
         emitted = serialize_result(base_result(
             abstentions=[{
                 "abstention_id": "ab_0", "reason": reason, "start": 0.0, "end": 0.2,
@@ -251,7 +331,7 @@ def test_abstention_reason_is_the_closed_recorded_enum() -> None:
             requested_capabilities=frozenset({capability}),
             provenance={
                 "stack": "qwen-1.7b",
-                "outcomes": {capability: "produced"},
+                "outcomes": {capability: outcome},
                 "observed": {},
                 "plan": {},
             },
@@ -370,7 +450,7 @@ def test_coverage_cannot_leave_the_source_timeline() -> None:
         ({"covered_through_seconds": 5.0, "missing_intervals": [[5.0, 10.0]]},
          "without gaps"),
         ({"units_completed": 2}, "leave at least one"),
-        ({"scope_intervals": [[0.0, 6.0], [5.0, 10.0]]}, "must not overlap"),
+        ({"scope_intervals": [[0.0, 6.0], [5.0, 10.0]]}, "non-overlapping"),
     ],
 )
 def test_coverage_ledger_must_be_internally_consistent(
@@ -402,6 +482,42 @@ def test_coverage_validator_exercises_multiple_disjoint_scopes() -> None:
     }
     payload = serialize_result(base_result(complete=False, coverage=coverage))
     assert payload["coverage"] == coverage
+
+
+def test_coverage_tolerance_does_not_scale_with_large_source_timestamps() -> None:
+    coverage = {
+        "scope_intervals": [[999_999_000.0, 1_000_000_000.0]],
+        "covered_through_seconds": 999_999_500.0,
+        "covered_fraction": 0.5009,
+        "covered_intervals": [[999_998_999.1, 999_999_500.0]],
+        "missing_intervals": [[999_999_500.0, 1_000_000_000.0]],
+        "units_total": 2,
+        "units_completed": 1,
+    }
+    source = {
+        "path": "long.wav",
+        "duration_seconds": 1_000_000_000.0,
+        "timebase": "seconds",
+    }
+    with pytest.raises(ResultError, match="without gaps"):
+        serialize_result(base_result(
+            source=source, complete=False, coverage=coverage
+        ))
+
+
+def test_coverage_interval_arrays_must_be_chronological() -> None:
+    coverage = {
+        "scope_intervals": [[0.0, 3.0]],
+        "covered_through_seconds": 1.0,
+        "covered_fraction": 0.5,
+        "covered_intervals": [[2.0, 2.5], [0.0, 1.0]],
+        "missing_intervals": [[1.0, 2.0], [2.5, 3.0]],
+        "units_total": 4,
+        "units_completed": 2,
+    }
+
+    with pytest.raises(ResultError, match="chronological"):
+        serialize_result(base_result(complete=False, coverage=coverage))
 
 
 def test_absent_sentinel_is_not_serialized() -> None:

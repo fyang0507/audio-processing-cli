@@ -1,6 +1,6 @@
 # `transcribe` — implementation plan
 
-**Status: plan, agreed 2026-08-19. None of it is built.** This answers
+**Status: implemented through phase F on 2026-09-03.** This records the plan that answered
 [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md): the layer under the settled
 agent-facing surface — modules, adapter boundaries, the stack table, orchestration, the test
 strategy, and a sequence. It does not restate the surface. Where this document and
@@ -112,7 +112,7 @@ left open or corrects something the evidence pass found.
 
 | Decision | Reason |
 | --- | --- |
-| **FireRed runs as one subprocess**, four Hub repositories in one package, three or four models loaded by request. | Provisioning and residency are different questions and only the second was wrong. One package, one download, one process is the measured configuration; splitting into four subprocesses would reimplement `FireRedAsr2System.process`'s glue, pay four model loads, and invalidate every recorded FireRed figure. `execution.residency` is corrected to the granularity that holds instead. |
+| **FireRed runs as one subprocess**, four Hub repositories in one package, three or four models loaded by request. | Provisioning and residency are different questions and only the second was wrong. One package, one download, one process is the measured configuration; splitting into four subprocesses would pay four model loads and invalidate every recorded FireRed figure. Inside that one process the stage intentionally mirrors the pinned `FireRedAsr2System.process` phase order rather than calling the method: upstream exposes neither injected external VAD nor a per-region completion ledger, both of which the shipped contract needs. The mirror keeps the same co-resident model objects and global post-filter punctuation stream. An executable source-backed test pins the exact upstream method body at `4e7d9aa` and compares its successful raw `sentences`, `words`, and `vad_segments_ms` with the mirror on the same stateful components. `execution.residency` is corrected to the granularity that holds instead. |
 | **No `--speakers` flag.** The diarizer estimates its own speaker count. | Simpler surface, and mechanically safe: `fluidaudiocli`'s offline options are "all optional" and `--num-speakers` merely overrides min/max. Cost, recorded rather than hidden: every cited diarization figure passed `--num-speakers 2`, so the shipped configuration is not the measured one. |
 | **`--language` stays, as a closed enum on the Qwen stacks only.** 30 declared names, matched case-insensitively, passed through verbatim, refused otherwise. | `_build_prompt` (`qwen3_asr.py:926-929`) falls back to the raw string when a name misses, so `--language EN` would interpolate `language EN<asr_text>` into the prompt with no error — a flag that parses and silently changes the decode. The accepted set is closed and readable, so refusing is possible without any translation table. Dropping the flag instead would return every recorded Qwen figure to a configuration no caller can request. |
 | **The language hint never reaches the aligner.** `roles.aligner.config.language_rule` declares the recorded CJK rule verbatim. | Finding 3, corrected against the pinned source: the rule is measured provenance. Chinese and Cantonese share the same fallback tokenizer, so no relative quality claim is made without a comparison run. |
@@ -158,7 +158,7 @@ it describes (`run_interview_pipeline.py:175`, "strictly sequential fresh subpro
 | --- | --- | --- |
 | `core` | in-process, `SileroOnnxVad` | **Declared exception.** No subprocess: it is a 2.3 MB hash-pinned ONNX file in the tool's own environment, already normalized to `SpeechRegion`, and there is no model object to leak. Normalization here is by code, not by construction. |
 | `mlx` | `<root>/envs/mlx/bin/python <stage script> <request> <result>` | one process per stage, enforced by exit |
-| `torch-firered` | same, one script for the whole stack | four models co-resident inside it (finding 1) |
+| `torch-firered` | same, one script for the whole stack; the pinned phase order is mirrored to support injected VAD and a completion ledger | four models co-resident inside it (finding 1) |
 | `torch-vibevoice` | same | one model |
 | `swift` | the built product directly | one process |
 
@@ -209,12 +209,14 @@ checkable; a caller timing the command externally sees more, because interpreter
 artifact writes are outside every stage — the same distinction
 `run_interview_pipeline.py:201-206` draws.
 
-`abstentions[].reason` is a three-member enum, one per cause the recorded runner distinguishes:
+`abstentions[].reason` is a four-member enum. Three come from the recorded diarizer runner:
 `overlap` (more than one speaker active), `short_turn` (an accepted turn below the 500 ms
 minimum), and `raw_fragment` (a span whose only activity was a sub-250 ms diarizer fragment).
-On the 30-minute interview those are 9, 33, and 54 entries covering 25 s of 1800 s. The
-budget-unprocessed turns the runner files beside them are **coverage**, not abstention: nothing
-was declined, the work was not reached.
+On the 30-minute interview those are 9, 33, and 54 entries covering 25 s of 1800 s. The fourth,
+`alignment_unavailable`, records the native bounds of an ordinary VibeVoice speech segment whose
+requested aligner stream is absent or nonconforming; bracketed event tags remain wordless without
+becoming abstentions. Budget-unprocessed turns are **coverage**, not abstention: nothing was
+declined, the work was not reached.
 
 `coverage` is over the source timeline: `missing_intervals` are the extents of units that did
 not run, `covered_intervals` their complement, `covered_fraction` covered duration over source
@@ -330,7 +332,7 @@ turn bounds equal the first run's for the units they share. The scaffold strip i
 the **no-hint** configuration (finding 2). `peak_rss_bytes` is the maximum of the per-stage
 peaks, never their sum.
 
-### Phase D — FireRed (issue #22; next)
+### Phase D — FireRed (issue #22; implemented)
 
 One stage script for the whole stack, three or four models by request. Carries the word
 partition (finding 5), `lid_regions[]` by region grouping with the label-constancy assertion
@@ -342,29 +344,41 @@ when a word is dropped from the stream. `lid_regions[]` bounds equal `vad_region
 a region with two distinct labels fails. With LID off, no `lang` or `lang_confidence` key exists
 anywhere in the document. `words` never carries a confidence field.
 
-### Phase E — VibeVoice (issue #23)
+### Phase E — VibeVoice (issue #23; implemented)
 
 Both forms of "no speaker" — the literal `"N/A"` and the absent key — become an absent key.
 Non-speech event tags survive as segments with bounds and no words. The truncation salvage of
 finding 4, `max_new_tokens` declared, and the 43-minute projection in the catalog.
 
 *Acceptance.* A recorded segment carrying `Speaker: "N/A"` produces no `speaker` key, and the
-test fails if the string reaches the document. `segments_without_words` counts the event tags
-while `word_timestamps` still reports `produced`. A truncated `raw_text`, cut at an arbitrary
-offset from a real artifact, yields every complete segment before the cut, exit 4, and a
-coverage watermark at the last complete segment's end — and yields nothing at all through
+test fails if the string reaches the document. Event tags count in `segments_without_words` while
+`word_timestamps` still reports `produced`. If an ordinary speech segment's requested alignment
+is absent, invalid, or cannot reproduce its text, the segment survives without `words`, one
+`alignment_unavailable` abstention carries its native bounds, and the run-level outcome becomes
+`abstained` while conforming word streams on other segments remain. A truncated `raw_text`, cut at
+an arbitrary offset from a real artifact, yields every complete segment before the cut, exit 4,
+and a coverage watermark at the last complete segment's end — and yields nothing at all through
 `post_process_transcription`, which is the reason the salvage exists.
+Native turns expose every bounded speech segment separately, so neither a gap nor an event is
+filled by grouping same-speaker labels. Across every stack, a segment intersecting a requested
+detected overlap that intersects document scope keeps text and bounds but omits `speaker`, even
+when the overlap starts before the range; overlap and abstention rows remain start-owned. FireRed
+and VibeVoice enforce the intersection explicitly; Qwen reconciliation creates transcript units
+only from atomic single-speaker spans, so such an intersection is unreachable there.
 
-### Phase F — `export` (issue #24)
+### Phase F — `export` (issue #24; implemented)
 
 `srt`, `vtt`, `md`, `txt`, `jsonl`; several `--input` documents merged in timeline order with
 re-numbered ids; `timing_required_for_format` when word timing is absent; cue policy hard-coded
 per issue #10.
 
-*Acceptance.* Subtitle output refuses a transcript with no `words`. Cue bounds come from the
-first and last word of a segment, never from a segment extent on a stack that has none. A
-segment with text and no word stream produces no cue. Merging a partial and its resumed
-remainder yields contiguous ids and no duplicated span.
+*Acceptance.* Subtitle output refuses a nonempty transcript with no real word stream, except for
+the bounded-event-only/produced-timing case that emits an empty file. Cue bounds come from the
+first and last word of a segment, never from a segment extent. Once any real word stream exists,
+every wordless segment is omitted, including ordinary `alignment_unavailable` speech. Merging a
+partial and its resumed remainder yields contiguous ids and no duplicated span. Output is atomic
+UTF-8; `--force` may replace only an existing regular destination, never an input transcript,
+canonical source, or directory.
 
 ## Document changes
 
@@ -382,7 +396,8 @@ target:
 
 Additions — names and rows this plan needs that no document yet carries:
 
-- `abstentions[].reason`: `overlap`, `short_turn`, `raw_fragment`, with the cause of each.
+- `abstentions[].reason`: `overlap`, `short_turn`, `raw_fragment`,
+  `alignment_unavailable`, with the cause of each.
 - The three turn-threshold **values** VOCABULARY names without publishing: `raw_fragment_min_ms`
   250, `accepted_turn_min_ms` 500, `same_label_merge_max_ms` 300
   (`run_turn_attributed_mlx_asr.py:78-84`).

@@ -66,6 +66,30 @@ def input_metadata(path: Path, probe: dict[str, object]) -> InputMetadata:
     )
 
 
+def result_source(
+    metadata: InputMetadata,
+    duration_seconds: float,
+    *,
+    source_identity: Path | None = None,
+) -> dict[str, Any]:
+    """Build the durable source identity for a result document.
+
+    Catalogs and plans preserve the caller's spelling, but a saved result can be
+    exported from another working directory.  Its canonical-media guard therefore
+    needs an absolute source identity captured while the run still has the caller's
+    original working directory.
+    """
+    source = dict(metadata.source)
+    # CLI paths are opened literally.  A real directory named ``~alice`` beneath the
+    # caller's working directory must not become Alice's home only when durable
+    # provenance is recorded; export relies on this identity to protect the source.
+    source["path"] = str(
+        source_identity if source_identity is not None else Path(metadata.path).resolve()
+    )
+    source["duration_seconds"] = duration_seconds
+    return source
+
+
 def _unit_count(definition: stacks.StackDefinition, duration: float) -> int | None:
     rule = definition.processing["unit_count_rule"]
     kind = rule["kind"]

@@ -11,9 +11,16 @@ detector's arithmetic is the thing under test; the model's judgement is not.
 
 from __future__ import annotations
 
+import hashlib
+import io
+import os
+import types
+
 import numpy as np
 import pytest
 
+from audio_cli import media as media_module
+from audio_cli import vad
 from audio_cli.profiles import PROFILES
 from audio_cli.vad import SileroOnnxVad
 
@@ -49,6 +56,202 @@ def detect(probabilities: list[float], profile_name: str = "transcription"):
         min_silence_ms=profile.vad_min_silence_ms,
         speech_pad_ms=profile.vad_speech_pad_ms,
     )
+
+
+def test_model_download_temporary_never_follows_a_precreated_symlink(
+    tmp_path, monkeypatch,
+) -> None:
+    cache = tmp_path / "models"
+    cache.mkdir()
+    victim = tmp_path / "victim.bin"
+    victim.write_bytes(b"owned elsewhere")
+    monkeypatch.setattr(vad, "_cache_root", lambda: cache)
+    monkeypatch.setattr(vad, "root", lambda: tmp_path)
+    monkeypatch.setattr(vad.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
+    target = cache / vad.MODEL_FILENAME
+    temporary = target.with_name(
+        f".audio-vad-download-{os.getpid()}-fixed.part"
+    )
+    temporary.symlink_to(victim)
+
+    with pytest.raises(vad.VadError, match="Could not download"):
+        vad.resolve_model_path()
+
+    assert victim.read_bytes() == b"owned elsewhere"
+    assert temporary.is_symlink()
+    assert not target.exists()
+
+
+def test_hash_matching_model_target_symlink_is_replaced_not_accepted(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    cache = tmp_path / "models"
+    cache.mkdir()
+    victim = tmp_path / "victim.onnx"
+    victim.write_bytes(payload)
+    target = cache / vad.MODEL_FILENAME
+    target.symlink_to(victim)
+    monkeypatch.setattr(vad, "_cache_root", lambda: cache)
+    monkeypatch.setattr(vad, "root", lambda: tmp_path)
+    monkeypatch.setattr(vad, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        vad.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    resolved = vad.resolve_model_path()
+
+    assert resolved == target
+    assert target.is_file() and not target.is_symlink()
+    assert target.read_bytes() == payload
+    assert victim.read_bytes() == payload
+
+
+def test_model_download_rolls_back_a_private_temporary_substitution_at_publication(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"new model bytes"
+    cache = tmp_path / "models"
+    cache.mkdir()
+    target = cache / vad.MODEL_FILENAME
+    target.write_bytes(b"prior managed cache")
+    victim = tmp_path / "victim.bin"
+    victim.write_bytes(b"owned elsewhere")
+    monkeypatch.setattr(vad, "_cache_root", lambda: cache)
+    monkeypatch.setattr(vad, "root", lambda: tmp_path)
+    monkeypatch.setattr(vad, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
+    monkeypatch.setattr(
+        vad.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        vad.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+    real_exchange = media_module._rename_exchange
+    substituted = False
+
+    def substitute_at_exchange(directory_descriptor, left_name, right_name):
+        nonlocal substituted
+        if not substituted:
+            substituted = True
+            os.rename(
+                left_name,
+                "held-legitimate.part",
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+            os.symlink(
+                victim,
+                left_name,
+                dir_fd=directory_descriptor,
+            )
+        real_exchange(directory_descriptor, left_name, right_name)
+
+    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+
+    with pytest.raises(vad.VadError, match="Could not download"):
+        vad.resolve_model_path()
+
+    temporary = target.with_name(
+        f".audio-vad-download-{os.getpid()}-fixed.part"
+    )
+    assert substituted is True
+    assert target.read_bytes() == b"prior managed cache"
+    assert victim.read_bytes() == b"owned elsewhere"
+    assert temporary.is_symlink()
+    assert (cache / "held-legitimate.part").read_bytes() == payload
+
+
+def test_model_download_never_replaces_a_directory_leaf(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    cache = tmp_path / "models"
+    cache.mkdir()
+    target = cache / vad.MODEL_FILENAME
+    target.mkdir()
+    marker = target / "owned.txt"
+    marker.write_bytes(b"preserve me")
+    monkeypatch.setattr(vad, "_cache_root", lambda: cache)
+    monkeypatch.setattr(vad, "root", lambda: tmp_path)
+    monkeypatch.setattr(vad, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        vad.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    with pytest.raises(vad.VadError, match="Could not download"):
+        vad.resolve_model_path()
+
+    assert target.is_dir()
+    assert marker.read_bytes() == b"preserve me"
+
+
+def test_model_download_cannot_follow_a_parent_swapped_after_open(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    cache = tmp_path / "models"
+    cache.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    external = outside / vad.MODEL_FILENAME
+    external.write_bytes(b"owned elsewhere")
+    monkeypatch.setattr(vad, "_cache_root", lambda: cache)
+    monkeypatch.setattr(vad, "root", lambda: tmp_path)
+    monkeypatch.setattr(vad, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    def swap_parent():
+        cache.rename(tmp_path / "models-old")
+        cache.symlink_to(outside, target_is_directory=True)
+        return types.SimpleNamespace(hex="fixed")
+
+    monkeypatch.setattr(vad.uuid, "uuid4", swap_parent)
+    monkeypatch.setattr(
+        vad.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    with pytest.raises(vad.VadError, match="Could not download"):
+        vad.resolve_model_path()
+
+    assert external.read_bytes() == b"owned elsewhere"
 
 
 def test_min_silence_ms_is_what_decides_a_break() -> None:

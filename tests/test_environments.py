@@ -31,6 +31,16 @@ def test_manifest_is_self_consistent() -> None:
     assert env.validate() == []
 
 
+def test_native_checkout_aliases_resolve_to_full_commits() -> None:
+    native = [package for package in env.packages().values() if package.checkout is not None]
+    assert native
+    for package in native:
+        alias = package.checkout["commit"]
+        resolved = package.checkout["resolved_commit"]
+        assert re.fullmatch(r"[0-9a-f]{40}", resolved)
+        assert len(alias) >= 7 and resolved.startswith(alias)
+
+
 def test_every_provisioned_environment_has_a_lock_that_exists() -> None:
     for environment in env.environments().values():
         if not (environment.provisioned and environment.has_interpreter):
@@ -216,6 +226,54 @@ def test_packages_for_resolves_all_firered_backends_to_one_package() -> None:
 def test_packages_for_rejects_a_backend_from_another_stack() -> None:
     with pytest.raises(env.ManifestError, match="does not support stack"):
         env.packages_for("qwen-1.7b", {"asr": "qwen3-asr-0.6b-8bit"})
+
+
+def test_vibevoice_package_declares_its_offline_tokenizer_materialization() -> None:
+    package = env.packages()["vibevoice-asr-7b"]
+    assert package.license_declared == "mixed: mit + apache-2.0"
+    assert package.license_reviewed is False
+    assert package.source["type"] == "huggingface_multi"
+    assert package.source["repos"] == [
+        {
+            "role": "asr",
+            "repo": "microsoft/VibeVoice-ASR",
+            "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
+            "bytes": 17_349_559_904,
+        },
+        {
+            "role": "tokenizer",
+            "repo": "Qwen/Qwen2.5-7B",
+            "revision": "d149729398750b98c0af14eb82c78cfe92750796",
+            "bytes": 11_488_231,
+            "allow_patterns": [
+                "config.json",
+                "merges.txt",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "vocab.json",
+            ],
+        },
+    ]
+    assert package.bytes == sum(item["bytes"] for item in package.source["repos"])
+    assert package.checkout["patched_file_sha256"] == {
+        "vibevoice/modular/modeling_vibevoice_asr.py": (
+            "b20a301dc489c9c7c71bbe02589d77448758afd08822eb0576ff9bc26dd53ac4"
+        )
+    }
+    assert env.packages()["firered-asr2s"].checkout["patched_file_sha256"] == {}
+
+
+def test_speaker_model_declares_only_the_artifacts_fluidaudio_loads() -> None:
+    package = env.packages()["speaker-diarization-coreml"]
+
+    assert package.bytes == 21_599_417
+    assert package.source["allow_patterns"] == [
+        "Segmentation.mlmodelc/**",
+        "FBank.mlmodelc/**",
+        "Embedding.mlmodelc/**",
+        "PldaRho.mlmodelc/**",
+        "plda-parameters.json",
+    ]
 
 
 def test_manifest_byte_counts_are_not_the_illustrative_ones_the_specs_used() -> None:

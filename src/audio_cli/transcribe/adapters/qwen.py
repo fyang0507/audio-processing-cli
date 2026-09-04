@@ -133,11 +133,18 @@ def normalize_qwen_segments(
     Unit bounds and speakers are deterministic orchestration inputs. Qwen supplies text only;
     its language scaffold is transport metadata and is intentionally not promoted to a result.
     """
-    by_id = {str(item["unit_id"]): item for item in units}
+    by_id: dict[str, Mapping[str, Any]] = {}
+    for item in units:
+        identifier = str(item["unit_id"])
+        if identifier in by_id:
+            raise ValueError(f"Qwen received duplicate requested unit {identifier!r}")
+        by_id[identifier] = item
     completed: list[dict[str, Any]] = []
     unfinished: list[dict[str, Any]] = []
     seen: set[str] = set()
-    values = raw.get("units", [])
+    if "units" not in raw:
+        raise ValueError("Qwen stage result is missing units")
+    values = raw["units"]
     if not isinstance(values, list):
         raise TypeError("Qwen stage result units must be an array")
     for item in values:
@@ -148,7 +155,12 @@ def normalize_qwen_segments(
             raise ValueError(f"Qwen stage returned unknown or duplicate unit {identifier!r}")
         seen.add(identifier)
         unit = by_id[identifier]
-        if item.get("processed") is not True:
+        processed = item.get("processed")
+        if not isinstance(processed, bool):
+            raise TypeError(
+                f"Qwen stage unit {identifier!r} processed must be a boolean"
+            )
+        if not processed:
             unfinished.append(dict(unit))
             continue
         text = item.get("text")
@@ -163,9 +175,10 @@ def normalize_qwen_segments(
         if "speaker" in unit:
             segment["speaker"] = str(unit["speaker"])
         completed.append(segment)
-    for unit in units:
-        if str(unit["unit_id"]) not in seen:
-            unfinished.append(dict(unit))
+    missing = set(by_id) - seen
+    if missing:
+        rendered = ", ".join(repr(identifier) for identifier in sorted(missing))
+        raise ValueError(f"Qwen stage result is missing requested units: {rendered}")
     completed.sort(key=lambda item: (item["start"], item["end"], item["unit_id"]))
     unfinished.sort(key=lambda item: (float(item["start"]), float(item["end"])))
     return completed, unfinished
