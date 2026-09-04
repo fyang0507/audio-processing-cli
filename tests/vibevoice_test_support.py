@@ -272,5 +272,22 @@ def _stage_request(tmp_path: Path) -> tuple[Path, Path, dict]:
     return request_path, result_path, request
 
 
-
-__all__ = [name for name in globals() if not name.startswith("__")]
+__all__ = [
+    "Path",
+    "ROOT",
+    "_PINNED_POST_PROCESS_TRANSCRIPTION",
+    "_fixture",
+    "_install_fake_vibevoice",
+    "_stage_request",
+    "ast",
+    "hashlib",
+    "json",
+    "normalize_vibevoice_result",
+    "pytest",
+    "sys",
+    "textwrap",
+    "threading",
+    "types",
+    "typing",
+    "vibevoice_stage",
+]

@@ -1,6 +1,28 @@
 from __future__ import annotations
 
-from transcribe_orchestrator_test_support import *  # noqa: F403
+from transcribe_orchestrator_test_support import (
+    InputMetadata,
+    Path,
+    StageOutcome,
+    StageTransport,
+    audio_paths,
+    build_plan,
+    full_registry,
+    orchestrator,
+    pytest,
+    refusals,
+    registry,
+    request,
+    resolve_request,
+    shutil,
+    wave,
+)
+from transcribe_orchestrator_test_support import (
+    provisioned_runtime_root as provisioned_runtime_root,
+)
+
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+
 
 def test_preflight_never_launches_fluidaudio_from_external_receipt_path(
     tmp_path,
@@ -323,10 +345,10 @@ def test_preflight_does_not_probe_below_a_redirected_environments_parent(
     def fail_probe(path: Path) -> bool:
         raise AssertionError(f"preflight launched redirected runtime {path}")
 
-    def fail_inspection(path: Path) -> orchestrator._CheckoutState:
+    def fail_inspection(path: Path) -> orchestrator_runtime._CheckoutState:
         raise AssertionError(f"preflight inspected redirected checkout {path}")
 
-    monkeypatch.setattr(orchestrator, "_inspect_checkout", fail_inspection)
+    monkeypatch.setattr(orchestrator_runtime, "_inspect_checkout", fail_inspection)
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.preflight(

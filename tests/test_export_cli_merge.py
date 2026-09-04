@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from export_cli_test_support import *
+from pathlib import Path
+
+from export_cli_test_support import (
+    _write_result,
+    cli,
+    json,
+)
+
 
 def test_export_cli_refuses_multi_input_vibevoice_native_diarization(
     tmp_path: Path, capsys,

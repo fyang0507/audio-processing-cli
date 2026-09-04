@@ -1,4 +1,4 @@
-"""The report writer in `media.py`, which had no test file.
+"""The report writer in `media.publication`, which once had no test file.
 
 Nothing here shells out to ffmpeg; these cover the file-publishing helpers, where the failure
 modes are permissions and half-written files rather than audio.
@@ -11,11 +11,9 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
-import numpy as np
-
-from audio_cli import media as media_module
 from audio_cli.media import (
     MediaError,
     ProtectedOutputError,
@@ -23,6 +21,8 @@ from audio_cli.media import (
     render_loudness_normalized,
     write_float_wav,
 )
+from audio_cli.media import identity as media_identity
+from audio_cli.media import publication as media_publication
 
 
 def normalize(tmp_path: Path, measurement: dict[str, float], *, duration_s: float):
@@ -155,7 +155,7 @@ def test_exclusive_temporary_does_not_follow_a_precreated_symlink(
     canonical.write_bytes(b"canonical")
     target = tmp_path / "report.json"
     monkeypatch.setattr(
-        "audio_cli.media.uuid.uuid4", lambda: SimpleNamespace(hex="fixed")
+        media_publication.uuid, "uuid4", lambda: SimpleNamespace(hex="fixed")
     )
     temporary = tmp_path / f".audio-write-{os.getpid()}-fixed.tmp"
     temporary.symlink_to(canonical)
@@ -179,7 +179,7 @@ def test_atomic_writer_closes_descriptor_when_temporary_identity_capture_fails(
         captured_descriptor = descriptor
         raise OSError("identity unavailable")
 
-    monkeypatch.setattr(media_module, "file_identity_from_descriptor", fail_identity)
+    monkeypatch.setattr(media_identity, "file_identity_from_descriptor", fail_identity)
 
     with pytest.raises(OSError, match="identity unavailable"):
         atomic_write_json(target, {"ok": True})
@@ -205,7 +205,7 @@ def test_atomic_writer_cannot_follow_a_parent_swapped_after_open(
         safe.symlink_to(outside, target_is_directory=True)
         return SimpleNamespace(hex="fixed")
 
-    monkeypatch.setattr("audio_cli.media.uuid.uuid4", swap_parent)
+    monkeypatch.setattr(media_publication.uuid, "uuid4", swap_parent)
     with pytest.raises(OSError, match="directory identity changed"):
         atomic_write_json(safe / "report.json", {"destroyed": True})
 
@@ -219,7 +219,7 @@ def test_force_writer_does_not_have_an_identity_check_replace_gap(
     source.write_bytes(b"canonical")
     output = tmp_path / "report.json"
     output.write_bytes(b"replaceable")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     raced = False
 
     def race_at_exchange(directory_descriptor, left_name, right_name):
@@ -229,7 +229,7 @@ def test_force_writer_does_not_have_an_identity_check_replace_gap(
             os.replace(source, output)
         return real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", race_at_exchange)
+    monkeypatch.setattr(media_publication, "_rename_exchange", race_at_exchange)
     with pytest.raises(ProtectedOutputError):
         atomic_write_json(
             output,
@@ -249,7 +249,7 @@ def test_force_writer_keeps_an_existing_destination_continuously_addressable(
 ) -> None:
     output = tmp_path / "report.json"
     output.write_bytes(b"previous")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     observations: list[bool] = []
 
     def observe_exchange(directory_descriptor, left_name, right_name):
@@ -257,7 +257,7 @@ def test_force_writer_keeps_an_existing_destination_continuously_addressable(
         real_exchange(directory_descriptor, left_name, right_name)
         observations.append(output.exists())
 
-    monkeypatch.setattr(media_module, "_rename_exchange", observe_exchange)
+    monkeypatch.setattr(media_publication, "_rename_exchange", observe_exchange)
     atomic_write_json(output, {"generation": "next"}, force=True)
 
     assert observations == [True, True]
@@ -271,7 +271,7 @@ def test_force_writer_rejects_a_substituted_private_temporary_at_exchange(
 ) -> None:
     output = tmp_path / "report.json"
     output.write_bytes(b"previous")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     raced = False
     substituted_name: str | None = None
 
@@ -298,7 +298,7 @@ def test_force_writer_rejects_a_substituted_private_temporary_at_exchange(
                 os.close(descriptor)
         return real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", substitute_temporary)
+    monkeypatch.setattr(media_publication, "_rename_exchange", substitute_temporary)
     with pytest.raises(OSError, match="temporary changed identity during publication"):
         atomic_write_json(output, {"generation": "next"}, force=True)
 
@@ -316,7 +316,7 @@ def test_failed_atomic_rollback_preserves_the_observed_protected_inode(
     source.write_bytes(b"canonical")
     output = tmp_path / "report.json"
     output.write_bytes(b"replaceable")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     calls = 0
 
     def fail_rollback(directory_descriptor, left_name, right_name):
@@ -327,7 +327,7 @@ def test_failed_atomic_rollback_preserves_the_observed_protected_inode(
             return real_exchange(directory_descriptor, left_name, right_name)
         raise OSError("synthetic rollback failure")
 
-    monkeypatch.setattr(media_module, "_rename_exchange", fail_rollback)
+    monkeypatch.setattr(media_publication, "_rename_exchange", fail_rollback)
     with pytest.raises(ProtectedOutputError) as caught:
         atomic_write_json(
             output,

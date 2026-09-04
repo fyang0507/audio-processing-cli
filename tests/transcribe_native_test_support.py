@@ -14,15 +14,15 @@ from audio_cli import packages as pkg
 from audio_cli import paths as audio_paths
 from audio_cli.export import export_documents, load_result_document
 from audio_cli.media import hash_file
-from audio_cli.transcribe import native as native_module
+from audio_cli.packages import integrity as package_integrity
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
 from audio_cli.transcribe import orchestrator, refusals
 from audio_cli.transcribe.adapters import normalize_vibevoice_result
 from audio_cli.transcribe.catalog import InputMetadata
 from audio_cli.transcribe.planner import build_plan, resolve_request
 from audio_cli.transcribe.transport import StageOutcome
 
-
-_REAL_INSPECT_CHECKOUT = orchestrator._inspect_checkout
+_REAL_INSPECT_CHECKOUT = orchestrator_runtime._inspect_checkout
 
 
 def _complete_vibe_payload(
@@ -52,11 +52,11 @@ def _complete_vibe_payload(
 def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
     """Unit fixtures model provisioned checkouts without creating nested Git repos."""
 
-    def inspect(checkout: Path) -> orchestrator._CheckoutState:
+    def inspect(checkout: Path) -> orchestrator_runtime._CheckoutState:
         if "fluidaudio" in str(checkout):
             package = env.packages()["fluidaudio"]
             _patches, modified, _digests = pkg.checkout_patch_expectation(package)
-            return orchestrator._CheckoutState(
+            return orchestrator_runtime._CheckoutState(
                 head=package.source["commit"], modified=modified, untracked=()
             )
         package_id = (
@@ -66,13 +66,13 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
         )
         package = env.packages()[package_id]
         _patches, modified, _digests = pkg.checkout_patch_expectation(package)
-        return orchestrator._CheckoutState(
+        return orchestrator_runtime._CheckoutState(
             head=package.checkout["resolved_commit"],
             modified=modified,
             untracked=(),
         )
 
-    monkeypatch.setattr(orchestrator, "_inspect_checkout", inspect)
+    monkeypatch.setattr(orchestrator_runtime, "_inspect_checkout", inspect)
 
     def digest(path: Path) -> str:
         fluid = env.packages()["fluidaudio"].source.get("patched_file_sha256", {})
@@ -85,7 +85,7 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
                 return expected
         return hash_file(path)
 
-    monkeypatch.setattr(orchestrator, "_checkout_file_digest", digest)
+    monkeypatch.setattr(orchestrator_runtime, "_checkout_file_digest", digest)
 
     def frozen(interpreter: Path) -> dict[str, str]:
         environment_name = interpreter.parent.parent.name
@@ -99,8 +99,10 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
             )
         return installed
 
-    monkeypatch.setattr(orchestrator, "_frozen_packages", frozen)
-    monkeypatch.setattr(orchestrator, "_python_runtime_runs", lambda _path: True)
+    monkeypatch.setattr(orchestrator_runtime, "_frozen_packages", frozen)
+    monkeypatch.setattr(
+        orchestrator_runtime, "_python_runtime_runs", lambda _path: True
+    )
 
     def snapshot_index() -> dict[tuple[str, str], Path]:
         found = {}
@@ -118,8 +120,7 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
                 )
         return found
 
-    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
-
+    monkeypatch.setattr(package_integrity, "_hub_snapshot_index", snapshot_index)
 
 
 def _ready_multi_package(tmp_path: Path, package_id: str) -> dict:
@@ -217,4 +218,33 @@ def _ready_fluidaudio(tmp_path: Path) -> dict:
         },
     }
 
-__all__ = [name for name in globals() if not name.startswith("__")]
+
+__all__ = [
+    "InputMetadata",
+    "Path",
+    "StageOutcome",
+    "_REAL_INSPECT_CHECKOUT",
+    "_complete_vibe_payload",
+    "_ready_fluidaudio",
+    "_ready_multi_package",
+    "_ready_single_package",
+    "_runtime",
+    "audio_paths",
+    "build_plan",
+    "env",
+    "export_documents",
+    "hash_file",
+    "json",
+    "load_result_document",
+    "normalize_vibevoice_result",
+    "orchestrator",
+    "os",
+    "pkg",
+    "pytest",
+    "refusals",
+    "resolve_request",
+    "shutil",
+    "subprocess",
+    "trusted_checkout_probe",
+    "wave",
+]

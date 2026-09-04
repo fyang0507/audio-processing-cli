@@ -1,6 +1,27 @@
 from __future__ import annotations
 
-from transcribe_orchestrator_test_support import *  # noqa: F403
+from transcribe_orchestrator_test_support import (
+    FakeTransport,
+    FullFakeTransport,
+    InputMetadata,
+    NoncontiguousTransport,
+    Path,
+    full_registry,
+    json,
+    orchestrator,
+    os,
+    pytest,
+    refusals,
+    registry,
+    request,
+    resolve_request,
+)
+from transcribe_orchestrator_test_support import (
+    provisioned_runtime_root as provisioned_runtime_root,
+)
+
+from audio_cli.transcribe import _orchestrator_output as orchestrator_output
+
 
 def test_run_refuses_existing_outputs_before_decode_and_force_is_explicit(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
@@ -182,7 +203,7 @@ def test_late_unwritable_destination_is_a_typed_refusal(
     def refuse_write(*_args, **_kwargs):
         raise PermissionError("destination is not writable")
 
-    monkeypatch.setattr(orchestrator, "atomic_write_json", refuse_write)
+    monkeypatch.setattr(orchestrator_output, "atomic_write_json", refuse_write)
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
             resolved,

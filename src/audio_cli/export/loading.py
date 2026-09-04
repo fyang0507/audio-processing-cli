@@ -114,6 +114,7 @@ def _owned_intervals(payload: Mapping[str, Any]) -> tuple[tuple[float, float], .
                 "provenance.plan.execution.range must carry requested and "
                 "selected_unit_scope pairs"
             )
+
         def range_number(value: object, field: str) -> float:
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(

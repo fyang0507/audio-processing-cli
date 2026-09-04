@@ -17,7 +17,6 @@ import pytest
 from audio_cli.transcribe.adapters import normalize_firered_result
 from audio_cli.transcribe.stages import firered as firered_stage
 
-
 ROOT = Path(__file__).parents[1]
 FIXTURE = ROOT / "tests/fixtures/firered_lidon_first_vad_region.json"
 
@@ -196,7 +195,6 @@ def _all_keys(value: object) -> set[str]:
     if isinstance(value, (list, tuple)):
         return set().union(*(_all_keys(item) for item in value), set())
     return set()
-
 
 
 def _install_fake_firered(monkeypatch: pytest.MonkeyPatch, record: dict[str, Any]) -> None:
@@ -398,5 +396,23 @@ def _run_stage(
     return code, json.loads(result_path.read_text(encoding="utf-8"))
 
 
-
-__all__ = [name for name in globals() if not name.startswith("__")]
+__all__ = [
+    "ROOT",
+    "_PINNED_FIRERED_PROCESS",
+    "_all_keys",
+    "_fixture",
+    "_install_fake_firered",
+    "_run_stage",
+    "_stage_request",
+    "ast",
+    "deepcopy",
+    "firered_stage",
+    "hashlib",
+    "json",
+    "normalize_firered_result",
+    "np",
+    "os",
+    "pytest",
+    "re",
+    "types",
+]

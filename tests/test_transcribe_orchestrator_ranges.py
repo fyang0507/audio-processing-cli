@@ -1,6 +1,27 @@
 from __future__ import annotations
 
-from transcribe_orchestrator_test_support import *  # noqa: F403
+from transcribe_orchestrator_test_support import (
+    FakeTransport,
+    FullFakeTransport,
+    InputMetadata,
+    Path,
+    StageOutcome,
+    full_registry,
+    json,
+    orchestrator,
+    pytest,
+    refusals,
+    registry,
+    request,
+    resolve_request,
+    wave,
+)
+from transcribe_orchestrator_test_support import (
+    provisioned_runtime_root as provisioned_runtime_root,
+)
+
+from audio_cli.transcribe import _orchestrator_qwen as qwen_execution
+
 
 def test_nonintersecting_range_refuses_after_decode_but_before_model(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
@@ -51,7 +72,7 @@ def test_open_range_end_resolves_against_canonical_not_shorter_probe(tmp_path) -
 
 def test_fixed_units_match_the_catalog_rule_even_for_a_subsecond_tail(tmp_path) -> None:
     resolved, _, _ = request(tmp_path)
-    assert orchestrator._fixed_units(360.0000625, resolved) == [
+    assert qwen_execution._fixed_units(360.0000625, resolved) == [
         {"unit_id": "unit_0", "start": 0.0, "end": 180.0},
         {"unit_id": "unit_1", "start": 180.0, "end": 360.0},
         {"unit_id": "unit_2", "start": 360.0, "end": 360.000063},

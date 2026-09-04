@@ -3,24 +3,42 @@
 from __future__ import annotations
 
 import math
-import time
 import wave
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-import numpy as np
+from typing import Any
 
 from audio_cli.environments import backends
 from audio_cli.environments import packages as package_catalog
 from audio_cli.media import capture_file_identity, temporary_directory
-from audio_cli.vad import SileroOnnxVad, VadError
+from audio_cli.packages import load_registry
+from audio_cli.vad import VadError
 
 from . import refusals
+from ._orchestrator_output import (
+    _backend_fix,
+    _coverage,
+    _has_lexical_text,
+    _outcomes,
+    _publish_partial,
+    _publish_result,
+    _record_metrics,
+    _resume_command,
+    _span_owned,
+    validate_output_targets,
+)
+from ._orchestrator_preflight import preflight
+from ._orchestrator_runtime import (
+    RunProduct,
+    RunRange,
+    _core_plan,
+    _materialized_path,
+    _validate_range,
+)
+from ._orchestrator_vad import _detect_vad
 from .adapters import (
     normalize_aligned_words,
     normalize_qwen_segments,
-    normalize_vad_regions,
     reconcile_turns,
     sentence_segments,
 )
@@ -28,9 +46,6 @@ from .catalog import InputMetadata, result_source
 from .planner import ResolvedRequest, build_plan
 from .result import ABSENT, NormalizedResult, ResultError, serialize_result
 from .transport import StageFailure, StageOutcome, StageTransport
-
-if TYPE_CHECKING:
-    from .orchestrator import RunProduct, RunRange
 
 
 def _fixed_units(duration: float, request: ResolvedRequest) -> list[dict[str, Any]]:
@@ -53,47 +68,6 @@ def _select_range(
     return [dict(item) for item in units if item["end"] > start and item["start"] < end], start, end
 
 
-def _materialized_path(entries: Mapping[str, Mapping[str, Any]], identifier: str) -> Path:
-    value = entries[identifier].get("materialized", {}).get("path")
-    if not value:
-        raise refusals.package_integrity_failed(({
-            "package": identifier, "check": "materialized_path",
-            "expected": "present", "actual": value,
-        },))
-    return Path(str(value))
-
-
-def _read_pcm16(path: Path) -> tuple[np.ndarray, int]:
-    with wave.open(str(path), "rb") as handle:
-        rate = handle.getframerate()
-        channels = handle.getnchannels()
-        width = handle.getsampwidth()
-        samples = np.frombuffer(handle.readframes(handle.getnframes()), dtype="<i2")
-    if rate != 16_000 or channels != 1 or width != 2:
-        raise ValueError("canonical decode is not mono 16 kHz PCM16")
-    return samples.astype(np.float32) / 32768.0, rate
-
-
-def _detect_vad(
-    path: Path, detector: Any | None, config: Mapping[str, Any]
-) -> tuple[list[dict[str, Any]], float, int]:
-    """Run core VAD in a short frame so its PCM and session die before model stages."""
-    from . import orchestrator as core
-
-    started = time.perf_counter()
-    samples, rate = _read_pcm16(path)
-    selected = detector or SileroOnnxVad()
-    regions = selected.detect(samples, rate, **config)
-    normalized = normalize_vad_regions(regions)
-    duration = round(len(samples) / float(rate), 6)
-    for index, region in enumerate(normalized):
-        if region["end"] > duration:
-            raise ValueError(
-                f"Silero VAD region {index} exceeds canonical source duration"
-            )
-    return normalized, round(time.perf_counter() - started, 6), core._self_peak_rss()
-
-
 def _run_qwen(
     request: ResolvedRequest,
     metadata: InputMetadata,
@@ -107,24 +81,6 @@ def _run_qwen(
     force: bool = False,
 ) -> RunProduct:
     """Execute the two Qwen stacks and return their normalized result."""
-    from . import orchestrator as core
-
-    RunProduct = core.RunProduct
-    StageTransport = core.StageTransport
-    _backend_fix = core._backend_fix
-    _core_plan = core._core_plan
-    _coverage = core._coverage
-    _has_lexical_text = core._has_lexical_text
-    _outcomes = core._outcomes
-    _publish_partial = core._publish_partial
-    _publish_result = core._publish_result
-    _record_metrics = core._record_metrics
-    _resume_command = core._resume_command
-    _span_owned = core._span_owned
-    _validate_range = core._validate_range
-    load_registry = core.load_registry
-    preflight = core.preflight
-    validate_output_targets = core.validate_output_targets
     protected_source_identity = capture_file_identity(request.input_path)
     validate_output_targets(
         request,

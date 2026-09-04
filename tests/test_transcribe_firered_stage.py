@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from transcribe_firered_test_support import *  # noqa: F403
+from pathlib import Path
+from typing import Any
+
+import pytest
+from transcribe_firered_test_support import (
+    _install_fake_firered,
+    _run_stage,
+    _stage_request,
+    normalize_firered_result,
+)
+
 
 def test_firered_stage_loads_once_with_exact_aed_config_and_native_range(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from export_test_support import *
+from pathlib import Path
+
+from export_test_support import (
+    OutputExistsError,
+    OutputWriteError,
+    UnsafeOutputError,
+    os,
+    pytest,
+    write_text_atomic,
+)
+
+from audio_cli.media import publication as media_publication
+
 
 def test_export_writer_closes_descriptor_when_temporary_identity_capture_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -28,6 +39,7 @@ def test_export_writer_closes_descriptor_when_temporary_identity_capture_fails(
     with pytest.raises(OSError):
         os.fstat(captured_descriptor)
     assert not output.exists()
+
 
 def test_atomic_writer_refuses_collisions_and_protected_paths(tmp_path: Path) -> None:
     destination = tmp_path / "out.txt"
@@ -160,7 +172,7 @@ def test_export_writer_rejects_a_substituted_private_temporary_at_exchange(
 ) -> None:
     output = tmp_path / "out.txt"
     output.write_bytes(b"previous")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     raced = False
     substituted_name: str | None = None
 
@@ -187,7 +199,7 @@ def test_export_writer_rejects_a_substituted_private_temporary_at_exchange(
                 os.close(descriptor)
         return real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", substitute_temporary)
+    monkeypatch.setattr(media_publication, "_rename_exchange", substitute_temporary)
     with pytest.raises(OutputWriteError, match="temporary changed identity"):
         write_text_atomic(output, "replacement\n", force=True)
 

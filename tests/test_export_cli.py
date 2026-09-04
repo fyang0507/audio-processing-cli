@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from export_cli_test_support import *
+from pathlib import Path
+
+from export_cli_test_support import (
+    _write_result,
+    cli,
+    json,
+    os,
+    stat,
+)
+
 
 def test_export_cli_prints_human_formats_without_an_output(
     tmp_path: Path, capsys

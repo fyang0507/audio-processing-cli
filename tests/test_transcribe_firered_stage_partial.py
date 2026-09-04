@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from transcribe_firered_test_support import *  # noqa: F403
+from pathlib import Path
+from typing import Any
+
+from transcribe_firered_test_support import (
+    ROOT,
+    _install_fake_firered,
+    _run_stage,
+    _stage_request,
+    firered_stage,
+    normalize_firered_result,
+    os,
+    pytest,
+)
+
 
 def test_firered_stage_salvages_only_punctuated_prefix_after_later_punc_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

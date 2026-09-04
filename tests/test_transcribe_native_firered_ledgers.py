@@ -1,7 +1,24 @@
 from __future__ import annotations
 
-from transcribe_native_test_support import *  # noqa: F403
+from pathlib import Path
 
+from transcribe_native_test_support import (
+    InputMetadata,
+    StageOutcome,
+    _ready_multi_package,
+    _runtime,
+    json,
+    orchestrator,
+    pytest,
+    refusals,
+    resolve_request,
+    wave,
+)
+from transcribe_native_test_support import (
+    trusted_checkout_probe as trusted_checkout_probe,
+)
+
+from audio_cli.transcribe import _native_scope as native_scope
 
 
 @pytest.mark.parametrize(
@@ -66,7 +83,7 @@ def test_firered_region_ledger_rejects_untrusted_stage_mutations(
 ) -> None:
     scope = (1.0, 2.0) if "does not intersect" in detail else (0.0, 2.0)
     with pytest.raises((TypeError, ValueError), match=detail):
-        native_module._firered_region_ledger(
+        native_scope._firered_region_ledger(
             regions,
             source_duration=2.0,
             requested_scope=scope,
@@ -74,7 +91,7 @@ def test_firered_region_ledger_rejects_untrusted_stage_mutations(
 
 
 def test_firered_ledger_comparison_uses_the_stage_millisecond_truncation() -> None:
-    ledger = native_module._firered_published_region_ledger([
+    ledger = native_scope._firered_published_region_ledger([
         {
             "region_id": "vad_0",
             "start": 0.2009,
@@ -88,7 +105,7 @@ def test_firered_ledger_comparison_uses_the_stage_millisecond_truncation() -> No
             "processed": False,
         },
     ])
-    assert native_module._firered_published_vad_prefix(ledger) == (
+    assert native_scope._firered_published_vad_prefix(ledger) == (
         {"start": 0.2, "end": 0.999},
     )
 

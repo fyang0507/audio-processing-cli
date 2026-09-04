@@ -1,6 +1,26 @@
 from __future__ import annotations
 
-from transcribe_native_test_support import *  # noqa: F403
+from pathlib import Path
+
+from transcribe_native_test_support import (
+    InputMetadata,
+    StageOutcome,
+    _complete_vibe_payload,
+    _ready_multi_package,
+    _ready_single_package,
+    _runtime,
+    orchestrator,
+    pytest,
+    refusals,
+    resolve_request,
+    wave,
+)
+from transcribe_native_test_support import (
+    trusted_checkout_probe as trusted_checkout_probe,
+)
+
+from audio_cli.transcribe.transport import StageFailure
+
 
 @pytest.mark.parametrize(
     ("mutation", "detail"),
@@ -194,7 +214,7 @@ def test_vibevoice_failed_aligner_is_a_backend_error_and_writes_no_result(
             )
             if not transport_failure:
                 return outcome
-            raise orchestrator.StageFailure(
+            raise StageFailure(
                 "aligner",
                 "qwen3-forcedaligner",
                 "synthetic failure",

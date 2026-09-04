@@ -1,6 +1,29 @@
 from __future__ import annotations
 
-from transcribe_native_test_support import *  # noqa: F403
+from transcribe_native_test_support import (
+    InputMetadata,
+    Path,
+    StageOutcome,
+    _complete_vibe_payload,
+    _ready_fluidaudio,
+    _ready_multi_package,
+    _ready_single_package,
+    _runtime,
+    json,
+    normalize_vibevoice_result,
+    orchestrator,
+    os,
+    pytest,
+    refusals,
+    resolve_request,
+    wave,
+)
+from transcribe_native_test_support import (
+    trusted_checkout_probe as trusted_checkout_probe,
+)
+
+from audio_cli.transcribe import _native_vibevoice as vibevoice_execution
+
 
 def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
     tmp_path: Path, monkeypatch
@@ -274,7 +297,7 @@ def test_vibevoice_native_turns_preserve_the_recorded_same_speaker_gap() -> None
         "hit_max_new_tokens": False,
     }, clip_duration_seconds=60.0)
 
-    turns = native_module._native_turns(normalized.segments)
+    turns = vibevoice_execution._native_turns(normalized.segments)
     assert turns[:2] == [
         {"turn_id": "turn_0", "speaker": "1", "start": 16.83, "end": 32.05},
         {"turn_id": "turn_1", "speaker": "1", "start": 33.64, "end": 37.84},

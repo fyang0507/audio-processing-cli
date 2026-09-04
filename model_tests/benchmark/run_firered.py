@@ -20,14 +20,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from ._firered_benchmark_support import *  # noqa: F403
+    from . import _firered_benchmark_support as _support
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _firered_benchmark_support import *  # noqa: F403
+    import _firered_benchmark_support as _support
 
 
 def main() -> int:
-    args = parse_args()
+    args = _support.parse_args()
     firered_root = Path(args.firered_root).resolve()
     model_root = firered_root / "pretrained_models"
     model_paths = {
@@ -40,7 +40,7 @@ def main() -> int:
     output_path = Path(args.output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lid_enabled = args.lid == "on"
-    uttid = sanitize_uttid(args.uttid or audio_path.stem)
+    uttid = _support.sanitize_uttid(args.uttid or audio_path.stem)
 
     status = "error"
     error: dict[str, str] | None = None
@@ -54,7 +54,7 @@ def main() -> int:
     samples: list[dict[str, Any]] = []
     phase = {"name": "startup"}
     stop = threading.Event()
-    rss_reader = RssReader()
+    rss_reader = _support.RssReader()
     process_start = time.perf_counter()
     usage_start = resource.getrusage(resource.RUSAGE_SELF)
 
@@ -96,14 +96,14 @@ def main() -> int:
         phase["name"] = "preprocess"
         t0 = time.perf_counter()
         try:
-            source_probe = ffprobe(audio_path)
+            source_probe = _support.ffprobe(audio_path)
             completed = subprocess.run(
                 ffmpeg_command, text=True, capture_output=True, check=False
             )
             if completed.returncode != 0:
                 message = completed.stderr.strip() or "ffmpeg conversion failed"
                 raise RuntimeError(message)
-            canonical_probe = ffprobe(canonical_audio)
+            canonical_probe = _support.ffprobe(canonical_audio)
         finally:
             timing["preprocess_s"] = time.perf_counter() - t0
 
@@ -254,7 +254,7 @@ def main() -> int:
         status = "ok"
 
         phase["name"] = "evidence"
-        canonical_sha256 = sha256(canonical_audio)
+        canonical_sha256 = _support.sha256(canonical_audio)
     except Exception as exc:  # preserve failure evidence in the result artifact
         error = {
             "type": type(exc).__name__,
@@ -266,7 +266,7 @@ def main() -> int:
     finally:
         if canonical_sha256 is None and canonical_audio.is_file():
             try:
-                canonical_sha256 = sha256(canonical_audio)
+                canonical_sha256 = _support.sha256(canonical_audio)
             except OSError:
                 pass
         phase["name"] = "complete"
@@ -280,7 +280,7 @@ def main() -> int:
         temporary.cleanup()
 
     try:
-        source_sha256 = sha256(audio_path) if audio_path.is_file() else None
+        source_sha256 = _support.sha256(audio_path) if audio_path.is_file() else None
     except OSError:
         source_sha256 = None
     duration: float | None = None
@@ -292,7 +292,7 @@ def main() -> int:
     normalized_output = fire_result
     normalized_json = json.dumps(
         normalized_output, ensure_ascii=False, sort_keys=True,
-        separators=(",", ":"), default=json_default,
+        separators=(",", ":"), default=_support.json_default,
     )
     sentences = fire_result.get("sentences", [])
     words = fire_result.get("words", [])
@@ -347,12 +347,12 @@ def main() -> int:
             "cpu_count": os.cpu_count(),
         },
         "runtime": {
-            "packages": package_versions([
+            "packages": _support.package_versions([
                 "fireredasr2s", "torch", "transformers", "numpy",
                 "soundfile", "torchaudio", "kaldi-native-fbank",
             ]),
-            "ffmpeg": command_version(["ffmpeg", "-version"]),
-            "ffprobe": command_version(["ffprobe", "-version"]),
+            "ffmpeg": _support.command_version(["ffmpeg", "-version"]),
+            "ffprobe": _support.command_version(["ffprobe", "-version"]),
             "environment": {
                 name: os.environ.get(name) for name in (
                     "OMP_NUM_THREADS", "MKL_NUM_THREADS",
@@ -376,9 +376,9 @@ def main() -> int:
             },
         },
         "source": {
-            "code": git_metadata(firered_root),
+            "code": _support.git_metadata(firered_root),
             "models": {
-                name: huggingface_revision(path)
+                name: _support.huggingface_revision(path)
                 for name, path in model_paths.items()
             },
         },
@@ -398,8 +398,8 @@ def main() -> int:
                 (int(sample["rss_bytes"]) for sample in samples), default=0
             ),
             "peak_sampled_rss_by_phase": peak_by_phase,
-            "ru_maxrss_bytes": normalized_ru_maxrss(usage_end),
-            "ru_children_maxrss_bytes": normalized_ru_maxrss(
+            "ru_maxrss_bytes": _support.normalized_ru_maxrss(usage_end),
+            "ru_children_maxrss_bytes": _support.normalized_ru_maxrss(
                 resource.getrusage(resource.RUSAGE_CHILDREN)
             ),
             "samples": samples,
@@ -407,10 +407,10 @@ def main() -> int:
         "stability": {
             "output_parse_valid": status == "ok" and isinstance(fire_result, dict)
             and isinstance(sentences, list) and isinstance(words, list),
-            "sentence_timestamps_monotonic": monotonic(
+            "sentence_timestamps_monotonic": _support.monotonic(
                 sentences, "start_ms", "end_ms"
             ) if sentences else None,
-            "word_timestamps_monotonic": monotonic(
+            "word_timestamps_monotonic": _support.monotonic(
                 words, "start_ms", "end_ms"
             ) if words else None,
             "last_sentence_end_s": last_end_s,
@@ -425,7 +425,7 @@ def main() -> int:
             "segments": normalized_segments,
             "normalized_segments_sha256": hashlib.sha256(json.dumps(
                 normalized_segments, ensure_ascii=False, sort_keys=True,
-                separators=(",", ":"), default=json_default,
+                separators=(",", ":"), default=_support.json_default,
             ).encode()).hexdigest(),
             "normalized_result_sha256": hashlib.sha256(
                 normalized_json.encode()
@@ -433,7 +433,9 @@ def main() -> int:
         },
     }
     output_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2, default=json_default) + "\n",
+        json.dumps(
+            result, ensure_ascii=False, indent=2, default=_support.json_default
+        ) + "\n",
         encoding="utf-8",
     )
     print(json.dumps({
@@ -451,7 +453,7 @@ def main() -> int:
             "normalized_segments_sha256"
         ],
         "error": error,
-    }, ensure_ascii=False, default=json_default))
+    }, ensure_ascii=False, default=_support.json_default))
     return 0 if status == "ok" else 1
 
 

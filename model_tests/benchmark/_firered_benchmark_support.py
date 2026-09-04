@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-
 __all__ = [
     "RssReader", "command_version", "ffprobe", "git_metadata",
     "huggingface_revision", "json_default", "monotonic",

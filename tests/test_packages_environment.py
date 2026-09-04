@@ -2,8 +2,22 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    env,
+    package_registry,
+    package_requirements,
+    paths,
+    pkg,
+    pytest,
+    types,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+
 
 def test_verify_treats_an_unlocked_extra_distribution_as_repairable_drift(
     tmp_path,
@@ -62,7 +76,7 @@ def test_environment_drift_allows_only_manifest_owned_direct_checkout_paths(
 ) -> None:
     managed = tmp_path / "managed"
     external = tmp_path / "external"
-    drift = pkg._environment_drift(
+    drift = package_requirements._environment_drift(
         {},
         {
             "native-backend": f"@ {managed.as_uri()}",
@@ -88,7 +102,7 @@ def test_environment_drift_requires_the_exact_named_checkout_install(
     frozen: dict[str, str],
 ) -> None:
     required = Path("/managed/checkout")
-    drift = pkg._environment_drift(
+    drift = package_requirements._environment_drift(
         {}, frozen, {"native-backend": required}
     )
     assert drift["native-backend"] == (
@@ -113,7 +127,9 @@ def test_verify_repair_reinstalls_ready_checkout_after_lock_sync(
 
     # Model a lock change plus uv sync: the direct install exists before repair,
     # create_environment removes it, and install_checkout must restore it.
-    locked_name = next(iter(pkg._locked_versions(env.environments()[environment_name])))
+    locked_name = next(iter(
+        package_requirements._locked_versions(env.environments()[environment_name])
+    ))
     toolchain._synced.discard(environment_name)
     toolchain._drift[locked_name] = "0.invalid"
     document = pkg.load_registry()
@@ -158,7 +174,9 @@ def test_verify_repair_never_installs_a_tampered_ready_checkout(
         / "vibevoice/modular/modeling_vibevoice_asr.py"
     )
     patched.write_text("tampered\n", encoding="utf-8")
-    locked_name = next(iter(pkg._locked_versions(env.environments()[package.environment])))
+    locked_name = next(iter(
+        package_requirements._locked_versions(env.environments()[package.environment])
+    ))
     toolchain._synced.discard(package.environment)
     toolchain._drift[locked_name] = "0.invalid"
     toolchain.calls.clear()
@@ -249,7 +267,7 @@ def test_pull_refuses_a_symlinked_root_before_loading_its_registry(
     def forbidden_registry_read():
         raise AssertionError("symlinked provisioning root reached registry loading")
 
-    monkeypatch.setattr(pkg, "load_registry", forbidden_registry_read)
+    monkeypatch.setattr(package_registry, "load_registry", forbidden_registry_read)
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.Provisioner(
             toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)

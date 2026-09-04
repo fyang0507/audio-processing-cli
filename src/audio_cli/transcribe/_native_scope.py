@@ -12,6 +12,7 @@ from audio_cli.environments import packages as package_catalog
 
 from . import refusals
 
+
 def _duration(path: Path) -> float:
     with wave.open(str(path), "rb") as handle:
         if (

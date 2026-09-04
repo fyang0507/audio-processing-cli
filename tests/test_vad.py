@@ -19,8 +19,8 @@ import types
 import numpy as np
 import pytest
 
-from audio_cli import media as media_module
 from audio_cli import vad
+from audio_cli.media import publication as media_publication
 from audio_cli.profiles import PROFILES
 from audio_cli.vad import SileroOnnxVad
 
@@ -146,7 +146,7 @@ def test_model_download_rolls_back_a_private_temporary_substitution_at_publicati
         "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     substituted = False
 
     def substitute_at_exchange(directory_descriptor, left_name, right_name):
@@ -166,7 +166,7 @@ def test_model_download_rolls_back_a_private_temporary_substitution_at_publicati
             )
         real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+    monkeypatch.setattr(media_publication, "_rename_exchange", substitute_at_exchange)
 
     with pytest.raises(vad.VadError, match="Could not download"):
         vad.resolve_model_path()

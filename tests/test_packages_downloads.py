@@ -2,8 +2,24 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    FakeFetcher,
+    FakeToolchain,
+    hashlib,
+    io,
+    os,
+    package_fetcher,
+    paths,
+    pkg,
+    pytest,
+    types,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+
+from audio_cli.media import publication as media_publication
+
 
 def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> None:
     """The one place `--repair` does nothing, and the reason it does not have to.
@@ -51,7 +67,7 @@ def test_url_download_temporary_never_follows_a_precreated_symlink(
     victim = tmp_path / "victim.bin"
     victim.write_bytes(b"owned elsewhere")
     monkeypatch.setattr(
-        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+        package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
     )
     temporary = target.with_name(f".audio-download-{os.getpid()}-fixed.part")
     temporary.symlink_to(victim)
@@ -87,7 +103,8 @@ def test_hash_matching_url_target_symlink_is_replaced_not_accepted(
             self.close()
 
     monkeypatch.setattr(
-        "audio_cli.packages.urllib.request.urlopen",
+        package_fetcher.urllib.request,
+        "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
 
@@ -113,7 +130,7 @@ def test_url_download_rolls_back_a_private_temporary_substitution_at_publication
     victim = tmp_path / "victim.bin"
     victim.write_bytes(b"owned elsewhere")
     monkeypatch.setattr(
-        pkg.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
+        package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
     )
 
     class Response(io.BytesIO):
@@ -124,11 +141,11 @@ def test_url_download_rolls_back_a_private_temporary_substitution_at_publication
             self.close()
 
     monkeypatch.setattr(
-        pkg.urllib.request,
+        package_fetcher.urllib.request,
         "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     substituted = False
 
     def substitute_at_exchange(directory_descriptor, left_name, right_name):
@@ -148,7 +165,7 @@ def test_url_download_rolls_back_a_private_temporary_substitution_at_publication
             )
         real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+    monkeypatch.setattr(media_publication, "_rename_exchange", substitute_at_exchange)
 
     with pytest.raises(pkg.ProvisioningError) as raised:
         pkg.Fetcher().url_file(
@@ -185,7 +202,7 @@ def test_url_download_never_replaces_a_directory_leaf(
             self.close()
 
     monkeypatch.setattr(
-        pkg.urllib.request,
+        package_fetcher.urllib.request,
         "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
@@ -223,9 +240,10 @@ def test_url_download_replaces_an_unreadable_cache_entry(
         digest_probes.append(args)
         raise PermissionError("unreadable")
 
-    monkeypatch.setattr(pkg, "sha256_regular_file_at", unreadable_digest)
+    monkeypatch.setattr(package_fetcher, "sha256_regular_file_at", unreadable_digest)
     monkeypatch.setattr(
-        "audio_cli.packages.urllib.request.urlopen",
+        package_fetcher.urllib.request,
+        "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
 
@@ -262,9 +280,10 @@ def test_url_download_cannot_follow_a_parent_swapped_after_open(
         models.symlink_to(outside, target_is_directory=True)
         return types.SimpleNamespace(hex="fixed")
 
-    monkeypatch.setattr("audio_cli.packages.uuid.uuid4", swap_parent)
+    monkeypatch.setattr(package_fetcher.uuid, "uuid4", swap_parent)
     monkeypatch.setattr(
-        "audio_cli.packages.urllib.request.urlopen",
+        package_fetcher.urllib.request,
+        "urlopen",
         lambda *_args, **_kwargs: Response(payload),
     )
 

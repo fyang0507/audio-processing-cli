@@ -33,8 +33,16 @@ from audio_cli import environments as env
 from audio_cli import media as media_module
 from audio_cli import packages as pkg
 from audio_cli import paths
-import audio_cli._package_verify as package_verify
 from audio_cli.cli import main
+from audio_cli.packages import catalog as package_catalog
+from audio_cli.packages import (
+    environment_verification as package_environment_verification,
+)
+from audio_cli.packages import fetcher as package_fetcher
+from audio_cli.packages import integrity as package_integrity
+from audio_cli.packages import registry as package_registry
+from audio_cli.packages import requirements as package_requirements
+from audio_cli.packages import teardown as package_teardown
 
 VIBE_MODEL_REVISION = "d0c9efdb8d614685062c04425d91e01b6f37d944"
 VIBE_TOKENIZER_REVISION = "d149729398750b98c0af14eb82c78cfe92750796"
@@ -62,7 +70,7 @@ def isolated_root(tmp_path, monkeypatch):
                 )
         return found
 
-    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
+    monkeypatch.setattr(package_integrity, "_hub_snapshot_index", snapshot_index)
     return tmp_path / "root"
 
 
@@ -124,7 +132,7 @@ class FakeToolchain(pkg.Toolchain):
 
     def frozen_packages(self, environment_python: Path) -> dict[str, str]:
         name = environment_python.parent.parent.name
-        installed = pkg._locked_versions(env.environments()[name])
+        installed = package_requirements._locked_versions(env.environments()[name])
         if name not in self._synced:
             installed.update(self._drift)
         installed.update(self._direct_installs.get(name, {}))
@@ -278,7 +286,7 @@ class FakeFetcher(pkg.Fetcher):
         deleted, freed = [], 0
         for revision in revisions:
             for candidate in self.hub.glob(f"models--*/snapshots/{revision}"):
-                freed += pkg._tree_bytes(candidate)
+                freed += package_integrity._tree_bytes(candidate)
                 for item in sorted(candidate.rglob("*"), reverse=True):
                     item.unlink() if item.is_file() else item.rmdir()
                 candidate.rmdir()
@@ -316,6 +324,7 @@ def _snapshot_index_for(hub: Path) -> dict[tuple[str, str], Path]:
 def provisioner(tmp_path):
     return pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
 
+
 QWEN_REPO = "mlx-community/Qwen3-ASR-1.7B-8bit"
 QWEN_REVISION = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
 ALIGNER_REVISION = "0e1a68e91d815300c7c9754b2a7639378b23db15"
@@ -342,15 +351,19 @@ def the_fake_download_satisfies_the_pin(monkeypatch):
         silero,
         source={**silero.source, "sha256": hashlib.sha256(b"onnx-bytes").hexdigest()},
     )
-    monkeypatch.setattr(pkg, "packages", lambda: catalog)
+    monkeypatch.setattr(package_catalog, "packages", lambda: catalog)
     return catalog
+
 
 __all__ = [
     "ALIGNER_REVISION", "FIRERED_REVISIONS", "FakeFetcher", "FakeToolchain",
     "Path", "QWEN_REPO", "QWEN_REVISION",
     "VIBE_MODEL_REVISION", "VIBE_TOKENIZER_REVISION", "_snapshot_index_for",
     "env", "hashlib", "io", "isolated_root", "json", "main", "media_module",
-    "os", "package_verify", "paths", "pkg",
+    "os", "package_catalog", "package_fetcher", "package_integrity",
+    "package_environment_verification", "package_registry", "package_requirements",
+    "package_teardown",
+    "paths", "pkg",
     "provisioner", "pytest", "replace", "shutil",
     "subprocess", "sys", "the_fake_download_satisfies_the_pin", "types",
 ]

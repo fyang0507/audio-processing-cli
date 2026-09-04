@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from vibevoice_test_support import *  # noqa: F403
+from vibevoice_test_support import (
+    Path,
+    _fixture,
+    _install_fake_vibevoice,
+    _stage_request,
+    json,
+    sys,
+    threading,
+    vibevoice_stage,
+)
+
 
 def test_vibevoice_stage_uses_one_seeded_offline_whole_media_call(
     tmp_path, monkeypatch

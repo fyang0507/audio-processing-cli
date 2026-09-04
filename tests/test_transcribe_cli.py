@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from audio_cli import cli
+from audio_cli.transcribe import _native_firered, _orchestrator_qwen
 from audio_cli.transcribe.catalog import input_metadata, result_source
 
 
@@ -152,7 +153,7 @@ def test_run_missing_package_is_bare_exit_three_after_probe_but_before_transport
     monkeypatch, capsys
 ) -> None:
     monkeypatch.setattr(cli, "probe_media", lambda path: probe())
-    monkeypatch.setattr(cli.transcribe_orchestrator, "load_registry", lambda: {
+    monkeypatch.setattr(_orchestrator_qwen, "load_registry", lambda: {
         "packages": {}, "environments": {},
     })
 
@@ -160,7 +161,7 @@ def test_run_missing_package_is_bare_exit_three_after_probe_but_before_transport
         def __init__(self, *args, **kwargs):
             raise AssertionError("exit 3 reached model transport")
 
-    monkeypatch.setattr(cli.transcribe_orchestrator, "StageTransport", ForbiddenTransport)
+    monkeypatch.setattr(_orchestrator_qwen, "StageTransport", ForbiddenTransport)
     assert cli.main([
         "transcribe", "run", "--input", "sample.wav", "--stack", "qwen-0.6b",
     ]) == 3
@@ -292,7 +293,7 @@ def test_firered_run_reaches_preflight_but_not_transport_when_unprovisioned(
     monkeypatch, capsys
 ) -> None:
     monkeypatch.setattr(cli, "probe_media", lambda path: probe())
-    monkeypatch.setattr(cli.transcribe_orchestrator, "load_registry", lambda: {
+    monkeypatch.setattr(_native_firered, "load_registry", lambda: {
         "packages": {}, "environments": {},
     })
 
@@ -300,7 +301,7 @@ def test_firered_run_reaches_preflight_but_not_transport_when_unprovisioned(
         def __init__(self, *args, **kwargs):
             raise AssertionError("exit 3 reached native model transport")
 
-    monkeypatch.setattr(cli.transcribe_orchestrator, "StageTransport", ForbiddenTransport)
+    monkeypatch.setattr(_native_firered, "StageTransport", ForbiddenTransport)
     assert cli.main([
         "transcribe", "run", "--input", "sample.wav", "--stack", "firered",
     ]) == 3

@@ -22,16 +22,16 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from ._turn_attributed_mlx_asr_plan import *  # noqa: F403
-    from ._turn_attributed_mlx_asr_runtime import *  # noqa: F403
+    from . import _turn_attributed_mlx_asr_plan as _plan
+    from . import _turn_attributed_mlx_asr_runtime as _runtime
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _turn_attributed_mlx_asr_plan import *  # noqa: F403
-    from _turn_attributed_mlx_asr_runtime import *  # noqa: F403
+    import _turn_attributed_mlx_asr_plan as _plan
+    import _turn_attributed_mlx_asr_runtime as _runtime
 
 
 def main() -> int:
-    args = parse_args()
+    args = _runtime.parse_args()
     process_start = time.perf_counter()
     usage_start = resource.getrusage(resource.RUSAGE_SELF)
     model_path = Path(args.model_path).expanduser().resolve()
@@ -50,7 +50,7 @@ def main() -> int:
     for variable in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         os.environ[variable] = "1"
 
-    rss_reader = RssReader()
+    rss_reader = _runtime.RssReader()
     samples: list[dict[str, Any]] = []
     sample_errors: list[str] = []
     phase = {"name": "startup"}
@@ -79,7 +79,7 @@ def main() -> int:
 
     sampler_thread = threading.Thread(target=sample_resources, daemon=True)
     sampler_thread.start()
-    swap_start = mac_swap_snapshot()
+    swap_start = _runtime.mac_swap_snapshot()
     status = "error"
     error: dict[str, Any] | None = None
     timing: dict[str, float] = {}
@@ -137,7 +137,7 @@ def main() -> int:
                 "private_batched_method": "_generate_chunks_batched",
                 "private_batched_signature": str(signature),
                 "source_path": str(model_source),
-                "source_sha256": sha256(model_source),
+                "source_sha256": _runtime.sha256(model_source),
                 "reason": (
                     "The public generate() accepts one waveform and batches only its "
                     "internally split chunks. This runner calls the inspected private "
@@ -149,31 +149,37 @@ def main() -> int:
         job_start = time.perf_counter()
         phase["name"] = "audio_and_turn_preparation"
         t0 = time.perf_counter()
-        source_probe = ffprobe(audio_path)
+        source_probe = _runtime.ffprobe(audio_path)
         raw_audio, source_rate = audio_read(audio_path, always_2d=True, dtype="float32")
-        if source_rate != SAMPLE_RATE or raw_audio.shape[1] != 1:
+        if source_rate != _plan.SAMPLE_RATE or raw_audio.shape[1] != 1:
             raise ValueError(
                 f"canonical input must be mono 16 kHz; got {source_rate} Hz, "
                 f"{raw_audio.shape[1]} channels"
             )
         audio = np.ascontiguousarray(raw_audio[:, 0], dtype=np.float32)
         if args.duration_limit is not None:
-            audio = audio[: min(len(audio), round(args.duration_limit * SAMPLE_RATE))]
+            audio = audio[: min(
+                len(audio), round(args.duration_limit * _plan.SAMPLE_RATE)
+            )]
         if len(audio) == 0:
             raise ValueError("empty audio after duration limit")
-        prepared_audio_hash = array_sha256(audio)
+        prepared_audio_hash = _runtime.array_sha256(audio)
         diarization = json.loads(diarization_path.read_text())
         raw_segments = diarization.get("output", {}).get("segments")
         if not isinstance(raw_segments, list):
             raise ValueError("diarization artifact lacks output.segments")
-        plan = build_plan(
+        plan = _plan.build_plan(
             raw_segments,
             total_samples=len(audio),
             raw_fragment_min_samples=round(
-                args.raw_fragment_min_seconds * SAMPLE_RATE
+                args.raw_fragment_min_seconds * _plan.SAMPLE_RATE
             ),
-            merge_gap_samples=round(args.merge_silence_max_seconds * SAMPLE_RATE),
-            asr_turn_min_samples=round(args.asr_turn_min_seconds * SAMPLE_RATE),
+            merge_gap_samples=round(
+                args.merge_silence_max_seconds * _plan.SAMPLE_RATE
+            ),
+            asr_turn_min_samples=round(
+                args.asr_turn_min_seconds * _plan.SAMPLE_RATE
+            ),
         )
         timing["audio_and_turn_preparation_s"] = time.perf_counter() - t0
 
@@ -185,7 +191,7 @@ def main() -> int:
             t0 = time.perf_counter()
             from mlx_lm.sample_utils import make_sampler  # noqa: PLC0415
 
-            accepted: list[Turn] = plan["accepted"]
+            accepted: list[_plan.Turn] = plan["accepted"]
             # Duration bucketing is deterministic and reduces zero-padding within a
             # batch. Results are restored to chronological turn order afterward.
             inference_order = sorted(
@@ -280,10 +286,10 @@ def main() -> int:
             for turn_index, turn in enumerate(accepted):
                 text, gen, prompt, was_processed = restored[turn_index]
                 if not was_processed:
-                    unprocessed.append(turn_record(turn, turn_index))
+                    unprocessed.append(_plan.turn_record(turn, turn_index))
                     continue
                 output_segments.append({
-                    **turn_record(turn, turn_index),
+                    **_plan.turn_record(turn, turn_index),
                     "text": text,
                     "language": args.language,
                     "prompt_tokens": prompt,
@@ -333,9 +339,9 @@ def main() -> int:
             })
         samples.append(final_sample)
 
-    swap_end = mac_swap_snapshot()
+    swap_end = _runtime.mac_swap_snapshot()
     usage_end = resource.getrusage(resource.RUSAGE_SELF)
-    duration_s = len(audio) / SAMPLE_RATE if audio is not None else None
+    duration_s = len(audio) / _plan.SAMPLE_RATE if audio is not None else None
     if duration_s:
         for name in ("inference_s", "service_job_after_model_load_s", "fresh_runner_wall_s"):
             if name in timing:
@@ -343,7 +349,7 @@ def main() -> int:
     timing["cpu_user_s"] = usage_end.ru_utime - usage_start.ru_utime
     timing["cpu_system_s"] = usage_end.ru_stime - usage_start.ru_stime
 
-    serialized_plan, abstentions = serialize_plan(
+    serialized_plan, abstentions = _plan.serialize_plan(
         plan, diarization, qwen_result
     )
 
@@ -357,7 +363,7 @@ def main() -> int:
         "error": error,
         "runner": {
             "path": str(Path(__file__).resolve()),
-            "sha256": sha256(Path(__file__).resolve()),
+            "sha256": _runtime.sha256(Path(__file__).resolve()),
             "argv": sys.argv,
         },
         "epistemic_limits": [
@@ -374,7 +380,7 @@ def main() -> int:
             "python": sys.version,
         },
         "runtime": {
-            "packages": package_versions([
+            "packages": _runtime.package_versions([
                 "mlx", "mlx-metal", "mlx-audio", "mlx-lm", "numpy", "miniaudio"
             ]),
             "offline_environment": {
@@ -385,29 +391,29 @@ def main() -> int:
         },
         "input": {
             "audio_path": str(audio_path),
-            "audio_sha256": sha256(audio_path),
+            "audio_sha256": _runtime.sha256(audio_path),
             "ffprobe": source_probe,
             "prepared_prefix_float32_sha256": prepared_audio_hash,
             "duration_s": duration_s,
             "duration_limit_requested_s": args.duration_limit,
             "diarization_path": str(diarization_path),
-            "diarization_sha256": sha256(diarization_path),
+            "diarization_sha256": _runtime.sha256(diarization_path),
             "diarization_output_segments_sha256": (
-                stable_json_sha256(diarization["output"]["segments"])
+                _runtime.stable_json_sha256(diarization["output"]["segments"])
                 if diarization is not None else None
             ),
         },
         "model": {
             "path": str(model_path),
-            "snapshot_revision": snapshot_revision(model_path),
+            "snapshot_revision": _runtime.snapshot_revision(model_path),
             "config_sha256": (
-                sha256(model_path / "config.json")
+                _runtime.sha256(model_path / "config.json")
                 if (model_path / "config.json").is_file() else None
             ),
             "weight_files": ([{
                 "name": path.name,
                 "bytes": path.stat().st_size,
-                "sha256": sha256(path),
+                "sha256": _runtime.sha256(path),
             } for path in sorted(model_path.glob("*.safetensors"))]
                 if model_path.is_dir() else []),
             "loaded_parameter_bytes": model_parameter_bytes,
@@ -419,7 +425,7 @@ def main() -> int:
             "batch_order": "ascending duration_samples then chronological index",
             "temperature": 0.0,
             "max_tokens_global": args.max_tokens,
-            "sample_rate_hz": SAMPLE_RATE,
+            "sample_rate_hz": _plan.SAMPLE_RATE,
             "raw_fragment_min_seconds": args.raw_fragment_min_seconds,
             "merge_silence_max_seconds": args.merge_silence_max_seconds,
             "asr_turn_min_seconds": args.asr_turn_min_seconds,
@@ -444,7 +450,7 @@ def main() -> int:
             "peak_sampled_rss_bytes": max((
                 int(item["rss_bytes"]) for item in samples
             ), default=None),
-            "ru_maxrss_bytes": normalized_ru_maxrss(usage_end),
+            "ru_maxrss_bytes": _runtime.normalized_ru_maxrss(usage_end),
             "peak_sampled_mlx_active_bytes": max((
                 int(item.get("mlx_active_bytes", 0)) for item in samples
             ), default=None),
@@ -465,7 +471,7 @@ def main() -> int:
             "anonymous_speakers": sorted({
                 item["speaker"] for item in output_segments
             }),
-            "segments_sha256": stable_json_sha256(output_segments),
+            "segments_sha256": _runtime.stable_json_sha256(output_segments),
             "last_end_s": max((
                 float(item["end_s"]) for item in output_segments
             ), default=None),

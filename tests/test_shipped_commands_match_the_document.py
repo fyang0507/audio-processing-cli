@@ -71,7 +71,6 @@ def test_the_document_names_every_environment_and_package_doctor_reports() -> No
         )
 
 
-
 def test_packages_list_emits_exactly_the_shape_the_document_publishes(tmp_path) -> None:
     """The defect this catches: the same drift as `doctor`, one command over.
 
@@ -171,7 +170,6 @@ def test_the_comparison_can_fail() -> None:
     renamed = json.loads(json.dumps(baseline))
     renamed["external_tools"] = renamed.pop("tools")
     assert "tools.ffmpeg.present" not in shape(renamed)
-
 
 
 def test_transcribe_capabilities_emits_the_shape_happy_path_publishes() -> None:

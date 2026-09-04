@@ -2,8 +2,32 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    QWEN_REVISION,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    _snapshot_index_for,
+    env,
+    json,
+    main,
+    package_environment_verification,
+    package_integrity,
+    package_teardown,
+    paths,
+    pkg,
+    pytest,
+    shutil,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+from package_test_support import (
+    the_fake_download_satisfies_the_pin as the_fake_download_satisfies_the_pin,
+)
 from spec_document_loader import read_spec_document
 
 
@@ -24,7 +48,7 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(
 
     fetcher = HubBesideModels(tmp_path, already_cached=(QWEN_REVISION,))
     monkeypatch.setattr(
-        pkg, "_hub_snapshot_index", lambda: _snapshot_index_for(fetcher.hub)
+        package_integrity, "_hub_snapshot_index", lambda: _snapshot_index_for(fetcher.hub)
     )
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "silero-vad"]))
@@ -155,7 +179,7 @@ def test_vocabulary_names_every_environment_state_verify_can_emit() -> None:
 
     emitted = set(re.findall(
         r'environment_states\[name\] = "(\w+)"',
-        Path(package_verify.__file__).read_text(),
+        Path(package_environment_verification.__file__).read_text(),
     ))
     assert emitted == {"absent", "ok", "drifted", "blocked"}, (
         f"verify emits environment states {sorted(emitted)}; register the new one in "
@@ -286,7 +310,7 @@ def test_failed_deletion_reports_no_reclaim_and_keeps_registry_owner(
     artifact = Path(
         pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]
     )
-    monkeypatch.setattr(pkg, "_delete_at", lambda _parent, _name: None)
+    monkeypatch.setattr(package_teardown, "_delete_at", lambda _parent, _name: None)
 
     with pytest.raises(pkg.ProvisioningError) as raised:
         provisioner.remove(["silero-vad"])
@@ -309,7 +333,7 @@ def test_managed_delete_cannot_follow_a_parent_swapped_after_open(
     outside_target.mkdir(parents=True)
     sentinel = outside_target / "KEEP"
     sentinel.write_bytes(b"owned elsewhere")
-    original_measure = pkg._owned_tree_bytes_at
+    original_measure = package_teardown._owned_tree_bytes_at
     swapped = False
 
     def swap_after_parent_open(parent_descriptor: int, name: str) -> int:
@@ -320,9 +344,9 @@ def test_managed_delete_cannot_follow_a_parent_swapped_after_open(
             managed_parent.symlink_to(outside, target_is_directory=True)
         return original_measure(parent_descriptor, name)
 
-    monkeypatch.setattr(pkg, "_owned_tree_bytes_at", swap_after_parent_open)
+    monkeypatch.setattr(package_teardown, "_owned_tree_bytes_at", swap_after_parent_open)
 
-    assert pkg._delete_managed(managed_target) == len(b"managed")
+    assert package_teardown._delete_managed(managed_target) == len(b"managed")
     assert sentinel.read_bytes() == b"owned elsewhere"
     assert not (paths.root() / "envs-old" / "victim").exists()
 

@@ -8,19 +8,16 @@ from typing import Any
 
 from audio_cli.environments import packages as package_catalog
 
+from ._native_scope import _owned
+from ._orchestrator_output import _outcomes, _publish_result, _record_metrics
+from ._orchestrator_runtime import _core_plan
 from .adapters import reconcile_turns
 from .catalog import InputMetadata, result_source
 from .planner import ResolvedRequest
 from .result import ABSENT, NormalizedResult, serialize_result
 from .transport import StageOutcome, StageTransport
-from ._native_scope import _owned
 
-def _core_helpers():
-    # Imported lazily from the dispatching module to avoid maintaining duplicate refusal,
-    # metric, and output-target implementations.
-    from . import orchestrator
 
-    return orchestrator
 def _diarizer_outputs(
     diarization: Any,
     *,
@@ -97,8 +94,7 @@ def _executed_plan(
     requested_scope: tuple[float, float],
     selected_scope: tuple[float, float],
 ) -> dict[str, Any]:
-    helpers = _core_helpers()
-    executed = helpers._core_plan(plan)
+    executed = _core_plan(plan)
     if run_range is not None:
         executed["execution"]["range"] = {
             "requested": [requested_scope[0], requested_scope[1]],
@@ -129,7 +125,6 @@ def _finish(
     observed: Mapping[str, Any] | None = None,
     capability_outcomes: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    helpers = _core_helpers()
     normalized = NormalizedResult(
         source=result_source(
             metadata, duration, source_identity=source_identity
@@ -140,7 +135,7 @@ def _finish(
             "stack": request.stack.id,
             "outcomes": dict(capability_outcomes)
             if capability_outcomes is not None
-            else helpers._outcomes(request.wants, segments=segments),
+            else _outcomes(request.wants, segments=segments),
             "observed": {},
             "plan": _executed_plan(
                 plan, run_range, requested_scope, selected_scope
@@ -154,7 +149,7 @@ def _finish(
         lid_regions=lid_regions,
         overlapped_speech=overlapped_speech,
     )
-    normalized.provenance["observed"].update(helpers._record_metrics(outcomes, normalized))
+    normalized.provenance["observed"].update(_record_metrics(outcomes, normalized))
     if observed:
         normalized.provenance["observed"].update(observed)
     return serialize_result(normalized)
@@ -171,8 +166,7 @@ def _write_complete(
 ) -> None:
     if output is None:
         return
-    helpers = _core_helpers()
-    helpers._publish_result(
+    _publish_result(
         request,
         payload,
         output,

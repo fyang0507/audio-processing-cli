@@ -65,10 +65,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from ._qwen_verbatim_probe_support import *  # noqa: F403
+    from . import _qwen_verbatim_probe_support as _support
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _qwen_verbatim_probe_support import *  # noqa: F403
+    import _qwen_verbatim_probe_support as _support
 
 
 def main() -> int:
@@ -82,12 +82,12 @@ def main() -> int:
         ),
         "runner": {
             "path": str(Path(__file__).resolve()),
-            "sha256": sha256_file(Path(__file__).resolve()),
+            "sha256": _support.sha256_file(Path(__file__).resolve()),
             "argv": sys.argv,
         },
-        "host": build_host_info(),
+        "host": _support.build_host_info(),
         "decode_config": {
-            "temperature": TEMPERATURE,
+            "temperature": _support.TEMPERATURE,
             "sampler": "mlx_lm.sample_utils.make_sampler(temp=0.0)",
             "language_argument": None,
             "language_argument_note": (
@@ -95,22 +95,22 @@ def main() -> int:
                 "every run in this probe so language hinting is not a "
                 "confound in the system_prompt comparison."
             ),
-            "max_tokens": MAX_TOKENS,
+            "max_tokens": _support.MAX_TOKENS,
             "batch_size": 1,
             "chunking": (
                 "whole-clip single chunk per call; no FluidAudio diarization "
                 "plan feeds this script, unlike run_turn_attributed_mlx_asr.py"
             ),
         },
-        "system_prompts_tested": SYSTEM_PROMPTS,
-        "filler_token_list": FILLER_TOKENS,
+        "system_prompts_tested": _support.SYSTEM_PROMPTS,
+        "filler_token_list": _support.FILLER_TOKENS,
         "repetition_method": (
             "regex on cleaned text: \\b([a-zA-Z']+)\\b[\\s,.\\u2018\\u2019-]"
             "{1,3}\\1\\b case-insensitive, immediate consecutive repeats of "
             "a Latin word token only. Chinese repetition is not "
             "regex-counted; see the report's qualitative notes."
         ),
-        "runtime_packages": package_versions([
+        "runtime_packages": _support.package_versions([
             "mlx", "mlx-metal", "mlx-audio", "mlx-lm", "numpy", "miniaudio",
         ]),
         "offline_environment": {
@@ -118,7 +118,10 @@ def main() -> int:
                 "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE",
             )
         },
-        "fixtures": {key: build_fixture_info(path) for key, path in FIXTURES.items()},
+        "fixtures": {
+            key: _support.build_fixture_info(path)
+            for key, path in _support.FIXTURES.items()
+        },
         "models": {
             key: {
                 "repo_id": spec["repo_id"],
@@ -126,7 +129,7 @@ def main() -> int:
                 "path": str(spec["path"]),
                 "snapshot_exists": spec["path"].is_dir(),
             }
-            for key, spec in MODELS.items()
+            for key, spec in _support.MODELS.items()
         },
         "api_probe": None,
         "runs": [],
@@ -135,13 +138,13 @@ def main() -> int:
         "memory": {},
     }
 
-    rss_reader = RssReader()
+    rss_reader = _support.RssReader()
 
     try:
-        import numpy as np
         import mlx.core as mx
+        import numpy as np
         from mlx.utils import tree_flatten
-        from mlx_audio.stt.utils import load_model, load_audio
+        from mlx_audio.stt.utils import load_audio, load_model
         from mlx_lm.sample_utils import make_sampler
 
         if not mx.metal.is_available():
@@ -149,36 +152,40 @@ def main() -> int:
 
         # --- Decode each existing fixture once, reused across every run ---
         prepared_audio: dict[str, Any] = {}
-        for key, path in FIXTURES.items():
+        for key, path in _support.FIXTURES.items():
             info = result["fixtures"][key]
             if not info["exists"]:
                 info["prepared_audio_error"] = "fixture file not found"
                 continue
             t0 = time.perf_counter()
             try:
-                audio_mx = load_audio(str(path), sr=SAMPLE_RATE)
+                audio_mx = load_audio(str(path), sr=_support.SAMPLE_RATE)
                 audio_np = np.ascontiguousarray(np.array(audio_mx, dtype=np.float32))
             except Exception as exc:
                 info["prepared_audio_error"] = f"{type(exc).__name__}: {exc}"
                 print(f"[fixture:{key}] decode FAILED: {exc}", flush=True)
                 continue
             prepared_audio[key] = audio_np
-            info["prepared_audio_sha256"] = array_sha256(audio_np)
+            info["prepared_audio_sha256"] = _support.array_sha256(audio_np)
             info["prepared_audio_samples"] = int(len(audio_np))
-            info["prepared_audio_duration_s"] = len(audio_np) / SAMPLE_RATE
+            info["prepared_audio_duration_s"] = len(audio_np) / _support.SAMPLE_RATE
             info["prepared_audio_decode_wall_s"] = time.perf_counter() - t0
             print(
-                f"[fixture:{key}] decoded {len(audio_np)/SAMPLE_RATE:.3f}s "
+                f"[fixture:{key}] decoded {len(audio_np)/_support.SAMPLE_RATE:.3f}s "
                 f"in {info['prepared_audio_decode_wall_s']:.2f}s "
                 f"sha256={info['prepared_audio_sha256'][:12]}...",
                 flush=True,
             )
 
         # --- Run each model in the plan once, executing all its runs ---
-        model_keys_in_order = list(dict.fromkeys(item[0] for item in RUN_PLAN))
+        model_keys_in_order = list(
+            dict.fromkeys(item[0] for item in _support.RUN_PLAN)
+        )
         for model_key in model_keys_in_order:
-            spec = MODELS[model_key]
-            model_runs = [item for item in RUN_PLAN if item[0] == model_key]
+            spec = _support.MODELS[model_key]
+            model_runs = [
+                item for item in _support.RUN_PLAN if item[0] == model_key
+            ]
 
             if not spec["path"].is_dir():
                 for _, audio_key, prompt_key, label in model_runs:
@@ -214,9 +221,11 @@ def main() -> int:
             if result["api_probe"] is None:
                 method = model._generate_chunks_batched
                 signature = inspect.signature(method)
-                signature_ok = REQUIRED_BATCHED_API_PARAMS.issubset(signature.parameters)
+                signature_ok = _support.REQUIRED_BATCHED_API_PARAMS.issubset(
+                    signature.parameters
+                )
                 source_path = Path(inspect.getfile(type(model))).resolve()
-                source_hash = sha256_file(source_path)
+                source_hash = _support.sha256_file(source_path)
                 result["api_probe"] = {
                     "model_generate_signature": str(inspect.signature(model.generate)),
                     "private_batched_method": "_generate_chunks_batched",
@@ -224,8 +233,12 @@ def main() -> int:
                     "signature_matches_runner_contract": signature_ok,
                     "source_path": str(source_path),
                     "source_sha256": source_hash,
-                    "expected_source_sha256": EXPECTED_QWEN3_ASR_SOURCE_SHA256,
-                    "source_sha256_matches_expected": source_hash == EXPECTED_QWEN3_ASR_SOURCE_SHA256,
+                    "expected_source_sha256": (
+                        _support.EXPECTED_QWEN3_ASR_SOURCE_SHA256
+                    ),
+                    "source_sha256_matches_expected": (
+                        source_hash == _support.EXPECTED_QWEN3_ASR_SOURCE_SHA256
+                    ),
                 }
                 print(
                     f"[api_probe] signature_ok={signature_ok} "
@@ -246,8 +259,14 @@ def main() -> int:
             )
             model_info = {
                 "load_s": load_s,
-                "weight_sha256": sha256_file(weights_path) if weights_path.is_file() else None,
-                "config_sha256": sha256_file(config_path) if config_path.is_file() else None,
+                "weight_sha256": (
+                    _support.sha256_file(weights_path)
+                    if weights_path.is_file() else None
+                ),
+                "config_sha256": (
+                    _support.sha256_file(config_path)
+                    if config_path.is_file() else None
+                ),
                 "loaded_parameter_bytes": model_parameter_bytes,
                 "mlx_peak_active_bytes_after_load": int(mx.get_peak_memory()),
             }
@@ -269,15 +288,15 @@ def main() -> int:
                     })
                     continue
 
-                system_prompt = SYSTEM_PROMPTS[prompt_key]
+                system_prompt = _support.SYSTEM_PROMPTS[prompt_key]
                 run_record: dict[str, Any] = {
                     "model_key": model_key, "audio_key": audio_key,
                     "prompt_key": prompt_key, "label": label,
                     "system_prompt": system_prompt,
                     "language_argument": None,
-                    "max_tokens": MAX_TOKENS,
+                    "max_tokens": _support.MAX_TOKENS,
                     "batch_size": 1,
-                    "temperature": TEMPERATURE,
+                    "temperature": _support.TEMPERATURE,
                 }
                 try:
                     mx.reset_peak_memory()
@@ -285,8 +304,8 @@ def main() -> int:
                     chunks = [(audio_np, 0.0)]
                     texts, gen_tokens, prompt_tokens, processed = model._generate_chunks_batched(
                         chunks,
-                        max_tokens=MAX_TOKENS,
-                        sampler=make_sampler(temp=TEMPERATURE),
+                        max_tokens=_support.MAX_TOKENS,
+                        sampler=make_sampler(temp=_support.TEMPERATURE),
                         language=None,
                         system_prompt=system_prompt,
                         batch_size=1,
@@ -301,8 +320,8 @@ def main() -> int:
                         raw_text.startswith("language ") and "<asr_text>" in raw_text
                     )
                     detected_language, clean_text = model.extract_language(raw_text)
-                    filler_counts = count_fillers(clean_text)
-                    repeats = find_repetitions(clean_text)
+                    filler_counts = _support.count_fillers(clean_text)
+                    repeats = _support.find_repetitions(clean_text)
 
                     run_record.update({
                         "status": "ok" if was_processed else "not_processed_budget_exhausted",
@@ -314,7 +333,9 @@ def main() -> int:
                         "raw_text_had_language_prefix": has_language_prefix,
                         "detected_language": detected_language,
                         "text": clean_text,
-                        "text_sha256": sha256_bytes(clean_text.encode("utf-8")),
+                        "text_sha256": _support.sha256_bytes(
+                            clean_text.encode("utf-8")
+                        ),
                         "filler_counts": filler_counts,
                         "filler_total": sum(filler_counts.values()),
                         "repetitions_detected": repeats,
@@ -322,7 +343,7 @@ def main() -> int:
                         "mlx_peak_active_bytes": int(mx.get_peak_memory()),
                         "mlx_active_bytes_after": int(mx.get_active_memory()),
                         "mlx_cache_bytes_after": int(mx.get_cache_memory()),
-                        "rss_high_water_bytes_so_far": peak_rss_bytes(),
+                        "rss_high_water_bytes_so_far": _support.peak_rss_bytes(),
                         "rss_source": rss_reader.source,
                     })
                     print(
@@ -364,12 +385,12 @@ def main() -> int:
         usage = resource.getrusage(resource.RUSAGE_SELF)
         result["memory"] = {
             "rss_source": rss_reader.source,
-            "ru_maxrss_bytes_final": peak_rss_bytes(),
+            "ru_maxrss_bytes_final": _support.peak_rss_bytes(),
             "ru_utime_s": usage.ru_utime,
             "ru_stime_s": usage.ru_stime,
         }
         output_path = (
-            REPO_ROOT / "model_tests" / "benchmark_runs"
+            _support.REPO_ROOT / "model_tests" / "benchmark_runs"
             / "qwen_verbatim_probe_multispeaker_20260817.json"
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -377,7 +398,7 @@ def main() -> int:
             json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         print(f"\nWrote {output_path}", flush=True)
-        print(f"artifact sha256={sha256_file(output_path)}", flush=True)
+        print(f"artifact sha256={_support.sha256_file(output_path)}", flush=True)
 
     ok_runs = sum(1 for r in result["runs"] if r.get("status") == "ok")
     return 0 if result["fatal_error"] is None and ok_runs > 0 else 1

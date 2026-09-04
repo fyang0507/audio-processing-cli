@@ -1,6 +1,21 @@
 from __future__ import annotations
 
-from transcribe_firered_test_support import *  # noqa: F403
+from typing import Any
+
+from transcribe_firered_test_support import (
+    _PINNED_FIRERED_PROCESS,
+    ROOT,
+    ast,
+    deepcopy,
+    firered_stage,
+    hashlib,
+    json,
+    np,
+    pytest,
+    re,
+    types,
+)
+
 
 @pytest.mark.parametrize("lid_enabled", [True, False])
 def test_firered_phase_mirror_matches_pinned_upstream_process(

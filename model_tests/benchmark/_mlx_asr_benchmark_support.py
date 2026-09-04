@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-
 __all__ = [
     "RssReader", "array_sha256", "command_version", "detect_family", "ffprobe",
     "mac_swap_snapshot", "monotonic_segments", "normalize_segments",

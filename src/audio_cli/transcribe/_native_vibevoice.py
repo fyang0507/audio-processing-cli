@@ -7,9 +7,37 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from audio_cli.media import temporary_directory
+from audio_cli.media import capture_file_identity, temporary_directory
+from audio_cli.packages import load_registry
 
 from . import refusals
+from ._native_common import (
+    _diarizer_outputs,
+    _finish,
+    _run_diarizer,
+    _write_complete,
+)
+from ._native_scope import (
+    _checkout,
+    _clip_canonical,
+    _duration,
+    _EmptySampleRange,
+    _intersects,
+    _intersects_any,
+    _materialized_role_paths,
+    _owned,
+    _published_scope,
+    _selected_scope,
+)
+from ._orchestrator_output import (
+    _backend_fix,
+    _publish_partial,
+    _resume_command,
+    validate_output_targets,
+)
+from ._orchestrator_preflight import preflight
+from ._orchestrator_runtime import RunProduct, _materialized_path, _validate_range
+from ._orchestrator_vad import _detect_vad
 from .adapters import (
     normalize_aligned_words,
     normalize_vibevoice_alignment,
@@ -19,25 +47,7 @@ from .catalog import InputMetadata
 from .planner import ResolvedRequest, build_plan
 from .result import ABSENT, ResultError
 from .transport import StageFailure, StageOutcome, StageTransport
-from ._native_common import (
-    _core_helpers,
-    _diarizer_outputs,
-    _finish,
-    _run_diarizer,
-    _write_complete,
-)
-from ._native_scope import (
-    _EmptySampleRange,
-    _checkout,
-    _clip_canonical,
-    _duration,
-    _intersects,
-    _intersects_any,
-    _materialized_role_paths,
-    _owned,
-    _published_scope,
-    _selected_scope,
-)
+
 
 def _native_turns(segments: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Expose each bounded Vibe speech label without filling gaps between segments."""
@@ -86,11 +96,8 @@ def _run_vibevoice(
     vad_detector: Any | None,
     force: bool,
 ) -> Any:
-    helpers = _core_helpers()
-    StageTransport = helpers.StageTransport
-    load_registry = helpers.load_registry
-    protected_source_identity = helpers.capture_file_identity(request.input_path)
-    helpers.validate_output_targets(
+    protected_source_identity = capture_file_identity(request.input_path)
+    validate_output_targets(
         request, output, output_format=output_format, run_range=run_range, force=force
     )
     source_identity = Path(request.input_path).resolve()
@@ -101,7 +108,7 @@ def _run_vibevoice(
         if isinstance(entry, Mapping) and entry.get("state") == "ready"
     }
     plan = build_plan(request, metadata, provisioned_packages=ready)
-    entries = helpers.preflight(plan, document)
+    entries = preflight(plan, document)
     stage_transport = transport or StageTransport()
     stage_outcomes: list[StageOutcome] = []
     active_role, active_backend = "decode", "ffmpeg"
@@ -111,7 +118,7 @@ def _run_vibevoice(
         try:
             stage_outcomes.append(stage_transport.decode(source_identity, canonical))
             duration = _duration(canonical)
-            run_range = helpers._validate_range(request, run_range, duration)
+            run_range = _validate_range(request, run_range, duration)
             scope = _selected_scope(run_range, duration)
             selected_audio = canonical
             requested_scope = scope
@@ -136,7 +143,7 @@ def _run_vibevoice(
                     ) from exc
 
             active_role, active_backend = "diarizer", "fluidaudio"
-            entries = helpers.preflight(plan, document)
+            entries = preflight(plan, document)
             diarization = _run_diarizer(
                 plan,
                 entries,
@@ -151,7 +158,7 @@ def _run_vibevoice(
             selected_vad: list[dict[str, Any]] = []
             if "vad" in plan.roles:
                 active_role, active_backend = "vad", "silero-vad"
-                values, wall, peak = helpers._detect_vad(
+                values, wall, peak = _detect_vad(
                     canonical, vad_detector, plan.roles["vad"]["config"]
                 )
                 selected_vad = [item for item in values if _owned(item, scope)]
@@ -160,7 +167,7 @@ def _run_vibevoice(
                 ))
 
             active_role, active_backend = "asr", "vibevoice-asr-7b"
-            entries = helpers.preflight(plan, document)
+            entries = preflight(plan, document)
             role_paths = _materialized_role_paths(entries, "vibevoice-asr-7b")
             tokenizer_source = plan.roles["asr"].get("tokenizer")
             if not isinstance(tokenizer_source, dict):
@@ -218,9 +225,9 @@ def _run_vibevoice(
             aligned: dict[str, list[dict[str, Any]]] = {}
             if "aligner" in plan.roles and alignable:
                 active_role, active_backend = "aligner", "qwen3-forcedaligner"
-                entries = helpers.preflight(plan, document)
+                entries = preflight(plan, document)
                 align = stage_transport.align(
-                    model=helpers._materialized_path(entries, "qwen3-forcedaligner"),
+                    model=_materialized_path(entries, "qwen3-forcedaligner"),
                     audio=canonical,
                     segments=alignable,
                     directory=directory,
@@ -241,7 +248,7 @@ def _run_vibevoice(
                 exc.role,
                 exc.backend,
                 exc.detail,
-                helpers._backend_fix(exc.role, exc.backend),
+                _backend_fix(exc.role, exc.backend),
             ) from exc
         except (
             EOFError, KeyError, RuntimeError, TypeError, ValueError, wave.Error,
@@ -250,7 +257,7 @@ def _run_vibevoice(
                 active_role,
                 active_backend,
                 str(exc),
-                helpers._backend_fix(active_role, active_backend),
+                _backend_fix(active_role, active_backend),
             ) from exc
 
         incomplete = normalized.hit_max_new_tokens
@@ -262,7 +269,7 @@ def _run_vibevoice(
                     "asr",
                     "vibevoice-asr-7b",
                     "generation reached its cap without a complete segment",
-                    helpers._backend_fix("asr", "vibevoice-asr-7b"),
+                    _backend_fix("asr", "vibevoice-asr-7b"),
                 )
             try:
                 watermark = float(normalized.covered_through_seconds)
@@ -273,7 +280,7 @@ def _run_vibevoice(
                     "asr",
                     "vibevoice-asr-7b",
                     str(exc),
-                    helpers._backend_fix("asr", "vibevoice-asr-7b"),
+                    _backend_fix("asr", "vibevoice-asr-7b"),
                 ) from exc
 
         _external_turns, overlaps, abstentions = _diarizer_outputs(
@@ -374,11 +381,11 @@ def _run_vibevoice(
                 active_role,
                 active_backend,
                 str(exc),
-                helpers._backend_fix(active_role, active_backend),
+                _backend_fix(active_role, active_backend),
             ) from exc
 
     if incomplete:
-        target = helpers._publish_partial(
+        target = _publish_partial(
             request,
             payload,
             output=output,
@@ -396,7 +403,7 @@ def _run_vibevoice(
             ),
             coverage,
             target,
-            helpers._resume_command(request, coverage, target, run_range),
+            _resume_command(request, coverage, target, run_range),
         )
 
     _write_complete(
@@ -408,4 +415,4 @@ def _run_vibevoice(
         force,
         protected_source_identity,
     )
-    return helpers.RunProduct(payload)
+    return RunProduct(payload)

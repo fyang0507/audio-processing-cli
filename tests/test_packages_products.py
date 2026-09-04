@@ -2,8 +2,25 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    FIRERED_REVISIONS,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    _snapshot_index_for,
+    env,
+    main,
+    package_integrity,
+    pkg,
+    pytest,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+
 
 def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(
     tmp_path, monkeypatch,
@@ -22,7 +39,7 @@ def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(
     for teardown in ("remove", "purge"):
         fetcher = HostileCache(tmp_path / teardown)
         monkeypatch.setattr(
-            pkg,
+            package_integrity,
             "_hub_snapshot_index",
             lambda fetcher=fetcher: _snapshot_index_for(fetcher.hub),
         )

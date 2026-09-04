@@ -70,6 +70,12 @@ boundaries. `tests/test_file_size_budget.py` enforces the limit and owns the nar
 list for generated locks and indivisible recorded fixtures; do not add an exception merely to
 avoid decomposing maintained code, tests, or prose.
 
+When a decomposition creates a family of modules, give that family a real subpackage instead
+of encoding the namespace in repeated root-level filename prefixes. Keep each subpackage's
+`__init__.py` as an explicit public facade, have implementation modules depend on the module
+that owns a behavior rather than reaching back through the facade, and split by responsibility
+rather than stopping just below the line limit.
+
 ## Habits learned the hard way
 
 - **Do not add structure nobody dispatches on.** A capability report here shed four nested

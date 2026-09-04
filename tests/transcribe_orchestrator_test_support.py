@@ -16,6 +16,8 @@ from audio_cli import environments as env
 from audio_cli import packages as pkg
 from audio_cli import paths as audio_paths
 from audio_cli.export import UnsafeOutputError, export_documents
+from audio_cli.packages import integrity as package_integrity
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
 from audio_cli.transcribe import orchestrator, refusals
 from audio_cli.transcribe.catalog import InputMetadata
 from audio_cli.transcribe.plan import serialize_plan
@@ -54,11 +56,11 @@ def provisioned_runtime_root(tmp_path: Path, monkeypatch) -> None:
                 )
         return found
 
-    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
+    monkeypatch.setattr(package_integrity, "_hub_snapshot_index", snapshot_index)
     monkeypatch.setattr(
-        orchestrator,
+        orchestrator_runtime,
         "_inspect_checkout",
-        lambda _checkout: orchestrator._CheckoutState(
+        lambda _checkout: orchestrator_runtime._CheckoutState(
             head=FLUID_REVISION,
             modified=pkg.checkout_patch_expectation(
                 env.packages()["fluidaudio"]
@@ -67,7 +69,7 @@ def provisioned_runtime_root(tmp_path: Path, monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        orchestrator,
+        orchestrator_runtime,
         "_checkout_file_digest",
         lambda path: (
             next(iter(env.packages()["fluidaudio"].source["patched_file_sha256"].values()))
@@ -221,6 +223,7 @@ def full_registry(tmp_path: Path) -> dict:
         "packages": packages,
     }
 
+
 class NoncontiguousTransport(FullFakeTransport):
     def __init__(self, *, partial: bool) -> None:
         super().__init__()
@@ -246,4 +249,36 @@ class NoncontiguousTransport(FullFakeTransport):
         ]}, 1.0, returncode=4 if self.partial else 0)
 
 
-__all__ = [name for name in globals() if not name.startswith("__")]
+__all__ = [
+    "FakeTransport",
+    "FakeVad",
+    "FullFakeTransport",
+    "InputMetadata",
+    "NoncontiguousTransport",
+    "Path",
+    "SileroOnnxVad",
+    "StageOutcome",
+    "StageTransport",
+    "UnsafeOutputError",
+    "audio_paths",
+    "build_plan",
+    "cli",
+    "env",
+    "export_documents",
+    "full_registry",
+    "inspect",
+    "json",
+    "orchestrator",
+    "os",
+    "provisioned_runtime_root",
+    "pytest",
+    "refusals",
+    "registry",
+    "replace",
+    "request",
+    "resolve_request",
+    "serialize_plan",
+    "shlex",
+    "shutil",
+    "wave",
+]

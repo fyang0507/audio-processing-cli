@@ -107,6 +107,8 @@ def _region_records(
         ):
             result.append({"region_id": identifier, "start": start, "end": end})
     return result
+
+
 def _mapping(value: object, field: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise TypeError(f"{field} must be an object")

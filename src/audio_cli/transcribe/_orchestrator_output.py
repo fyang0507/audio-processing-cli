@@ -7,17 +7,20 @@ import shlex
 import unicodedata
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from audio_cli.media import ProtectedFileIdentity, ProtectedOutputError
+from audio_cli.media import (
+    ProtectedFileIdentity,
+    ProtectedOutputError,
+    atomic_write_json,
+    atomic_write_text,
+)
 
 from . import refusals
+from ._orchestrator_runtime import RunRange
 from .planner import ResolvedRequest
 from .result import ABSENT, NormalizedResult
 from .transport import StageOutcome
-
-if TYPE_CHECKING:
-    from .orchestrator import RunRange
 
 
 def _record_metrics(outcomes: Sequence[StageOutcome], result: NormalizedResult) -> dict[str, Any]:
@@ -241,13 +244,11 @@ def _write_result_file(
     protected_path: Path,
     protected_identity: ProtectedFileIdentity | None,
 ) -> None:
-    from . import orchestrator as core
-
     protected_identities = (
         (protected_identity,) if protected_identity is not None else ()
     )
     if output_format == "json":
-        core.atomic_write_json(
+        atomic_write_json(
             path,
             payload,
             force=force,
@@ -255,7 +256,7 @@ def _write_result_file(
             protected_identities=protected_identities,
         )
     else:
-        core.atomic_write_text(
+        atomic_write_text(
             path,
             render_human(payload, output_format),
             force=force,
@@ -326,13 +327,11 @@ def _publish_partial(
     force: bool,
     protected_source_identity: ProtectedFileIdentity | None,
 ) -> Path:
-    from . import orchestrator as core
-
     if output is None and not force:
         while True:
             target = _unused_partial_path(request.input_path)
             try:
-                core.atomic_write_json(
+                atomic_write_json(
                     target,
                     payload,
                     force=False,

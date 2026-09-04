@@ -1,7 +1,30 @@
 from __future__ import annotations
 
-from transcribe_orchestrator_test_support import *  # noqa: F403
+from transcribe_orchestrator_test_support import (
+    FakeTransport,
+    FullFakeTransport,
+    InputMetadata,
+    Path,
+    StageOutcome,
+    UnsafeOutputError,
+    cli,
+    export_documents,
+    full_registry,
+    json,
+    orchestrator,
+    pytest,
+    refusals,
+    registry,
+    replace,
+    request,
+    resolve_request,
+    shlex,
+)
+from transcribe_orchestrator_test_support import (
+    provisioned_runtime_root as provisioned_runtime_root,
+)
 
+from audio_cli.transcribe import _orchestrator_output as orchestrator_output
 
 
 def test_qwen_floor_run_uses_fixed_units_and_never_publishes_container_bounds(tmp_path) -> None:
@@ -224,7 +247,7 @@ def test_resume_builder_defensively_quotes_an_option_like_internal_value(
         ),
         language="--stack",
     )
-    fix = orchestrator._resume_command(
+    fix = orchestrator_output._resume_command(
         resolved,
         {
             "units_completed": 1,

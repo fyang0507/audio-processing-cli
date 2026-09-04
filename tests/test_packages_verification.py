@@ -2,8 +2,30 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    FIRERED_REVISIONS,
+    QWEN_REPO,
+    QWEN_REVISION,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    env,
+    package_registry,
+    paths,
+    pkg,
+    pytest,
+    shutil,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+from package_test_support import (
+    the_fake_download_satisfies_the_pin as the_fake_download_satisfies_the_pin,
+)
+
 
 # --------------------------------------------------------------------------------------
 # What `pull` and `verify` used to claim: a digest nobody took, a repair nobody wired, and
@@ -172,7 +194,7 @@ def test_a_ready_package_is_never_reopened_as_pulling(provisioner, monkeypatch) 
         states.append(document["packages"].get("qwen3-asr-1.7b-8bit", {}).get("state"))
         real_save(document)
 
-    monkeypatch.setattr(pkg, "save_registry", spy)
+    monkeypatch.setattr(package_registry, "save_registry", spy)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     assert states == [], (
         f"a no-op pull rewrote the registry, states {states}: a ready package must not be "

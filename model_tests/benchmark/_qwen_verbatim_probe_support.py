@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 __all__ = [
     "EXPECTED_QWEN3_ASR_SOURCE_SHA256", "FILLER_TOKENS", "FIXTURES",
     "LATIN_REPEAT_RE", "MAX_TOKENS", "MODELS", "REPO_ROOT",

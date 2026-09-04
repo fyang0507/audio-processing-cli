@@ -10,9 +10,8 @@ from typing import Any
 from audio_cli import paths
 from audio_cli.environments import environments as environment_catalog
 from audio_cli.environments import packages as package_catalog
+from audio_cli.media import hash_file
 from audio_cli.packages import (
-    _checkout_install_drift,
-    _managed_checkout_requirements,
     built_product_candidates,
     checkout_file_matches,
     checkout_patch_expectation,
@@ -23,9 +22,15 @@ from audio_cli.packages import (
     managed_url_artifact_path,
     validated_built_product,
 )
+from audio_cli.packages.requirements import (
+    _checkout_install_drift,
+    _managed_checkout_requirements,
+)
 
+from . import _orchestrator_runtime as runtime
 from . import refusals
 from .plan import Plan
+
 
 def preflight(
     plan: Plan,
@@ -36,21 +41,9 @@ def preflight(
     frozen_packages_probe: Callable[[Path], dict[str, str]] | None = None,
 ) -> dict[str, Mapping[str, Any]]:
     """Fail before decode or model load if the selected materialization is not usable."""
-    # Resolve through the compatibility facade so existing probe monkeypatches remain effective.
-    from . import orchestrator as core
-
-    _CheckoutState = core._CheckoutState
-    _built_product_runs = core._built_product_runs
-    _checkout_file_digest = core._checkout_file_digest
-    _frozen_packages = core._frozen_packages
-    _inspect_checkout = core._inspect_checkout
-    _missing_record = core._missing_record
-    _paths_exist = core._paths_exist
-    _python_runtime_runs = core._python_runtime_runs
-    hash_file = core.hash_file
-    built_product_probe = built_product_probe or _built_product_runs
-    python_runtime_probe = python_runtime_probe or _python_runtime_runs
-    frozen_packages_probe = frozen_packages_probe or _frozen_packages
+    built_product_probe = built_product_probe or runtime._built_product_runs
+    python_runtime_probe = python_runtime_probe or runtime._python_runtime_runs
+    frozen_packages_probe = frozen_packages_probe or runtime._frozen_packages
     entries = registry.get("packages", {})
     if not isinstance(entries, Mapping):
         entries = {}
@@ -60,7 +53,7 @@ def preflight(
             continue
         entry = entries.get(record["package"])
         if not isinstance(entry, Mapping) or entry.get("state") != "ready":
-            missing.append(_missing_record(record))
+            missing.append(runtime._missing_record(record))
     if missing:
         known = sum(int(item["bytes"] or 0) for item in missing)
         unsized = [str(item["package"]) for item in missing if item["bytes"] is None]
@@ -207,7 +200,9 @@ def preflight(
         if catalog[identifier].environment in unusable_environments:
             continue
         materialized = entry.get("materialized", {})
-        if not isinstance(materialized, Mapping) or not _paths_exist(materialized):
+        if not isinstance(materialized, Mapping) or not runtime._paths_exist(
+            materialized
+        ):
             failures.append({
                 "package": identifier,
                 "check": "materialized_paths_exist",
@@ -267,10 +262,10 @@ def preflight(
                     "expected": list(accepted_commits),
                     "actual": actual_commit,
                 })
-            checkout_state: _CheckoutState | None = None
+            checkout_state: runtime._CheckoutState | None = None
             if checkout is not None and checkout.is_dir():
                 try:
-                    checkout_state = _inspect_checkout(checkout)
+                    checkout_state = runtime._inspect_checkout(checkout)
                 except ValueError as exc:
                     failures.append({
                         "package": identifier,
@@ -318,7 +313,10 @@ def preflight(
                 changed: list[str] = []
                 for name, expected_digest in expected_digests.items():
                     if not checkout_file_matches(
-                        checkout, name, expected_digest, _checkout_file_digest
+                        checkout,
+                        name,
+                        expected_digest,
+                        runtime._checkout_file_digest,
                     ):
                         changed.append(name)
                 if changed:
@@ -362,7 +360,7 @@ def preflight(
                 candidates = []
             else:
                 try:
-                    state = _inspect_checkout(checkout)
+                    state = runtime._inspect_checkout(checkout)
                 except ValueError as exc:
                     failures.append({
                         "package": identifier,
@@ -418,7 +416,10 @@ def preflight(
                     changed = [
                         name for name, digest in expected_digests.items()
                         if not checkout_file_matches(
-                            checkout, name, digest, _checkout_file_digest
+                            checkout,
+                            name,
+                            digest,
+                            runtime._checkout_file_digest,
                         )
                     ]
                     if changed:

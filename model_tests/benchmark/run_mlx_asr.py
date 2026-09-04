@@ -22,14 +22,14 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from ._mlx_asr_benchmark_support import *  # noqa: F403
+    from . import _mlx_asr_benchmark_support as _support
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _mlx_asr_benchmark_support import *  # noqa: F403
+    import _mlx_asr_benchmark_support as _support
 
 
 def main() -> int:
-    args = parse_args()
+    args = _support.parse_args()
     model_path = Path(args.model_path).expanduser().resolve()
     audio_path = Path(args.audio).expanduser().resolve()
     output_path = Path(args.output).expanduser().resolve()
@@ -46,7 +46,7 @@ def main() -> int:
         raise SystemExit(f"model weights not found: {model_path}")
 
     config = json.loads(config_path.read_text())
-    detected_family = detect_family(config)
+    detected_family = _support.detect_family(config)
     family = detected_family if args.family == "auto" else args.family
     if family != detected_family:
         raise SystemExit(
@@ -60,14 +60,14 @@ def main() -> int:
 
     process_start = time.perf_counter()
     usage_start = resource.getrusage(resource.RUSAGE_SELF)
-    rss_reader = RssReader()
+    rss_reader = _support.RssReader()
     phase = {"name": "startup"}
     samples: list[dict[str, Any]] = []
     sampler_errors: list[dict[str, str]] = []
     stop = threading.Event()
     mx_holder: dict[str, Any] = {}
     explicit_mlx_phase_peaks: dict[str, int] = {}
-    swap_start = mac_swap_snapshot()
+    swap_start = _support.mac_swap_snapshot()
 
     def sample_memory() -> None:
         while True:
@@ -142,7 +142,7 @@ def main() -> int:
         phase["name"] = "audio_preprocess"
         mx.reset_peak_memory()
         t0 = time.perf_counter()
-        source_probe = ffprobe(audio_path)
+        source_probe = _support.ffprobe(audio_path)
         loaded_audio = load_audio(str(audio_path), sr=16000)
         mx.eval(loaded_audio)
         mx.synchronize()
@@ -151,7 +151,7 @@ def main() -> int:
             prepared_audio = prepared_audio.reshape(-1)
         prepared_audio = np.ascontiguousarray(prepared_audio)
         audio_duration_s = len(prepared_audio) / 16000
-        prepared_audio_sha256 = array_sha256(prepared_audio)
+        prepared_audio_sha256 = _support.array_sha256(prepared_audio)
         del loaded_audio
         mx.clear_cache()
         timing["audio_preprocess_s"] = time.perf_counter() - t0
@@ -228,8 +228,8 @@ def main() -> int:
 
     text = str(getattr(transcription, "text", "")) if transcription else ""
     raw_segments = getattr(transcription, "segments", None) if transcription else None
-    segments = normalize_segments(raw_segments)
-    output_hash = stable_json_sha256(segments)
+    segments = _support.normalize_segments(raw_segments)
+    output_hash = _support.stable_json_sha256(segments)
     last_end_s = max((item["end_s"] for item in segments), default=None)
     timestamp_semantics = (
         "model_chunk_bounds_not_speech_timestamps"
@@ -273,7 +273,7 @@ def main() -> int:
     for path in sorted(model_path.glob("*.safetensors")):
         weight_files.append({
             "name": path.name, "size_bytes": path.stat().st_size,
-            "sha256": sha256(path),
+            "sha256": _support.sha256(path),
         })
     source_files = []
     for path in [
@@ -282,9 +282,11 @@ def main() -> int:
         if "mlx_audio.stt.utils" in sys.modules else None,
     ]:
         if path is not None and path.is_file():
-            source_files.append({"path": str(path), "sha256": sha256(path)})
+            source_files.append({
+                "path": str(path), "sha256": _support.sha256(path)
+            })
 
-    swap_end = mac_swap_snapshot()
+    swap_end = _support.mac_swap_snapshot()
     swap_delta = None
     if swap_start is not None and swap_end is not None:
         swap_delta = swap_end["used_bytes"] - swap_start["used_bytes"]
@@ -308,18 +310,18 @@ def main() -> int:
             "machine": platform.machine(),
             "python": sys.version,
             "cpu_count": os.cpu_count(),
-            "physical_memory_bytes": physical_memory_bytes(),
+            "physical_memory_bytes": _support.physical_memory_bytes(),
             "mlx_device": (
                 mx_holder["module"].device_info() if "module" in mx_holder else None
             ),
         },
         "runtime": {
-            "packages": package_versions([
+            "packages": _support.package_versions([
                 "mlx", "mlx-metal", "mlx-audio", "numpy", "scipy",
                 "transformers", "tokenizers", "huggingface-hub",
             ]),
-            "ffmpeg": command_version(["ffmpeg", "-version"]),
-            "ffprobe": command_version(["ffprobe", "-version"]),
+            "ffmpeg": _support.command_version(["ffmpeg", "-version"]),
+            "ffprobe": _support.command_version(["ffprobe", "-version"]),
             "offline_environment": {
                 name: os.environ.get(name) for name in (
                     "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
@@ -329,9 +331,9 @@ def main() -> int:
         },
         "model": {
             "path": str(model_path),
-            "snapshot_revision": snapshot_revision(model_path),
+            "snapshot_revision": _support.snapshot_revision(model_path),
             "family": family,
-            "config_sha256": sha256(config_path),
+            "config_sha256": _support.sha256(config_path),
             "quantization": config.get(
                 "quantization", config.get("quantization_config")
             ),
@@ -374,7 +376,7 @@ def main() -> int:
         },
         "audio": {
             "path": str(audio_path),
-            "sha256": sha256(audio_path),
+            "sha256": _support.sha256(audio_path),
             "probe": source_probe,
             "prepared_sample_rate": 16000,
             "prepared_channels": 1,
@@ -393,7 +395,7 @@ def main() -> int:
             "peak_sampled_rss_bytes": max(
                 (int(item["rss_bytes"]) for item in samples), default=0
             ),
-            "ru_maxrss_bytes": normalized_ru_maxrss(usage_end),
+            "ru_maxrss_bytes": _support.normalized_ru_maxrss(usage_end),
             "peak_sampled_mlx_active_bytes": max(
                 (int(item.get("mlx_active_bytes", 0)) for item in samples),
                 default=0,
@@ -423,7 +425,7 @@ def main() -> int:
             "normalized_segments_sha256": output_hash,
             "segment_count": len(segments),
             "timestamp_semantics": timestamp_semantics,
-            "timestamps_monotonic": monotonic_segments(segments),
+            "timestamps_monotonic": _support.monotonic_segments(segments),
             "last_segment_end_s": last_end_s,
             "last_segment_end_ratio": (
                 last_end_s / audio_duration_s

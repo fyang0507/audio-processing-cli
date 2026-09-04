@@ -80,6 +80,7 @@ def _write(path: Path, payload: dict) -> Path:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return path
 
+
 def _timed_segment(
     text: str,
     words: list[tuple[str, float, float]],

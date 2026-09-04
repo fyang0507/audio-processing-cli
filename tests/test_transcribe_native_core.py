@@ -1,6 +1,27 @@
 from __future__ import annotations
 
-from transcribe_native_test_support import *  # noqa: F403
+from pathlib import Path
+
+from transcribe_native_test_support import (
+    _REAL_INSPECT_CHECKOUT,
+    InputMetadata,
+    StageOutcome,
+    _ready_multi_package,
+    _runtime,
+    audio_paths,
+    env,
+    orchestrator,
+    pkg,
+    pytest,
+    refusals,
+    resolve_request,
+    subprocess,
+    wave,
+)
+from transcribe_native_test_support import (
+    trusted_checkout_probe as trusted_checkout_probe,
+)
+
 
 def test_checkout_probe_reads_live_head_tracked_and_untracked_state(
     tmp_path: Path,
@@ -57,8 +78,6 @@ def test_checkout_probe_reads_live_head_tracked_and_untracked_state(
         "ignored.tmp",
         "rogue.py",
     )
-
-
 
 
 @pytest.mark.parametrize(

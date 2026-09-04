@@ -306,6 +306,7 @@ def test_overlap_id_is_a_non_empty_document_scoped_id() -> None:
                 provenance=provenance,
             ))
 
+
 def test_abstention_reason_is_the_closed_recorded_enum() -> None:
     assert ABSTENTION_REASONS == {
         "alignment_unavailable", "overlap", "short_turn", "raw_fragment",

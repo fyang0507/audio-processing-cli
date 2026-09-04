@@ -12,7 +12,8 @@ from audio_cli import environments as env
 from audio_cli import packages as pkg
 from audio_cli import paths
 from audio_cli.media import hash_file
-from audio_cli.transcribe import orchestrator as transcribe_orchestrator
+from audio_cli.packages import integrity as package_integrity
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
 
 REPO = Path(__file__).resolve().parents[1]
 HAPPY_PATH = REPO / "TRANSCRIBE_HAPPY_PATH.md"
@@ -23,11 +24,11 @@ def configure_isolated_root(tmp_path, monkeypatch):
     """The document shows an unprovisioned machine, and so must this."""
     monkeypatch.setenv("AUDIO_PROCESSING_MODEL_CACHE", str(tmp_path / "root"))
 
-    def inspect(checkout: Path) -> transcribe_orchestrator._CheckoutState:
+    def inspect(checkout: Path) -> orchestrator_runtime._CheckoutState:
         if "fluidaudio" in str(checkout):
             package = env.packages()["fluidaudio"]
             _patches, modified, _digests = pkg.checkout_patch_expectation(package)
-            return transcribe_orchestrator._CheckoutState(
+            return orchestrator_runtime._CheckoutState(
                 head=package.source["commit"], modified=modified, untracked=()
             )
         package_id = (
@@ -37,13 +38,13 @@ def configure_isolated_root(tmp_path, monkeypatch):
         )
         package = env.packages()[package_id]
         _patches, modified, _digests = pkg.checkout_patch_expectation(package)
-        return transcribe_orchestrator._CheckoutState(
+        return orchestrator_runtime._CheckoutState(
             head=package.checkout["resolved_commit"],
             modified=modified,
             untracked=(),
         )
 
-    monkeypatch.setattr(transcribe_orchestrator, "_inspect_checkout", inspect)
+    monkeypatch.setattr(orchestrator_runtime, "_inspect_checkout", inspect)
 
     def digest(path: Path) -> str:
         fluid = env.packages()["fluidaudio"].source.get("patched_file_sha256", {})
@@ -56,7 +57,7 @@ def configure_isolated_root(tmp_path, monkeypatch):
                 return expected
         return hash_file(path)
 
-    monkeypatch.setattr(transcribe_orchestrator, "_checkout_file_digest", digest)
+    monkeypatch.setattr(orchestrator_runtime, "_checkout_file_digest", digest)
 
     def frozen(interpreter: Path) -> dict[str, str]:
         environment_name = interpreter.parent.parent.name
@@ -70,7 +71,7 @@ def configure_isolated_root(tmp_path, monkeypatch):
             )
         return installed
 
-    monkeypatch.setattr(transcribe_orchestrator, "_frozen_packages", frozen)
+    monkeypatch.setattr(orchestrator_runtime, "_frozen_packages", frozen)
 
     def snapshot_index() -> dict[tuple[str, str], Path]:
         found = {}
@@ -88,7 +89,7 @@ def configure_isolated_root(tmp_path, monkeypatch):
                 )
         return found
 
-    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
+    monkeypatch.setattr(package_integrity, "_hub_snapshot_index", snapshot_index)
 
 
 class StubToolchain(pkg.Toolchain):
@@ -133,6 +134,7 @@ def shape(node, trail: str = "") -> dict[str, str]:
 
 
 COMPATIBLE = {"empty", "list"}
+
 
 def provisioned_like_the_document(tmp_path: Path) -> pkg.Provisioner:
     """A root holding every package, so `list` and `verify` print their populated shape.
@@ -180,7 +182,6 @@ def documented_fenced_block(
 
 def documented_text_block(anchor: str, *, document: Path = HAPPY_PATH) -> str:
     return documented_fenced_block(anchor, "text", document=document)
-
 
 
 def assert_documented_shape(actual: dict, documented: dict, label: str) -> None:

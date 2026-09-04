@@ -1,6 +1,26 @@
 from __future__ import annotations
 
-from transcribe_native_test_support import *  # noqa: F403
+from transcribe_native_test_support import (
+    InputMetadata,
+    Path,
+    _ready_multi_package,
+    _runtime,
+    build_plan,
+    env,
+    hash_file,
+    orchestrator,
+    pkg,
+    pytest,
+    refusals,
+    resolve_request,
+    shutil,
+)
+from transcribe_native_test_support import (
+    trusted_checkout_probe as trusted_checkout_probe,
+)
+
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+
 
 @pytest.mark.parametrize(
     ("stack_id", "environment", "mutation", "expected_check"),
@@ -61,10 +81,10 @@ def test_native_preflight_rejects_untrusted_source_checkout_before_decode(
     _patches, expected_modified, _expected_digests = pkg.checkout_patch_expectation(package)
     if mutation in {"head", "head_prefix", "tracked", "untracked", "not_git"}:
         if mutation == "not_git":
-            def inspect(_checkout: Path) -> orchestrator._CheckoutState:
+            def inspect(_checkout: Path) -> orchestrator_runtime._CheckoutState:
                 raise ValueError("not a Git checkout")
         else:
-            state = orchestrator._CheckoutState(
+            state = orchestrator_runtime._CheckoutState(
                 head=(
                     "0" * 40 if mutation == "head"
                     else package.checkout["commit"] if mutation == "head_prefix"
@@ -78,10 +98,10 @@ def test_native_preflight_rejects_untrusted_source_checkout_before_decode(
                 untracked=(("rogue.py",) if mutation == "untracked" else ()),
             )
 
-            def inspect(_checkout: Path) -> orchestrator._CheckoutState:
+            def inspect(_checkout: Path) -> orchestrator_runtime._CheckoutState:
                 return state
 
-        monkeypatch.setattr(orchestrator, "_inspect_checkout", inspect)
+        monkeypatch.setattr(orchestrator_runtime, "_inspect_checkout", inspect)
 
     source = tmp_path / f"{stack_id}.wav"
     source.write_bytes(b"source")
@@ -152,8 +172,10 @@ def test_native_preflight_refuses_a_missing_checkout_install_before_decode(
         def decode(self, *_args, **_kwargs):
             raise AssertionError("missing checkout install reached decode")
 
-    monkeypatch.setattr(orchestrator, "_frozen_packages", lambda _path: {})
-    monkeypatch.setattr(orchestrator, "_python_runtime_runs", lambda _path: True)
+    monkeypatch.setattr(orchestrator_runtime, "_frozen_packages", lambda _path: {})
+    monkeypatch.setattr(
+        orchestrator_runtime, "_python_runtime_runs", lambda _path: True
+    )
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
             request,
@@ -182,14 +204,14 @@ def test_native_preflight_never_inspects_an_external_checkout_receipt(
     external.mkdir()
     entry["materialized"]["checkout"] = str(external)
 
-    def fail_inspection(path: Path) -> orchestrator._CheckoutState:
+    def fail_inspection(path: Path) -> orchestrator_runtime._CheckoutState:
         raise AssertionError(f"preflight inspected external checkout {path}")
 
     def fail_hash(path: Path) -> str:
         raise AssertionError(f"preflight hashed external checkout file {path}")
 
-    monkeypatch.setattr(orchestrator, "_inspect_checkout", fail_inspection)
-    monkeypatch.setattr(orchestrator, "_checkout_file_digest", fail_hash)
+    monkeypatch.setattr(orchestrator_runtime, "_inspect_checkout", fail_inspection)
+    monkeypatch.setattr(orchestrator_runtime, "_checkout_file_digest", fail_hash)
     source = tmp_path / "vibe.wav"
     source.write_bytes(b"source")
     request = resolve_request(stack_id="vibevoice", input_path=source, wants=())
@@ -259,9 +281,9 @@ def test_native_preflight_derives_exact_patch_state_independently_of_receipt(
     materialized.setdefault("patched_file_digests", {})["evil.py"] = hash_file(evil)
 
     monkeypatch.setattr(
-        orchestrator,
+        orchestrator_runtime,
         "_inspect_checkout",
-        lambda _checkout: orchestrator._CheckoutState(
+        lambda _checkout: orchestrator_runtime._CheckoutState(
             head=package.checkout["resolved_commit"],
             modified=(*names, "evil.py"),
             untracked=(),

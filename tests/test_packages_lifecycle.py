@@ -2,8 +2,30 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    VIBE_MODEL_REVISION,
+    VIBE_TOKENIZER_REVISION,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    env,
+    json,
+    os,
+    package_registry,
+    paths,
+    pkg,
+    pytest,
+    types,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+
+from audio_cli.media import publication as media_publication
+
 
 def test_an_empty_root_reports_everything_absent() -> None:
     report = pkg.list_report()
@@ -130,7 +152,7 @@ def test_registry_temporary_never_follows_a_precreated_symlink(
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
     monkeypatch.setattr(
-        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
     )
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
     temporary.symlink_to(victim)
@@ -152,17 +174,19 @@ def test_registry_writer_refuses_a_known_substituted_temporary(
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
     monkeypatch.setattr(
-        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
     )
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
-    real_assert = pkg.assert_directory_binding
+    real_assert = package_registry.assert_directory_binding
 
     def substitute_temporary(descriptor: int, directory: Path) -> None:
         real_assert(descriptor, directory)
         temporary.unlink()
         temporary.symlink_to(victim)
 
-    monkeypatch.setattr(pkg, "assert_directory_binding", substitute_temporary)
+    monkeypatch.setattr(
+        package_registry, "assert_directory_binding", substitute_temporary
+    )
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.save_registry(pkg.blank_registry())
@@ -186,10 +210,10 @@ def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
     monkeypatch.setattr(
-        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
     )
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
-    real_exchange = media_module._rename_exchange
+    real_exchange = media_publication._rename_exchange
     substituted = False
 
     def substitute_at_exchange(
@@ -202,7 +226,7 @@ def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
             os.symlink(str(victim), left_name, dir_fd=directory_descriptor)
         real_exchange(directory_descriptor, left_name, right_name)
 
-    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+    monkeypatch.setattr(media_publication, "_rename_exchange", substitute_at_exchange)
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         replacement = pkg.blank_registry()
@@ -232,7 +256,7 @@ def test_registry_writer_cannot_follow_a_parent_swapped_after_open(
         target.parent.symlink_to(outside, target_is_directory=True)
         return types.SimpleNamespace(hex="fixed")
 
-    monkeypatch.setattr("audio_cli.packages.uuid.uuid4", swap_parent)
+    monkeypatch.setattr(package_registry.uuid, "uuid4", swap_parent)
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.save_registry(pkg.blank_registry())
 

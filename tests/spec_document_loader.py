@@ -5,30 +5,31 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+DOCS = REPO / "docs"
 
 _SPEC_PARTS = {
     (REPO / "TRANSCRIBE_HAPPY_PATH.md").resolve(): (
-        REPO / "TRANSCRIBE_HAPPY_PATH_00_OVERVIEW_AND_MACHINE.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_10_INTERVIEW_PLAN_AND_PROVISION.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_20_INTERVIEW_RUN_AND_EXPORT.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_30_VIDEO_EDITING.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_40_DIALECT_RECORDING.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_50_CORRECTIVE_PATHS.md",
-        REPO / "TRANSCRIBE_HAPPY_PATH_60_TEARDOWN.md",
+        DOCS / "transcribe-happy-path" / "00-overview-and-machine.md",
+        DOCS / "transcribe-happy-path" / "10-interview-plan-and-provision.md",
+        DOCS / "transcribe-happy-path" / "20-interview-run-and-export.md",
+        DOCS / "transcribe-happy-path" / "30-video-editing.md",
+        DOCS / "transcribe-happy-path" / "40-dialect-recording.md",
+        DOCS / "transcribe-happy-path" / "50-corrective-paths.md",
+        DOCS / "transcribe-happy-path" / "60-teardown.md",
     ),
     (REPO / "TRANSCRIBE_CONTRACT.md").resolve(): (
-        REPO / "TRANSCRIBE_CONTRACT_00_OVERVIEW.md",
-        REPO / "TRANSCRIBE_CONTRACT_10_MACHINE_AND_QWEN.md",
-        REPO / "TRANSCRIBE_CONTRACT_20_NATIVE_STACKS.md",
-        REPO / "TRANSCRIBE_CONTRACT_30_EXPORT.md",
-        REPO / "TRANSCRIBE_CONTRACT_40_REFUSALS.md",
-        REPO / "TRANSCRIBE_CONTRACT_50_TEARDOWN_AND_COVERAGE.md",
+        DOCS / "transcribe-contract" / "00-overview.md",
+        DOCS / "transcribe-contract" / "10-machine-and-qwen.md",
+        DOCS / "transcribe-contract" / "20-native-stacks.md",
+        DOCS / "transcribe-contract" / "30-export.md",
+        DOCS / "transcribe-contract" / "40-refusals.md",
+        DOCS / "transcribe-contract" / "50-teardown-and-coverage.md",
     ),
     (REPO / "VOCABULARY.md").resolve(): (
-        REPO / "VOCABULARY_00_TERMS.md",
-        REPO / "VOCABULARY_10_FLOORS_CAPABILITIES_AND_RESOLUTION.md",
-        REPO / "VOCABULARY_20_PACKAGES_AND_ENVIRONMENTS.md",
-        REPO / "VOCABULARY_30_RETIRED_WORDS_AND_VERSIONING.md",
+        DOCS / "vocabulary" / "00-terms.md",
+        DOCS / "vocabulary" / "10-floors-capabilities-and-resolution.md",
+        DOCS / "vocabulary" / "20-packages-and-environments.md",
+        DOCS / "vocabulary" / "30-retired-words-and-versioning.md",
     ),
 }
 

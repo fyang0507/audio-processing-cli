@@ -2,8 +2,30 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    ALIGNER_REVISION,
+    FIRERED_REVISIONS,
+    VIBE_MODEL_REVISION,
+    VIBE_TOKENIZER_REVISION,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    env,
+    package_integrity,
+    pkg,
+    pytest,
+    replace,
+    shutil,
+    sys,
+    types,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+
 
 # --------------------------------------------------------------------------------------
 # The shared Hugging Face cache
@@ -101,14 +123,14 @@ def test_pull_refuses_an_unindexed_hub_return_before_traversing_it(
             self.snapshots.append((repo, revision))
             return external
 
-    original_tree_bytes = pkg._tree_bytes
+    original_tree_bytes = package_integrity._tree_bytes
 
     def refuse_external_traversal(path: Path) -> int:
         if Path(path) == external:
             raise AssertionError("pull traversed an unindexed downloader return")
         return original_tree_bytes(path)
 
-    monkeypatch.setattr(pkg, "_tree_bytes", refuse_external_traversal)
+    monkeypatch.setattr(package_integrity, "_tree_bytes", refuse_external_traversal)
     provisioner = pkg.Provisioner(
         toolchain=FakeToolchain(), fetcher=UnindexedFetcher(tmp_path)
     )

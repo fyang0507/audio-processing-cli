@@ -4,9 +4,10 @@ import numpy as np
 import pytest
 from scipy.io import wavfile
 
-import audio_cli.pipeline as pipeline_module
 from audio_cli.media import is_enhanced_media, probe_media
 from audio_cli.pipeline import EnhancementPipeline, PipelineError
+from audio_cli.pipeline import preparation as pipeline_preparation
+from audio_cli.pipeline import runner as pipeline_runner
 from audio_cli.profiles import PROFILES, STAGE_ORDER
 from audio_cli.vad import SpeechRegion
 
@@ -75,14 +76,14 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     wavfile.write(source, sample_rate, audio)
 
     correction_calls: list[set[str]] = []
-    apply_corrections = pipeline_module.apply_machine_region_corrections
+    apply_corrections = pipeline_runner.apply_machine_region_corrections
 
     def record_corrections(samples, rate, analysis, corrections_db, fade_ms):
         correction_calls.append(set(corrections_db))
         return apply_corrections(samples, rate, analysis, corrections_db, fade_ms)
 
     monkeypatch.setattr(
-        pipeline_module, "apply_machine_region_corrections", record_corrections
+        pipeline_runner, "apply_machine_region_corrections", record_corrections
     )
     report = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad()).run(
         source, output=output, dry_run=False
@@ -155,7 +156,7 @@ def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
     the guarantee that speech effects are fully engaged at the last detected sample.
     """
     audio = np.zeros((samples_48k, 1), dtype=np.float32)
-    vad = pipeline_module._vad_audio(audio, 48_000)
+    vad = pipeline_preparation._vad_audio(audio, 48_000)
 
     assert vad.size / 16_000 <= samples_48k / 48_000 + 1e-12, (
         f"{samples_48k} samples at 48 kHz became {vad.size} at 16 kHz, which is "
@@ -166,13 +167,13 @@ def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
 def test_a_source_already_at_16k_is_passed_through_whole() -> None:
     """The truncation must not eat a sample when no resampling happens."""
     audio = np.zeros((16_000, 1), dtype=np.float32)
-    assert pipeline_module._vad_audio(audio, 16_000).size == 16_000
+    assert pipeline_preparation._vad_audio(audio, 16_000).size == 16_000
 
 
 def test_the_vad_timeline_loses_at_most_one_sample() -> None:
     """Truncating is the safe direction, but it must not become a habit of discarding tail."""
     samples_48k = 1332160
     audio = np.zeros((samples_48k, 1), dtype=np.float32)
-    vad = pipeline_module._vad_audio(audio, 48_000)
+    vad = pipeline_preparation._vad_audio(audio, 48_000)
     exact = samples_48k * 16_000 / 48_000
     assert exact - vad.size < 1.0, f"dropped {exact - vad.size:.3f} samples of tail"

@@ -2,8 +2,29 @@
 
 from __future__ import annotations
 
-# ruff: noqa: F403, F405
-from package_test_support import *
+from package_test_support import (
+    QWEN_REPO,
+    QWEN_REVISION,
+    FakeFetcher,
+    FakeToolchain,
+    Path,
+    env,
+    json,
+    main,
+    package_registry,
+    paths,
+    pkg,
+    pytest,
+    shutil,
+    subprocess,
+)
+from package_test_support import (
+    isolated_root as isolated_root,
+)
+from package_test_support import (
+    provisioner as provisioner,
+)
+
 
 def test_verify_reports_the_private_api_guard_as_unchecked_without_the_environment(
     provisioner,
@@ -235,14 +256,14 @@ def test_registry_read_error_is_a_machine_readable_cli_failure(
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("{}", encoding="utf-8")
-    original = pkg.os.open
+    original = package_registry.os.open
 
     def unreadable(path, flags, mode=0o777, *, dir_fd=None):
         if path == target.name and dir_fd is not None:
             raise PermissionError("denied")
         return original(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(pkg.os, "open", unreadable)
+    monkeypatch.setattr(package_registry.os, "open", unreadable)
     assert main(["packages", "verify"]) == 3
     error = json.loads(capsys.readouterr().err)["error"]
     assert error["code"] == "registry_unreadable"
@@ -257,7 +278,7 @@ def test_registry_loader_never_follows_a_leaf_substituted_before_open(
     target.write_text(json.dumps(pkg.blank_registry()), encoding="utf-8")
     victim = tmp_path / "external-registry.json"
     victim.write_text("external bytes must not be read\n", encoding="utf-8")
-    original = pkg.os.open
+    original = package_registry.os.open
     substituted = False
 
     def substitute(path, flags, mode=0o777, *, dir_fd=None):
@@ -268,7 +289,7 @@ def test_registry_loader_never_follows_a_leaf_substituted_before_open(
             target.symlink_to(victim)
         return original(path, flags, mode, dir_fd=dir_fd)
 
-    monkeypatch.setattr(pkg.os, "open", substitute)
+    monkeypatch.setattr(package_registry.os, "open", substitute)
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.load_registry()

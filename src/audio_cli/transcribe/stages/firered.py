@@ -18,10 +18,8 @@ try:
     from ._firered_protocol import (
         _format_region,
         _mapping,
-        _number,
         _positive_int,
         _probability,
-        _public_region_bounds,
         _range_bounds,
         _region_records,
         _result_array,
@@ -31,10 +29,8 @@ except ImportError:  # Executed directly by the isolated model environment.
     from _firered_protocol import (
         _format_region,
         _mapping,
-        _number,
         _positive_int,
         _probability,
-        _public_region_bounds,
         _range_bounds,
         _region_records,
         _result_array,
@@ -68,8 +64,6 @@ def _json_default(value: object) -> object:
     raise TypeError(f"{type(value).__name__} is not JSON serializable")
 
 
-
-
 def _timed(
     name: str, function: Callable[..., Any], stage_time: dict[str, float]
 ) -> Callable[..., Any]:
@@ -82,8 +76,6 @@ def _timed(
             stage_time[name] += time.perf_counter() - started
 
     return wrapper
-
-
 
 
 def _run_pipeline(
@@ -334,12 +326,12 @@ def main() -> int:
             ))
 
         print("firered stage: loading local co-resident models", file=sys.stderr, flush=True)
+        import soundfile as sf
         from fireredasr2s import FireRedAsr2System, FireRedAsr2SystemConfig
         from fireredasr2s.fireredasr2 import FireRedAsr2Config
         from fireredasr2s.fireredlid import FireRedLidConfig
         from fireredasr2s.fireredpunc import FireRedPuncConfig
         from fireredasr2s.fireredvad import FireRedVadConfig
-        import soundfile as sf
 
         # These are the six AED decode values used by the recorded runner at
         # model_tests/benchmark/run_firered.py:360-370.  The stage takes them from

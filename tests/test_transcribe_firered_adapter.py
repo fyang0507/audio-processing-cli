@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from transcribe_firered_test_support import *  # noqa: F403
+from transcribe_firered_test_support import (
+    ROOT,
+    _all_keys,
+    _fixture,
+    deepcopy,
+    hashlib,
+    json,
+    normalize_firered_result,
+    pytest,
+)
+
 
 def test_firered_fixture_provenance_and_strict_normalization() -> None:
     fixture = _fixture()

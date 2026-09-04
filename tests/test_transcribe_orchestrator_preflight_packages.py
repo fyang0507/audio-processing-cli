@@ -1,6 +1,31 @@
 from __future__ import annotations
 
-from transcribe_orchestrator_test_support import *  # noqa: F403
+from pathlib import Path
+
+from transcribe_orchestrator_test_support import (
+    FakeVad,
+    FullFakeTransport,
+    InputMetadata,
+    SileroOnnxVad,
+    audio_paths,
+    build_plan,
+    env,
+    full_registry,
+    inspect,
+    orchestrator,
+    pytest,
+    refusals,
+    registry,
+    request,
+    resolve_request,
+)
+from transcribe_orchestrator_test_support import (
+    provisioned_runtime_root as provisioned_runtime_root,
+)
+
+from audio_cli.transcribe import _orchestrator_preflight as orchestrator_preflight
+from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+
 
 def test_preflight_refuses_missing_package_before_transport_exists(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
@@ -80,7 +105,7 @@ def test_qwen_add_ons_share_full_timeline_and_capability_gated_output(
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     fake = FullFakeTransport()
-    monkeypatch.setattr(orchestrator, "_self_peak_rss", lambda: 120)
+    monkeypatch.setattr(orchestrator_runtime, "_self_peak_rss", lambda: 120)
     product = orchestrator.run(
         resolved,
         metadata,
@@ -226,7 +251,7 @@ def test_preflight_types_an_unreadable_silero_digest_as_package_integrity(
     model.parent.mkdir(parents=True)
     model.write_bytes(b"model")
     monkeypatch.setattr(
-        orchestrator,
+        orchestrator_preflight,
         "hash_file",
         lambda _path: (_ for _ in ()).throw(PermissionError("unreadable")),
     )
