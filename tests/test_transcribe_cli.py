@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from audio_cli import cli
+from audio_cli.transcribe.catalog import input_metadata, result_source
 
 
 def probe(duration: float = 12.5) -> dict[str, object]:
@@ -15,6 +16,19 @@ def probe(duration: float = 12.5) -> dict[str, object]:
             "channels": 2,
         },
         "format": {"duration": str(duration), "format_name": "wav"},
+    }
+
+
+def test_result_source_resolves_relative_media_only_for_durable_output(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    metadata = input_metadata(Path("source.wav"), probe(2.0))
+    assert metadata.path == "source.wav"
+    assert result_source(metadata, 1.999) == {
+        "path": str(tmp_path / "source.wav"),
+        "duration_seconds": 1.999,
+        "timebase": "seconds",
     }
 
 
@@ -250,28 +264,52 @@ def test_run_force_still_cannot_target_the_canonical_input(
     assert source.read_bytes() == b"source"
 
 
-def test_unimplemented_run_stack_refuses_before_media_or_provisioning(
+def test_run_reports_a_typed_refusal_for_an_output_symlink_loop(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    source = tmp_path / "sample.wav"
+    source.write_bytes(b"source")
+    output = tmp_path / "loop.json"
+    output.symlink_to(output.name)
+    monkeypatch.setattr(
+        cli,
+        "probe_media",
+        lambda path: (_ for _ in ()).throw(AssertionError("invalid output reached probe")),
+    )
+
+    assert cli.main([
+        "transcribe", "run", "--input", str(source), "--stack", "qwen-0.6b",
+        "-o", str(output), "--force",
+    ]) == 2
+
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "output_path_invalid"
+    assert error["target"] == str(output)
+    assert output.is_symlink()
+
+
+def test_firered_run_reaches_preflight_but_not_transport_when_unprovisioned(
     monkeypatch, capsys
 ) -> None:
-    def forbidden(*args, **kwargs):
-        raise AssertionError("unimplemented run reached external state")
-    monkeypatch.setattr(cli, "probe_media", forbidden)
-    monkeypatch.setattr(cli, "load_registry", forbidden)
+    monkeypatch.setattr(cli, "probe_media", lambda path: probe())
+    monkeypatch.setattr(cli.transcribe_orchestrator, "load_registry", lambda: {
+        "packages": {}, "environments": {},
+    })
+
+    class ForbiddenTransport:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("exit 3 reached native model transport")
+
+    monkeypatch.setattr(cli.transcribe_orchestrator, "StageTransport", ForbiddenTransport)
     assert cli.main([
         "transcribe", "run", "--input", "sample.wav", "--stack", "firered",
-    ]) == 2
-    assert json.loads(capsys.readouterr().err) == {
-        "code": "stack_run_unavailable",
-        "stack": "firered",
-        "issue": 22,
-        "fix": (
-            "the firered run adapter is tracked in "
-            "https://github.com/fyang0507/audio-processing-cli/issues/22"
-        ),
-    }
+    ]) == 3
+    error = json.loads(capsys.readouterr().err)
+    assert error["code"] == "packages_not_provisioned"
+    assert [item["package"] for item in error["missing"]] == ["firered-asr2s"]
 
 
-def test_unimplemented_run_stack_refuses_before_range_parsing(monkeypatch, capsys) -> None:
+def test_firered_run_parses_range_before_media(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         cli, "probe_media",
         lambda path: (_ for _ in ()).throw(AssertionError("stack refusal reached probe")),
@@ -280,4 +318,4 @@ def test_unimplemented_run_stack_refuses_before_range_parsing(monkeypatch, capsy
         "transcribe", "run", "--input", "sample.wav", "--stack", "firered",
         "--range", "not-a-range",
     ]) == 2
-    assert json.loads(capsys.readouterr().err)["code"] == "stack_run_unavailable"
+    assert json.loads(capsys.readouterr().err)["code"] == "range_invalid"

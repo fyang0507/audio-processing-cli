@@ -1,0 +1,31 @@
+{
+  "source_artifact": "model_tests/vibevoice/VibeVoice/result_vibevoice_multispeaker.json",
+  "source_sha256": "2cbf2d11d6f19e381be5aa333f655ba690bb4cfebb8968fa38a81616a75b14ca",
+  "excerpt_rule": "segments 7 through 10 inclusive, unchanged and in source order",
+  "segments": [
+    {
+      "Start": 16.83,
+      "End": 32.05,
+      "Speaker": 1,
+      "Content": "It's like attack each other, and in one game there are like one hundred, um, players, and they try to kill each other, and you can also build buildings or a shield to protect yourself."
+    },
+    {
+      "Start": 33.64,
+      "End": 37.84,
+      "Speaker": 1,
+      "Content": "That's, that's it. And there's only one winner in one game."
+    },
+    {
+      "Start": 37.84,
+      "End": 40.28,
+      "Speaker": "N/A",
+      "Content": "[Environmental Sounds]"
+    },
+    {
+      "Start": 40.28,
+      "End": 52.84,
+      "Speaker": 0,
+      "Content": "好，嗯，然后就是说呢，嗯，这段对话就这样完成了。"
+    }
+  ]
+}

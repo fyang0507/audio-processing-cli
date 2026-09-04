@@ -2,16 +2,25 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
+import shlex
+import shutil
 import wave
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from audio_cli import cli
+from audio_cli import environments as env
+from audio_cli import packages as pkg
+from audio_cli import paths as audio_paths
+from audio_cli.export import UnsafeOutputError, export_documents
 from audio_cli.transcribe import orchestrator, refusals
 from audio_cli.transcribe.catalog import InputMetadata
 from audio_cli.transcribe.plan import serialize_plan
 from audio_cli.transcribe.planner import build_plan, resolve_request
-from audio_cli.transcribe.transport import StageOutcome
+from audio_cli.transcribe.transport import StageOutcome, StageTransport
 from audio_cli.vad import SileroOnnxVad
 
 REVISION = "89e96d92ba34aca20b3e29fb10cc284097d1219f"
@@ -29,6 +38,44 @@ def provisioned_runtime_root(tmp_path: Path, monkeypatch) -> None:
     interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
     interpreter.chmod(0o755)
 
+    def snapshot_index() -> dict[tuple[str, str], Path]:
+        found = {}
+        for package in env.packages().values():
+            source = package.source
+            repositories = (
+                source["repos"] if source["type"] == "huggingface_multi"
+                else [source] if source["type"] == "huggingface"
+                else []
+            )
+            for repository in repositories:
+                found[(repository["repo"], repository["revision"])] = (
+                    tmp_path / "hub" / f"models--{repository['repo'].replace('/', '--')}"
+                    / "snapshots" / repository["revision"]
+                )
+        return found
+
+    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
+    monkeypatch.setattr(
+        orchestrator,
+        "_inspect_checkout",
+        lambda _checkout: orchestrator._CheckoutState(
+            head=FLUID_REVISION,
+            modified=pkg.checkout_patch_expectation(
+                env.packages()["fluidaudio"]
+            )[1],
+            untracked=(),
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_checkout_file_digest",
+        lambda path: (
+            next(iter(env.packages()["fluidaudio"].source["patched_file_sha256"].values()))
+            if path.name == "ProcessCommand.swift" and path.read_bytes() == b"patched\n"
+            else pkg.sha256_file(path)
+        ),
+    )
+
 
 def request(tmp_path: Path, *, wants=(), run_range=None):
     source = tmp_path / "source.wav"
@@ -41,12 +88,16 @@ def request(tmp_path: Path, *, wants=(), run_range=None):
 
 
 def registry(tmp_path: Path) -> dict:
-    model = tmp_path / "model"
-    model.mkdir(exist_ok=True)
+    source = env.packages()["qwen3-asr-0.6b-8bit"].source
+    model = (
+        tmp_path / "hub" / f"models--{source['repo'].replace('/', '--')}"
+        / "snapshots" / REVISION
+    )
+    model.mkdir(parents=True, exist_ok=True)
     return {"environments": {"mlx": {"state": "ready"}}, "packages": {
         "qwen3-asr-0.6b-8bit": {
         "state": "ready",
-        "materialized": {"path": str(model), "revision": REVISION},
+        "materialized": {"path": str(model), "revision": REVISION, "bytes": 0},
     }}}
 
 
@@ -124,23 +175,45 @@ def full_registry(tmp_path: Path) -> dict:
         ("qwen3-forcedaligner", ALIGNER_REVISION),
         ("speaker-diarization-coreml", SPEAKER_REVISION),
     ):
-        target = tmp_path / identifier
-        target.mkdir(exist_ok=True)
+        source = env.packages()[identifier].source
+        target = (
+            tmp_path / "hub" / f"models--{source['repo'].replace('/', '--')}"
+            / "snapshots" / revision
+        )
+        target.mkdir(parents=True, exist_ok=True)
+        for pattern in source.get("allow_patterns", ()):
+            marker = target / (
+                f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern
+            )
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_bytes(b"")
         packages[identifier] = {
             "state": "ready",
-            "materialized": {"path": str(target), "revision": revision},
+            "materialized": {
+                "path": str(target), "revision": revision, "bytes": 0,
+            },
         }
-    fluid = tmp_path / "fluidaudio"
-    fluid.mkdir(exist_ok=True)
+    fluid = audio_paths.checkout_dir("swift", "fluidaudio")
+    fluid.mkdir(parents=True, exist_ok=True)
     product = fluid / ".build" / "release" / "fluidaudiocli"
     product.parent.mkdir(parents=True, exist_ok=True)
     product.write_text("#!/bin/sh\n", encoding="utf-8")
     product.chmod(0o755)
+    patched = fluid / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
+    patched.parent.mkdir(parents=True, exist_ok=True)
+    patched.write_bytes(b"patched\n")
+    patch_name, patch_paths, patch_digests = pkg.checkout_patch_expectation(
+        env.packages()["fluidaudio"]
+    )
     packages["fluidaudio"] = {
         "state": "ready",
         "materialized": {
             "path": str(fluid), "revision": FLUID_REVISION,
             "built": True, "product_runs": True,
+            "product_path": product.relative_to(fluid).as_posix(),
+            "product_sha256": pkg.sha256_file(product),
+            "patches_applied": list(patch_name),
+            "patched_file_digests": patch_digests,
         },
     }
     return {
@@ -168,6 +241,41 @@ def test_qwen_floor_run_uses_fixed_units_and_never_publishes_container_bounds(tm
     assert product.payload["provenance"]["observed"]["total_wall_seconds"] == 5.0
 
 
+def test_run_captures_source_identity_before_decode_and_export_protects_it(
+    tmp_path,
+) -> None:
+    first = tmp_path / "first.wav"
+    second = tmp_path / "second.wav"
+    link = tmp_path / "input.wav"
+    first.write_bytes(b"first-source")
+    second.write_bytes(b"second-source")
+    link.symlink_to(first)
+    request_ = resolve_request(stack_id="qwen-0.6b", input_path=link, wants=())
+    metadata = InputMetadata(str(link), 2.0, "wav", 16_000, 1)
+
+    class RetargetingTransport(FullFakeTransport):
+        def decode(self, source, target):
+            assert Path(source) == first.resolve()
+            assert Path(source).read_bytes() == b"first-source"
+            link.unlink()
+            link.symlink_to(second)
+            return super().decode(source, target)
+
+    product = orchestrator.run(
+        request_,
+        metadata,
+        registry=registry(tmp_path),
+        transport=RetargetingTransport(),
+    )
+
+    assert product.payload["source"]["path"] == str(first.resolve())
+    transcript = tmp_path / "result.json"
+    transcript.write_text(json.dumps(product.payload), encoding="utf-8")
+    with pytest.raises(UnsafeOutputError):
+        export_documents([transcript], "txt", output=first, force=True)
+    assert first.read_bytes() == b"first-source"
+
+
 def test_partial_qwen_run_writes_conforming_result_and_exact_resume_ledger(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
     output = tmp_path / "requested.md"
@@ -188,6 +296,52 @@ def test_partial_qwen_run_writes_conforming_result_and_exact_resume_ledger(tmp_p
     assert payload["coverage"]["missing_intervals"] == [[180.0, 361.0]]
     assert payload["coverage"]["scope_intervals"] == [[0.0, 361.0]]
     assert "--range 180.0:" in raised.value.payload["fix"]
+
+
+@pytest.mark.parametrize("malformation", ["absent_units", "missing_row", "non_bool"])
+def test_qwen_malformed_partial_ledger_is_backend_failure_without_publication(
+    tmp_path: Path,
+    malformation: str,
+) -> None:
+    class MalformedLedgerTransport(FakeTransport):
+        def qwen(self, *, units, **kwargs):
+            if malformation == "absent_units":
+                payload = {}
+            else:
+                rows = [{
+                    "unit_id": item["unit_id"],
+                    "processed": index == 0,
+                    "text": "language English<asr_text>Hello.",
+                } for index, item in enumerate(units)]
+                if malformation == "missing_row":
+                    rows.pop()
+                else:
+                    rows[0]["processed"] = 1
+                payload = {"units": rows}
+            return StageOutcome(
+                "asr",
+                "qwen3-asr-0.6b-8bit",
+                payload,
+                3.0,
+                returncode=4,
+            )
+
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "malformed.json"
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=MalformedLedgerTransport(),
+            output=output,
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["backend"] == "qwen3-asr-0.6b-8bit"
+    assert not output.exists()
+    assert not (tmp_path / "malformed.partial.json").exists()
 
 
 def test_repeated_incomplete_resumes_never_overwrite_an_earlier_partial(tmp_path) -> None:
@@ -241,6 +395,25 @@ def test_repeated_implicit_partial_outputs_choose_unused_siblings(tmp_path) -> N
     assert second_partial.is_file()
 
 
+def test_implicit_partial_skips_a_broken_symlink_destination(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    first_candidate = tmp_path / "source.partial.json"
+    first_candidate.symlink_to("missing-partial.json")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=FakeTransport(partial=True),
+        )
+
+    assert raised.value.payload["code"] == "run_incomplete"
+    assert Path(raised.value.payload["output"]).name == "source.partial.2.json"
+    assert first_candidate.is_symlink()
+    assert first_candidate.readlink() == Path("missing-partial.json")
+
+
 def test_bounded_partial_resume_preserves_the_requested_end(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
     with pytest.raises(refusals.Refusal) as raised:
@@ -253,6 +426,38 @@ def test_bounded_partial_resume_preserves_the_requested_end(tmp_path) -> None:
             run_range=orchestrator.parse_range("100:300"),
         )
     assert "--range 180.0:300.0" in raised.value.payload["fix"]
+
+
+def test_resume_builder_defensively_quotes_an_option_like_internal_value(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = replace(
+        resolve_request(
+            stack_id="qwen-0.6b",
+            input_path=source,
+            wants=(),
+            language="English",
+        ),
+        language="--stack",
+    )
+    fix = orchestrator._resume_command(
+        resolved,
+        {
+            "units_completed": 1,
+            "covered_intervals": [[0.0, 180.0]],
+            "covered_through_seconds": 180.0,
+        },
+        tmp_path / "source.partial.json",
+        None,
+    )
+
+    arguments = shlex.split(fix)
+    parsed = cli._parser().parse_args(arguments[1:])
+    assert parsed.language == "--stack"
+    assert parsed.stack == "qwen-0.6b"
+    assert parsed.run_range == "180.0:"
 
 
 def test_zero_completed_units_write_a_partial_without_a_replaying_fix(tmp_path) -> None:
@@ -350,7 +555,10 @@ def test_preflight_refuses_missing_swift_product_before_decode(tmp_path) -> None
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     document = full_registry(tmp_path)
-    product = tmp_path / "fluidaudio" / ".build" / "release" / "fluidaudiocli"
+    product = (
+        audio_paths.checkout_dir("swift", "fluidaudio")
+        / ".build" / "release" / "fluidaudiocli"
+    )
     product.unlink()
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(resolved, metadata, registry=document)
@@ -432,24 +640,497 @@ def test_qwen_add_ons_share_full_timeline_and_capability_gated_output(
     assert observed["peak_mps_live_bytes"] == 150
 
 
-def test_preflight_defends_against_legacy_ready_but_unrunnable_registry(tmp_path) -> None:
-    """Older registries may claim ready despite product_runs=false; current pull cannot."""
+def test_preflight_uses_bound_live_product_not_legacy_boolean_receipts(tmp_path) -> None:
+    """Boolean pull history cannot overrule the bound live executable."""
     resolved = resolve_request(
         stack_id="qwen-0.6b", input_path=tmp_path / "source.wav", wants=("diarization",),
     )
     metadata = InputMetadata("source.wav", 2.0, "wav", 16_000, 1)
     document = full_registry(tmp_path)
     document["packages"]["fluidaudio"]["materialized"]["built"] = False
-    with pytest.raises(refusals.Refusal) as raised:
-        orchestrator.run(resolved, metadata, registry=document)
-    assert raised.value.payload["code"] == "package_integrity_failed"
-    assert raised.value.payload["failed"][0]["check"] == "built"
-
-    document["packages"]["fluidaudio"]["materialized"]["built"] = True
     document["packages"]["fluidaudio"]["materialized"]["product_runs"] = False
+    plan = build_plan(
+        resolved,
+        metadata,
+        provisioned_packages=set(document["packages"]),
+    )
+    selected = orchestrator.preflight(plan, document)
+    assert "fluidaudio" in selected
+
+
+def test_preflight_rejects_replaced_fluidaudio_product_bytes(tmp_path) -> None:
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=tmp_path / "source.wav",
+        wants=("diarization",),
+    )
+    metadata = InputMetadata("source.wav", 2.0, "wav", 16_000, 1)
+    document = full_registry(tmp_path)
+    product = next(
+        audio_paths.checkout_dir("swift", "fluidaudio").glob(
+            ".build/**/release/fluidaudiocli"
+        )
+    )
+    product.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    product.chmod(0o755)
+    plan = build_plan(
+        resolved, metadata, provisioned_packages=set(document["packages"])
+    )
+
     with pytest.raises(refusals.Refusal) as raised:
-        orchestrator.run(resolved, metadata, registry=document)
-    assert raised.value.payload["code"] == "package_build_unusable"
+        orchestrator.preflight(plan, document)
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "built_product_digest" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+
+
+def test_preflight_refuses_default_silero_through_a_symlinked_models_parent(
+    tmp_path: Path,
+) -> None:
+    package = env.packages()["silero-vad"]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    model = outside / package.source["filename"]
+    model.write_bytes(b"model")
+    models = audio_paths.models_dir()
+    models.parent.mkdir(parents=True, exist_ok=True)
+    models.symlink_to(outside, target_is_directory=True)
+    plan = type("Plan", (), {
+        "stack": "qwen-0.6b",
+        "packages": ({"package": "silero-vad", "auto_fetch": True},),
+    })()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.preflight(plan, {"packages": {}, "environments": {}})
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "managed artifact parent is a symlink" in str(
+        raised.value.payload["failed"]
+    )
+
+
+def test_preflight_refuses_missing_default_silero_below_a_symlinked_root(
+    tmp_path: Path,
+) -> None:
+    package = env.packages()["silero-vad"]
+    root = audio_paths.root()
+    external = tmp_path / "external-runtime-root"
+    root.rename(external)
+    root.symlink_to(external, target_is_directory=True)
+    plan = type("Plan", (), {
+        "stack": "qwen-0.6b",
+        "packages": ({"package": "silero-vad", "auto_fetch": True},),
+    })()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.preflight(plan, {"packages": {}, "environments": {}})
+
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["failed"] == [{
+        "package": "silero-vad",
+        "check": "url_artifact_sha256",
+        "expected": package.source["sha256"],
+        "actual": f"provisioning root is a symlink: {root}",
+    }]
+
+
+def test_preflight_types_an_unreadable_silero_digest_as_package_integrity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    package = env.packages()["silero-vad"]
+    model = audio_paths.models_dir() / package.source["filename"]
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"model")
+    monkeypatch.setattr(
+        orchestrator,
+        "hash_file",
+        lambda _path: (_ for _ in ()).throw(PermissionError("unreadable")),
+    )
+    plan = type("Plan", (), {
+        "stack": "qwen-0.6b",
+        "packages": ({"package": "silero-vad", "auto_fetch": True},),
+    })()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.preflight(plan, {"packages": {}, "environments": {}})
+
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    failure = raised.value.payload["failed"][0]
+    assert failure["check"] == "url_artifact_sha256"
+    assert "could not hash managed artifact" in failure["actual"]
+
+
+def test_preflight_rejects_changed_product_digest_before_decode(tmp_path) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+    )
+    metadata = InputMetadata(str(source), 2.0, "wav", 16_000, 1)
+    document = full_registry(tmp_path)
+    product = (
+        audio_paths.checkout_dir("swift", "fluidaudio")
+        / ".build" / "release" / "fluidaudiocli"
+    )
+    product.write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("nonlaunching product reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "built_product_digest" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+
+
+def test_preflight_never_launches_fluidaudio_from_external_receipt_path(
+    tmp_path,
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+    )
+    metadata = InputMetadata(str(source), 2.0, "wav", 16_000, 1)
+    document = full_registry(tmp_path)
+    marker = tmp_path / "launched"
+    external = tmp_path / "external-fluid"
+    product = external / ".build" / "release" / "fluidaudiocli"
+    product.parent.mkdir(parents=True)
+    product.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    product.chmod(0o755)
+    document["packages"]["fluidaudio"]["materialized"]["path"] = str(external)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("external product reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "built_checkout_path" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+    assert not marker.exists()
+
+
+def test_preflight_rejects_fluidaudio_product_symlink_escape(tmp_path) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+    )
+    metadata = InputMetadata(str(source), 2.0, "wav", 16_000, 1)
+    document = full_registry(tmp_path)
+    checkout = audio_paths.checkout_dir("swift", "fluidaudio")
+    product = checkout / ".build" / "release" / "fluidaudiocli"
+    marker = tmp_path / "launched"
+    external = tmp_path / "external-product"
+    external.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    external.chmod(0o755)
+    product.unlink()
+    product.symlink_to(external)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("symlinked product reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "built_product_executable" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+    assert not marker.exists()
+
+
+def test_preflight_rejects_same_revision_basename_outside_hub_cache_index(
+    tmp_path,
+) -> None:
+    resolved, metadata, _run_range = request(tmp_path)
+    document = registry(tmp_path)
+    materialized = document["packages"]["qwen3-asr-0.6b-8bit"]["materialized"]
+    snapshot = Path(materialized["path"])
+    external = tmp_path / "attacker-controlled" / snapshot.name
+    shutil.copytree(snapshot, external)
+    materialized["path"] = str(external)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("external snapshot reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "hub_snapshot_integrity" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+
+
+def test_preflight_uses_manifest_pin_not_mutable_hub_receipt_revision(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    document["packages"]["qwen3-asr-0.6b-8bit"]["materialized"][
+        "revision"
+    ] = "tampered-history"
+    plan = build_plan(
+        resolved,
+        metadata,
+        provisioned_packages={"qwen3-asr-0.6b-8bit"},
+    )
+
+    selected = orchestrator.preflight(
+        plan,
+        document,
+        python_runtime_probe=lambda _path: True,
+    )
+
+    assert selected["qwen3-asr-0.6b-8bit"] is document["packages"][
+        "qwen3-asr-0.6b-8bit"
+    ]
+
+
+def test_preflight_rejects_a_hub_file_target_outside_its_repository_cache(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    materialized = document["packages"]["qwen3-asr-0.6b-8bit"]["materialized"]
+    snapshot = Path(materialized["path"])
+    external = tmp_path / "external-model.safetensors"
+    external.write_bytes(b"x" * 4096)
+    (snapshot / "model.safetensors").symlink_to(external)
+    materialized["bytes"] = 4096
+    plan = build_plan(
+        resolved,
+        metadata,
+        provisioned_packages={"qwen3-asr-0.6b-8bit"},
+    )
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.preflight(
+            plan,
+            document,
+            python_runtime_probe=lambda _path: True,
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    hub_failure = next(
+        item for item in raised.value.payload["failed"]
+        if item["check"] == "hub_snapshot_integrity"
+    )
+    assert "outside its repository cache" in " ".join(hub_failure["actual"])
+
+
+def test_preflight_live_probes_managed_python_before_decode(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    interpreter = (
+        tmp_path / "runtime" / "envs" / "mlx" / "bin" / "python"
+    )
+    interpreter.write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
+    interpreter.chmod(0o755)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("nonlaunching interpreter reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert raised.value.payload["failed"] == [{
+        "package": "qwen3-asr-0.6b-8bit",
+        "check": "environment_mlx_python_runs",
+        "expected": True,
+        "actual": False,
+    }]
+
+
+def test_preflight_refuses_a_symlinked_environment_root_before_decode(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    managed = audio_paths.env_dir("mlx")
+    external = tmp_path / "external-mlx"
+    managed.rename(external)
+    managed.symlink_to(external, target_is_directory=True)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("redirected environment reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["failed"] == [{
+        "package": "qwen3-asr-0.6b-8bit",
+        "check": "environment_mlx_managed_root",
+        "expected": str(managed),
+        "actual": f"managed environment path is a symlink: {managed}",
+    }]
+
+
+def test_preflight_refuses_a_symlinked_provisioning_root_before_decode(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    root = audio_paths.root()
+    external = tmp_path / "external-runtime-root"
+    root.rename(external)
+    root.symlink_to(external, target_is_directory=True)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("symlinked provisioning root reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["failed"] == [{
+        "package": "qwen3-asr-0.6b-8bit",
+        "check": "environment_mlx_managed_root",
+        "expected": str(audio_paths.env_dir("mlx")),
+        "actual": f"provisioning root is a symlink: {root}",
+    }]
+
+
+def test_preflight_refuses_an_in_root_symlinked_environments_parent_before_decode(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+    envs = audio_paths.envs_dir()
+    alternate = audio_paths.root() / "alternate-envs"
+    envs.rename(alternate)
+    envs.symlink_to(alternate, target_is_directory=True)
+
+    class NoDecode:
+        def decode(self, *_args, **_kwargs):
+            raise AssertionError("redirected environments parent reached decode")
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved, metadata, registry=document, transport=NoDecode(),
+        )
+
+    assert raised.value.exit_code == 3
+    assert raised.value.payload["failed"] == [{
+        "package": "qwen3-asr-0.6b-8bit",
+        "check": "environment_mlx_managed_root",
+        "expected": str(audio_paths.env_dir("mlx")),
+        "actual": f"managed environment parent is a symlink: {envs}",
+    }]
+
+
+def test_python_stage_rechecks_environment_after_decode_before_runner_launch(
+    tmp_path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    document = registry(tmp_path)
+
+    class NoLaunchRunner:
+        def run(self, command):
+            raise AssertionError(f"redirected interpreter was launched: {command}")
+
+    class MutatingTransport(StageTransport):
+        def decode(self, _source, target):
+            with wave.open(str(target), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(16_000)
+                handle.writeframes(b"\0\0" * 32_000)
+            managed = audio_paths.env_dir("mlx")
+            external = tmp_path / "external-mlx"
+            managed.rename(external)
+            managed.symlink_to(external, target_is_directory=True)
+            return StageOutcome("decode", "ffmpeg", {}, 1.0)
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=document,
+            transport=MutatingTransport(NoLaunchRunner()),
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert "environment_mlx_managed_root" in {
+        item["check"] for item in raised.value.payload["failed"]
+    }
+
+
+def test_preflight_does_not_probe_below_a_redirected_environments_parent(
+    tmp_path, monkeypatch,
+) -> None:
+    resolved = resolve_request(
+        stack_id="qwen-0.6b",
+        input_path=tmp_path / "source.wav",
+        wants=("diarization",),
+    )
+    metadata = InputMetadata("source.wav", 2.0, "wav", 16_000, 1)
+    document = full_registry(tmp_path)
+    plan = build_plan(
+        resolved,
+        metadata,
+        provisioned_packages=set(document["packages"]),
+    )
+    envs = audio_paths.envs_dir()
+    alternate = audio_paths.root() / "alternate-envs"
+    envs.rename(alternate)
+    envs.symlink_to(alternate, target_is_directory=True)
+
+    def fail_probe(path: Path) -> bool:
+        raise AssertionError(f"preflight launched redirected runtime {path}")
+
+    def fail_inspection(path: Path) -> orchestrator._CheckoutState:
+        raise AssertionError(f"preflight inspected redirected checkout {path}")
+
+    monkeypatch.setattr(orchestrator, "_inspect_checkout", fail_inspection)
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.preflight(
+            plan,
+            document,
+            built_product_probe=fail_probe,
+            python_runtime_probe=fail_probe,
+        )
+
+    assert raised.value.payload["code"] == "package_integrity_failed"
+    assert {item["check"] for item in raised.value.payload["failed"]} == {
+        "environment_mlx_managed_root",
+        "environment_swift_managed_root",
+    }
 
 
 def test_nonintersecting_range_refuses_after_decode_but_before_model(tmp_path) -> None:
@@ -685,6 +1366,182 @@ def test_run_refuses_existing_outputs_before_decode_and_force_is_explicit(tmp_pa
     assert json.loads(output.read_text(encoding="utf-8")) == payload
 
 
+def test_run_treats_broken_symlinks_as_existing_before_decode(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "broken.json"
+    output.symlink_to("missing.json")
+    transport = FakeTransport()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=transport,
+            output=output,
+        )
+
+    assert raised.value.payload["code"] == "output_exists"
+    assert transport.units == []
+    assert output.is_symlink()
+    assert output.readlink() == Path("missing.json")
+
+
+def test_run_treats_broken_derived_partial_as_existing_before_decode(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+    partial = tmp_path / "result.partial.json"
+    partial.symlink_to("missing-partial.json")
+    transport = FakeTransport()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=transport,
+            output=output,
+        )
+
+    assert raised.value.payload["code"] == "output_exists"
+    assert raised.value.payload["existing"] == str(partial)
+    assert transport.units == []
+    assert partial.is_symlink()
+
+
+def test_force_refuses_an_output_symlink_loop_as_an_invalid_path(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "loop.json"
+    output.symlink_to(output.name)
+    transport = FakeTransport()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=transport,
+            output=output,
+            force=True,
+        )
+
+    assert raised.value.payload["code"] == "output_path_invalid"
+    assert raised.value.payload["target"] == str(output)
+    assert transport.units == []
+    assert output.is_symlink()
+
+
+@pytest.mark.parametrize("partial_target", [False, True])
+def test_force_refuses_a_directory_output_before_decode(
+    tmp_path, partial_target: bool
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+    target = tmp_path / "result.partial.json" if partial_target else output
+    target.mkdir()
+    transport = FakeTransport()
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=transport,
+            output=output,
+            force=True,
+        )
+
+    assert raised.value.payload["code"] == "output_path_invalid"
+    assert raised.value.payload["target"] == str(target)
+    assert transport.units == []
+    assert target.is_dir()
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_late_output_collision_is_never_clobbered(tmp_path, partial: bool) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+    collision = (
+        tmp_path / "result.partial.json" if partial else output
+    )
+
+    class LateCollisionTransport(FakeTransport):
+        def qwen(self, **kwargs):
+            outcome = super().qwen(**kwargs)
+            collision.write_text("racer-owned\n", encoding="utf-8")
+            return outcome
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=LateCollisionTransport(partial=partial),
+            output=output,
+        )
+
+    assert raised.value.payload["code"] == "output_exists"
+    assert raised.value.payload["existing"] == str(collision)
+    assert collision.read_text(encoding="utf-8") == "racer-owned\n"
+    if partial:
+        assert not output.exists()
+
+
+def test_late_directory_collision_is_a_typed_refusal(tmp_path) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+
+    class LateDirectoryTransport(FakeTransport):
+        def qwen(self, **kwargs):
+            outcome = super().qwen(**kwargs)
+            output.mkdir()
+            return outcome
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=LateDirectoryTransport(),
+            output=output,
+        )
+
+    assert raised.value.payload["code"] == "output_path_invalid"
+    assert raised.value.payload["target"] == str(output)
+    assert output.is_dir()
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_late_unwritable_destination_is_a_typed_refusal(
+    tmp_path: Path,
+    monkeypatch,
+    partial: bool,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+    transport = FakeTransport(partial=partial)
+
+    def refuse_write(*_args, **_kwargs):
+        raise PermissionError("destination is not writable")
+
+    monkeypatch.setattr(orchestrator, "atomic_write_json", refuse_write)
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=transport,
+            output=output,
+        )
+
+    target = tmp_path / "result.partial.json" if partial else output
+    assert raised.value.exit_code == 2
+    assert raised.value.payload["code"] == "output_path_invalid"
+    assert raised.value.payload["provided"] == str(output)
+    assert raised.value.payload["target"] == str(target)
+    assert "not writable" in raised.value.payload["reason"]
+
+
 def test_run_never_allows_output_to_resolve_to_canonical_input(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
     with pytest.raises(refusals.Refusal) as raised:
@@ -712,6 +1569,34 @@ def test_run_never_allows_output_to_resolve_to_canonical_input(tmp_path) -> None
     assert raised.value.payload["code"] == "output_is_canonical_input"
     assert raised.value.payload["resolved_target"] == str(derived_source)
     assert derived_source.read_bytes() == b"canonical"
+
+
+def test_qwen_publication_preserves_source_renamed_to_forced_output_after_decode(
+    tmp_path: Path,
+) -> None:
+    resolved, metadata, _ = request(tmp_path)
+    output = tmp_path / "result.json"
+    output.write_bytes(b"replaceable")
+
+    class SourceMovingTransport(FakeTransport):
+        def qwen(self, **kwargs):
+            outcome = super().qwen(**kwargs)
+            os.replace(resolved.input_path, output)
+            return outcome
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=SourceMovingTransport(),
+            output=output,
+            force=True,
+        )
+
+    assert raised.value.payload["code"] == "output_is_canonical_input"
+    assert not resolved.input_path.exists()
+    assert output.read_bytes() == b"source"
 
 
 def test_diarizer_exclusions_survive_without_requesting_diarization(tmp_path) -> None:
@@ -773,6 +1658,107 @@ def test_backend_failure_fix_does_not_promise_an_unrelated_command(tmp_path) -> 
     assert not raised.value.payload["fix"].startswith("audio ")
 
 
+@pytest.mark.parametrize(
+    ("partial_payload", "returncode"),
+    [(False, 4), (True, 0)],
+)
+def test_qwen_exit_status_must_match_the_unfinished_unit_ledger(
+    tmp_path: Path,
+    partial_payload: bool,
+    returncode: int,
+) -> None:
+    class ContradictoryTransport(FakeTransport):
+        def __init__(self) -> None:
+            super().__init__(partial=partial_payload)
+
+        def qwen(self, **kwargs):
+            outcome = super().qwen(**kwargs)
+            return StageOutcome(
+                outcome.role,
+                outcome.backend,
+                outcome.payload,
+                outcome.wall_seconds,
+                returncode=returncode,
+                peak_rss_bytes=outcome.peak_rss_bytes,
+            )
+
+    resolved, metadata, _ = request(tmp_path)
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=ContradictoryTransport(),
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["role"] == "asr"
+    assert "exit status disagrees with unfinished unit ledger" in (
+        raised.value.payload["detail"]
+    )
+
+
+def test_invalid_internal_stage_walls_are_a_typed_backend_refusal(tmp_path) -> None:
+    class InvalidMetricsTransport(FakeTransport):
+        def qwen(self, **kwargs):
+            outcome = super().qwen(**kwargs)
+            return StageOutcome(
+                outcome.role,
+                outcome.backend,
+                outcome.payload,
+                outcome.wall_seconds,
+                returncode=outcome.returncode,
+                peak_rss_bytes=outcome.peak_rss_bytes,
+                wall_seconds_by_stage={"asr": outcome.wall_seconds + 1.0},
+            )
+
+    resolved, metadata, _ = request(tmp_path)
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=InvalidMetricsTransport(),
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["role"] == "asr"
+    assert "internal wall metrics exceed its process wall" in (
+        raised.value.payload["detail"]
+    )
+
+
+@pytest.mark.parametrize(
+    "canonical_bytes",
+    [b"", b"not a wave", bytes.fromhex("52494646a8eddd645741564545e52057cfbfd3cf")],
+)
+def test_malformed_canonical_wav_is_a_typed_decode_failure(
+    tmp_path,
+    canonical_bytes: bytes,
+) -> None:
+    class MalformedDecodeTransport(FakeTransport):
+        def decode(self, source, target):
+            target.write_bytes(canonical_bytes)
+            return StageOutcome("decode", "ffmpeg", {}, 0.1)
+
+    resolved, metadata, _ = request(tmp_path)
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=MalformedDecodeTransport(),
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["role"] == "decode"
+    assert raised.value.payload["backend"] == "ffmpeg"
+    assert isinstance(raised.value.payload["detail"], str)
+
+
 def test_backend_derived_result_error_is_one_json_refusal(tmp_path) -> None:
     class NonLabelTransport(FullFakeTransport):
         def diarize(self, **kwargs):
@@ -798,6 +1784,86 @@ def test_backend_derived_result_error_is_one_json_refusal(tmp_path) -> None:
     assert raised.value.exit_code == 1
     assert raised.value.payload["code"] == "backend_failed"
     assert "must be absent" in raised.value.payload["detail"]
+
+
+@pytest.mark.parametrize(
+    "invalid_segment",
+    [
+        {
+            "startTimeSeconds": False,
+            "endTimeSeconds": 1.0,
+            "speakerId": "S1",
+        },
+        {
+            "startTimeSeconds": 0.0,
+            "endTimeSeconds": 1.0,
+            "speakerId": [],
+        },
+    ],
+)
+def test_invalid_diarizer_artifact_is_a_typed_backend_refusal(
+    tmp_path,
+    invalid_segment: dict[str, object],
+) -> None:
+    class InvalidDiarizerTransport(FullFakeTransport):
+        def diarize(self, **kwargs):
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {"segments": [invalid_segment]},
+                1.0,
+            )
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+    )
+    metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=full_registry(tmp_path),
+            transport=InvalidDiarizerTransport(),
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["role"] == "diarizer"
+    assert raised.value.payload["backend"] == "fluidaudio"
+
+
+def test_invalid_vad_artifact_is_a_typed_backend_refusal(tmp_path) -> None:
+    class OverlappingVad:
+        def detect(self, samples, rate, **config):
+            return [
+                {"start": 0.0, "end": 0.8},
+                {"start": 0.7, "end": 1.0},
+            ]
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("vad",),
+    )
+    metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
+
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=full_registry(tmp_path),
+            transport=FullFakeTransport(),
+            vad_detector=OverlappingVad(),
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["role"] == "vad"
+    assert raised.value.payload["backend"] == "silero-vad"
+    assert "overlaps" in raised.value.payload["detail"]
 
 
 def test_abstentions_are_reidentified_in_source_order(tmp_path) -> None:
@@ -886,6 +1952,115 @@ def test_alignment_abstention_is_observable_and_does_not_invent_words(tmp_path) 
     assert all("words" not in item for item in payload["segments"])
     assert payload["provenance"]["outcomes"]["word_timestamps"] == "abstained"
     assert payload["provenance"]["observed"]["segments_without_words"] == 1
+    assert payload["abstentions"] == [{
+        "abstention_id": "ab_0",
+        "reason": "alignment_unavailable",
+        "start": 0.0,
+        "end": 2.0,
+    }]
+
+
+@pytest.mark.parametrize(
+    "aligner_payload",
+    [
+        {},
+        {"segments": []},
+        {"segments": [{"unit_id": "turn_0"}]},
+    ],
+)
+def test_qwen_rejects_incomplete_aligner_ledgers_without_publication(
+    tmp_path: Path,
+    aligner_payload: dict,
+) -> None:
+    class MalformedAligner(FullFakeTransport):
+        def align(self, **kwargs):
+            return StageOutcome(
+                "aligner", "qwen3-forcedaligner", aligner_payload, 1.0
+            )
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
+    )
+    output = tmp_path / "result.json"
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            InputMetadata(str(source), 2.0, "wav", 48_000, 2),
+            registry=full_registry(tmp_path),
+            transport=MalformedAligner(),
+            output=output,
+        )
+
+    assert raised.value.exit_code == 1
+    assert raised.value.payload["code"] == "backend_failed"
+    assert raised.value.payload["backend"] == "qwen3-forcedaligner"
+    assert not output.exists()
+
+
+def test_alignment_text_mismatch_records_the_attempted_unit_bounds(tmp_path) -> None:
+    class MismatchedAligner(FullFakeTransport):
+        def align(self, *, segments, **kwargs):
+            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
+                "unit_id": item["unit_id"],
+                "words": [{"text": "Goodbye", "start": 0.0, "end": 1.0}],
+            } for item in segments]}, 1.0)
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+    )
+    payload = orchestrator.run(
+        resolved,
+        InputMetadata(str(source), 2.0, "wav", 48_000, 2),
+        registry=full_registry(tmp_path),
+        transport=MismatchedAligner(),
+    ).payload
+
+    assert payload["abstentions"] == [{
+        "abstention_id": "ab_0",
+        "reason": "alignment_unavailable",
+        "start": 0.0,
+        "end": 2.0,
+    }]
+    assert all("words" not in item for item in payload["segments"])
+
+
+def test_partial_qwen_alignment_abstention_covers_only_the_completed_prefix(
+    tmp_path,
+) -> None:
+    class PartialAbstainingAligner(FakeTransport):
+        def align(self, *, segments, **kwargs):
+            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
+                "unit_id": item["unit_id"], "words": None,
+            } for item in segments]}, 1.0)
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    resolved = resolve_request(
+        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+    )
+    with pytest.raises(refusals.Refusal) as raised:
+        orchestrator.run(
+            resolved,
+            InputMetadata(str(source), 361.0, "wav", 48_000, 2),
+            registry=full_registry(tmp_path),
+            transport=PartialAbstainingAligner(partial=True),
+        )
+
+    payload = json.loads(
+        Path(raised.value.payload["output"]).read_text(encoding="utf-8")
+    )
+    assert payload["abstentions"] == [{
+        "abstention_id": "ab_0",
+        "reason": "alignment_unavailable",
+        "start": 0.0,
+        "end": 180.0,
+    }]
 
 
 def test_punctuation_only_alignment_with_empty_words_is_produced_not_abstained(
@@ -918,12 +2093,40 @@ def test_punctuation_only_alignment_with_empty_words_is_produced_not_abstained(
     assert payload["provenance"]["observed"]["segments_without_words"] == 0
 
 
-def test_whole_aligner_failure_salvages_complete_asr_as_abstained(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("returncode", "transport_failure", "detail"),
+    [(1, True, "out of memory"), (4, False, "unsupported exit 4")],
+)
+def test_whole_aligner_failure_is_a_backend_error_and_writes_no_result(
+    tmp_path, returncode: int, transport_failure: bool, detail: str
+) -> None:
     class FailingAligner(FullFakeTransport):
         def align(self, **kwargs):
             from audio_cli.transcribe.transport import StageFailure
 
-            raise StageFailure("aligner", "qwen3-forcedaligner", "out of memory")
+            if not transport_failure:
+                successful = super().align(**kwargs)
+                return StageOutcome(
+                    successful.role,
+                    successful.backend,
+                    successful.payload,
+                    successful.wall_seconds,
+                    returncode=returncode,
+                )
+            outcome = StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {"error": {"message": "out of memory"}},
+                2.5,
+                returncode=returncode,
+                peak_rss_bytes=250,
+            )
+            raise StageFailure(
+                "aligner",
+                "qwen3-forcedaligner",
+                "out of memory",
+                outcome=outcome,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -931,15 +2134,21 @@ def test_whole_aligner_failure_salvages_complete_asr_as_abstained(tmp_path) -> N
         stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
-    payload = orchestrator.run(
-        resolved,
-        metadata,
-        registry=full_registry(tmp_path),
-        transport=FailingAligner(),
-    ).payload
-    assert payload["complete"] is True
-    assert payload["segments"] == [{"segment_id": "seg_0", "text": "Hello."}]
-    assert payload["provenance"]["outcomes"]["word_timestamps"] == "abstained"
+    output = tmp_path / "must-not-exist.json"
+    with pytest.raises(refusals.Refusal) as caught:
+        orchestrator.run(
+            resolved,
+            metadata,
+            registry=full_registry(tmp_path),
+            transport=FailingAligner(),
+            output=output,
+        )
+    assert caught.value.exit_code == 1
+    assert caught.value.payload["code"] == "backend_failed"
+    assert caught.value.payload["role"] == "aligner"
+    assert caught.value.payload["backend"] == "qwen3-forcedaligner"
+    assert detail in caught.value.payload["detail"]
+    assert not output.exists()
 
 
 def test_canonical_wav_header_owns_duration_and_fixed_unit_bounds(tmp_path) -> None:

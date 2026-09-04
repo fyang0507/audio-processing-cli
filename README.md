@@ -12,12 +12,13 @@ original + profile
 
 The CLI reports what it measured, which versioned rule matched, the exact DSP parameters it resolved, and whether the result conforms to the selected profile. It does not label audio universally “good” or “bad,” and it abstains where a mixed track cannot be changed safely.
 
-The second implemented surface is transcription and its explicit provisioning layer.
-`audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact
-request, and `audio transcribe run` executes the `qwen-1.7b` and `qwen-0.6b` stacks. `audio
-doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims
-the pinned packages and runtimes. FireRed, VibeVoice, and deterministic export remain the next
-three implementation phases; the command never downloads a model behind a caller's back.
+The second implemented surface is transcription, deterministic export, and its explicit
+provisioning layer. `audio transcribe capabilities` describes a stack, `audio transcribe plan`
+resolves an exact request, and `audio transcribe run` executes all four stacks: `qwen-1.7b`,
+`qwen-0.6b`, `firered`, and `vibevoice`. `audio export` renders normalized results without model
+work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies,
+and reclaims the pinned packages and runtimes; no command downloads a model behind a caller's
+back.
 
 This implements [Issue #4 — Profile-driven automatic audio enhancement](https://github.com/fyang0507/audio-processing-cli/issues/4) within the product boundary established by [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1).
 
@@ -55,7 +56,7 @@ uv sync --extra dev
 uv run audio enhance --list-stages --profile product-demo
 ```
 
-The first inspection downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches without being asked, the only one pinned by content hash rather than by revision, and `audio packages pull silero-vad` provisions it explicitly instead. Set `AUDIO_PROCESSING_VAD_MODEL` or pass `--vad-model` to use a pre-populated local model. No PyTorch runtime is required.
+The first inspection downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches without being asked, the only one pinned by content hash rather than by revision, and `audio packages pull silero-vad` provisions it explicitly instead. Set `AUDIO_PROCESSING_VAD_MODEL` or pass `--vad-model` to use a pre-populated copy of that same hash-pinned model; an arbitrary ONNX file is refused rather than run under false 6.2.1 provenance. No PyTorch runtime is required.
 
 ## Use
 
@@ -188,9 +189,9 @@ Six behaviours to know before dispatching on the payloads:
 - `pull` accepts package ids **or** `--stack`, never both, and it refuses `--want` at exit 2 rather than accepting a capability filter it does not implement. Use `transcribe plan` to find the exact package set, then pull those ids, or pull the complete stack.
 - A package the registry already calls `ready` is reported under `skipped` and not re-materialized; it contributes nothing to `pulled_known_bytes`. `pull --repair PACKAGE` forces the work anyway, re-downloading a Hub snapshot and re-cloning a checkout rather than trusting what is on disk.
 - `--stack` tolerates a package its toolchain blocks: the rest of the stack provisions, the exit stays 0, and the blocked package appears in `warnings` with `blocking: true`. Naming that package on the command line is an instruction rather than a guess, so there an absent toolchain is exit 3.
-- `verify` publishes one verdict per environment — `ok`, `drifted`, `blocked`, or `absent`. Only `drifted` is repairable here, with `verify --repair`. `blocked` means a tool the environment requires is off `PATH`, so nothing in it can run; it exits 0 and says so rather than naming a fix this CLI cannot perform.
-- `digest: "ok"` is published only for a package pinned by content hash, which is `silero-vad` and nothing else. Hub packages publish the `revision` they pinned — a different claim, deliberately a different key.
-- `remove` resolves every name against the registry before deleting anything, and both teardowns drop a registry entry as that package's own bytes go. Weights live in a Hub cache shared with other tools, so a revision this root downloaded is deleted and one that pre-existed is retained; `purge --dry-run` reports the split before a caller promises a total.
+- `verify` publishes one verdict per environment — `ok`, `drifted`, `blocked`, or `absent`. Only `drifted` is repairable here, with `verify --repair`. `blocked` means a provisioning or repair tool is off `PATH` and no ready built runtime can substitute for it; a directly launchable FluidAudio product therefore remains `ok` without Swift. The blocked verdict exits 0 and says so rather than naming a fix this CLI cannot perform.
+- `digest: "ok"` is published only for a package pinned by content hash, which is `silero-vad` and nothing else. Hub packages publish the `revision` they pinned after the live cache index binds repository plus revision to the recorded snapshot path and the allowlist/size checks pass — a different claim, deliberately a different key.
+- `remove` resolves every name before deleting anything. Local targets and environment ownership come from the installed manifest, not mutable registry paths. A Hub revision is eligible only when this root recorded downloading it, the current manifest still pins it for that package, and it was not pre-existing; `purge --dry-run` reports both the eligible and retained sets before a caller promises a total.
 
 ## Transcription
 
@@ -208,7 +209,15 @@ audio transcribe run --input meeting.m4a --stack qwen-1.7b \
 ```
 
 Existing transcript and partial-result paths are preserved unless `--force` is explicit; no flag
-can make the output overwrite the canonical input.
+can make the output overwrite an input transcript, its derived partial path, or canonical source
+media.
+
+Transcript/export publication, URL-model downloads, and managed removals are bound to
+already-opened, non-symlink directories, so swapping a parent path during those operations cannot
+redirect their output or package cleanup.
+FluidAudio is patched at its pinned source commit to require the exact provisioned diarization
+model directory and to stay offline; its built product path and live SHA256 are receipt-bound and
+checked again before decode.
 
 The Qwen runner decodes one temporary mono 16 kHz PCM WAV while preserving the original source,
 runs model stages strictly sequentially in fresh processes, and keeps every result bound on the
@@ -220,8 +229,18 @@ re-diarizes the whole source before processing only intersecting units.
 
 Omitting `--want` is the floors-only request, not “everything.” `--language` is an optional closed
 Qwen hint and does not reach the forced aligner. Missing packages fail at exit 3 with an explicit
-`audio packages pull` fix before decode or model load. `firered` and `vibevoice` can already be
-inspected and planned, but their `run` adapters are tracked in issues #22 and #23; export is #24.
+`audio packages pull` fix before decode or model load. All four stacks execute: FireRed keeps its
+native VAD/LID/ASR/punctuation models co-resident, while VibeVoice preserves native speaker/event
+segments and uses the Qwen aligner only when word timing is requested. A failed bounded
+ordinary-speech alignment becomes a same-bounds `alignment_unavailable` abstention; an unbounded
+Qwen failure remains unit-scoped because schema v1 has no segment-to-unit link. Event tags are excluded, and
+same-speaker turns never bridge a gap or event. Any requested detected overlap intersecting a
+segment and document scope masks sole `speaker` attribution even across a range boundary, while
+overlap and abstention rows remain start-owned. `audio export`
+merges compatible result documents and atomically writes UTF-8 SRT, VTT, Markdown, text, or JSONL
+without modifying media. Subtitle export uses only real word streams, omitting bounded events and
+bounded ordinary segments with exact same-bounds abstentions from mixed results. It refuses
+unbounded failures and all-ordinary-wordless results rather than inventing cue bounds.
 
 ## Test
 

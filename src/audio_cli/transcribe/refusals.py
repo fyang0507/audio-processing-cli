@@ -6,6 +6,8 @@ These payloads print bare on stderr.  The older shipped commands retain their hi
 
 from __future__ import annotations
 
+import hashlib
+import os
 import shlex
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -27,6 +29,11 @@ def _refusal(code: str, exit_code: int, fix: str, **fields: Any) -> Refusal:
     return Refusal({"code": code, **fields, "fix": fix}, exit_code=exit_code)
 
 
+def command_path_argument(value: str | Path) -> str:
+    rendered = str(value)
+    return f"./{rendered}" if rendered.startswith("-") else rendered
+
+
 def _plan_command(
     input_path: str | Path,
     stack: str,
@@ -37,12 +44,19 @@ def _plan_command(
     diarizer: str | None = None,
 ) -> str:
     parts = [
-        "audio", "transcribe", "plan", "--input", str(input_path), "--stack", stack,
+        "audio", "transcribe", "plan", "--input", command_path_argument(input_path),
     ]
+    if stack.startswith("-"):
+        parts.append(f"--stack={stack}")
+    else:
+        parts.extend(("--stack", stack))
     if wants:
         parts.extend(("--want", ",".join(wants)))
     if language is not None:
-        parts.extend(("--language", language))
+        if language.startswith("-"):
+            parts.append(f"--language={language}")
+        else:
+            parts.extend(("--language", language))
     if vad is not None:
         parts.extend(("--vad", vad))
     if diarizer is not None:
@@ -64,12 +78,19 @@ def _run_command(
     force: bool = False,
 ) -> str:
     parts = [
-        "audio", "transcribe", "run", "--input", str(input_path), "--stack", stack,
+        "audio", "transcribe", "run", "--input", command_path_argument(input_path),
     ]
+    if stack.startswith("-"):
+        parts.append(f"--stack={stack}")
+    else:
+        parts.extend(("--stack", stack))
     if wants:
         parts.extend(("--want", ",".join(wants)))
     if language is not None:
-        parts.extend(("--language", language))
+        if language.startswith("-"):
+            parts.append(f"--language={language}")
+        else:
+            parts.extend(("--language", language))
     if vad is not None:
         parts.extend(("--vad", vad))
     if diarizer is not None:
@@ -79,7 +100,7 @@ def _run_command(
     if output_format != "json":
         parts.extend(("--format", output_format))
     if output is not None:
-        parts.extend(("-o", str(output)))
+        parts.extend(("-o", command_path_argument(output)))
     if force:
         parts.append("--force")
     return shlex.join(parts)
@@ -311,8 +332,8 @@ def output_is_canonical_input(
         "output_is_canonical_input",
         2,
         (
-            "choose an --output whose transcript and derived partial paths do not resolve "
-            "to the canonical input; --force cannot override this"
+            "choose an --output that does not resolve to an input transcript, its derived "
+            "partial path, or canonical source media; --force cannot override this"
         ),
         field="--output",
         provided=str(output),
@@ -320,15 +341,119 @@ def output_is_canonical_input(
     )
 
 
-def stack_run_unavailable(stack: str, issue: int) -> Refusal:
+def output_path_invalid(
+    output: str | Path, target: str | Path, reason: str,
+) -> Refusal:
     return _refusal(
-        "stack_run_unavailable",
+        "output_path_invalid",
         2,
-        f"the {stack} run adapter is tracked in "
-        f"https://github.com/fyang0507/audio-processing-cli/issues/{issue}",
-        stack=stack,
-        issue=issue,
+        (
+            "choose an --output whose destination and parent directory can be "
+            "resolved and written safely"
+        ),
+        field="--output",
+        provided=str(output),
+        target=str(target),
+        reason=reason,
     )
+
+
+def output_required_for_force() -> Refusal:
+    return _refusal(
+        "output_required_for_force",
+        2,
+        "remove --force when writing to stdout, or add --output PATH",
+        field="--force",
+        provided=True,
+        requires="--output",
+    )
+
+
+def export_input_invalid(input_path: str | Path, reason: str) -> Refusal:
+    return _refusal(
+        "export_input_invalid",
+        2,
+        "regenerate or repair the input transcript before exporting it",
+        field="--input",
+        provided=str(input_path),
+        reason=reason,
+    )
+
+
+def export_inputs_incompatible(
+    input_paths: Sequence[str | Path],
+    reason: str,
+    *,
+    fix: str | None = None,
+) -> Refusal:
+    return _refusal(
+        "export_inputs_incompatible",
+        2,
+        fix or (
+            "export these inputs separately, or select results with the same canonical "
+            "source and non-overlapping ranges"
+        ),
+        field="--input",
+        provided=[str(path) for path in input_paths],
+        reason=reason,
+    )
+
+
+def _unused_timed_output(
+    transcript: Path, source_path: Path | None,
+) -> Path:
+    name = transcript.name
+    for suffix in (".transcript.json", ".partial.json", ".rest.json", ".json"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+
+    source_resolved: Path | None = None
+    if source_path is not None:
+        try:
+            source_resolved = source_path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ValueError("source.path is not a resolvable regular file") from exc
+    try:
+        name_limit = int(os.pathconf(transcript.parent, "PC_NAME_MAX"))
+    except (OSError, ValueError):
+        name_limit = 255
+    fallback_name = (
+        "transcript-"
+        + hashlib.sha256(os.fsencode(transcript.name)).hexdigest()[:16]
+    )
+    index = 1
+    while True:
+        marker = "" if index == 1 else f".{index}"
+        candidate_name = f"{name}.timed{marker}.json"
+        partial_name = f"{Path(candidate_name).with_suffix('').name}.partial.json"
+        if max(len(os.fsencode(candidate_name)), len(os.fsencode(partial_name))) > name_limit:
+            candidate_name = f"{fallback_name}.timed{marker}.json"
+            partial_name = f"{Path(candidate_name).with_suffix('').name}.partial.json"
+        candidate = transcript.with_name(candidate_name)
+        partial = candidate.with_name(partial_name)
+        try:
+            occupied = any(
+                path.exists() or path.is_symlink()
+                for path in (candidate, partial)
+            )
+        except OSError as exc:
+            raise ValueError(
+                "no safe sibling result path fits beside this transcript"
+            ) from exc
+        if not occupied:
+            try:
+                protected = {
+                    candidate.resolve(strict=False),
+                    partial.resolve(strict=False),
+                }
+            except (OSError, RuntimeError) as exc:
+                raise ValueError(
+                    "no safe sibling result path can be resolved beside this transcript"
+                ) from exc
+            if source_resolved is None or source_resolved not in protected:
+                return candidate
+        index += 1
 
 
 def timing_required_for_format(
@@ -337,15 +462,71 @@ def timing_required_for_format(
     found: Sequence[str],
     stack: str,
     wants: Sequence[str],
+    *,
+    source_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    language: str | None = None,
+    vad: str | None = None,
+    run_range: str | None = None,
+    word_timing_outcome: str | None = None,
 ) -> Refusal:
     requested = list(dict.fromkeys([*wants, "word_timestamps"]))
+    transcript = Path(input_path)
+    unsafe_legacy_source = False
+    if source_path is not None:
+        source = Path(source_path)
+        if not source.is_absolute() or not source.is_file():
+            unsafe_legacy_source = True
+        else:
+            try:
+                source.resolve(strict=True)
+            except (OSError, RuntimeError):
+                unsafe_legacy_source = True
+    if word_timing_outcome == "abstained":
+        fix = (
+            "choose md, txt, or jsonl, provide another result with produced timed words, "
+            "or choose a different stack; this result already attempted word_timestamps "
+            "and abstained, so repeating the same command is not a repair"
+        )
+    elif "word_timestamps" in found:
+        fix = (
+            "choose md, txt, or jsonl, or provide a transcript containing timed "
+            "words; this result already records word_timestamps but has no word "
+            "stream from which subtitle cues can be built"
+        )
+    elif unsafe_legacy_source:
+        fix = (
+            "regenerate this transcript with the current audio CLI before rerunning "
+            "or exporting it; its relative, missing, non-file, or unresolvable "
+            "source.path cannot safely identify the original media"
+        )
+    else:
+        if output_path is None:
+            try:
+                output_path = _unused_timed_output(
+                    transcript,
+                    Path(source_path) if source_path is not None else None,
+                )
+            except ValueError:
+                fix = (
+                    "choose md, txt, or jsonl, or rerun transcription from a "
+                    "shorter output directory; no safe sibling timed-result path "
+                    "fits beside this transcript"
+                )
+        if output_path is not None:
+            fix = _run_command(
+                source_path or input_path,
+                stack,
+                requested,
+                language=language,
+                vad=vad,
+                run_range=run_range,
+                output=output_path,
+            )
     return _refusal(
         "timing_required_for_format",
         2,
-        (
-            f"audio transcribe run --input {shlex.quote(str(input_path))} --stack {stack} "
-            f"--want {','.join(requested)} --format {output_format}"
-        ),
+        fix,
         field="--format",
         provided=output_format,
         requires_capability="word_timestamps",

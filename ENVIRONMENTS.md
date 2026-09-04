@@ -28,7 +28,7 @@ long-form path entirely.
 | --- | --- | --- |
 | `qwen-1.7b`, floors only | `mlx` | 2.30 GiB |
 | `qwen-1.7b` + `diarization` + `word_timestamps` | `mlx`, `swift` | 3.61 GiB + one unsized build |
-| `vibevoice` + `word_timestamps` | `mlx`, `torch-vibevoice` | 17.35 GiB |
+| `vibevoice` + `word_timestamps` | `mlx`, `torch-vibevoice` | 17.36 GiB |
 | `firered` + `lid` | `torch-firered` | 8.93 GiB |
 
 ## How the layout was derived
@@ -150,6 +150,15 @@ Why `uv pip sync` rather than `uv sync` over a project, or extras on this repo's
 - `--generate-hashes` costs about two seconds per lock and makes every wheel digest-checked by
   the installer. Provisioning integrity is the resolver's, not ours.
 
+The two native Python backends are the deliberate post-lock exception: after sync, pull installs
+the exact manifest-owned checkout with `--no-deps`. The manifest pins both its distribution name
+and checkout path. Verify requires that named distribution to freeze as a direct `file://`
+reference to that exact path; a missing install, a right path under the wrong name, or a right
+name at another path is environment drift. `verify --repair` validates the checkout before
+executing its build backend, syncs the lock, reinstalls every ready checkout owned by that
+environment, cleans install artifacts, updates the lock receipt, and freezes again. This ordering
+matters because `uv pip sync` removes direct installs that are not themselves in the lock.
+
 ### Locks
 
 ```text
@@ -185,6 +194,12 @@ it is why the probe reads dependency sets rather than a hand-maintained grouping
 
 `<root>/registry.json`, where `<root>` is `AUDIO_PROCESSING_MODEL_CACHE` when set and
 otherwise the per-platform cache directory `src/audio_cli/vad.py` already resolves.
+The configured provisioning-root leaf and the registry itself must both be non-symlink
+directories/files, and the registry's recorded `root` must resolve to the exact current
+provisioning root. Registry reads and writes are bound to an already-opened root descriptor;
+a leaf substituted between inspection and open is not followed, and a redirected root is
+`registry_unreadable` before `verify` probes anything below it. A copied or redirected receipt
+is not authority over another directory.
 
 ```jsonc
 {
@@ -244,6 +259,22 @@ a tree whose state is what is in doubt. It is a no-op for `silero-vad` by constr
 that one reason only: `url_file` re-hashes the file against the manifest pin and re-downloads
 unless it matches, so a match already is the strongest re-materialization available.
 
+That URL fast path accepts only the manifest-derived path under `<root>/models` as a contained,
+non-symlink regular file. A hash-matching symlink is replaced rather than trusted, and the same
+path/type boundary is checked after the atomic download. Publication is bound to the exact private
+temporary inode opened before the transfer, so substituting its name cannot publish other bytes or
+erase the prior managed cache entry; displaced directories are never removed. Silero's runtime
+auto-fetch applies the same rule; an explicit `AUDIO_PROCESSING_VAD_MODEL` remains a caller-supplied,
+hash-checked input. These descriptor and identity checks cover accidental/public-path retargeting,
+not a same-credential process changing a random private sibling after its final inspection; POSIX
+has no portable unlink-if-inode operation, and such a process can already remove the managed files
+directly.
+
+Environment creation has the matching boundary. Before creating or installing anything, `pull`
+requires the manifest-derived `<root>/envs/<environment>` leaf and its `envs` parent not to be
+redirected by a symlink or outside the provisioning root. It never follows a mutable registry path
+to choose an environment target.
+
 **A stack tolerates a toolchain-blocked package; a named one does not.** `--stack` selects every
 package a stack can use, which is a superset guess, so a machine with no Swift toolchain
 provisions the rest of the stack and reports `fluidaudio` as a blocking `warnings` entry. Exit 3
@@ -253,9 +284,10 @@ first blocked package is what this replaced, and because `select` sorts by id, `
 sorted first and `pull --stack qwen-1.7b` on a toolchain-less machine provisioned nothing at all.
 
 **Reference counts are derived, never stored.** `remove <package>` deletes that package's
-artifacts, then removes its environment only if no other non-absent package targets it. A
-stored count is a second copy of a fact the table already holds, and it would eventually
-disagree with it.
+artifacts, then removes its environment only if no other non-absent package targets it. Package
+to environment identity comes from the installed manifest rather than the mutable registry entry;
+a stored count or receipt-selected environment is a second copy of a fact the manifest already
+holds, and it would eventually disagree with it.
 
 **`purge` reads the registry, reports reclaimable bytes, and touches no media or output.**
 
@@ -271,51 +303,104 @@ window in `purge` — a Hub cache that fails mid-teardown used to leave every pa
 nothing behind it. `purge` never had the validation defect, because it takes its list from the
 registry rather than from a caller. A repeated name removes once and is reported once.
 
-**A teardown reports what it actually freed.** Two things follow, and the first was got wrong
-before it was got right. Most of the bytes are not under the root at all — they are Hub
-revisions — so `remove` and `purge` delete exactly the revisions the registry records, by
-commit hash, through the Hub cache's own revision-scoped deletion. A sibling revision of the
-same repository is not ours to touch. And `reclaimed_bytes` is *measured before deleting*
-rather than read off the registry, because the first version summed recorded sizes while
-deleting nothing from the cache, and so reported 2.47 GB reclaimed while freeing about 400 MB
-of virtual environment. Revisions the cache no longer holds are reported as
-`hub_revisions_not_found`, not as deleted.
+**A teardown reports what it actually freed.** Registry paths and ownership lists are claims, not
+deletion authority. Local targets are derived only from the installed manifest and must remain
+inside the managed root without crossing a parent symlink. A Hub revision is deletion-eligible
+only when the receipt says this root downloaded it, the current manifest still pins it for that
+package, and the receipt does not also mark it pre-existing. Claimed revisions outside that
+intersection are retained; an unknown or retired registry package loses its registry entry but no
+recorded path is followed. A local deletion is confirmed absent before its registry ownership or
+reclaimed-byte count changes, so a failed deletion leaves the owner intact.
+
+Most of the bytes are not under the root at all — they are Hub revisions — and eligible commits are
+deleted through the Hub cache's own revision-scoped deletion. A sibling revision of the same
+repository is not ours to touch. `reclaimed_bytes` is measured rather than read off the registry,
+because the first version summed recorded sizes while deleting nothing from the cache, and so
+reported 2.47 GB reclaimed while freeing about 400 MB of virtual environment. Revisions the cache
+no longer holds are reported as `hub_revisions_not_found`, not as deleted.
 
 ## `verify`
 
+Registry readiness is the first gate. If a package entry is `ready` while its manifest-selected
+environment entry is missing or not `ready`, `verify` leaves that environment's verdict `absent`,
+emits `environment_not_ready` with the sorted dependent package ids and their `pull --repair` fix,
+and stops below that root. It does not freeze the environment, inspect a dependent source
+checkout, or launch a dependent interpreter or built product.
+
 Four checks, all cheap, none loading weights:
 
-1. **Artifact digests** for every package pinned by content hash, which is `silero-vad` and
-   nothing else. The manifest pins the Hub packages by *revision* and carries no `sha256` for
-   them, so there is nothing to hash a snapshot against: those report the revision they
-   materialized, and the check that applies to them is that the snapshot still exists. `verify`
+1. **Artifact integrity** at the strongest boundary each source declares. `silero-vad` is the
+   only package pinned by content hash. Its default cache path and any explicit
+   `AUDIO_PROCESSING_VAD_MODEL` override are hashed before decode; an override is a
+   pre-populated copy, not an alternate unpinned backend. The manifest pins Hub packages by
+   *revision* and carries
+   no `sha256` for them, so there is nothing to hash a snapshot against: for those, `verify`
+   requires the Hugging Face cache index to bind each repository and pinned revision to the
+   receipt's snapshot path, every manifest `allow_patterns` match (including the VibeVoice
+   tokenizer subset), and the exact tree-byte total recorded when pull materialized the package,
+   then reports the pinned revision or revisions. `verify`
    says `digest: "ok"` only where bytes were hashed and `revision`/`revisions` where a revision
    is pinned — the two are different claims and must not print the same word. Every Hub package
    recorded `digest_verified: true` at pull time until this was corrected, which made `verify`
    report a digest check for eight packages and perform it for one.
-2. **Environment equality with its lock** — `uv pip freeze` against the locked set. A drifted
-   environment is a repairable state, not a fatal one; `--repair` re-syncs.
+2. **Environment root identity, then equality with its lock** — before `uv pip freeze`, the
+   manifest-derived environment root itself must be a real directory, not a symlink, and resolve
+   under the provisioning root. Only then is its installed set compared with the lock. A normal
+   virtual environment may still use a symlink at `bin/python`; the trust boundary is the root.
+   Lock drift is repairable with `--repair`. A redirected root is reported `drifted` but is not
+   followed or overwritten: replace the redirected path named by the failure before repairing.
 3. **The `mlx-audio` private-API guard** — the source hash over
    `mlx_audio/stt/models/qwen3_asr/qwen3_asr.py`, plus the signature of
    `Qwen3ASRModel._generate_chunks_batched`. Both are readable by importing the class, so
    verification needs no checkpoint: confirmed, the signature check passes on a fresh
    environment without loading the 2.3 GiB model.
-4. **Patches applied, and the Swift product runs.** A patch is verified by the post-patch
-   digest of each file it touches, recorded at `pull` time.
+4. **Patches applied, and the Swift product runs.** The manifest pins the post-patch SHA256 of
+   every touched file; the mutable receipt must repeat those values, the live files must hash to
+   them, and Git must name exactly that tracked change set. The Swift product must be a contained,
+   non-symlink executable under its exact managed checkout and is launched directly rather than
+   trusted from a receipt bit.
 
 Each check has a failure that must be reachable, not merely described: reverting the patch,
 deleting a wheel, or bumping `mlx-audio` each has to make exactly one of these fail.
 
+`verify` and `run` both apply the source-checkout check rather than trusting the receipt. They read
+the live Git HEAD, derive the only allowed tracked files from the shipped patch, require the
+manifest-owned post-patch hashes, require the receipt to repeat those hashes exactly, and enumerate
+both ordinary and **ignored** untracked files. An unpatched checkout must have empty patch history,
+an empty hash map, and no tracked changes.
+For compatibility with registries written before full commit ids were recorded, a receipt's
+`checkout_commit` may equal either the manifest's short `commit` alias or its full
+`resolved_commit`; new pulls write the full value, and the live Git HEAD must always equal that
+full resolved commit.
+Ignored `__pycache__`, compiled extensions, and build leftovers can still be imported or executed
+from a checkout, so normal `git status` cleanliness is not sufficient evidence. Pull cleans its
+own ignored install artifacts; anything that reappears fails explicit verification and makes the
+package untrusted before decode.
+
+Run preflight applies the same exact, contained, non-symlink environment-root check before it
+launches each selected managed Python interpreter with an isolated no-op and before decode. An
+executable bit proves only a directory entry; a corrupt or nonlaunching interpreter or redirected
+root is an exit-3 package-integrity failure before media or model work begins.
+
 Per-environment, `verify` states a verdict rather than the registry's state: `ok`, `drifted`,
-`blocked`, or `absent`. `blocked` means a tool in that environment's `requires_tool` is not on
-`PATH`, so nothing in it can run — this tool launches the Swift product through `swift run` —
-and it is reachable exactly because a stack pull now provisions around a blocked package:
-`speaker-diarization-coreml` needs no toolchain, so it lands in `swift` and leaves the
-environment `ready` in the registry while holding nothing executable. That state used to be
-unreachable, since the stack pull aborted and the environment stayed absent. It is not a
-`failed` entry, so `verify` still exits 0: nothing provisioned is broken, and no `audio` command
-installs a toolchain for a `fix` to name. `doctor`, `list`, and `path` keep publishing the
-registry's own `state`, which is a different fact — see VOCABULARY.md for both enumerations.
+`blocked`, or `absent`. Swift is a provisioning and repair dependency, not an ongoing runtime
+dependency: once FluidAudio is ready, runtime and `verify` execute the built product directly.
+A Swift-less environment is therefore `ok` only after that live executable launches. It remains
+`blocked` when a partial stack pull provisioned `speaker-diarization-coreml` but could not build
+FluidAudio, or when the recorded product no longer launches and Swift is absent to repair it.
+That state is not itself a `failed` entry, so `verify` still exits 0 when only the product is
+absent: nothing provisioned is broken, and no `audio` command installs a toolchain for a `fix` to
+name. A present but nonlaunching product also emits its package failure. `doctor`, `list`, and
+`path` keep publishing the registry's own `state`, which is a different fact — see VOCABULARY.md
+for both enumerations.
+
+FluidAudio is built from the pinned 0.15.5 checkout only after
+`fluidaudio-pinned-model-dir.patch` makes offline processing require an explicit
+`--model-dir` and disables ModelHub downloads. The native transport binds that argument to the
+exact managed `speaker-diarization-coreml` directory. Pull records the built executable's path
+and SHA256; verify and run recompute that digest, validate the pinned post-patch Swift source
+hash, and launch that same executable. A runnable binary at a different path, a rebuilt binary
+with different bytes, or an implicit model cache is not equivalent evidence.
 
 ## Running a stage in another environment
 
@@ -371,9 +456,10 @@ root, minutes old, offered a three-week-old aligner checkpoint to `purge`; it de
 and said why. "Materialized here" was never a statement about ownership of the bytes, and the
 code read it as one.
 
-The fix is to record whether *this pull* actually fetched the revision. Teardown deletes only
-what it downloaded, reports the rest as `hub_revisions_retained`, and `purge --dry-run` prints
-the split before anything goes.
+The fix is to record whether *this pull* actually fetched the revision, then bound that mutable
+receipt by the package's revisions in the current installed manifest. Teardown deletes only the
+intersection, reports pre-existing and out-of-manifest claims as `hub_revisions_retained`, and
+`purge --dry-run` prints the split before anything goes.
 
 **Where that decision happens is load-bearing, and the obvious placement is wrong.** Asking the
 cache at download time — inside the fetcher, which reads cleaner — breaks on a retry:
@@ -394,13 +480,14 @@ real run found was in the *boundary* the fakes stood in for. Both kinds are need
 ## What is still open
 - **The VibeVoice re-measurement decision**, above. It is the only thing standing between four
   provisioned environments and three.
-- **`fluidaudio` remains unsized.** It is a build product; `pull` records its size once, and
-  it is the only entry left in `unsized_packages` after this pass. Every other package now has
-  a real byte count read from the Hub at its pinned revision — the spec documents' figures were
-  illustrative, and several were wrong: `microsoft/VibeVoice-ASR` is 16.16 GiB rather than the
-  quoted 17.0, and `speaker-diarization-coreml` is 129 MB rather than 84.
+- **`fluidaudio` remains unsized before build.** It is a build product; `pull` records its size
+  once. Every weight package has a byte count read from its pinned source selection — including
+  21,599,417 bytes for the five FluidAudio diarization artifacts actually loaded, rather than
+  the 129,243,647-byte full Hub snapshot recorded by older receipts. `microsoft/VibeVoice-ASR`
+  is 16.16 GiB rather than the earlier illustrative 17.0.
 - **Licenses are declared, not reviewed.** Every package now carries the license its card
-  states at the pinned revision — Qwen and FireRed apache-2.0, VibeVoice mit,
+  states at the pinned revision — Qwen and FireRed apache-2.0, VibeVoice's combined package
+  `mixed: mit + apache-2.0` because it includes a pinned Qwen tokenizer subset,
   `speaker-diarization-coreml` cc-by-4.0, FluidAudio apache-2.0, Silero mit read from the
   tagged LICENSE. `license_reviewed` stays false except where the terms were actually read.
   A declared license is evidence that one exists, not a redistribution clearance.

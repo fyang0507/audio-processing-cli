@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 
 from audio_cli.transcribe import refusals, stacks
 from audio_cli.transcribe.planner import resolve_request
+from audio_cli import cli
 
 HAPPY_PATH = Path(__file__).resolve().parents[1] / "TRANSCRIBE_HAPPY_PATH.md"
 
@@ -144,10 +146,21 @@ EXPECTED_KEYS = {
         "code", "field", "provided", "allowed", "capability", "fix",
     },
     "range_invalid": {"code", "field", "provided", "reason", "fix"},
-    "stack_run_unavailable": {"code", "stack", "issue", "fix"},
     "output_exists": {"code", "field", "provided", "existing", "fix"},
     "output_is_canonical_input": {
         "code", "field", "provided", "resolved_target", "fix",
+    },
+    "output_path_invalid": {
+        "code", "field", "provided", "target", "reason", "fix",
+    },
+    "output_required_for_force": {
+        "code", "field", "provided", "requires", "fix",
+    },
+    "export_input_invalid": {
+        "code", "field", "provided", "reason", "fix",
+    },
+    "export_inputs_incompatible": {
+        "code", "field", "provided", "reason", "fix",
     },
     "timing_required_for_format": {
         "code", "field", "provided", "requires_capability", "found", "note", "fix",
@@ -204,12 +217,19 @@ def all_refusal_examples() -> list[refusals.Refusal]:
             "meeting.m4a", "qwen-1.7b", ("diarization",), "bad",
             "--range must be START: or START:END",
         ),
-        refusals.stack_run_unavailable("firered", 22),
         refusals.output_exists(
             "meeting.m4a", "qwen-1.7b", ("diarization",),
             "meeting.json", "meeting.json",
         ),
         refusals.output_is_canonical_input("meeting.m4a", "meeting.m4a"),
+        refusals.output_path_invalid(
+            "meeting.json", "meeting.partial.json", "Symlink loop"
+        ),
+        refusals.output_required_for_force(),
+        refusals.export_input_invalid("meeting.json", "schema mismatch"),
+        refusals.export_inputs_incompatible(
+            ("meeting.part1.json", "other.json"), "canonical sources differ"
+        ),
         refusals.timing_required_for_format(
             "meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)
         ),
@@ -233,8 +253,55 @@ def all_refusal_examples() -> list[refusals.Refusal]:
 
 def test_every_current_contract_refusal_has_one_fixed_shape_builder() -> None:
     examples = all_refusal_examples()
-    assert len(examples) == 18
+    assert len(examples) == len(EXPECTED_KEYS)
     assert {item.payload["code"] for item in examples} == set(EXPECTED_KEYS)
     for item in examples:
         assert set(item.payload) == EXPECTED_KEYS[item.payload["code"]]
         assert item.payload["fix"]
+
+
+def test_timing_fix_is_runnable_for_an_option_like_transcript_filename() -> None:
+    refusal = refusals.timing_required_for_format(
+        "--result.json", "srt", (), "qwen-1.7b", ("verbatim",)
+    )
+    arguments = shlex.split(refusal.payload["fix"])
+    parsed = cli._parser().parse_args(arguments[1:])
+    assert parsed.output == Path("--result.timed.json")
+
+
+def test_timing_refusal_stays_typed_when_no_sibling_path_can_be_probed(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"source")
+    transcript = tmp_path / "result.json"
+    original_exists = Path.exists
+
+    def exists(path: Path) -> bool:
+        if ".timed" in path.name:
+            raise OSError("simulated path length boundary")
+        return original_exists(path)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    refusal = refusals.timing_required_for_format(
+        transcript,
+        "srt",
+        (),
+        "qwen-1.7b",
+        ("verbatim",),
+        source_path=source,
+    )
+
+    assert refusal.exit_code == 2
+    assert refusal.payload["code"] == "timing_required_for_format"
+    assert not refusal.payload["fix"].startswith("audio ")
+    assert "no safe sibling" in refusal.payload["fix"]
+
+
+def test_output_exists_fix_is_runnable_for_option_like_media_and_output() -> None:
+    refusal = refusals.output_exists(
+        "-source.wav", "qwen-1.7b", (), "-out.json", "-out.json"
+    )
+    parsed = cli._parser().parse_args(shlex.split(refusal.payload["fix"])[1:])
+    assert parsed.input == Path("-source.wav")
+    assert parsed.output == Path("-out.json")

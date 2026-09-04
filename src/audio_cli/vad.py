@@ -4,6 +4,7 @@ import hashlib
 import os
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -11,7 +12,15 @@ from typing import Protocol
 import numpy as np
 import onnxruntime as ort
 
-from .paths import models_dir
+from .media import (
+    assert_directory_binding,
+    bound_directory,
+    cleanup_temporary_file,
+    file_identity_from_descriptor,
+    publish_temporary_file,
+    sha256_regular_file_at,
+)
+from .paths import models_dir, root
 
 MODEL_VERSION = "silero-vad-6.2.1"
 MODEL_URL = (
@@ -78,39 +87,96 @@ def resolve_model_path(explicit: Path | None = None) -> Path:
         assert path is not None
         if not path.is_file():
             raise VadError(f"Silero VAD model not found: {path}")
+        actual = _sha256(path)
+        if actual != MODEL_SHA256:
+            raise VadError(
+                f"Silero VAD model checksum mismatch: expected {MODEL_SHA256}, "
+                f"got {actual} for {path}"
+            )
         return path
 
     target = _cache_root() / MODEL_FILENAME
-    if target.is_file() and _sha256(target) == MODEL_SHA256:
-        return target
-    if target.exists():
-        target.unlink()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    partial = target.with_name(f".{target.name}.{os.getpid()}.part")
     try:
-        request = urllib.request.Request(
-            MODEL_URL,
-            headers={"User-Agent": "audio-processing-cli/0.1"},
-        )
-        with (
-            urllib.request.urlopen(request, timeout=60) as response,
-            partial.open("wb") as output,
-        ):
-            while chunk := response.read(1024 * 1024):
-                output.write(chunk)
-        actual = _sha256(partial)
-        if actual != MODEL_SHA256:
-            raise VadError(
-                f"Downloaded Silero VAD checksum mismatch: expected {MODEL_SHA256}, got {actual}"
+        with bound_directory(
+            target.parent,
+            root=root(),
+            create=True,
+        ) as parent_descriptor:
+            try:
+                existing = sha256_regular_file_at(
+                    parent_descriptor, target.name
+                )
+            except OSError:
+                existing = None
+            if existing == MODEL_SHA256:
+                return target
+            partial_name = (
+                f".audio-vad-download-{os.getpid()}-{uuid.uuid4().hex}.part"
             )
-        os.replace(partial, target)
+            created = False
+            temporary_identity = None
+            try:
+                descriptor = os.open(
+                    partial_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_CLOEXEC", 0),
+                    0o666,
+                    dir_fd=parent_descriptor,
+                )
+                created = True
+                try:
+                    temporary_identity = file_identity_from_descriptor(
+                        descriptor, target.parent / partial_name
+                    )
+                finally:
+                    if temporary_identity is None:
+                        os.close(descriptor)
+                if temporary_identity is None:
+                    raise OSError(
+                        f"VAD download temporary is not a regular file: "
+                        f"{target.parent / partial_name}"
+                    )
+                request = urllib.request.Request(
+                    MODEL_URL,
+                    headers={"User-Agent": "audio-processing-cli/0.1"},
+                )
+                with os.fdopen(descriptor, "wb") as output:
+                    response = urllib.request.urlopen(request, timeout=60)
+                    with response:
+                        digest = hashlib.sha256()
+                        while chunk := response.read(1024 * 1024):
+                            output.write(chunk)
+                            digest.update(chunk)
+                        output.flush()
+                        os.fsync(output.fileno())
+                actual = digest.hexdigest()
+                if actual != MODEL_SHA256:
+                    raise VadError(
+                        "Downloaded Silero VAD checksum mismatch: expected "
+                        f"{MODEL_SHA256}, got {actual}"
+                    )
+                assert_directory_binding(parent_descriptor, target.parent)
+                publish_temporary_file(
+                    parent_descriptor,
+                    partial_name,
+                    target.name,
+                    output_path=target,
+                    force=True,
+                    temporary_identity=temporary_identity,
+                    replace_non_directory=True,
+                )
+                created = False
+            finally:
+                if created and temporary_identity is not None:
+                    cleanup_temporary_file(
+                        parent_descriptor, partial_name, temporary_identity
+                    )
     except (OSError, urllib.error.URLError) as exc:
         raise VadError(
             "Could not download the pinned Silero VAD model. Connect once to populate the cache, "
             "or set AUDIO_PROCESSING_VAD_MODEL to a local silero_vad.onnx file."
         ) from exc
-    finally:
-        partial.unlink(missing_ok=True)
     return target
 
 

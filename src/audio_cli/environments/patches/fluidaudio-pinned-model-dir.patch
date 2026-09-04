@@ -1,0 +1,31 @@
+diff --git a/Sources/FluidAudioCLI/Commands/ProcessCommand.swift b/Sources/FluidAudioCLI/Commands/ProcessCommand.swift
+index 434cafa..fd56432 100644
+--- a/Sources/FluidAudioCLI/Commands/ProcessCommand.swift
++++ b/Sources/FluidAudioCLI/Commands/ProcessCommand.swift
+@@ -152,2 +152,9 @@ enum ProcessCommand {
+-            let modelDir = OfflineDiarizerModels.defaultModelsDirectory()
++            guard let modelDirectory = args.modelDirectory, !modelDirectory.isEmpty else {
++                fputs("ERROR: --model-dir is required in offline mode\n", stderr)
++                fflush(stderr)
++                logger.error("--model-dir is required in offline mode")
++                exit(1)
++            }
++            let modelDir = URL(fileURLWithPath: modelDirectory, isDirectory: true)
++            ModelHub.offlineMode = true
+             let manager = OfflineDiarizerManager(config: offlineConfig)
+@@ -246,2 +253,3 @@ enum ProcessCommand {
+         var rttmFile: String?
++        var modelDirectory: String?
+         var embeddingExportPath: String?
+@@ -301,2 +309,7 @@ enum ProcessCommand {
+                 parsed.debug = true
++            case "--model-dir":
++                if i + 1 < args.count {
++                    parsed.modelDirectory = args[i + 1]
++                    i += 1
++                }
+             case "--rttm":
+@@ -489,2 +502,3 @@ enum ProcessCommand {
+             OFFLINE MODE OPTIONS (VBx clustering, all optional):
++                --model-dir <directory>        Required pinned offline model directory
+                 --rttm <file>                   Compute DER/JER against RTTM annotations

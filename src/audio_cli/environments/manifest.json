@@ -68,7 +68,7 @@
       "requires_tool": [
         "swift"
       ],
-      "reason": "A Swift build product plus one Core ML model package. No interpreter, so no lock; absent `swift` blocks only these packages and is reported by `audio doctor` rather than being fatal."
+      "reason": "A Swift-built product plus one Core ML model package. No interpreter, so no lock; Swift is required to provision or repair the product, while a ready runtime executes and verifies the built binary directly without Swift."
     }
   },
   "backends": {
@@ -182,19 +182,43 @@
       "stacks": [
         "vibevoice"
       ],
-      "bytes": 17349559904,
-      "license_declared": "mit",
+      "bytes": 17361048135,
+      "license_declared": "mixed: mit + apache-2.0",
       "license_reviewed": false,
       "source": {
-        "type": "huggingface",
-        "repo": "microsoft/VibeVoice-ASR",
-        "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944"
+        "type": "huggingface_multi",
+        "repos": [
+          {
+            "role": "asr",
+            "repo": "microsoft/VibeVoice-ASR",
+            "revision": "d0c9efdb8d614685062c04425d91e01b6f37d944",
+            "bytes": 17349559904
+          },
+          {
+            "role": "tokenizer",
+            "repo": "Qwen/Qwen2.5-7B",
+            "revision": "d149729398750b98c0af14eb82c78cfe92750796",
+            "bytes": 11488231,
+            "allow_patterns": [
+              "config.json",
+              "merges.txt",
+              "tokenizer.json",
+              "tokenizer_config.json",
+              "vocab.json"
+            ]
+          }
+        ]
       },
       "checkout": {
+        "distribution": "vibevoice",
         "repo": "https://github.com/microsoft/VibeVoice.git",
         "commit": "94da20d",
+        "resolved_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
         "install": "--no-deps",
-        "patch": "patches/vibevoice-logits-to-keep.patch"
+        "patch": "patches/vibevoice-logits-to-keep.patch",
+        "patched_file_sha256": {
+          "vibevoice/modular/modeling_vibevoice_asr.py": "b20a301dc489c9c7c71bbe02589d77448758afd08822eb0576ff9bc26dd53ac4"
+        }
       },
       "note": "Native speaker structure, so the `diarization` capability is native on this stack and no diarizer add-on is planned for it.",
       "mlx_alternative": {
@@ -251,10 +275,13 @@
         ]
       },
       "checkout": {
+        "distribution": "fireredasr2s",
         "repo": "https://github.com/FireRedTeam/FireRedASR2S.git",
         "commit": "4e7d9aa",
+        "resolved_commit": "4e7d9aaf4482a47cec1724807026b9b151926eb5",
         "install": "--no-deps",
-        "patch": null
+        "patch": null,
+        "patched_file_sha256": {}
       },
       "note": "One package supplying four roles, because the four checkpoints are provisioned and versioned together and no plan uses one without the checkout that loads it. `lid` costs a second inference pass; the punctuator always runs, because punctuated text is a floor."
     },
@@ -283,7 +310,11 @@
         "repo": "https://github.com/FluidInference/FluidAudio.git",
         "version": "0.15.5",
         "commit": "19600a485baa4998812e4654b70d2bab8f2c9949",
-        "product": "fluidaudiocli"
+        "product": "fluidaudiocli",
+        "patch": "patches/fluidaudio-pinned-model-dir.patch",
+        "patched_file_sha256": {
+          "Sources/FluidAudioCLI/Commands/ProcessCommand.swift": "cba176cb6a612f347a8fcc72be2af9ce766246a781338a27e5e668c862f9e683"
+        }
       },
       "note": "Also ships a Core ML VAD that its own VadManager resolves. That is not a named package here: the comparison probe exercised it, but this tool has never provisioned it. If --vad fluidaudio ships, it becomes one and gets its own entry."
     },
@@ -299,14 +330,21 @@
         "vibevoice",
         "firered"
       ],
-      "bytes": 129243647,
+      "bytes": 21599417,
       "license_declared": "cc-by-4.0",
       "license_reviewed": true,
       "license_source": "model_tests/benchmark/DIARIZATION.md",
       "source": {
         "type": "huggingface",
         "repo": "FluidInference/speaker-diarization-coreml",
-        "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594"
+        "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+        "allow_patterns": [
+          "Segmentation.mlmodelc/**",
+          "FBank.mlmodelc/**",
+          "Embedding.mlmodelc/**",
+          "PldaRho.mlmodelc/**",
+          "plda-parameters.json"
+        ]
       }
     }
   }

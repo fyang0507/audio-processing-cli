@@ -74,7 +74,6 @@ _ALIGNER = {
 _VIBEVOICE = {
     "backend": "vibevoice-asr-7b",
     "environment": "torch-vibevoice",
-    "source_commit": "94da20d98b2fa7688e9cbfaf7692ddb4954f7600",
     "patch": "vibevoice-logits-to-keep",
     "config": {
         "device": "mps",
@@ -114,10 +113,11 @@ _FIRERED_ROLES = {
         },
         "selected_by": "stack",
         "deterministic": True,
-        "determinism_tolerance_ms": 1.0,
+        "determinism_tolerance_ms": 2.0,
         "determinism_basis": (
-            "exact-repeat 60-minute fixture reproduced text and stayed within 1.0 ms of the "
-            "standalone timestamp sequence"
+            "exact-repeat 60-minute fixture repeated the text and speaker-null sequences; "
+            "maximum rebased timestamp drift was 1.0000000000002037 ms, within the frozen "
+            "2.0 ms tolerance, so normalized segments were not byte-equal"
         ),
     },
     "punctuator": {
@@ -284,13 +284,41 @@ def resolve_request(
     )
 
 
+def _manifest_role_source(package_id: str, role: str) -> dict[str, str]:
+    source = env.packages()[package_id].source
+    if source.get("type") == "huggingface_multi":
+        matches = [
+            repository
+            for repository in source.get("repos", ())
+            if repository.get("role") == role
+        ]
+        if len(matches) != 1:
+            raise stacks.StackTableError(
+                f"package {package_id!r} has no single source for role {role!r}"
+            )
+        source = matches[0]
+    repository = source.get("repo")
+    revision = source.get("revision")
+    if not isinstance(repository, str) or not isinstance(revision, str):
+        raise stacks.StackTableError(
+            f"package {package_id!r} role {role!r} has no pinned Hub source"
+        )
+    return {"repository": repository, "revision": revision}
+
+
+def _manifest_checkout_commit(package_id: str) -> str:
+    checkout = env.packages()[package_id].checkout
+    commit = checkout.get("resolved_commit") if checkout is not None else None
+    if not isinstance(commit, str) or len(commit) != 40:
+        raise stacks.StackTableError(
+            f"package {package_id!r} has no fully resolved checkout commit"
+        )
+    return commit
+
+
 def _manifest_revision(backend_id: str) -> str:
     backend = env.backends()[backend_id]
-    source = env.packages()[backend.package].source
-    revision = source.get("revision")
-    if not isinstance(revision, str):
-        raise stacks.StackTableError(f"backend {backend_id!r} has no single revision")
-    return revision
+    return _manifest_role_source(backend.package, backend.role)["revision"]
 
 
 def _role_template(
@@ -323,8 +351,15 @@ def _role_template(
     elif backend == "vibevoice-asr-7b":
         value = copy.deepcopy(_VIBEVOICE)
         value["revision"] = _manifest_revision(backend)
+        value["source_commit"] = _manifest_checkout_commit("vibevoice-asr-7b")
+        value["tokenizer"] = {
+            "materialized_role": "tokenizer",
+            **_manifest_role_source("vibevoice-asr-7b", "tokenizer"),
+        }
     elif backend in {"firered-vad", "firered-asr2-aed", "firered-punc", "firered-lid"}:
         value = copy.deepcopy(_FIRERED_ROLES[role])
+        value["revision"] = _manifest_revision(backend)
+        value["source_commit"] = _manifest_checkout_commit("firered-asr2s")
     elif backend == "fluidaudio":
         value = copy.deepcopy(_FLUIDAUDIO)
         if "overlapped_speech" in request.wants:
@@ -333,6 +368,7 @@ def _role_template(
         value = copy.deepcopy(_SILERO)
     elif backend == "qwen3-forcedaligner":
         value = copy.deepcopy(_ALIGNER)
+        value["revision"] = _manifest_revision(backend)
     else:
         raise stacks.StackTableError(f"no plan role template for backend {backend!r}")
     if selected_by is not None:

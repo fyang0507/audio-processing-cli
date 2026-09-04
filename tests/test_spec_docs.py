@@ -28,6 +28,13 @@ CONTRACT = REPO / "TRANSCRIBE_CONTRACT.md"
 HAPPY_PATH = REPO / "TRANSCRIBE_HAPPY_PATH.md"
 VOCABULARY = REPO / "VOCABULARY.md"
 SPEC_DOCS = (CONTRACT, HAPPY_PATH)
+AGENT_GUIDANCE = REPO / "AGENTS.md"
+AUDIO_SKILL = REPO / ".agents" / "skills" / "audio-cli"
+SHIPPED_SKILL_GUIDANCE = (
+    AUDIO_SKILL / "SKILL.md",
+    AUDIO_SKILL / "references" / "model-packages.md",
+    AUDIO_SKILL / "references" / "transcribe.md",
+)
 
 # The capability namespace, as published in VOCABULARY.md.
 CAPABILITY_NAMES = frozenset({
@@ -201,8 +208,9 @@ def test_most_fixes_are_runnable_commands() -> None:
             if isinstance(doc, dict) and "code" in doc and not doc["fix"].startswith("audio "):
                 sentence_fixes.add(doc["code"])
     assert sentence_fixes == {
-        "capability_unsupported", "backend_failed", "stack_run_unavailable",
-        "output_is_canonical_input",
+        "capability_unsupported", "backend_failed", "output_is_canonical_input",
+        "output_path_invalid", "output_required_for_force", "export_input_invalid",
+        "export_inputs_incompatible", "timing_required_for_format",
     }, (
         f"unexpected sentence-only fixes: {sorted(sentence_fixes)}. Every other code has a "
         "configuration that works, so its fix must be copy-pasteable."
@@ -411,3 +419,38 @@ def test_vocabulary_publishes_the_namespace_the_examples_use() -> None:
     text = VOCABULARY.read_text()
     for name in CAPABILITY_NAMES:
         assert f"`{name}`" in text, f"VOCABULARY.md does not define {name!r}"
+
+
+def test_vibevoice_cap_projection_is_scoped_and_labelled_in_both_specs() -> None:
+    for path in SPEC_DOCS:
+        text = " ".join(path.read_text().split())
+        assert "11,345 generated tokens over 1,800 seconds" in text
+        assert "declared 16,384-token cap" in text
+        assert "about 43 minutes of comparable audio" in text
+        assert "rate extrapolation, not an observed truncation" in text
+
+
+def test_repository_and_shipped_skill_describe_the_current_run_surface() -> None:
+    """The packaged user instructions must advance when an executable phase ships."""
+    stale_claims = (
+        "only the two qwen",
+        "only the qwen",
+        "run adapters have not shipped",
+        "remain work in progress",
+        "export are issues #22",
+        "export is not shipped",
+        "export are not shipped",
+    )
+    for path in (AGENT_GUIDANCE, *SHIPPED_SKILL_GUIDANCE):
+        text = path.read_text().lower()
+        for claim in stale_claims:
+            assert claim not in text, f"{path.relative_to(REPO)} retains stale claim {claim!r}"
+
+    repository_text = AGENT_GUIDANCE.read_text()
+    assert "transcribe through four explicit stacks" in repository_text
+    assert "`transcribe run`, and `export` ship" in repository_text
+
+    transcribe_text = SHIPPED_SKILL_GUIDANCE[-1].read_text()
+    for stack in ("`qwen-1.7b`", "`qwen-0.6b`", "`firered`", "`vibevoice`"):
+        assert stack in transcribe_text
+    assert "`audio export` can merge" in transcribe_text

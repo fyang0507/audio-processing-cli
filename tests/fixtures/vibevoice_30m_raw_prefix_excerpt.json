@@ -1,0 +1,6 @@
+{
+  "source_artifact": "model_tests/benchmark_runs/vibe_mps_bf16_logitskeep_spice30m_participant.json",
+  "source_sha256": "4606bc1042de5574b38e5d8b306943856cc17dddd41a6fbc54b2dded6d092a54",
+  "excerpt_rule": "output.raw_text from byte zero through the closing brace of array element 3, unchanged; the outer array close and later elements are omitted",
+  "raw_text": "assistant\n[{\"Start\":0,\"End\":10.91,\"Content\":\"[Silence]\"},{\"Start\":10.91,\"End\":17.91,\"Speaker\":0,\"Content\":\"哦，杨妈，哈喽，OK啊，你啊，你哋妈咪喺边度嚟噶？\"},{\"Start\":18.08,\"End\":27.95,\"Speaker\":1,\"Content\":\"嗯，我妈咪喺公园嚟噶。嗯，我爸爸又喺公园，但系佢细个嗰时搬咗去香港，佢喺香港长大噶。\"},{\"Start\":28.19,\"End\":31.72,\"Speaker\":0,\"Content\":\"嗯，你本身屋企都系讲广东话？\"}"
+}

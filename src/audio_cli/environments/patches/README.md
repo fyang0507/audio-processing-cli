@@ -1,4 +1,24 @@
-# Local VibeVoice benchmark patches
+# Pinned source patches
+
+## `fluidaudio-pinned-model-dir.patch`
+
+FluidAudio 0.15.5 normally resolves its offline diarization models through a
+mutable default cache and may ask ModelHub to download missing files. The
+shipped runtime cannot make that hidden choice: `audio packages pull` applies
+this patch to commit `19600a485baa4998812e4654b70d2bab8f2c9949`, builds the
+patched checkout, and records the product path and SHA256 in its receipt.
+
+The patch makes offline processing require `--model-dir`, passes that exact
+managed directory to `OfflineDiarizerModels.load`, and enables ModelHub's
+offline mode. The native transport supplies the separately provisioned
+`speaker-diarization-coreml` directory. Verification and run preflight require
+the checkout, the patched Swift file hash, the executable's live SHA256, and
+that model-directory binding to remain manifest-owned before launching it.
+
+The manifest pins the post-patch SHA256 of
+`Sources/FluidAudioCLI/Commands/ProcessCommand.swift`; updating FluidAudio or
+this patch requires updating that evidence together and exercising a real
+`audio packages pull --repair fluidaudio` build.
 
 ## `vibevoice-logits-to-keep.patch`
 

@@ -17,23 +17,51 @@ repair ever running.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import os
 import shutil
+import subprocess
+import sys
+import types
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from audio_cli import environments as env
+from audio_cli import media as media_module
 from audio_cli import packages as pkg
 from audio_cli import paths
 from audio_cli.cli import main
+
+VIBE_MODEL_REVISION = "d0c9efdb8d614685062c04425d91e01b6f37d944"
+VIBE_TOKENIZER_REVISION = "d149729398750b98c0af14eb82c78cfe92750796"
 
 
 @pytest.fixture(autouse=True)
 def isolated_root(tmp_path, monkeypatch):
     """Every test gets an empty root, so none of them can see a real provisioning."""
     monkeypatch.setenv("AUDIO_PROCESSING_MODEL_CACHE", str(tmp_path / "root"))
+
+    def snapshot_index() -> dict[tuple[str, str], Path]:
+        found: dict[tuple[str, str], Path] = {}
+        for package in env.packages().values():
+            source = package.source
+            repositories = (
+                source["repos"] if source["type"] == "huggingface_multi"
+                else [source] if source["type"] == "huggingface"
+                else []
+            )
+            for repository in repositories:
+                found[(repository["repo"], repository["revision"])] = (
+                    tmp_path / "hub"
+                    / f"models--{repository['repo'].replace('/', '--')}"
+                    / "snapshots" / repository["revision"]
+                )
+        return found
+
+    monkeypatch.setattr(pkg, "_hub_snapshot_index", snapshot_index)
     return tmp_path / "root"
 
 
@@ -57,7 +85,10 @@ class FakeToolchain(pkg.Toolchain):
         self._drift = dict(drift or {})
         self.created: list[str] = []
         self._synced: set[str] = set()
+        self._direct_installs: dict[str, dict[str, str]] = {}
         self.private_api_hash = private_api_hash
+        self._checkout_commits: dict[Path, str] = {}
+        self._checkout_tracked: dict[Path, dict[str, bytes]] = {}
 
     def which(self, tool: str) -> str | None:
         return None if tool in self.missing else f"/usr/bin/{tool}"
@@ -88,12 +119,14 @@ class FakeToolchain(pkg.Toolchain):
         (target / "bin" / "python").write_text("#!/bin/sh\n")
         # Re-syncing from the lock is what removes drift, so this is where it goes.
         self._synced.add(environment.name)
+        self._direct_installs[environment.name] = {}
 
     def frozen_packages(self, environment_python: Path) -> dict[str, str]:
         name = environment_python.parent.parent.name
         installed = pkg._locked_versions(env.environments()[name])
         if name not in self._synced:
             installed.update(self._drift)
+        installed.update(self._direct_installs.get(name, {}))
         return installed
 
     def clone(self, repo: str, commit: str, target: Path) -> None:
@@ -102,18 +135,81 @@ class FakeToolchain(pkg.Toolchain):
         touched = target / "vibevoice" / "modular"
         touched.mkdir(parents=True, exist_ok=True)
         (touched / "modeling_vibevoice_asr.py").write_text("original\n")
+        fluid_process = (
+            target / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
+        )
+        fluid_process.parent.mkdir(parents=True, exist_ok=True)
+        fluid_process.write_text("original fluid process\n", encoding="utf-8")
+        package = env.packages()[target.name]
+        expected = (
+            package.checkout.get("resolved_commit", package.checkout["commit"])
+            if package.checkout is not None
+            else package.source["commit"]
+        )
+        self._checkout_commits[target] = expected
+        self._checkout_tracked[target] = {
+            str(path.relative_to(target)): path.read_bytes()
+            for path in target.rglob("*")
+            if path.is_file()
+        }
 
     def apply_patch(self, checkout: Path, patch: Path) -> None:
+        if checkout.name == "fluidaudio":
+            target = (
+                checkout / "Sources" / "FluidAudioCLI" / "Commands"
+                / "ProcessCommand.swift"
+            )
+            target.write_text("patched fluid process\n", encoding="utf-8")
+            return
         target = checkout / "vibevoice" / "modular" / "modeling_vibevoice_asr.py"
         if target.is_file():
             target.write_text("patched\n")
 
     def install_checkout(self, environment_python: Path, checkout: Path) -> None:
         self.calls.append(["install", str(checkout)])
+        environment_name = environment_python.parent.parent.name
+        package = env.packages()[checkout.name]
+        distribution = package.checkout["distribution"]
+        self._direct_installs.setdefault(environment_name, {})[distribution] = (
+            f"@ {checkout.resolve(strict=False).as_uri()}"
+        )
+
+    def file_digest(self, path: Path) -> str:
+        fluid = env.packages()["fluidaudio"].source.get("patched_file_sha256", {})
+        for name, digest in fluid.items():
+            if path.as_posix().endswith(f"/{name}") \
+                    and path.read_bytes() == b"patched fluid process\n":
+                return digest
+        expected = env.packages()["vibevoice-asr-7b"].checkout["patched_file_sha256"]
+        for name, digest in expected.items():
+            if path.as_posix().endswith(f"/{name}") and path.read_bytes() == b"patched\n":
+                return digest
+        return pkg.sha256_file(path)
+
+    def inspect_checkout(self, checkout: Path) -> pkg.CheckoutState:
+        tracked = self._checkout_tracked[checkout]
+        modified = tuple(sorted(
+            name
+            for name, contents in tracked.items()
+            if not (checkout / name).is_file() or (checkout / name).read_bytes() != contents
+        ))
+        files = {
+            str(path.relative_to(checkout))
+            for path in checkout.rglob("*")
+            if path.is_file()
+        }
+        return pkg.CheckoutState(
+            head=self._checkout_commits[checkout],
+            modified=modified,
+            untracked=tuple(sorted(files - set(tracked))),
+        )
 
     def swift_build(self, checkout: Path) -> None:
-        (checkout / ".build").mkdir(parents=True, exist_ok=True)
-        (checkout / ".build" / "product").write_bytes(b"x" * 1024)
+        product = env.packages()[checkout.name].source["product"]
+        artifact = checkout / ".build" / "fake-target" / "release" / product
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_bytes(b"x" * 1024)
+        artifact.chmod(0o755)
 
     def swift_product_runs(self, checkout: Path, product: str) -> bool:
         return True
@@ -131,11 +227,19 @@ class FakeFetcher(pkg.Fetcher):
         self.already_cached = set(already_cached)
         self.snapshots: list[tuple[str, str]] = []
         self.forced: list[tuple[str, str]] = []
+        self.filtered: list[tuple[str, str, tuple[str, ...]]] = []
 
     def cached_revisions(self) -> set[str]:
         return set(self.already_cached)
 
-    def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
+    def hf_snapshot(
+        self,
+        repo: str,
+        revision: str,
+        *,
+        force: bool = False,
+        allow_patterns: tuple[str, ...] | None = None,
+    ) -> Path:
         """Faithful about the one behaviour `--repair` turns on.
 
         `snapshot_download` returns a revision the cache already holds as it stands — corrupt or
@@ -145,19 +249,34 @@ class FakeFetcher(pkg.Fetcher):
         self.snapshots.append((repo, revision))
         if force:
             self.forced.append((repo, revision))
-        target = self.hub / repo.replace("/", "--") / revision
-        weights = target / "model.safetensors"
-        if weights.is_file() and not force:
+        if allow_patterns is not None:
+            self.filtered.append((repo, revision, allow_patterns))
+        target = (
+            self.hub / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
+        )
+        artifacts = (
+            [
+                target / (
+                    f"{name[:-3]}/model.mil" if name.endswith("/**") else name
+                )
+                for name in allow_patterns
+            ]
+            if allow_patterns is not None
+            else [target / "model.safetensors"]
+        )
+        if all(artifact.is_file() for artifact in artifacts) and not force:
             return target
         target.mkdir(parents=True, exist_ok=True)
-        weights.write_bytes(self.WEIGHTS)
+        for artifact in artifacts:
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_bytes(self.WEIGHTS)
         return target
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Deletes the fake snapshot directories this fetcher created, and reports their size."""
         deleted, freed = [], 0
         for revision in revisions:
-            for candidate in self.hub.glob(f"*/{revision}"):
+            for candidate in self.hub.glob(f"models--*/snapshots/{revision}"):
                 freed += pkg._tree_bytes(candidate)
                 for item in sorted(candidate.rglob("*"), reverse=True):
                     item.unlink() if item.is_file() else item.rmdir()
@@ -174,6 +293,24 @@ class FakeFetcher(pkg.Fetcher):
         return target
 
 
+def _snapshot_index_for(hub: Path) -> dict[tuple[str, str], Path]:
+    """The cache-index view corresponding to a FakeFetcher's configured Hub root."""
+    found: dict[tuple[str, str], Path] = {}
+    for package in env.packages().values():
+        source = package.source
+        repositories = (
+            source["repos"] if source["type"] == "huggingface_multi"
+            else [source] if source["type"] == "huggingface"
+            else []
+        )
+        for repository in repositories:
+            found[(repository["repo"], repository["revision"])] = (
+                hub / f"models--{repository['repo'].replace('/', '--')}"
+                / "snapshots" / repository["revision"]
+            )
+    return found
+
+
 @pytest.fixture
 def provisioner(tmp_path):
     return pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
@@ -184,6 +321,31 @@ def test_an_empty_root_reports_everything_absent() -> None:
     assert report["packages"] == []
     assert set(report["environments"].values()) == {"absent"}
     assert report["total_known_bytes"] == 0
+
+
+def test_list_uses_manifest_identity_and_license_facts_for_known_packages() -> None:
+    package = env.packages()["qwen3-asr-0.6b-8bit"]
+    document = pkg.blank_registry()
+    document["packages"][package.id] = {
+        "state": "ready",
+        "environment": "tampered-environment",
+        "license_declared": "tampered-license",
+        "license_reviewed": not package.license_reviewed,
+        "materialized": {"bytes": 7},
+    }
+    pkg.save_registry(document)
+
+    listed = pkg.list_report()["packages"]
+
+    assert listed == [{
+        "package": package.id,
+        "environment": package.environment,
+        "state": "ready",
+        "bytes": 7,
+        "license_declared": package.license_declared,
+        "license_reviewed": package.license_reviewed,
+        "used_by_stacks": list(package.stacks),
+    }]
 
 
 def test_path_report_locates_things_before_anything_is_provisioned() -> None:
@@ -210,7 +372,9 @@ def test_pull_creates_the_environment_and_marks_the_package_ready(provisioner) -
     assert pkg.missing_packages(selection) == []
 
 
-def test_pull_warns_that_a_declared_license_is_not_a_reviewed_one(provisioner) -> None:
+def test_pull_warns_that_a_declared_license_is_not_a_reviewed_one(
+    provisioner, tmp_path,
+) -> None:
     receipt = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     warning = receipt["warnings"][0]
     assert warning["code"] == "license_unreviewed"
@@ -218,7 +382,7 @@ def test_pull_warns_that_a_declared_license_is_not_a_reviewed_one(provisioner) -
     assert warning["packages"] == ["qwen3-asr-1.7b-8bit"]
 
     # And says nothing where the terms were actually read.
-    other = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(Path("/tmp")))
+    other = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
     assert other.pull(pkg.select(["speaker-diarization-coreml"]))["warnings"] == []
 
 
@@ -264,9 +428,155 @@ def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
 
 def test_the_registry_is_written_atomically(provisioner, isolated_root) -> None:
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
-    leftovers = list(isolated_root.glob(".registry.json*"))
+    leftovers = list(isolated_root.glob(".audio-registry-*.tmp"))
     assert leftovers == [], f"temporary registry files survived: {leftovers}"
     assert json.loads(paths.registry_path().read_text())["schema_version"] == 1
+
+
+def test_registry_temporary_never_follows_a_precreated_symlink(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    victim = tmp_path / "victim.json"
+    victim.write_text("owned elsewhere\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+    temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
+    temporary.symlink_to(victim)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.save_registry(pkg.blank_registry())
+
+    assert caught.value.code == "registry_unreadable"
+    assert victim.read_text(encoding="utf-8") == "owned elsewhere\n"
+    assert temporary.is_symlink()
+    assert not target.exists()
+
+
+def test_registry_writer_refuses_a_known_substituted_temporary(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    victim = tmp_path / "victim.json"
+    victim.write_text("owned elsewhere\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+    temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
+    real_assert = pkg.assert_directory_binding
+
+    def substitute_temporary(descriptor: int, directory: Path) -> None:
+        real_assert(descriptor, directory)
+        temporary.unlink()
+        temporary.symlink_to(victim)
+
+    monkeypatch.setattr(pkg, "assert_directory_binding", substitute_temporary)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.save_registry(pkg.blank_registry())
+
+    assert caught.value.code == "registry_unreadable"
+    assert "temporary changed identity" in caught.value.message
+    assert victim.read_text(encoding="utf-8") == "owned elsewhere\n"
+    assert temporary.is_symlink()
+    assert not target.exists()
+
+
+def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    original = pkg.blank_registry()
+    original["tool_version"] = "original"
+    target.write_text(json.dumps(original), encoding="utf-8")
+    before = target.read_bytes()
+    victim = tmp_path / "victim.json"
+    victim.write_text("owned elsewhere\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+    temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
+    real_exchange = media_module._rename_exchange
+    substituted = False
+
+    def substitute_at_exchange(
+        directory_descriptor: int, left_name: str, right_name: str,
+    ) -> None:
+        nonlocal substituted
+        if not substituted:
+            substituted = True
+            os.unlink(left_name, dir_fd=directory_descriptor)
+            os.symlink(str(victim), left_name, dir_fd=directory_descriptor)
+        real_exchange(directory_descriptor, left_name, right_name)
+
+    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        replacement = pkg.blank_registry()
+        replacement["tool_version"] = "replacement"
+        pkg.save_registry(replacement)
+
+    assert caught.value.code == "registry_unreadable"
+    assert substituted is True
+    assert target.read_bytes() == before
+    assert victim.read_text(encoding="utf-8") == "owned elsewhere\n"
+    assert temporary.is_symlink()
+
+
+def test_registry_writer_cannot_follow_a_parent_swapped_after_open(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True)
+    displaced_root = tmp_path / "root-before-swap"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / target.name
+    victim.write_text("owned elsewhere\n", encoding="utf-8")
+
+    def swap_parent():
+        target.parent.rename(displaced_root)
+        target.parent.symlink_to(outside, target_is_directory=True)
+        return types.SimpleNamespace(hex="fixed")
+
+    monkeypatch.setattr("audio_cli.packages.uuid.uuid4", swap_parent)
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.save_registry(pkg.blank_registry())
+
+    assert caught.value.code == "registry_unreadable"
+    assert "directory identity changed" in caught.value.message
+    assert victim.read_text(encoding="utf-8") == "owned elsewhere\n"
+    assert not list(outside.glob(".audio-registry-*.tmp"))
+    assert not list(displaced_root.glob(".audio-registry-*.tmp"))
+
+
+@pytest.mark.parametrize("destination_kind", ["directory", "symlink"])
+def test_registry_writer_refuses_a_nonregular_destination(
+    tmp_path, destination_kind: str,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True)
+    victim = tmp_path / "outside-registry.json"
+    victim.write_text("owned elsewhere\n", encoding="utf-8")
+    if destination_kind == "directory":
+        target.mkdir()
+    else:
+        target.symlink_to(victim)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.save_registry(pkg.blank_registry())
+
+    assert caught.value.code == "registry_unreadable"
+    assert "not a regular file" in caught.value.message
+    assert victim.read_text(encoding="utf-8") == "owned elsewhere\n"
+    if destination_kind == "directory":
+        assert target.is_dir()
+    else:
+        assert target.is_symlink()
 
 
 def test_remove_takes_the_environment_only_with_its_last_package(provisioner) -> None:
@@ -287,7 +597,10 @@ def test_remove_takes_the_environment_only_with_its_last_package(provisioner) ->
 def test_remove_reports_hub_revisions_and_never_claims_to_own_the_cache(provisioner) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     report = provisioner.remove(["vibevoice-asr-7b"])
-    assert report["hub_revisions_deleted"] == ["d0c9efdb8d614685062c04425d91e01b6f37d944"]
+    assert report["hub_revisions_deleted"] == [
+        VIBE_MODEL_REVISION,
+        VIBE_TOKENIZER_REVISION,
+    ]
     assert "shared Hugging Face cache" in report["hub_cache_note"]
 
 
@@ -295,15 +608,22 @@ def test_remove_deletes_the_checkout_and_the_revision_it_materialized(provisione
     """The recorded revision is deleted; the shared cache around it is not touched."""
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
-    snapshot = Path(pkg.load_registry()["packages"]["vibevoice-asr-7b"]["materialized"]["path"])
+    snapshots = [
+        Path(value)
+        for value in pkg.load_registry()["packages"]["vibevoice-asr-7b"]
+        ["materialized"]["paths"].values()
+    ]
+    snapshot = snapshots[0]
     sibling = snapshot.parent / "another-revision"
     sibling.mkdir(parents=True)
     (sibling / "weights").write_bytes(b"someone else's")
-    assert checkout.is_dir() and snapshot.is_dir()
+    assert checkout.is_dir() and all(item.is_dir() for item in snapshots)
 
     report = provisioner.remove(["vibevoice-asr-7b"])
     assert not checkout.exists()
-    assert not snapshot.exists(), "the revision this tool materialized should be reclaimed"
+    assert not any(item.exists() for item in snapshots), (
+        "the revisions this tool materialized should be reclaimed"
+    )
     assert sibling.is_dir(), "a revision this tool never recorded is not ours to delete"
     assert report["reclaimed_bytes"] > 0
     assert report["hub_revisions_not_found"] == []
@@ -359,7 +679,7 @@ def test_verify_reports_a_reverted_patch(provisioner) -> None:
     patched.write_text("original\n")
 
     failure = provisioner.verify()["failed"]
-    assert [item["code"] for item in failure] == ["patch_not_applied"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
     assert failure[0]["fix"].startswith("audio packages pull --repair")
 
 
@@ -397,6 +717,404 @@ def test_verify_reports_a_drifted_environment_and_repairs_it(tmp_path) -> None:
     assert provisioner.verify()["environments"]["mlx"] == "ok"
 
 
+def test_verify_treats_an_unlocked_extra_distribution_as_repairable_drift(
+    tmp_path,
+) -> None:
+    pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).pull(
+        pkg.select(["qwen3-asr-1.7b-8bit"])
+    )
+    direct_reference = "@ file:///external/startup-hook"
+    toolchain = FakeToolchain(drift={"startup-hook": direct_reference})
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+
+    report = provisioner.verify()
+
+    assert report["environments"]["mlx"] == "drifted"
+    assert report["failed"][0]["examples"]["startup-hook"] == {
+        "locked": None,
+        "installed": direct_reference,
+    }
+    repaired = provisioner.verify(repair=True)
+    assert repaired["environments"]["mlx"] == "ok"
+    assert repaired["failed"] == []
+    assert toolchain.created == ["mlx"]
+    assert provisioner.verify()["environments"]["mlx"] == "ok"
+
+
+def test_freeze_parser_keeps_direct_editable_and_unknown_installed_lines(
+    monkeypatch,
+) -> None:
+    toolchain = pkg.Toolchain()
+    stdout = "\n".join((
+        "locked_package==1.2.3",
+        "rogue @ file:///tmp/rogue",
+        "-e file:///tmp/editable#egg=editable_hook",
+        "-e http://[invalid",
+        "future-freeze-syntax",
+    ))
+    monkeypatch.setattr(
+        toolchain,
+        "run",
+        lambda *_args, **_kwargs: types.SimpleNamespace(
+            returncode=0, stdout=stdout, stderr=""
+        ),
+    )
+
+    assert toolchain.frozen_packages(Path("/unused/python")) == {
+        "locked-package": "1.2.3",
+        "rogue": "@ file:///tmp/rogue",
+        "editable-hook": "-e file:///tmp/editable#egg=editable_hook",
+        "<editable:http://[invalid>": "-e http://[invalid",
+        "<unparsed:future-freeze-syntax>": "future-freeze-syntax",
+    }
+
+
+def test_environment_drift_allows_only_manifest_owned_direct_checkout_paths(
+    tmp_path,
+) -> None:
+    managed = tmp_path / "managed"
+    external = tmp_path / "external"
+    drift = pkg._environment_drift(
+        {},
+        {
+            "native-backend": f"@ {managed.as_uri()}",
+            "startup-hook": f"@ {external.as_uri()}",
+        },
+        {"native-backend": managed},
+    )
+
+    assert drift == {
+        "startup-hook": (None, f"@ {external.as_uri()}"),
+    }
+
+
+@pytest.mark.parametrize(
+    "frozen",
+    [
+        {},
+        {"wrong-name": "@ file:///managed/checkout"},
+        {"native-backend": "@ file:///external/checkout"},
+    ],
+)
+def test_environment_drift_requires_the_exact_named_checkout_install(
+    frozen: dict[str, str],
+) -> None:
+    required = Path("/managed/checkout")
+    drift = pkg._environment_drift(
+        {}, frozen, {"native-backend": required}
+    )
+    assert drift["native-backend"] == (
+        f"@ {required.as_uri()}", frozen.get("native-backend")
+    )
+
+
+@pytest.mark.parametrize("package_id", ["vibevoice-asr-7b", "firered-asr2s"])
+def test_verify_repair_reinstalls_ready_checkout_after_lock_sync(
+    tmp_path: Path,
+    package_id: str,
+) -> None:
+    toolchain = FakeToolchain()
+    provisioner = pkg.Provisioner(
+        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
+    )
+    package = env.packages()[package_id]
+    provisioner.pull(pkg.select([package_id]))
+    environment_name = package.environment
+    distribution = package.checkout["distribution"]
+    assert distribution in toolchain._direct_installs[environment_name]
+
+    # Model a lock change plus uv sync: the direct install exists before repair,
+    # create_environment removes it, and install_checkout must restore it.
+    locked_name = next(iter(pkg._locked_versions(env.environments()[environment_name])))
+    toolchain._synced.discard(environment_name)
+    toolchain._drift[locked_name] = "0.invalid"
+    document = pkg.load_registry()
+    document["environments"][environment_name]["lock_sha256"] = "stale"
+    pkg.save_registry(document)
+    toolchain.calls.clear()
+    toolchain.created.clear()
+
+    repaired = provisioner.verify(repair=True)
+
+    assert repaired["environments"][environment_name] == "ok"
+    assert repaired["failed"] == []
+    assert toolchain.created == [environment_name]
+    assert [call[0] for call in toolchain.calls if call[0] == "install"] == [
+        "install"
+    ]
+    assert distribution in toolchain._direct_installs[environment_name]
+    registry = pkg.load_registry()
+    assert registry["environments"][environment_name]["state"] == "ready"
+    assert registry["environments"][environment_name]["lock_sha256"] == (
+        pkg.sha256_file(env.environments()[environment_name].lock)
+    )
+    assert provisioner.verify()["environments"][environment_name] == "ok"
+
+    created_before = list(toolchain.created)
+    provisioner.pull(pkg.select([package_id]))
+    assert toolchain.created == created_before
+
+
+def test_verify_repair_never_installs_a_tampered_ready_checkout(
+    tmp_path: Path,
+) -> None:
+    toolchain = FakeToolchain()
+    provisioner = pkg.Provisioner(
+        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
+    )
+    package_id = "vibevoice-asr-7b"
+    package = env.packages()[package_id]
+    provisioner.pull(pkg.select([package_id]))
+    patched = (
+        paths.checkout_dir(package.environment, package.id)
+        / "vibevoice/modular/modeling_vibevoice_asr.py"
+    )
+    patched.write_text("tampered\n", encoding="utf-8")
+    locked_name = next(iter(pkg._locked_versions(env.environments()[package.environment])))
+    toolchain._synced.discard(package.environment)
+    toolchain._drift[locked_name] = "0.invalid"
+    toolchain.calls.clear()
+    toolchain.created.clear()
+
+    report = provisioner.verify(repair=True)
+
+    assert report["environments"][package.environment] == "drifted"
+    assert any(
+        item.get("package") == package_id
+        and item["code"] == "package_integrity_failed"
+        for item in report["failed"]
+    )
+    assert toolchain.created == []
+    assert not [call for call in toolchain.calls if call[0] == "install"]
+
+
+def test_verify_refuses_a_symlinked_environment_root_even_when_freeze_matches(
+    tmp_path,
+) -> None:
+    toolchain = FakeToolchain(private_api_hash="would-execute-external-python")
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    managed = paths.env_dir("mlx")
+    external = tmp_path / "external-mlx"
+    managed.rename(external)
+    managed.symlink_to(external, target_is_directory=True)
+    marker = external / "owned-elsewhere"
+    marker.write_text("keep\n", encoding="utf-8")
+    toolchain.calls.clear()
+
+    report = provisioner.verify()
+
+    assert report["environments"]["mlx"] == "drifted"
+    assert report["failed"][0]["code"] == "environment_drifted"
+    assert "environment path is a symlink" in report["failed"][0]["detail"]
+    assert report["mlx_audio_private_api_matches_expected"] is False
+    assert not any("-c" in call for call in toolchain.calls)
+    repaired = provisioner.verify(repair=True)
+    assert repaired["environments"]["mlx"] == "drifted"
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["qwen3-forcedaligner"]))
+    assert caught.value.code == "environment_drifted"
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_pull_refuses_a_symlinked_provisioning_root_before_skip_or_fetch(
+    tmp_path,
+) -> None:
+    package_id = "qwen3-asr-1.7b-8bit"
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
+    )
+    provisioner.pull(pkg.select([package_id]))
+    root = paths.root()
+    external = tmp_path / "external-provisioning-root"
+    root.rename(external)
+    root.symlink_to(external, target_is_directory=True)
+    marker = external / "owned-elsewhere"
+    marker.write_text("keep\n", encoding="utf-8")
+
+    class NoFetch(FakeFetcher):
+        def cached_revisions(self) -> set[str]:
+            raise AssertionError("symlinked provisioning root reached cache inspection")
+
+    toolchain = FakeToolchain()
+    guarded = pkg.Provisioner(toolchain=toolchain, fetcher=NoFetch(tmp_path))
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        # This ready package formerly took the skip fast path and reported success.
+        guarded.pull(pkg.select([package_id]))
+
+    assert caught.value.code == "environment_drifted"
+    assert caught.value.message == f"provisioning root is a symlink: {root}"
+    assert toolchain.calls == []
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_pull_refuses_a_symlinked_root_before_loading_its_registry(
+    tmp_path, monkeypatch,
+) -> None:
+    root = paths.root()
+    external = tmp_path / "external-provisioning-root"
+    external.mkdir()
+    root.symlink_to(external, target_is_directory=True)
+
+    def forbidden_registry_read():
+        raise AssertionError("symlinked provisioning root reached registry loading")
+
+    monkeypatch.setattr(pkg, "load_registry", forbidden_registry_read)
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.Provisioner(
+            toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
+        ).pull(pkg.select(["qwen3-asr-0.6b-8bit"]))
+
+    assert caught.value.code == "environment_drifted"
+    assert caught.value.message == f"provisioning root is a symlink: {root}"
+
+
+def test_verify_never_probes_below_a_symlinked_provisioning_root(tmp_path) -> None:
+    package_id = "vibevoice-asr-7b"
+    toolchain = FakeToolchain(private_api_hash="would-execute-external-python")
+    provisioner = pkg.Provisioner(
+        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
+    )
+    provisioner.pull(pkg.select([package_id]))
+    root = paths.root()
+    external = tmp_path / "external-provisioning-root"
+    root.rename(external)
+    root.symlink_to(external, target_is_directory=True)
+    marker = external / "owned-elsewhere"
+    marker.write_text("keep\n", encoding="utf-8")
+    toolchain.calls.clear()
+    toolchain.created.clear()
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.verify(repair=True)
+
+    assert caught.value.code == "registry_unreadable"
+    assert str(root) in caught.value.message
+    assert toolchain.calls == []
+    assert toolchain.created == []
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_every_managed_path_rejects_a_symlinked_provisioning_root(tmp_path) -> None:
+    root = paths.root()
+    environment = paths.env_dir("torch-vibevoice")
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    artifact = (
+        paths.models_dir()
+        / env.packages()["silero-vad"].source["filename"]
+    )
+    checkout.mkdir(parents=True)
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"model")
+    external = tmp_path / "external-provisioning-root"
+    root.rename(external)
+    root.symlink_to(external, target_is_directory=True)
+    expected_issue = f"provisioning root is a symlink: {root}"
+
+    assert pkg.managed_environment_path("torch-vibevoice") == (
+        environment, expected_issue,
+    )
+    assert pkg.managed_checkout_path(
+        env.packages()["vibevoice-asr-7b"], checkout
+    ) == (checkout, f"package environment is not managed: {expected_issue}")
+    assert pkg.managed_url_artifact_path(
+        env.packages()["silero-vad"], artifact
+    ) == (artifact, expected_issue)
+
+
+def test_verify_refuses_an_in_root_symlinked_environments_parent(tmp_path) -> None:
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
+    )
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    envs = paths.envs_dir()
+    alternate = paths.root() / "alternate-envs"
+    envs.rename(alternate)
+    envs.symlink_to(alternate, target_is_directory=True)
+
+    report = provisioner.verify()
+
+    assert report["environments"]["mlx"] == "drifted"
+    assert "environment parent is a symlink" in report["failed"][0]["detail"]
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull(pkg.select(["qwen3-forcedaligner"]))
+    assert caught.value.code == "environment_drifted"
+
+
+def test_verify_does_not_inspect_or_launch_below_a_redirected_environment_parent(
+    tmp_path,
+) -> None:
+    class ProbeTrap(FakeToolchain):
+        armed = False
+
+        def inspect_checkout(self, checkout: Path) -> pkg.CheckoutState:
+            if self.armed:
+                raise AssertionError(f"verify inspected redirected checkout {checkout}")
+            return super().inspect_checkout(checkout)
+
+        def built_product_runs(self, executable: Path) -> bool:
+            if self.armed:
+                raise AssertionError(f"verify launched redirected product {executable}")
+            return True
+
+    toolchain = ProbeTrap()
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["vibevoice-asr-7b", "fluidaudio"]))
+    envs = paths.envs_dir()
+    alternate = paths.root() / "alternate-envs"
+    envs.rename(alternate)
+    envs.symlink_to(alternate, target_is_directory=True)
+    toolchain.armed = True
+
+    report = provisioner.verify()
+
+    assert report["verified"] == []
+    assert {item["environment"] for item in report["failed"]} == {
+        "torch-vibevoice", "swift",
+    }
+    assert all(item["code"] == "environment_drifted" for item in report["failed"])
+
+
+def test_verify_fails_closed_when_ready_packages_have_no_ready_environment(
+    tmp_path,
+) -> None:
+    class ProbeTrap(FakeToolchain):
+        armed = False
+
+        def inspect_checkout(self, checkout: Path) -> pkg.CheckoutState:
+            if self.armed:
+                raise AssertionError(f"verify inspected checkout without environment {checkout}")
+            return super().inspect_checkout(checkout)
+
+        def built_product_runs(self, executable: Path) -> bool:
+            if self.armed:
+                raise AssertionError(f"verify launched product without environment {executable}")
+            return True
+
+    toolchain = ProbeTrap()
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["vibevoice-asr-7b", "fluidaudio"]))
+    document = pkg.load_registry()
+    document["environments"].pop("torch-vibevoice")
+    document["environments"]["swift"]["state"] = "creating"
+    pkg.save_registry(document)
+    toolchain.armed = True
+
+    report = provisioner.verify()
+
+    assert report["verified"] == []
+    assert report["environments"]["torch-vibevoice"] == "absent"
+    assert report["environments"]["swift"] == "absent"
+    failures = {item["environment"]: item for item in report["failed"]}
+    assert set(failures) == {"torch-vibevoice", "swift"}
+    assert failures["torch-vibevoice"]["code"] == "environment_not_ready"
+    assert failures["swift"]["code"] == "environment_not_ready"
+    assert failures["torch-vibevoice"]["packages"] == ["vibevoice-asr-7b"]
+    assert failures["swift"]["packages"] == ["fluidaudio"]
+
+
 def test_verify_reports_a_corrupted_single_file_artifact(tmp_path) -> None:
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
                                  fetcher=FakeFetcher(tmp_path, corrupt=True))
@@ -420,6 +1138,36 @@ def test_selecting_by_stack_covers_every_package_that_stack_can_use() -> None:
     chosen = {package.id for package in pkg.select(stack="qwen-1.7b")}
     assert chosen == {"silero-vad", "qwen3-asr-1.7b-8bit", "qwen3-forcedaligner",
                       "fluidaudio", "speaker-diarization-coreml"}
+
+
+def test_named_selection_stably_deduplicates_repeated_ids(provisioner) -> None:
+    selection = pkg.select([
+        "qwen3-asr-1.7b-8bit",
+        "qwen3-forcedaligner",
+        "qwen3-asr-1.7b-8bit",
+    ])
+    assert [package.id for package in selection] == [
+        "qwen3-asr-1.7b-8bit", "qwen3-forcedaligner",
+    ]
+
+    receipt = provisioner.pull(pkg.select([
+        "qwen3-asr-1.7b-8bit", "qwen3-asr-1.7b-8bit",
+    ]))
+    assert [item["package"] for item in receipt["pulled"]] == ["qwen3-asr-1.7b-8bit"]
+    assert receipt["skipped"] == []
+
+
+def test_repair_deduplicates_before_forcing_a_download(tmp_path) -> None:
+    fetcher = FakeFetcher(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+
+    receipt = provisioner.pull(pkg.select([
+        "qwen3-asr-1.7b-8bit", "qwen3-asr-1.7b-8bit",
+    ]), repair=True)
+
+    assert fetcher.forced == [(QWEN_REPO, QWEN_REVISION)]
+    assert [item["package"] for item in receipt["pulled"]] == ["qwen3-asr-1.7b-8bit"]
 
 
 def test_unknown_names_fail_with_the_menu_rather_than_a_guess() -> None:
@@ -446,13 +1194,15 @@ def test_a_missing_required_tool_blocks_only_the_package_that_needs_it(tmp_path)
     assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
 
 
-def test_doctor_reports_provisioning_state_and_what_a_missing_tool_blocks() -> None:
+def test_doctor_separates_pull_toolchains_from_runtime_requirements() -> None:
     report = pkg.doctor(toolchain=FakeToolchain(missing=("swift",)))
     assert report["tools"]["swift"]["present"] is False
+    assert report["environments"]["swift"]["requires_tool"] == ["swift"]
     assert report["environments"]["swift"]["blocked_by_missing_tool"] == ["swift"]
     assert report["environments"]["mlx"]["blocked_by_missing_tool"] == []
     assert report["environments"]["torch-vibevoice"]["provisional"] is True
     assert report["packages"]["firered-asr2s"] == "absent"
+    assert env.packages()["fluidaudio"].requires_tool == ("swift",)
 
 
 def test_registry_with_a_future_schema_version_is_refused(isolated_root) -> None:
@@ -462,6 +1212,219 @@ def test_registry_with_a_future_schema_version_is_refused(isolated_root) -> None
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.load_registry()
     assert caught.value.code == "registry_unreadable"
+
+
+@pytest.mark.parametrize("foreign_kind", ["copy", "symlink"])
+@pytest.mark.parametrize("teardown", ["remove", "purge"])
+def test_foreign_registry_never_authorizes_hub_deletion(
+    tmp_path, foreign_kind: str, teardown: str,
+) -> None:
+    """Hub ownership belongs to one provisioning root, not to a movable receipt."""
+    foreign_root = tmp_path / "foreign-root"
+    foreign_registry = foreign_root / "registry.json"
+    foreign_root.mkdir()
+    package = env.packages()["qwen3-asr-0.6b-8bit"]
+    document = pkg.blank_registry()
+    document["root"] = str(foreign_root)
+    document["packages"][package.id] = {
+        "state": "ready",
+        "environment": package.environment,
+        "materialized": {
+            "hub_revisions": [package.source["revision"]],
+            "bytes": 0,
+        },
+    }
+    foreign_registry.write_text(json.dumps(document), encoding="utf-8")
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True)
+    if foreign_kind == "copy":
+        shutil.copyfile(foreign_registry, target)
+    else:
+        target.symlink_to(foreign_registry)
+
+    class DeletionTripwire(FakeFetcher):
+        def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
+            raise AssertionError(f"foreign registry authorized deletion of {revisions}")
+
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=DeletionTripwire(tmp_path)
+    )
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        if teardown == "remove":
+            provisioner.remove([package.id])
+        else:
+            provisioner.purge(dry_run=False)
+
+    assert caught.value.code == "registry_unreadable"
+
+
+@pytest.mark.parametrize("document", [[], {"schema_version": 1, "packages": []}, {
+    "schema_version": 1, "packages": {"broken": []},
+}])
+def test_registry_container_shapes_are_validated(document) -> None:
+    paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.load_registry()
+    assert caught.value.code == "registry_unreadable"
+
+
+def test_registry_duplicate_keys_are_refused_before_last_wins_semantics(
+    capsys,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    expected_root = json.dumps(str(paths.root()))
+    target.write_text(
+        "{"
+        '"schema_version":1,'
+        '"tool_version":"test",'
+        '"root":"attacker-controlled",'
+        f'"root":{expected_root},'
+        '"environments":{},'
+        '"packages":{}'
+        "}",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.load_registry()
+    assert caught.value.code == "registry_unreadable"
+    assert "duplicate JSON object key 'root'" in caught.value.message
+
+    assert main(["packages", "list"]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+
+
+@pytest.mark.parametrize("command", ["list", "path", "verify"])
+def test_cli_readers_refuse_a_nonfile_registry(command, capsys) -> None:
+    paths.registry_path().mkdir(parents=True)
+
+    assert main(["packages", command]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+    assert "not a regular file" in error["detail"]
+
+
+@pytest.mark.parametrize(
+    "revisions_key", ["hub_revisions", "hub_revisions_pre_existing"]
+)
+def test_registry_rejects_nonstring_revision_ownership_receipts(
+    revisions_key, capsys,
+) -> None:
+    package = env.packages()["qwen3-asr-0.6b-8bit"]
+    document = pkg.blank_registry()
+    document["packages"][package.id] = {
+        "state": "pulling",
+        "materialized": {revisions_key: [package.source["revision"], {}]},
+    }
+    paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.load_registry()
+    assert caught.value.code == "registry_unreadable"
+
+    assert main(["packages", "pull", "--repair", package.id]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+
+
+def test_repair_refuses_a_malformed_top_level_retry_ownership_ledger(capsys) -> None:
+    package = env.packages()["qwen3-asr-0.6b-8bit"]
+    document = pkg.blank_registry()
+    document["packages"][package.id] = {
+        "state": "pulling",
+        "hub_revisions_pre_existing": [package.source["revision"], {}],
+    }
+    paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["packages", "pull", "--repair", package.id]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+    assert "hub_revisions_pre_existing" in error["detail"]
+
+
+def test_registry_read_error_is_a_machine_readable_cli_failure(
+    monkeypatch, capsys,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("{}", encoding="utf-8")
+    original = pkg.os.open
+
+    def unreadable(path, flags, mode=0o777, *, dir_fd=None):
+        if path == target.name and dir_fd is not None:
+            raise PermissionError("denied")
+        return original(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(pkg.os, "open", unreadable)
+    assert main(["packages", "verify"]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+    assert "Restore access" in error["fix"]
+
+
+def test_registry_loader_never_follows_a_leaf_substituted_before_open(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.registry_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(pkg.blank_registry()), encoding="utf-8")
+    victim = tmp_path / "external-registry.json"
+    victim.write_text("external bytes must not be read\n", encoding="utf-8")
+    original = pkg.os.open
+    substituted = False
+
+    def substitute(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal substituted
+        if path == target.name and dir_fd is not None and not substituted:
+            substituted = True
+            target.unlink()
+            target.symlink_to(victim)
+        return original(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(pkg.os, "open", substitute)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        pkg.load_registry()
+
+    assert caught.value.code == "registry_unreadable"
+    assert substituted is True
+    assert target.is_symlink()
+    assert victim.read_text(encoding="utf-8") == "external bytes must not be read\n"
+
+
+@pytest.mark.parametrize("command", ["list", "path", "verify"])
+def test_cli_readers_refuse_nonobject_materialized_registry_entry(
+    command, capsys,
+) -> None:
+    document = pkg.blank_registry()
+    document["packages"]["silero-vad"] = {
+        "state": "ready", "materialized": "not-an-object",
+    }
+    paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["packages", command]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
+
+
+@pytest.mark.parametrize("command", ["list", "path", "verify"])
+def test_cli_readers_refuse_nonnumeric_materialized_bytes(command, capsys) -> None:
+    document = pkg.blank_registry()
+    document["packages"]["silero-vad"] = {
+        "state": "ready", "materialized": {"bytes": "not-a-number"},
+    }
+    paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["packages", command]) == 3
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "registry_unreadable"
 
 
 def test_cli_exit_codes(capsys, provisioner) -> None:
@@ -492,7 +1455,7 @@ def test_verify_exits_three_when_a_check_fails(capsys, provisioner) -> None:
     patched.write_text("original\n")
     assert main(["packages", "verify"]) == 3
     codes = {item["code"] for item in json.loads(capsys.readouterr().out)["failed"]}
-    assert "patch_not_applied" in codes
+    assert "package_integrity_failed" in codes
 
 
 def test_the_patch_ships_inside_the_package() -> None:
@@ -500,6 +1463,43 @@ def test_the_patch_ships_inside_the_package() -> None:
     patch = env.HERE / "patches" / "vibevoice-logits-to-keep.patch"
     assert patch.is_file()
     assert "modeling_vibevoice_asr.py" in patch.read_text()
+
+
+def test_fluidaudio_patch_applies_to_exact_pinned_source_and_forces_offline_models(
+    tmp_path: Path,
+) -> None:
+    """Exercise the real patch; the provisioning fake cannot prove Swift semantics."""
+    repository = Path(__file__).resolve().parents[1]
+    fixture = repository / "tests/fixtures/fluidaudio/ProcessCommand.swift"
+    assert pkg.sha256_file(fixture) == (
+        "2a90c1f8848b21a89a18361458ac3c58fc785fb110d93e706cc2af9b0f01dc41"
+    ), "fixture drifted from FluidAudio 19600a485baa4998812e4654b70d2bab8f2c9949"
+    target = (
+        tmp_path / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
+    )
+    target.parent.mkdir(parents=True)
+    shutil.copyfile(fixture, target)
+    patch = env.HERE / "patches/fluidaudio-pinned-model-dir.patch"
+
+    check = subprocess.run(
+        ["git", "apply", "--check", str(patch)],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert check.returncode == 0, check.stderr
+    subprocess.run(["git", "apply", str(patch)], cwd=tmp_path, check=True)
+
+    assert pkg.sha256_file(target) == (
+        "cba176cb6a612f347a8fcc72be2af9ce766246a781338a27e5e668c862f9e683"
+    )
+    patched = target.read_text(encoding="utf-8")
+    model_argument = patched.index("args.modelDirectory")
+    offline_gate = patched.index("ModelHub.offlineMode = true")
+    model_load = patched.index("OfflineDiarizerModels.load(from: modelDir)")
+    assert model_argument < offline_gate < model_load
+    assert "OfflineDiarizerModels.defaultModelsDirectory()" not in patched
 
 
 # --------------------------------------------------------------------------------------
@@ -525,6 +1525,7 @@ def test_a_pre_existing_revision_is_never_deleted_by_teardown(tmp_path) -> None:
     receipt = provisioner.pull(pkg.select(["qwen3-forcedaligner"]))
 
     assert receipt["pulled"][0]["hub_revisions_pre_existing"] == [ALIGNER_REVISION]
+    assert receipt["pulled_known_bytes"] == 0
     materialized = pkg.load_registry()["packages"]["qwen3-forcedaligner"]["materialized"]
     assert materialized["hub_revisions"] == []
     assert materialized["hub_revisions_pre_existing"] == [ALIGNER_REVISION]
@@ -532,11 +1533,15 @@ def test_a_pre_existing_revision_is_never_deleted_by_teardown(tmp_path) -> None:
     dry = provisioner.purge(dry_run=True)
     assert dry["would_remove"]["hub_revisions"] == []
     assert dry["would_keep"]["hub_revisions"] == [ALIGNER_REVISION]
+    assert dry["reclaimable_known_bytes"] == 0
 
     done = provisioner.purge(dry_run=False)
     assert done["hub_revisions_deleted"] == []
     assert done["hub_revisions_retained"] == [ALIGNER_REVISION]
-    snapshot = tmp_path / "hub" / "mlx-community--Qwen3-ForcedAligner-0.6B-8bit" / ALIGNER_REVISION
+    snapshot = (
+        tmp_path / "hub" / "models--mlx-community--Qwen3-ForcedAligner-0.6B-8bit"
+        / "snapshots" / ALIGNER_REVISION
+    )
     assert snapshot.is_dir(), "purge deleted a revision it did not download"
 
 
@@ -551,7 +1556,9 @@ def test_remove_keeps_pre_existing_revisions_and_deletes_its_own(tmp_path) -> No
     assert set(report["hub_revisions_retained"]) == set(FIRERED_REVISIONS[:2])
     assert "not this root's to delete" in report["hub_revisions_retained_reason"]
     for revision in FIRERED_REVISIONS[:2]:
-        assert list((tmp_path / "hub").glob(f"*/{revision}")), f"{revision} was deleted"
+        assert list((tmp_path / "hub").glob(
+            f"models--*/snapshots/{revision}"
+        )), f"{revision} was deleted"
 
 
 def test_a_multi_repo_receipt_names_every_revision_it_materialized(provisioner) -> None:
@@ -559,6 +1566,165 @@ def test_a_multi_repo_receipt_names_every_revision_it_materialized(provisioner) 
     receipt = provisioner.pull(pkg.select(["firered-asr2s"]))["pulled"][0]
     assert set(receipt["revisions"]) == set(FIRERED_REVISIONS)
     assert "revision" not in receipt, "a four-repo package cannot have one revision"
+
+
+def test_vibevoice_materializes_only_the_pinned_tokenizer_files(provisioner) -> None:
+    package = env.packages()["vibevoice-asr-7b"]
+    repositories = package.source["repos"]
+    tokenizer = next(item for item in repositories if item["role"] == "tokenizer")
+    patterns = tuple(tokenizer["allow_patterns"])
+
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"]["materialized"]
+
+    assert set(materialized["paths"]) == {
+        "microsoft/VibeVoice-ASR",
+        "Qwen/Qwen2.5-7B",
+    }
+    assert materialized["revisions"] == [
+        VIBE_MODEL_REVISION,
+        VIBE_TOKENIZER_REVISION,
+    ]
+    assert provisioner.fetcher.filtered == [(
+        "Qwen/Qwen2.5-7B",
+        VIBE_TOKENIZER_REVISION,
+        patterns,
+    )]
+    tokenizer_path = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
+    assert {path.name for path in tokenizer_path.iterdir()} == set(patterns)
+
+
+def test_pull_refuses_an_unindexed_hub_return_before_traversing_it(
+    tmp_path, monkeypatch,
+) -> None:
+    package = env.packages()["qwen3-asr-0.6b-8bit"]
+    external = tmp_path / "outside-cache" / package.source["revision"]
+    external.mkdir(parents=True)
+
+    class UnindexedFetcher(FakeFetcher):
+        def hf_snapshot(self, repo, revision, *, force=False, allow_patterns=None):
+            self.snapshots.append((repo, revision))
+            return external
+
+    original_tree_bytes = pkg._tree_bytes
+
+    def refuse_external_traversal(path: Path) -> int:
+        if Path(path) == external:
+            raise AssertionError("pull traversed an unindexed downloader return")
+        return original_tree_bytes(path)
+
+    monkeypatch.setattr(pkg, "_tree_bytes", refuse_external_traversal)
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=UnindexedFetcher(tmp_path)
+    )
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull([package])
+
+    assert caught.value.code == "package_integrity_failed"
+    assert "does not equal cache-indexed revision path" in caught.value.message
+    entry = pkg.load_registry()["packages"][package.id]
+    assert entry["state"] == "pulling"
+    assert "materialized" not in entry
+
+
+def test_multi_hub_pull_refuses_a_missing_allowlist_before_later_work(
+    tmp_path,
+) -> None:
+    original = env.packages()["vibevoice-asr-7b"]
+    tokenizer = next(
+        repository
+        for repository in original.source["repos"]
+        if repository["role"] == "tokenizer"
+    )
+    asr = next(
+        repository
+        for repository in original.source["repos"]
+        if repository["role"] == "asr"
+    )
+    package = replace(
+        original,
+        source={**original.source, "repos": [tokenizer, asr]},
+    )
+
+    class MissingTokenizerFile(FakeFetcher):
+        def hf_snapshot(self, repo, revision, *, force=False, allow_patterns=None):
+            snapshot = super().hf_snapshot(
+                repo,
+                revision,
+                force=force,
+                allow_patterns=allow_patterns,
+            )
+            if allow_patterns is not None:
+                (snapshot / "tokenizer.json").unlink()
+            return snapshot
+
+    toolchain = FakeToolchain()
+    fetcher = MissingTokenizerFile(tmp_path)
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=fetcher)
+
+    with pytest.raises(pkg.ProvisioningError) as caught:
+        provisioner.pull([package])
+
+    assert caught.value.code == "package_integrity_failed"
+    assert "missing allow_pattern tokenizer.json" in caught.value.message
+    assert fetcher.snapshots == [(tokenizer["repo"], tokenizer["revision"])]
+    assert not any(call and call[0] == "install" for call in toolchain.calls)
+    entry = pkg.load_registry()["packages"][package.id]
+    assert entry["state"] == "pulling"
+    assert "materialized" not in entry
+
+
+def test_speaker_model_globs_require_nested_files_not_only_directories(
+    provisioner,
+) -> None:
+    package = env.packages()["speaker-diarization-coreml"]
+    patterns = tuple(package.source["allow_patterns"])
+
+    provisioner.pull(pkg.select([package.id]))
+    materialized = pkg.load_registry()["packages"][package.id]["materialized"]
+    snapshot = Path(materialized["path"])
+
+    assert provisioner.fetcher.filtered == [(
+        package.source["repo"], package.source["revision"], patterns,
+    )]
+    assert pkg.hub_materialization_issues(package, materialized) == []
+    nested = snapshot / "Segmentation.mlmodelc" / "model.mil"
+    replaced_bytes = nested.stat().st_size
+    nested.unlink()
+    (snapshot / "same-size-filler.bin").write_bytes(b"x" * replaced_bytes)
+
+    issues = pkg.hub_materialization_issues(package, materialized)
+    assert "missing allow_pattern Segmentation.mlmodelc/**" in " ".join(issues)
+
+
+def test_real_hub_fetcher_forwards_the_tokenizer_allowlist(monkeypatch, tmp_path) -> None:
+    calls: dict[str, object] = {}
+    hub = types.ModuleType("huggingface_hub")
+
+    def snapshot_download(repo: str, **kwargs):
+        calls.update({"repo": repo, **kwargs})
+        target = tmp_path / "snapshot"
+        target.mkdir()
+        return str(target)
+
+    hub.snapshot_download = snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+
+    patterns = ("tokenizer.json", "tokenizer_config.json")
+    found = pkg.Fetcher().hf_snapshot(
+        "Qwen/Qwen2.5-7B",
+        VIBE_TOKENIZER_REVISION,
+        allow_patterns=patterns,
+    )
+
+    assert found == tmp_path / "snapshot"
+    assert calls == {
+        "repo": "Qwen/Qwen2.5-7B",
+        "revision": VIBE_TOKENIZER_REVISION,
+        "force_download": False,
+        "allow_patterns": list(patterns),
+    }
 
 
 def test_verify_flags_weights_another_root_deleted(provisioner, tmp_path) -> None:
@@ -575,6 +1741,94 @@ def test_verify_flags_weights_another_root_deleted(provisioner, tmp_path) -> Non
     assert failure[0]["fix"] == "audio packages pull --repair qwen3-asr-1.7b-8bit"
 
 
+def test_verify_flags_hub_snapshot_byte_drift(provisioner) -> None:
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
+        "materialized"
+    ]
+    snapshot = Path(materialized["path"])
+    next(path for path in snapshot.rglob("*") if path.is_file()).unlink()
+
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "snapshot bytes changed" in failure[0]["detail"]
+
+
+@pytest.mark.parametrize("mutation", ["external_file", "snapshot_symlink"])
+def test_verify_rejects_hub_snapshot_redirection(
+    provisioner, tmp_path, mutation: str,
+) -> None:
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
+        "materialized"
+    ]
+    snapshot = Path(materialized["path"])
+    if mutation == "external_file":
+        model = next(path for path in snapshot.rglob("*") if path.is_file())
+        external = tmp_path / "external-model.safetensors"
+        external.write_bytes(model.read_bytes())
+        model.unlink()
+        model.symlink_to(external)
+    else:
+        external = tmp_path / "external-snapshot"
+        snapshot.rename(external)
+        snapshot.symlink_to(external, target_is_directory=True)
+
+    failure = provisioner.verify()["failed"]
+
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "non-symlink" in failure[0]["detail"] or "outside" in failure[0]["detail"]
+
+
+def test_verify_flags_a_missing_allowlisted_tokenizer_file(provisioner) -> None:
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"][
+        "materialized"
+    ]
+    tokenizer = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
+    (tokenizer / "tokenizer.json").unlink()
+
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "missing allow_pattern tokenizer.json" in failure[0]["detail"]
+
+
+def test_verify_requires_allowlisted_tokenizer_matches_to_be_files(provisioner) -> None:
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"][
+        "materialized"
+    ]
+    tokenizer = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
+    required = tokenizer / "tokenizer.json"
+    replaced_bytes = required.stat().st_size
+    required.unlink()
+    required.mkdir()
+    # Preserve the receipt's total tree size so only the file-kind check can catch this.
+    (tokenizer / "same-size-filler.bin").write_bytes(b"x" * replaced_bytes)
+
+    failure = provisioner.verify()["failed"]
+
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "missing allow_pattern tokenizer.json" in failure[0]["detail"]
+
+
+def test_verify_rejects_hub_path_outside_the_cache_index(
+    provisioner, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
+    document = pkg.load_registry()
+    materialized = document["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]
+    snapshot = Path(materialized["path"])
+    moved = tmp_path / "attacker-controlled" / snapshot.name
+    shutil.copytree(snapshot, moved)
+    materialized["path"] = str(moved)
+    pkg.save_registry(document)
+
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "does not equal cache-indexed revision path" in failure[0]["detail"]
+
+
 def test_pull_receipt_bytes_are_named_for_this_pull_not_the_total(provisioner) -> None:
     """The figure legitimately goes down between pulls, so it must not read as cumulative."""
     first = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
@@ -582,9 +1836,17 @@ def test_pull_receipt_bytes_are_named_for_this_pull_not_the_total(provisioner) -
     # The old name invited reading a per-pull figure as a running total, and it is not one:
     # each receipt covers only its own packages, while `list` accumulates.
     assert "reclaimable_known_bytes" not in first
-    assert first["pulled_known_bytes"] == second["pulled_known_bytes"]  # one package each
-    assert pkg.list_report()["total_known_bytes"] == (
-        first["pulled_known_bytes"] + second["pulled_known_bytes"])
+    assert first["pulled_known_bytes"] == env.packages()[
+        "qwen3-asr-1.7b-8bit"
+    ].bytes
+    assert second["pulled_known_bytes"] == env.packages()[
+        "qwen3-asr-0.6b-8bit"
+    ].bytes
+    document = pkg.load_registry()
+    assert pkg.list_report()["total_known_bytes"] == sum(
+        entry["materialized"]["bytes"]
+        for entry in document["packages"].values()
+    )
 
 
 def test_path_says_where_weights_actually_live(provisioner) -> None:
@@ -593,6 +1855,29 @@ def test_path_says_where_weights_actually_live(provisioner) -> None:
     assert "Hugging Face cache" in report["weights"]["location"]
     assert report["models"]["exists"] is False
     assert "silero-vad" in report["models"]["holds"]
+
+
+def test_path_reports_single_and_multi_repo_materializations_without_null_aliases(
+    provisioner,
+) -> None:
+    provisioner.pull(pkg.select([
+        "qwen3-asr-1.7b-8bit", "firered-asr2s", "vibevoice-asr-7b",
+    ]))
+    document = pkg.load_registry()
+    report = pkg.path_report()["packages"]
+
+    single = report["qwen3-asr-1.7b-8bit"]
+    single_materialized = document["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]
+    assert single["location"] == single_materialized["path"]
+    assert "locations" not in single
+    assert "checkout" not in single
+
+    for identifier in ("firered-asr2s", "vibevoice-asr-7b"):
+        entry = report[identifier]
+        materialized = document["packages"][identifier]["materialized"]
+        assert entry["locations"] == dict(sorted(materialized["paths"].items()))
+        assert entry["checkout"] == materialized["checkout"]
+        assert "location" not in entry
 
 
 def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
@@ -697,6 +1982,82 @@ def test_verify_earns_the_word_digest_instead_of_borrowing_it(
     assert [item["code"] for item in failure] == ["package_integrity_failed"]
 
 
+def test_verify_rejects_a_hash_matching_url_artifact_outside_its_managed_path(
+    provisioner, the_fake_download_satisfies_the_pin, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["silero-vad"]))
+    external = tmp_path / "external.onnx"
+    external.write_bytes(b"onnx-bytes")
+    document = pkg.load_registry()
+    document["packages"]["silero-vad"]["materialized"]["path"] = str(external)
+    pkg.save_registry(document)
+
+    failure = provisioner.verify()["failed"]
+
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "not managed path" in failure[0]["detail"]
+    assert pkg.path_report()["packages"]["silero-vad"]["location"] == str(
+        paths.models_dir() / env.packages()["silero-vad"].source["filename"]
+    )
+
+
+def test_verify_rejects_a_symlinked_models_parent_with_matching_url_bytes(
+    provisioner, the_fake_download_satisfies_the_pin,
+) -> None:
+    provisioner.pull(pkg.select(["silero-vad"]))
+    models = paths.models_dir()
+    alternate = paths.root() / "alternate-models"
+    models.rename(alternate)
+    models.symlink_to(alternate, target_is_directory=True)
+
+    failure = provisioner.verify()["failed"]
+
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert f"managed artifact parent is a symlink: {models}" in failure[0]["detail"]
+
+
+@pytest.mark.parametrize(
+    ("identifier", "receipt_key", "expected"),
+    [
+        ("qwen3-asr-1.7b-8bit", "revision", [QWEN_REVISION]),
+        ("firered-asr2s", "revisions", list(FIRERED_REVISIONS)),
+    ],
+)
+def test_verify_reports_manifest_revisions_not_tampered_receipt_history(
+    provisioner, identifier: str, receipt_key: str, expected: list[str],
+) -> None:
+    provisioner.pull(pkg.select([identifier]))
+    document = pkg.load_registry()
+    materialized = document["packages"][identifier]["materialized"]
+    materialized[receipt_key] = "tampered" if receipt_key == "revision" else ["tampered"]
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    assert report["failed"] == []
+    verified = next(item for item in report["verified"] if item["package"] == identifier)
+    if receipt_key == "revision":
+        assert verified["revision"] == expected[0]
+    else:
+        assert verified["revisions"] == expected
+
+
+def test_verify_fails_a_ready_registry_package_missing_from_the_manifest() -> None:
+    document = pkg.blank_registry()
+    document["packages"]["retired-or-tampered"] = {
+        "state": "ready", "environment": "core", "materialized": {},
+    }
+    pkg.save_registry(document)
+
+    report = pkg.Provisioner(toolchain=FakeToolchain()).verify()
+    assert report["verified"] == []
+    assert report["failed"] == [{
+        "package": "retired-or-tampered",
+        "code": "package_unknown",
+        "detail": "ready registry entry is not present in the installed manifest",
+        "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
+    }]
+
+
 def test_a_stale_digest_claim_in_the_registry_is_not_republished(provisioner) -> None:
     """A root provisioned before this fix carries the fabrication in `registry.json`.
 
@@ -780,18 +2141,154 @@ def test_repair_re_downloads_a_hub_snapshot_a_re_pull_would_keep(tmp_path) -> No
 
 
 def test_repair_replaces_a_checkout_rather_than_patching_what_is_there(provisioner) -> None:
-    """`verify`'s `patch_not_applied` fix names `pull --repair`, so it has to actually repair."""
+    """A checkout integrity failure names `pull --repair`, so it has to actually repair."""
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
     patched = checkout / "vibevoice" / "modular" / "modeling_vibevoice_asr.py"
     patched.write_text("original\n")
     stray = checkout / "left-behind-by-a-half-finished-pull.txt"
     stray.write_text("x")
-    assert [item["code"] for item in provisioner.verify()["failed"]] == ["patch_not_applied"]
+    assert [item["code"] for item in provisioner.verify()["failed"]] == [
+        "package_integrity_failed"
+    ]
 
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]), repair=True)
     assert provisioner.verify()["failed"] == []
     assert not stray.exists(), "the checkout was patched in place rather than replaced"
+
+
+@pytest.mark.parametrize("identifier", ["firered-asr2s", "vibevoice-asr-7b"])
+@pytest.mark.parametrize(
+    "mutation", ["missing", "head", "tracked", "untracked", "ignored"],
+)
+def test_verify_rejects_every_live_native_checkout_drift(
+    provisioner, identifier: str, mutation: str,
+) -> None:
+    provisioner.pull(pkg.select([identifier]))
+    document = pkg.load_registry()
+    materialized = document["packages"][identifier]["materialized"]
+    snapshots = [Path(path) for path in materialized["paths"].values()]
+    checkout = Path(materialized["checkout"])
+
+    if mutation == "missing":
+        shutil.rmtree(checkout)
+    elif mutation == "head":
+        provisioner.toolchain._checkout_commits[checkout] = "0" * 40
+    elif mutation == "tracked":
+        (checkout / "pyproject.toml").write_text("tampered\n", encoding="utf-8")
+    elif mutation == "untracked":
+        (checkout / "rogue.py").write_text("rogue\n", encoding="utf-8")
+    else:
+        ignored = checkout / "__pycache__" / "rogue.cpython-312.pyc"
+        ignored.parent.mkdir()
+        ignored.write_bytes(b"importable")
+
+    report = provisioner.verify()
+    failure = [item for item in report["failed"] if item.get("package") == identifier]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert not [item for item in report["verified"] if item["package"] == identifier]
+    if identifier == "firered-asr2s" and mutation == "missing":
+        assert all(snapshot.is_dir() for snapshot in snapshots), (
+            "the checkout regression accidentally removed the intact Hub evidence"
+        )
+
+
+def test_verify_accepts_a_legacy_short_checkout_receipt_only_when_live_head_is_exact(
+    provisioner,
+) -> None:
+    provisioner.pull(pkg.select(["firered-asr2s"]))
+    document = pkg.load_registry()
+    materialized = document["packages"]["firered-asr2s"]["materialized"]
+    materialized["checkout_commit"] = env.packages()["firered-asr2s"].checkout["commit"]
+    pkg.save_registry(document)
+
+    assert provisioner.verify()["failed"] == []
+    checkout = Path(materialized["checkout"])
+    provisioner.toolchain._checkout_commits[checkout] = materialized["checkout_commit"]
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "expected exact commit" in failure[0]["detail"]
+
+
+def test_verify_rejects_a_wrong_checkout_receipt_with_an_exact_live_head(
+    provisioner,
+) -> None:
+    provisioner.pull(pkg.select(["firered-asr2s"]))
+    document = pkg.load_registry()
+    materialized = document["packages"]["firered-asr2s"]["materialized"]
+    materialized["checkout_commit"] = "wrong"
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    failure = [
+        item for item in report["failed"] if item.get("package") == "firered-asr2s"
+    ]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "recorded checkout commit" in failure[0]["detail"]
+    assert not [
+        item for item in report["verified"] if item["package"] == "firered-asr2s"
+    ]
+
+
+def test_verify_hashes_live_patch_against_manifest_even_with_a_valid_receipt(
+    provisioner,
+) -> None:
+    identifier = "vibevoice-asr-7b"
+    package = env.packages()[identifier]
+    provisioner.pull(pkg.select([identifier]))
+    document = pkg.load_registry()
+    materialized = document["packages"][identifier]["materialized"]
+    checkout = Path(materialized["checkout"])
+    _patches, names, _digests = pkg.checkout_patch_expectation(package)
+    assert len(names) == 1
+    patched = checkout / names[0]
+    patched.write_text("attacker-controlled\n", encoding="utf-8")
+
+    report = provisioner.verify()
+    failure = [item for item in report["failed"] if item.get("package") == identifier]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert failure[0]["detail"] == (
+        f"live patched-file hashes changed for {sorted(names)!r}"
+    )
+    assert not [item for item in report["verified"] if item["package"] == identifier]
+
+
+def test_real_checkout_probe_includes_ordinary_and_ignored_untracked_files(tmp_path) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    toolchain = pkg.Toolchain()
+    assert toolchain.run(["git", "init", "--quiet"], cwd=checkout).returncode == 0
+    (checkout / ".gitignore").write_text("*.pyc\n", encoding="utf-8")
+    (checkout / "tracked.py").write_text("original\n", encoding="utf-8")
+    assert toolchain.run(["git", "add", "."], cwd=checkout).returncode == 0
+    assert toolchain.run([
+        "git", "-c", "user.name=Audio Tests", "-c", "user.email=audio@example.invalid",
+        "commit", "--quiet", "-m", "fixture",
+    ], cwd=checkout).returncode == 0
+    assert toolchain.run([
+        "git", "config", "core.abbrev", "12",
+    ], cwd=checkout).returncode == 0
+    assert toolchain.run([
+        "git", "config", "diff.noprefix", "true",
+    ], cwd=checkout).returncode == 0
+    assert toolchain.run([
+        "git", "config", "diff.interHunkContext", "100",
+    ], cwd=checkout).returncode == 0
+    assert toolchain.run([
+        "git", "config", "diff.suppressBlankEmpty", "true",
+    ], cwd=checkout).returncode == 0
+
+    clean = toolchain.inspect_checkout(checkout)
+    assert len(clean.head) == 40
+    assert clean.modified == ()
+    assert clean.untracked == ()
+
+    (checkout / "tracked.py").write_text("changed\n", encoding="utf-8")
+    (checkout / "rogue.py").write_text("rogue\n", encoding="utf-8")
+    (checkout / "ignored.pyc").write_bytes(b"importable")
+    changed = toolchain.inspect_checkout(checkout)
+    assert changed.modified == ("tracked.py",)
+    assert changed.untracked == ("ignored.pyc", "rogue.py")
 
 
 def test_repair_discards_the_swift_checkout_before_rebuilding(provisioner) -> None:
@@ -803,7 +2300,66 @@ def test_repair_discards_the_swift_checkout_before_rebuilding(provisioner) -> No
 
     provisioner.pull(pkg.select(["fluidaudio"]), repair=True)
     assert not stray.exists()
-    assert (checkout / ".build" / "product").is_file()
+    product = env.packages()["fluidaudio"].source["product"]
+    assert list(checkout.glob(f".build/**/release/{product}"))
+
+
+@pytest.mark.parametrize("mutation", ["checkout", "product"])
+def test_verify_rejects_a_missing_fluidaudio_checkout_or_product(
+    provisioner, mutation: str,
+) -> None:
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    materialized = pkg.load_registry()["packages"]["fluidaudio"]["materialized"]
+    checkout = Path(materialized["path"])
+    product = env.packages()["fluidaudio"].source["product"]
+    executable = next(checkout.glob(f".build/**/release/{product}"))
+    if mutation == "checkout":
+        shutil.rmtree(checkout)
+    else:
+        executable.unlink()
+
+    report = provisioner.verify()
+    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert not [item for item in report["verified"] if item["package"] == "fluidaudio"]
+
+
+def test_verify_never_launches_fluidaudio_from_an_external_receipt_path(
+    provisioner, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    document = pkg.load_registry()
+    external = tmp_path / "external-fluid"
+    product = external / ".build" / "release" / "fluidaudiocli"
+    product.parent.mkdir(parents=True)
+    product.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    product.chmod(0o755)
+    document["packages"]["fluidaudio"]["materialized"]["path"] = str(external)
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "not managed path" in failure[0]["detail"]
+
+
+def test_verify_rejects_a_fluidaudio_product_symlink_escape(
+    provisioner, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    package = env.packages()["fluidaudio"]
+    checkout = paths.checkout_dir(package.environment, package.id)
+    product = next(checkout.glob(".build/**/release/fluidaudiocli"))
+    external = tmp_path / "external-fluid-product"
+    external.write_bytes(product.read_bytes())
+    external.chmod(0o755)
+    product.unlink()
+    product.symlink_to(external)
+
+    report = provisioner.verify()
+    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "expected one executable built product" in failure[0]["detail"]
 
 
 def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> None:
@@ -842,6 +2398,240 @@ def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> N
                 hashlib.sha256(b"onnx-bytes").hexdigest(), target)
         finally:
             urllib.request.urlopen = original
+
+
+def test_url_download_temporary_never_follows_a_precreated_symlink(
+    tmp_path, monkeypatch,
+) -> None:
+    target = paths.models_dir() / "model.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    victim = tmp_path / "victim.bin"
+    victim.write_bytes(b"owned elsewhere")
+    monkeypatch.setattr(
+        "audio_cli.packages.uuid.uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+    temporary = target.with_name(f".audio-download-{os.getpid()}-fixed.part")
+    temporary.symlink_to(victim)
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        pkg.Fetcher().url_file(
+            "https://example.invalid/model.onnx",
+            hashlib.sha256(b"model").hexdigest(),
+            target,
+        )
+
+    assert raised.value.code == "download_failed"
+    assert victim.read_bytes() == b"owned elsewhere"
+    assert temporary.is_symlink()
+    assert not target.exists()
+
+
+def test_hash_matching_url_target_symlink_is_replaced_not_accepted(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    target = paths.models_dir() / "model.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    victim = tmp_path / "victim.onnx"
+    victim.write_bytes(payload)
+    target.symlink_to(victim)
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        "audio_cli.packages.urllib.request.urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    resolved = pkg.Fetcher().url_file(
+        "https://example.invalid/model.onnx",
+        hashlib.sha256(payload).hexdigest(),
+        target,
+    )
+
+    assert resolved == target
+    assert target.is_file() and not target.is_symlink()
+    assert target.read_bytes() == payload
+    assert victim.read_bytes() == payload
+
+
+def test_url_download_rolls_back_a_private_temporary_substitution_at_publication(
+    tmp_path, monkeypatch,
+) -> None:
+    payload = b"new model bytes"
+    target = paths.models_dir() / "model.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"prior managed cache")
+    victim = tmp_path / "victim.bin"
+    victim.write_bytes(b"owned elsewhere")
+    monkeypatch.setattr(
+        pkg.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
+    )
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        pkg.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+    real_exchange = media_module._rename_exchange
+    substituted = False
+
+    def substitute_at_exchange(directory_descriptor, left_name, right_name):
+        nonlocal substituted
+        if not substituted:
+            substituted = True
+            os.rename(
+                left_name,
+                "held-legitimate.part",
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+            os.symlink(
+                victim,
+                left_name,
+                dir_fd=directory_descriptor,
+            )
+        real_exchange(directory_descriptor, left_name, right_name)
+
+    monkeypatch.setattr(media_module, "_rename_exchange", substitute_at_exchange)
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        pkg.Fetcher().url_file(
+            "https://example.invalid/model.onnx",
+            hashlib.sha256(payload).hexdigest(),
+            target,
+        )
+
+    temporary = target.with_name(
+        f".audio-download-{os.getpid()}-fixed.part"
+    )
+    assert raised.value.code == "download_failed"
+    assert substituted is True
+    assert target.read_bytes() == b"prior managed cache"
+    assert victim.read_bytes() == b"owned elsewhere"
+    assert temporary.is_symlink()
+    assert (target.parent / "held-legitimate.part").read_bytes() == payload
+
+
+def test_url_download_never_replaces_a_directory_leaf(
+    monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    target = paths.models_dir() / "model.onnx"
+    target.mkdir(parents=True)
+    marker = target / "owned.txt"
+    marker.write_bytes(b"preserve me")
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        pkg.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        pkg.Fetcher().url_file(
+            "https://example.invalid/model.onnx",
+            hashlib.sha256(payload).hexdigest(),
+            target,
+        )
+
+    assert raised.value.code == "download_failed"
+    assert target.is_dir()
+    assert marker.read_bytes() == b"preserve me"
+
+
+def test_url_download_replaces_an_unreadable_cache_entry(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    target = paths.models_dir() / "model.onnx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"unreadable")
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(
+        pkg,
+        "sha256_regular_file_at",
+        lambda *_args: (_ for _ in ()).throw(PermissionError("unreadable")),
+    )
+    monkeypatch.setattr(
+        "audio_cli.packages.urllib.request.urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    assert pkg.Fetcher().url_file(
+        "https://example.invalid/model.onnx",
+        hashlib.sha256(payload).hexdigest(),
+        target,
+    ) == target
+    assert target.read_bytes() == payload
+
+
+def test_url_download_cannot_follow_a_parent_swapped_after_open(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    payload = b"model bytes"
+    models = paths.models_dir()
+    models.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    external = outside / "model.onnx"
+    external.write_bytes(b"owned elsewhere")
+
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    def swap_parent():
+        models.rename(paths.root() / "models-old")
+        models.symlink_to(outside, target_is_directory=True)
+        return types.SimpleNamespace(hex="fixed")
+
+    monkeypatch.setattr("audio_cli.packages.uuid.uuid4", swap_parent)
+    monkeypatch.setattr(
+        "audio_cli.packages.urllib.request.urlopen",
+        lambda *_args, **_kwargs: Response(payload),
+    )
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        pkg.Fetcher().url_file(
+            "https://example.invalid/model.onnx",
+            hashlib.sha256(payload).hexdigest(),
+            models / "model.onnx",
+        )
+
+    assert raised.value.code == "download_failed"
+    assert external.read_bytes() == b"owned elsewhere"
 
 
 def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
@@ -906,7 +2696,9 @@ def test_naming_a_toolchain_blocked_package_is_still_exit_three(tmp_path) -> Non
     assert caught.value.exit_code == 3
 
 
-def test_teardown_never_deletes_a_sibling_of_the_models_directory(tmp_path) -> None:
+def test_teardown_never_deletes_a_sibling_of_the_models_directory(
+    tmp_path, monkeypatch,
+) -> None:
     """`str(models_dir) in path` is a substring test where a prefix test was meant.
 
     Point the Hub cache at `<root>/models_hub` — one plausible `HF_HOME` — and every snapshot
@@ -920,6 +2712,7 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(tmp_path) -> N
             self.hub = Path(str(paths.models_dir()) + "_hub")
 
     fetcher = HubBesideModels(tmp_path, already_cached=(QWEN_REVISION,))
+    monkeypatch.setattr(pkg, "_hub_snapshot_index", lambda: _snapshot_index_for(fetcher.hub))
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "silero-vad"]))
 
@@ -935,7 +2728,7 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(tmp_path) -> N
     assert not artifact.exists(), "the artifact this root wrote under models/ was not reclaimed"
 
 
-def test_want_is_refused_rather_than_accepted_and_ignored(capsys) -> None:
+def test_want_is_refused_rather_than_accepted_and_ignored(capsys, monkeypatch) -> None:
     """`--want` reached no code that could honour it. TRANSCRIBE_HAPPY_PATH.md §4.6 on why."""
     assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", "diarization"]) == 2
     error = json.loads(capsys.readouterr().err)["error"]
@@ -950,6 +2743,15 @@ def test_want_is_refused_rather_than_accepted_and_ignored(capsys) -> None:
     error = json.loads(capsys.readouterr().err)["error"]
     assert error["code"] == "stack_required"
     assert "--want" not in error["fix"]
+
+    def provisioner_must_not_start():
+        raise AssertionError("a refused --want reached provisioning")
+
+    monkeypatch.setattr("audio_cli.cli.Provisioner", provisioner_must_not_start)
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", ""]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "want_not_implemented"
+    assert error["provided"] == ""
 
 
 def test_a_stack_beside_named_packages_is_a_conflict_not_a_precedence(capsys) -> None:
@@ -996,44 +2798,31 @@ def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys)
     ]
 
 
-def test_verify_does_not_call_an_environment_ok_when_its_toolchain_is_absent(
+def test_verify_does_not_require_the_provisioning_tool_to_run_a_built_product(
     tmp_path, the_fake_download_satisfies_the_pin
 ) -> None:
-    """A state that only became reachable once a stack pull stopped aborting on a blocked package.
-
-    `speaker-diarization-coreml` needs no toolchain of its own, so it lands in `swift` and marks
-    that environment `ready` while `fluidaudio` stays blocked. Nothing in it can run: this tool
-    launches the built product through `swift run`. A caller dispatching on `swift: "ok"` would
-    conclude diarization is available on a machine that cannot do it.
-    """
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
-                                  fetcher=FakeFetcher(tmp_path))
-    provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
-    assert pkg.load_registry()["environments"]["swift"]["state"] == "ready", (
-        "the fixture no longer reaches the state under test"
-    )
+    """Swift builds the binary; verification and transcription execute that binary directly."""
+    toolchain = FakeToolchain()
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    toolchain.missing.add("swift")
 
     report = provisioner.verify()
-    assert report["environments"]["swift"] == "blocked"
-    assert report["environments"]["mlx"] == "ok"
-    # Exit 0, deliberately: `verify` exits 3 on `failed`, and this is not a broken check. The
-    # missing package is one `list` reports as absent, and no `audio` command installs Swift.
+    assert report["environments"]["swift"] == "ok"
     assert report["failed"] == []
+    assert next(
+        item for item in report["verified"] if item["package"] == "fluidaudio"
+    )["product_runs"] is True
+    assert any(call[0].endswith("fluidaudiocli") for call in toolchain.calls), (
+        "verify trusted the receipt instead of launching the built executable"
+    )
+    assert pkg.doctor(toolchain=toolchain)["environments"]["swift"][
+        "blocked_by_missing_tool"
+    ] == []
 
-    # And it is a claim about the toolchain, not about the root: the same registry verifies `ok`
-    # once `swift` is back, with nothing re-pulled.
-    restored = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
-    assert restored.verify()["environments"]["swift"] == "ok"
 
-
-def test_a_blocked_environment_outranks_the_checks_it_would_prevent(tmp_path) -> None:
-    """`blocked` replaces a verdict, and only a verdict.
-
-    An environment nobody has provisioned stays `absent` — that is not a claim of usability and
-    it is what `pull` acts on. The word replaces `ok` and `drifted`, which are statements about
-    checks that passed or failed, and it outranks them because a repair that needs the missing
-    tool is not a repair a caller can run.
-    """
+def test_a_weight_only_swift_environment_stays_blocked_without_a_build_tool(tmp_path) -> None:
+    """Without the built runtime, a missing provisioning tool still blocks repair."""
     absent_root = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
                                   fetcher=FakeFetcher(tmp_path))
     assert absent_root.verify()["environments"]["swift"] == "absent"
@@ -1072,9 +2861,14 @@ def test_remove_validates_every_name_before_deleting_anything(provisioner) -> No
     provisioner.pull(pkg.select(["silero-vad", "vibevoice-asr-7b"]))
     document = pkg.load_registry()
     artifact = Path(document["packages"]["silero-vad"]["materialized"]["path"])
-    snapshot = Path(document["packages"]["vibevoice-asr-7b"]["materialized"]["path"])
+    snapshots = [
+        Path(value)
+        for value in document["packages"]["vibevoice-asr-7b"]
+        ["materialized"]["paths"].values()
+    ]
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
-    assert artifact.is_file() and snapshot.is_dir() and checkout.is_dir()
+    assert artifact.is_file() and all(item.is_dir() for item in snapshots) \
+        and checkout.is_dir()
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         provisioner.remove(["silero-vad", "vibevoice-asr-7b", "not-a-package"])
@@ -1084,13 +2878,16 @@ def test_remove_validates_every_name_before_deleting_anything(provisioner) -> No
     # All three kinds of location a package can hold, none of them touched.
     assert artifact.is_file(), "a pinned artifact was deleted before the list was validated"
     assert checkout.is_dir(), "a source checkout was deleted before the list was validated"
-    assert snapshot.is_dir(), "a Hub revision was deleted before the list was validated"
+    assert all(item.is_dir() for item in snapshots), (
+        "a Hub revision was deleted before the list was validated"
+    )
     assert pkg.is_ready(pkg.load_registry(), "silero-vad")
     assert pkg.is_ready(pkg.load_registry(), "vibevoice-asr-7b")
 
     # And the refusal is not a disabled teardown: the same names without the typo still work.
     provisioner.remove(["silero-vad", "vibevoice-asr-7b"])
-    assert not artifact.exists() and not checkout.exists() and not snapshot.exists()
+    assert not artifact.exists() and not checkout.exists() \
+        and not any(item.exists() for item in snapshots)
     assert pkg.load_registry()["packages"] == {}
 
 
@@ -1109,7 +2906,163 @@ def test_remove_names_only_what_it_removed(provisioner) -> None:
     assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
 
 
-def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(tmp_path) -> None:
+def test_remove_drops_unknown_registry_entry_without_following_its_paths(
+    tmp_path,
+) -> None:
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    keep = victim / "keep.txt"
+    keep.write_text("owned elsewhere", encoding="utf-8")
+    foreign_revision = "f" * 40
+    document = pkg.blank_registry()
+    document["packages"]["retired-or-tampered"] = {
+        "state": "ready",
+        "environment": "../../victim",
+        "materialized": {
+            "checkout": str(victim),
+            "path": str(paths.models_dir() / ".." / "victim"),
+            "hub_revisions": [foreign_revision],
+        },
+    }
+    document["environments"]["../../victim"] = {"state": "ready"}
+    pkg.save_registry(document)
+
+    report = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
+    ).remove(["retired-or-tampered"])
+
+    assert report["removed"] == ["retired-or-tampered"]
+    assert report["hub_revisions_deleted"] == []
+    assert report["hub_revisions_retained"] == [foreign_revision]
+    assert report["hub_revisions_retained_reason"] == (
+        "not owned by this root under the current package manifest, so they are not "
+        "this root's to delete"
+    )
+    assert keep.read_text(encoding="utf-8") == "owned elsewhere"
+    assert pkg.load_registry()["packages"] == {}
+
+
+def test_remove_refuses_a_parent_symlink_escape_and_preserves_ownership(
+    provisioner, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["silero-vad"]))
+    filename = env.packages()["silero-vad"].source["filename"]
+    shutil.rmtree(paths.models_dir())
+    external = tmp_path / "external-models"
+    external.mkdir()
+    victim = external / filename
+    victim.write_bytes(b"owned elsewhere")
+    paths.models_dir().symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        provisioner.remove(["silero-vad"])
+
+    assert raised.value.code == "delete_refused"
+    assert victim.read_bytes() == b"owned elsewhere"
+    assert pkg.is_ready(pkg.load_registry(), "silero-vad")
+
+
+def test_failed_deletion_reports_no_reclaim_and_keeps_registry_owner(
+    provisioner, monkeypatch,
+) -> None:
+    provisioner.pull(pkg.select(["silero-vad"]))
+    artifact = Path(
+        pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]
+    )
+    monkeypatch.setattr(pkg, "_delete_at", lambda _parent, _name: None)
+
+    with pytest.raises(pkg.ProvisioningError) as raised:
+        provisioner.remove(["silero-vad"])
+
+    assert raised.value.code == "delete_failed"
+    assert artifact.is_file()
+    assert pkg.is_ready(pkg.load_registry(), "silero-vad")
+
+
+def test_managed_delete_cannot_follow_a_parent_swapped_after_open(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    managed_parent = paths.root() / "envs"
+    managed_target = managed_parent / "victim"
+    managed_target.mkdir(parents=True)
+    (managed_target / "managed.bin").write_bytes(b"managed")
+    outside = tmp_path / "outside"
+    outside_target = outside / "victim"
+    outside_target.mkdir(parents=True)
+    sentinel = outside_target / "KEEP"
+    sentinel.write_bytes(b"owned elsewhere")
+    original_measure = pkg._owned_tree_bytes_at
+    swapped = False
+
+    def swap_after_parent_open(parent_descriptor: int, name: str) -> int:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            managed_parent.rename(paths.root() / "envs-old")
+            managed_parent.symlink_to(outside, target_is_directory=True)
+        return original_measure(parent_descriptor, name)
+
+    monkeypatch.setattr(pkg, "_owned_tree_bytes_at", swap_after_parent_open)
+
+    assert pkg._delete_managed(managed_target) == len(b"managed")
+    assert sentinel.read_bytes() == b"owned elsewhere"
+    assert not (paths.root() / "envs-old" / "victim").exists()
+
+
+def test_environment_refcount_comes_from_manifest_not_mutable_entry(provisioner) -> None:
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "qwen3-forcedaligner"]))
+    document = pkg.load_registry()
+    document["packages"]["qwen3-asr-1.7b-8bit"]["environment"] = "elsewhere"
+    pkg.save_registry(document)
+
+    report = provisioner.remove(["qwen3-forcedaligner"])
+
+    assert "mlx" in report["environments_kept"]
+    assert paths.env_dir("mlx").is_dir()
+    assert pkg.is_ready(pkg.load_registry(), "qwen3-asr-1.7b-8bit")
+
+
+def test_nonready_pull_replaces_dirty_checkout_before_install(tmp_path) -> None:
+    checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+    checkout.mkdir(parents=True)
+    stale = checkout / "setup.py"
+    stale.write_text("raise RuntimeError('executed stale hook')\n", encoding="utf-8")
+
+    class InstallTripwire(FakeToolchain):
+        def install_checkout(self, environment_python: Path, checkout_: Path) -> None:
+            assert not (checkout_ / "setup.py").exists()
+            super().install_checkout(environment_python, checkout_)
+
+    provisioner = pkg.Provisioner(
+        toolchain=InstallTripwire(), fetcher=FakeFetcher(tmp_path)
+    )
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+
+    assert provisioner.verify()["failed"] == []
+
+
+def test_verify_rejects_patched_file_symlink_even_when_target_bytes_match(
+    provisioner, tmp_path,
+) -> None:
+    provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
+    package = env.packages()["vibevoice-asr-7b"]
+    _patches, names, _digests = pkg.checkout_patch_expectation(package)
+    checkout = paths.checkout_dir(package.environment, package.id)
+    patched = checkout / names[0]
+    external = tmp_path / "matching.py"
+    external.write_bytes(patched.read_bytes())
+    patched.unlink()
+    patched.symlink_to(external)
+
+    failure = provisioner.verify()["failed"]
+    assert [item["code"] for item in failure] == ["package_integrity_failed"]
+    assert "live patched-file hashes changed" in failure[0]["detail"]
+
+
+def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(
+    tmp_path, monkeypatch,
+) -> None:
     """The narrower half of the same defect, and the reason each entry is saved as it goes.
 
     A shared Hub cache can fail or vanish mid-teardown. With one write at the end, that failure
@@ -1122,8 +3075,11 @@ def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(tmp_path) -> No
             raise OSError("the shared cache went away mid-teardown")
 
     for teardown in ("remove", "purge"):
-        provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
-                                      fetcher=HostileCache(tmp_path / teardown))
+        fetcher = HostileCache(tmp_path / teardown)
+        monkeypatch.setattr(
+            pkg, "_hub_snapshot_index", lambda fetcher=fetcher: _snapshot_index_for(fetcher.hub)
+        )
+        provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
         provisioner.pull(pkg.select(["silero-vad", "qwen3-asr-1.7b-8bit"]))
         artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
 
@@ -1275,13 +3231,17 @@ def test_a_build_whose_product_cannot_run_is_not_a_provisioned_package(tmp_path)
     assert not pkg.is_ready(pkg.load_registry(), "fluidaudio")
 
 
-def test_verify_fails_a_registry_that_recorded_an_unusable_build(tmp_path) -> None:
-    """Reachable from a registry written before `pull` started refusing this."""
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
+def test_verify_fails_when_the_live_product_does_not_run_despite_a_true_receipt(tmp_path) -> None:
+    """The registry's product_runs bit is history; the current executable is the check."""
+    class StopsRunning(FakeToolchain):
+        def built_product_runs(self, executable: Path) -> bool:
+            return False
+
+    provisioner = pkg.Provisioner(toolchain=StopsRunning(), fetcher=FakeFetcher(tmp_path))
     provisioner.pull(pkg.select(["fluidaudio"]))
 
     document = pkg.load_registry()
-    document["packages"]["fluidaudio"]["materialized"]["product_runs"] = False
+    assert document["packages"]["fluidaudio"]["materialized"]["product_runs"] is True
     pkg.save_registry(document)
 
     report = provisioner.verify()
@@ -1292,6 +3252,34 @@ def test_verify_fails_a_registry_that_recorded_an_unusable_build(tmp_path) -> No
     assert not [v for v in report["verified"] if v["package"] == "fluidaudio"], (
         "the same package was both verified and failed"
     )
+
+
+def test_verify_accepts_a_live_product_despite_a_stale_false_receipt(provisioner) -> None:
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    document = pkg.load_registry()
+    document["packages"]["fluidaudio"]["materialized"]["product_runs"] = False
+    pkg.save_registry(document)
+
+    report = provisioner.verify()
+    assert report["failed"] == []
+    verified = next(item for item in report["verified"] if item["package"] == "fluidaudio")
+    assert verified["product_runs"] is True
+
+
+def test_nonlaunching_product_does_not_exempt_a_swiftless_environment(tmp_path) -> None:
+    class StopsRunning(FakeToolchain):
+        def built_product_runs(self, executable: Path) -> bool:
+            return False
+
+    toolchain = StopsRunning()
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
+    provisioner.pull(pkg.select(["fluidaudio"]))
+    toolchain.missing.add("swift")
+
+    report = provisioner.verify()
+    assert report["environments"]["swift"] == "blocked"
+    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
+    assert [item["code"] for item in failure] == ["package_build_unusable"]
 
 
 def test_the_real_toolchain_launches_the_product_it_was_given(tmp_path) -> None:
@@ -1318,3 +3306,22 @@ def test_the_real_toolchain_launches_the_product_it_was_given(tmp_path) -> None:
     assert commands == [["swift", "run", "-c", "release", "fluidaudiocli", "--help"]], (
         f"the product argument did not reach the command: {commands}"
     )
+
+
+def test_the_real_verify_probe_executes_the_built_product_without_swift(tmp_path) -> None:
+    commands: list[list[str]] = []
+
+    class RecordingRun(pkg.Toolchain):
+        def run(self, args, *, cwd=None, timeout=3600):
+            commands.append(list(args))
+
+            class Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return Result()
+
+    executable = tmp_path / "fluidaudiocli"
+    assert RecordingRun().built_product_runs(executable) is True
+    assert commands == [[str(executable), "--help"]]
