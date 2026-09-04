@@ -174,7 +174,10 @@ transcription stacks, and deterministic transcript export. Issue #21 is merged; 
   managed environments, skill validation, fresh sdist/wheel builds, and an isolated wheel-install
   smoke test. The established `plan -> implement -> adversarial review -> fix -> re-review` loop
   continued until both final audit streams returned exactly `CONVERGED` with no reproducible P0-P2
-  finding.
+  finding. The implementation is commit
+  `b5e6a55cd975779c06c300e590d57e6874cf8cad` in
+  [PR #30](https://github.com/fyang0507/audio-processing-cli/pull/30), which closes issues #22,
+  #23, and #24 when merged; the PR remains open for human review.
 
 ## Read this first
 
