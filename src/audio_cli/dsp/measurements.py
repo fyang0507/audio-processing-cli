@@ -13,9 +13,7 @@ def regional_measurements(
     sample_rate: int,
     analysis: SignalAnalysis,
 ) -> dict[str, object]:
-    speech_level = rms_dbfs(
-        _speech_samples(audio, analysis.speech_regions, sample_rate)
-    )
+    speech_level = rms_dbfs(_speech_samples(audio, analysis.speech_regions, sample_rate))
     machines: list[dict[str, object]] = []
     for region in analysis.machine_regions:
         start = max(0, round(region.start * sample_rate))

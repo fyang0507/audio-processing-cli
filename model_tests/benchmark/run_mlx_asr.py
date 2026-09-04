@@ -49,9 +49,7 @@ def main() -> int:
     detected_family = _support.detect_family(config)
     family = detected_family if args.family == "auto" else args.family
     if family != detected_family:
-        raise SystemExit(
-            f"--family {family} disagrees with model config ({detected_family})"
-        )
+        raise SystemExit(f"--family {family} disagrees with model config ({detected_family})")
 
     # Enforce offline behavior before importing mlx-audio/Transformers.
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -81,16 +79,21 @@ def main() -> int:
                 try:
                     active = int(mx.get_active_memory())
                     cache = int(mx.get_cache_memory())
-                    sample.update({
-                        "mlx_active_bytes": active,
-                        "mlx_cache_bytes": cache,
-                        "mlx_active_plus_cache_bytes": active + cache,
-                        "mlx_peak_active_bytes": int(mx.get_peak_memory()),
-                    })
+                    sample.update(
+                        {
+                            "mlx_active_bytes": active,
+                            "mlx_cache_bytes": cache,
+                            "mlx_active_plus_cache_bytes": active + cache,
+                            "mlx_peak_active_bytes": int(mx.get_peak_memory()),
+                        }
+                    )
                 except Exception as exc:  # telemetry must not abort inference
-                    sampler_errors.append({
-                        "type": type(exc).__name__, "message": str(exc),
-                    })
+                    sampler_errors.append(
+                        {
+                            "type": type(exc).__name__,
+                            "message": str(exc),
+                        }
+                    )
             samples.append(sample)
             if stop.wait(args.sample_interval):
                 break
@@ -117,6 +120,7 @@ def main() -> int:
         import numpy as np  # noqa: PLC0415
         from mlx.utils import tree_flatten  # noqa: PLC0415
         from mlx_audio.stt.utils import load_audio, load_model  # noqa: PLC0415
+
         timing["import_s"] = time.perf_counter() - t0
         mx_holder["module"] = mx
         if not mx.metal.is_available():
@@ -134,8 +138,8 @@ def main() -> int:
         model_parameter_bytes = sum(int(value.nbytes) for _, value in flattened)
         for _, value in flattened:
             dtype = str(value.dtype)
-            model_parameter_dtype_counts[dtype] = (
-                model_parameter_dtype_counts.get(dtype, 0) + int(value.nbytes)
+            model_parameter_dtype_counts[dtype] = model_parameter_dtype_counts.get(dtype, 0) + int(
+                value.nbytes
             )
         model_source_file = Path(inspect.getfile(type(model))).resolve()
 
@@ -161,9 +165,7 @@ def main() -> int:
         mx.reset_peak_memory()
         t0 = time.perf_counter()
         if family == "qwen3-asr":
-            qwen_language = (
-                None if args.language.casefold() == "auto" else args.language
-            )
+            qwen_language = None if args.language.casefold() == "auto" else args.language
             transcription = model.generate(
                 prepared_audio,
                 language=qwen_language,
@@ -212,16 +214,21 @@ def main() -> int:
             try:
                 active = int(mx.get_active_memory())
                 cache = int(mx.get_cache_memory())
-                final_sample.update({
-                    "mlx_active_bytes": active,
-                    "mlx_cache_bytes": cache,
-                    "mlx_active_plus_cache_bytes": active + cache,
-                    "mlx_peak_active_bytes": int(mx.get_peak_memory()),
-                })
+                final_sample.update(
+                    {
+                        "mlx_active_bytes": active,
+                        "mlx_cache_bytes": cache,
+                        "mlx_active_plus_cache_bytes": active + cache,
+                        "mlx_peak_active_bytes": int(mx.get_peak_memory()),
+                    }
+                )
             except Exception as exc:
-                sampler_errors.append({
-                    "type": type(exc).__name__, "message": str(exc),
-                })
+                sampler_errors.append(
+                    {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    }
+                )
         samples.append(final_sample)
         stop.set()
         sampler.join()
@@ -246,8 +253,11 @@ def main() -> int:
         name = str(sample["phase"])
         values = peak_by_phase.setdefault(name, {})
         for key in (
-            "rss_bytes", "mlx_active_bytes", "mlx_cache_bytes",
-            "mlx_active_plus_cache_bytes", "mlx_peak_active_bytes",
+            "rss_bytes",
+            "mlx_active_bytes",
+            "mlx_cache_bytes",
+            "mlx_active_plus_cache_bytes",
+            "mlx_peak_active_bytes",
         ):
             if key in sample:
                 values[key] = max(values.get(key, 0), int(sample[key]))
@@ -260,9 +270,7 @@ def main() -> int:
             timing["rtf_service_job_after_model_load"] = (
                 timing["service_job_wall_after_model_load_s"] / audio_duration_s
             )
-        timing["rtf_fresh_process"] = (
-            timing["fresh_process_wall_s"] / audio_duration_s
-        )
+        timing["rtf_fresh_process"] = timing["fresh_process_wall_s"] / audio_duration_s
         timing["projected_30m_service_job_s_at_observed_rtf"] = (
             timing.get("rtf_service_job_after_model_load", 0.0) * 1800
         )
@@ -271,20 +279,23 @@ def main() -> int:
 
     weight_files = []
     for path in sorted(model_path.glob("*.safetensors")):
-        weight_files.append({
-            "name": path.name, "size_bytes": path.stat().st_size,
-            "sha256": _support.sha256(path),
-        })
+        weight_files.append(
+            {
+                "name": path.name,
+                "size_bytes": path.stat().st_size,
+                "sha256": _support.sha256(path),
+            }
+        )
     source_files = []
     for path in [
-        Path(__file__).resolve(), model_source_file,
+        Path(__file__).resolve(),
+        model_source_file,
         Path(inspect.getfile(sys.modules["mlx_audio.stt.utils"])).resolve()
-        if "mlx_audio.stt.utils" in sys.modules else None,
+        if "mlx_audio.stt.utils" in sys.modules
+        else None,
     ]:
         if path is not None and path.is_file():
-            source_files.append({
-                "path": str(path), "sha256": _support.sha256(path)
-            })
+            source_files.append({"path": str(path), "sha256": _support.sha256(path)})
 
     swap_end = _support.mac_swap_snapshot()
     swap_delta = None
@@ -311,20 +322,28 @@ def main() -> int:
             "python": sys.version,
             "cpu_count": os.cpu_count(),
             "physical_memory_bytes": _support.physical_memory_bytes(),
-            "mlx_device": (
-                mx_holder["module"].device_info() if "module" in mx_holder else None
-            ),
+            "mlx_device": (mx_holder["module"].device_info() if "module" in mx_holder else None),
         },
         "runtime": {
-            "packages": _support.package_versions([
-                "mlx", "mlx-metal", "mlx-audio", "numpy", "scipy",
-                "transformers", "tokenizers", "huggingface-hub",
-            ]),
+            "packages": _support.package_versions(
+                [
+                    "mlx",
+                    "mlx-metal",
+                    "mlx-audio",
+                    "numpy",
+                    "scipy",
+                    "transformers",
+                    "tokenizers",
+                    "huggingface-hub",
+                ]
+            ),
             "ffmpeg": _support.command_version(["ffmpeg", "-version"]),
             "ffprobe": _support.command_version(["ffprobe", "-version"]),
             "offline_environment": {
-                name: os.environ.get(name) for name in (
-                    "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE",
+                name: os.environ.get(name)
+                for name in (
+                    "HF_HUB_OFFLINE",
+                    "TRANSFORMERS_OFFLINE",
                     "HF_DATASETS_OFFLINE",
                 )
             },
@@ -334,9 +353,7 @@ def main() -> int:
             "snapshot_revision": _support.snapshot_revision(model_path),
             "family": family,
             "config_sha256": _support.sha256(config_path),
-            "quantization": config.get(
-                "quantization", config.get("quantization_config")
-            ),
+            "quantization": config.get("quantization", config.get("quantization_config")),
             "parameter_bytes": model_parameter_bytes,
             "parameter_bytes_by_dtype": model_parameter_dtype_counts,
             "weight_files": weight_files,
@@ -346,27 +363,26 @@ def main() -> int:
             "qwen_language_argument": (
                 None
                 if family == "qwen3-asr" and args.language.casefold() == "auto"
-                else args.language if family == "qwen3-asr" else None
+                else args.language
+                if family == "qwen3-asr"
+                else None
             ),
-            "qwen_chunk_seconds": (
-                args.qwen_chunk_seconds if family == "qwen3-asr" else None
-            ),
-            "qwen_batch_size": (
-                args.qwen_batch_size if family == "qwen3-asr" else None
-            ),
+            "qwen_chunk_seconds": (args.qwen_chunk_seconds if family == "qwen3-asr" else None),
+            "qwen_batch_size": (args.qwen_batch_size if family == "qwen3-asr" else None),
             "max_tokens": args.max_tokens if family == "qwen3-asr" else None,
-            "whisper_condition_on_previous_text": (
-                True if family == "whisper" else None
-            ),
+            "whisper_condition_on_previous_text": (True if family == "whisper" else None),
             "whisper_temperature_schedule": (
-                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-                if family == "whisper" else None
+                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0] if family == "whisper" else None
             ),
-            "whisper_fallback_thresholds": ({
-                "compression_ratio": 2.4,
-                "log_probability": -1.0,
-                "no_speech_probability": 0.6,
-            } if family == "whisper" else None),
+            "whisper_fallback_thresholds": (
+                {
+                    "compression_ratio": 2.4,
+                    "log_probability": -1.0,
+                    "no_speech_probability": 0.6,
+                }
+                if family == "whisper"
+                else None
+            ),
             "whisper_word_timestamps": (
                 args.whisper_word_timestamps if family == "whisper" else None
             ),
@@ -392,9 +408,7 @@ def main() -> int:
                 "active plus cache is the sampled MLX allocator footprint proxy; "
                 "all MLX counters overlap process RSS and omit non-MLX allocations"
             ),
-            "peak_sampled_rss_bytes": max(
-                (int(item["rss_bytes"]) for item in samples), default=0
-            ),
+            "peak_sampled_rss_bytes": max((int(item["rss_bytes"]) for item in samples), default=0),
             "ru_maxrss_bytes": _support.normalized_ru_maxrss(usage_end),
             "peak_sampled_mlx_active_bytes": max(
                 (int(item.get("mlx_active_bytes", 0)) for item in samples),
@@ -405,8 +419,7 @@ def main() -> int:
                 default=0,
             ),
             "peak_sampled_mlx_active_plus_cache_bytes": max(
-                (int(item.get("mlx_active_plus_cache_bytes", 0))
-                 for item in samples),
+                (int(item.get("mlx_active_plus_cache_bytes", 0)) for item in samples),
                 default=0,
             ),
             "explicit_mlx_peak_active_bytes_by_phase": explicit_mlx_phase_peaks,
@@ -429,39 +442,40 @@ def main() -> int:
             "last_segment_end_s": last_end_s,
             "last_segment_end_ratio": (
                 last_end_s / audio_duration_s
-                if last_end_s is not None and audio_duration_s else None
+                if last_end_s is not None and audio_duration_s
+                else None
             ),
-            "language": getattr(transcription, "language", None)
-            if transcription else None,
+            "language": getattr(transcription, "language", None) if transcription else None,
             "prompt_tokens": getattr(transcription, "prompt_tokens", None)
-            if transcription else None,
-            "generation_tokens": getattr(
-                transcription, "generation_tokens", None
-            ) if transcription else None,
+            if transcription
+            else None,
+            "generation_tokens": getattr(transcription, "generation_tokens", None)
+            if transcription
+            else None,
         },
     }
-    output_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n"
+    output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str) + "\n")
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "family": family,
+                "model": model_path.name,
+                "duration_s": audio_duration_s,
+                "inference_s": timing.get("inference_s"),
+                "service_job_s": timing.get("service_job_wall_after_model_load_s"),
+                "fresh_process_s": timing.get("fresh_process_wall_s"),
+                "rtf_service_job": timing.get("rtf_service_job_after_model_load"),
+                "peak_rss_bytes": result["memory"]["peak_sampled_rss_bytes"],
+                "peak_mlx_active_bytes": result["memory"]["peak_sampled_mlx_active_bytes"],
+                "peak_mlx_active_plus_cache_bytes": result["memory"][
+                    "peak_sampled_mlx_active_plus_cache_bytes"
+                ],
+                "segments": len(segments),
+                "last_end_s": last_end_s,
+            }
+        )
     )
-    print(json.dumps({
-        "status": status,
-        "family": family,
-        "model": model_path.name,
-        "duration_s": audio_duration_s,
-        "inference_s": timing.get("inference_s"),
-        "service_job_s": timing.get("service_job_wall_after_model_load_s"),
-        "fresh_process_s": timing.get("fresh_process_wall_s"),
-        "rtf_service_job": timing.get("rtf_service_job_after_model_load"),
-        "peak_rss_bytes": result["memory"]["peak_sampled_rss_bytes"],
-        "peak_mlx_active_bytes": result["memory"][
-            "peak_sampled_mlx_active_bytes"
-        ],
-        "peak_mlx_active_plus_cache_bytes": result["memory"][
-            "peak_sampled_mlx_active_plus_cache_bytes"
-        ],
-        "segments": len(segments),
-        "last_end_s": last_end_s,
-    }))
     return 0 if status == "ok" else 1
 
 

@@ -37,10 +37,12 @@ def test_observed_wall_and_peak_arithmetic_is_enforced() -> None:
         "peak_rss_bytes_by_stage": {"asr": 100, "aligner": 80},
         "peak_rss_bytes": 100,
     }
-    emitted = serialize_result(replace(
-        base_result(),
-        provenance={"stack": "qwen-1.7b", "outcomes": {}, "observed": valid, "plan": {}},
-    ))
+    emitted = serialize_result(
+        replace(
+            base_result(),
+            provenance={"stack": "qwen-1.7b", "outcomes": {}, "observed": valid, "plan": {}},
+        )
+    )
     assert emitted["provenance"]["observed"] == valid
 
     for mutation, message in (
@@ -48,20 +50,27 @@ def test_observed_wall_and_peak_arithmetic_is_enforced() -> None:
         ({**valid, "peak_rss_bytes": 180}, "maximum"),
     ):
         with pytest.raises(ResultError, match=message):
-            serialize_result(replace(
-                base_result(),
-                provenance={
-                    "stack": "qwen-1.7b", "outcomes": {}, "observed": mutation, "plan": {},
-                },
-            ))
+            serialize_result(
+                replace(
+                    base_result(),
+                    provenance={
+                        "stack": "qwen-1.7b",
+                        "outcomes": {},
+                        "observed": mutation,
+                        "plan": {},
+                    },
+                )
+            )
 
 
 def test_observed_counts_are_reconciled_with_the_serialized_arrays() -> None:
     observed = {"segments": 1, "words": 0, "abstentions": 0}
-    emitted = serialize_result(replace(
-        base_result(),
-        provenance={"stack": "qwen-1.7b", "outcomes": {}, "observed": observed, "plan": {}},
-    ))
+    emitted = serialize_result(
+        replace(
+            base_result(),
+            provenance={"stack": "qwen-1.7b", "outcomes": {}, "observed": observed, "plan": {}},
+        )
+    )
     assert emitted["provenance"]["observed"] == observed
 
     for mutation in (
@@ -70,21 +79,30 @@ def test_observed_counts_are_reconciled_with_the_serialized_arrays() -> None:
         {**observed, "turns": 0},
     ):
         with pytest.raises(ResultError, match="result contains"):
-            serialize_result(replace(
-                base_result(),
-                provenance={
-                    "stack": "qwen-1.7b", "outcomes": {}, "observed": mutation, "plan": {},
-                },
-            ))
+            serialize_result(
+                replace(
+                    base_result(),
+                    provenance={
+                        "stack": "qwen-1.7b",
+                        "outcomes": {},
+                        "observed": mutation,
+                        "plan": {},
+                    },
+                )
+            )
 
     with pytest.raises(ResultError, match="unknown keys"):
-        serialize_result(replace(
-            base_result(),
-            provenance={
-                "stack": "qwen-1.7b", "outcomes": {},
-                "observed": {"backend_confidence": 0.9}, "plan": {},
-            },
-        ))
+        serialize_result(
+            replace(
+                base_result(),
+                provenance={
+                    "stack": "qwen-1.7b",
+                    "outcomes": {},
+                    "observed": {"backend_confidence": 0.9},
+                    "plan": {},
+                },
+            )
+        )
 
 
 def test_coverage_cannot_leave_the_source_timeline() -> None:
@@ -106,14 +124,14 @@ def test_coverage_cannot_leave_the_source_timeline() -> None:
     [
         ({"covered_through_seconds": 5.0}, "first missing"),
         ({"covered_fraction": 0.5}, "covered duration"),
-        ({"covered_through_seconds": 5.0, "missing_intervals": [[5.0, 10.0]]},
-         "without gaps"),
+        ({"covered_through_seconds": 5.0, "missing_intervals": [[5.0, 10.0]]}, "without gaps"),
         ({"units_completed": 2}, "leave at least one"),
         ({"scope_intervals": [[0.0, 6.0], [5.0, 10.0]]}, "non-overlapping"),
     ],
 )
 def test_coverage_ledger_must_be_internally_consistent(
-    mutation: dict[str, object], message: str,
+    mutation: dict[str, object],
+    message: str,
 ) -> None:
     coverage = {
         "scope_intervals": [[0.0, 10.0]],
@@ -159,9 +177,7 @@ def test_coverage_tolerance_does_not_scale_with_large_source_timestamps() -> Non
         "timebase": "seconds",
     }
     with pytest.raises(ResultError, match="without gaps"):
-        serialize_result(base_result(
-            source=source, complete=False, coverage=coverage
-        ))
+        serialize_result(base_result(source=source, complete=False, coverage=coverage))
 
 
 def test_coverage_interval_arrays_must_be_chronological() -> None:

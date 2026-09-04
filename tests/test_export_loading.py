@@ -53,9 +53,7 @@ def test_loader_accepts_exact_result_and_rejects_schema_drift(tmp_path: Path) ->
 
     deep = _payload([])
     deep["provenance"]["plan"] = {"deep": "__DEEP_PLAN__"}
-    encoded = json.dumps(deep).replace(
-        '"__DEEP_PLAN__"', "[" * 1_500 + "0" + "]" * 1_500
-    )
+    encoded = json.dumps(deep).replace('"__DEEP_PLAN__"', "[" * 1_500 + "0" + "]" * 1_500)
     deep_path = tmp_path / "deep-plan.json"
     deep_path.write_text(encoded, encoding="utf-8")
     with pytest.raises(InvalidResultError, match="recursion depth"):
@@ -94,28 +92,34 @@ def test_loader_rejects_words_outside_explicit_segment_bounds(
     word_end: float,
 ) -> None:
     payload = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "Hello.",
-            "start": 1.0,
-            "end": 3.0,
-            "words": [{
-                "word_id": "w_0",
-                "text": "Hello",
-                "start": 1.5,
-                "end": 2.5,
-            }],
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "Hello.",
+                "start": 1.0,
+                "end": 3.0,
+                "words": [
+                    {
+                        "word_id": "w_0",
+                        "text": "Hello",
+                        "start": 1.5,
+                        "end": 2.5,
+                    }
+                ],
+            }
+        ],
         duration=4.0,
         outcomes={
             "segment_timestamps": "produced",
             "word_timestamps": "produced",
         },
     )
-    payload["segments"][0]["words"][0].update({
-        "start": word_start,
-        "end": word_end,
-    })
+    payload["segments"][0]["words"][0].update(
+        {
+            "start": word_start,
+            "end": word_end,
+        }
+    )
     transcript = _write(tmp_path / "contradictory-bounds.json", payload)
 
     with pytest.raises(
@@ -129,18 +133,22 @@ def test_export_preserves_the_recorded_one_millisecond_firered_end_seam(
     tmp_path: Path,
 ) -> None:
     payload = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "Hello.",
-            "start": 1.0,
-            "end": 3.0,
-            "words": [{
-                "word_id": "w_0",
-                "text": "Hello",
-                "start": 2.0,
-                "end": 3.001,
-            }],
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "Hello.",
+                "start": 1.0,
+                "end": 3.0,
+                "words": [
+                    {
+                        "word_id": "w_0",
+                        "text": "Hello",
+                        "start": 2.0,
+                        "end": 3.001,
+                    }
+                ],
+            }
+        ],
         duration=4.0,
         outcomes={
             "segment_timestamps": "produced",
@@ -162,7 +170,9 @@ def test_export_preserves_the_recorded_one_millisecond_firered_end_seam(
     ],
 )
 def test_loader_rejects_non_numeric_opaque_plan_range_bounds(
-    tmp_path: Path, field: str, values: list[object],
+    tmp_path: Path,
+    field: str,
+    values: list[object],
 ) -> None:
     payload = _payload([], run_range=[0.0, 1.0])
     payload["provenance"]["plan"]["execution"]["range"][field] = values
@@ -248,10 +258,12 @@ def test_loader_rejects_one_document_with_segments_outside_its_owned_scope(
 
 
 def test_loader_rejects_duplicate_ids_and_nonchronological_words(tmp_path: Path) -> None:
-    duplicate = _payload([
-        {"segment_id": "seg_0", "text": "One."},
-        {"segment_id": "seg_0", "text": "Two."},
-    ])
+    duplicate = _payload(
+        [
+            {"segment_id": "seg_0", "text": "One."},
+            {"segment_id": "seg_0", "text": "Two."},
+        ]
+    )
     with pytest.raises(InvalidResultError, match="duplicates"):
         load_result_document(_write(tmp_path / "duplicate.json", duplicate))
 

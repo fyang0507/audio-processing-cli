@@ -173,7 +173,7 @@ fixed by the tool version rather than by the request.
 
 The three thresholds are `raw_fragment_min_ms: 250`, `accepted_turn_min_ms: 500`, and
 `same_label_merge_max_ms: 300`, exactly as declared by
-`model_tests/benchmark/run_turn_attributed_mlx_asr.py:78-84`. A raw diarizer fragment below
+`model_tests/benchmark/turn_attributed_mlx_asr/runtime.py:76-90`. A raw diarizer fragment below
 250 ms is not transcribed; same-label fragments separated by at most 300 ms are merged; a
 resulting turn below 500 ms is not transcribed. The two declined cases become `raw_fragment`
 and `short_turn` abstentions respectively. Ambiguous multi-speaker activity becomes `overlap`.

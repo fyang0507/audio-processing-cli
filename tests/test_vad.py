@@ -15,6 +15,7 @@ import hashlib
 import io
 import os
 import types
+from itertools import pairwise
 
 import numpy as np
 import pytest
@@ -59,7 +60,8 @@ def detect(probabilities: list[float], profile_name: str = "transcription"):
 
 
 def test_model_download_temporary_never_follows_a_precreated_symlink(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     cache = tmp_path / "models"
     cache.mkdir()
@@ -69,9 +71,7 @@ def test_model_download_temporary_never_follows_a_precreated_symlink(
     monkeypatch.setattr(vad, "root", lambda: tmp_path)
     monkeypatch.setattr(vad.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
     target = cache / vad.MODEL_FILENAME
-    temporary = target.with_name(
-        f".audio-vad-download-{os.getpid()}-fixed.part"
-    )
+    temporary = target.with_name(f".audio-vad-download-{os.getpid()}-fixed.part")
     temporary.symlink_to(victim)
 
     with pytest.raises(vad.VadError, match="Could not download"):
@@ -83,7 +83,8 @@ def test_model_download_temporary_never_follows_a_precreated_symlink(
 
 
 def test_hash_matching_model_target_symlink_is_replaced_not_accepted(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"model bytes"
     cache = tmp_path / "models"
@@ -118,7 +119,8 @@ def test_hash_matching_model_target_symlink_is_replaced_not_accepted(
 
 
 def test_model_download_rolls_back_a_private_temporary_substitution_at_publication(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"new model bytes"
     cache = tmp_path / "models"
@@ -130,9 +132,7 @@ def test_model_download_rolls_back_a_private_temporary_substitution_at_publicati
     monkeypatch.setattr(vad, "_cache_root", lambda: cache)
     monkeypatch.setattr(vad, "root", lambda: tmp_path)
     monkeypatch.setattr(vad, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
-    monkeypatch.setattr(
-        vad.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(vad.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
 
     class Response(io.BytesIO):
         def __enter__(self):
@@ -171,9 +171,7 @@ def test_model_download_rolls_back_a_private_temporary_substitution_at_publicati
     with pytest.raises(vad.VadError, match="Could not download"):
         vad.resolve_model_path()
 
-    temporary = target.with_name(
-        f".audio-vad-download-{os.getpid()}-fixed.part"
-    )
+    temporary = target.with_name(f".audio-vad-download-{os.getpid()}-fixed.part")
     assert substituted is True
     assert target.read_bytes() == b"prior managed cache"
     assert victim.read_bytes() == b"owned elsewhere"
@@ -182,7 +180,8 @@ def test_model_download_rolls_back_a_private_temporary_substitution_at_publicati
 
 
 def test_model_download_never_replaces_a_directory_leaf(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"model bytes"
     cache = tmp_path / "models"
@@ -216,7 +215,8 @@ def test_model_download_never_replaces_a_directory_leaf(
 
 
 def test_model_download_cannot_follow_a_parent_swapped_after_open(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"model bytes"
     cache = tmp_path / "models"
@@ -300,7 +300,7 @@ def test_regions_stay_ordered_disjoint_and_non_empty(silence_frames: int) -> Non
     assert regions, "confident speech produced no region"
     for region in regions:
         assert region.start < region.end, f"empty or inverted region {region}"
-    for earlier, later in zip(regions, regions[1:]):
+    for earlier, later in pairwise(regions):
         assert earlier.end <= later.start, f"{earlier} overlaps {later}"
 
 

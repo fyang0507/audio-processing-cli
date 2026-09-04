@@ -13,9 +13,7 @@ MAX_LINES_EXCLUSIVE = 500
 EXCEPTIONS = {
     "uv.lock": "uv-generated dependency lock",
     "src/audio_cli/environments/locks/mlx.txt": "uv-generated hashed environment lock",
-    "src/audio_cli/environments/locks/torch-firered.txt": (
-        "uv-generated hashed environment lock"
-    ),
+    "src/audio_cli/environments/locks/torch-firered.txt": ("uv-generated hashed environment lock"),
     "src/audio_cli/environments/locks/torch-vibevoice.txt": (
         "uv-generated hashed environment lock"
     ),
@@ -32,18 +30,13 @@ def _tracked_files() -> tuple[str, ...]:
     completed = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
         cwd=REPO,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     assert completed.returncode == 0, completed.stderr.decode(errors="replace")
-    relative_paths = tuple(
-        entry.decode() for entry in completed.stdout.split(b"\0") if entry
-    )
+    relative_paths = tuple(entry.decode() for entry in completed.stdout.split(b"\0") if entry)
     return tuple(
-        relative_path
-        for relative_path in relative_paths
-        if (REPO / relative_path).is_file()
+        relative_path for relative_path in relative_paths if (REPO / relative_path).is_file()
     )
 
 
@@ -69,7 +62,6 @@ def test_tracked_files_stay_below_the_line_budget() -> None:
 
 def test_line_budget_exceptions_remain_narrow_and_explained() -> None:
     assert all(reason.strip() for reason in EXCEPTIONS.values())
-    assert all(
-        _line_count(relative_path) >= MAX_LINES_EXCLUSIVE
-        for relative_path in EXCEPTIONS
-    ), "remove an exception once its file falls below the budget"
+    assert all(_line_count(relative_path) >= MAX_LINES_EXCLUSIVE for relative_path in EXCEPTIONS), (
+        "remove an exception once its file falls below the budget"
+    )

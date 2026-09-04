@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 RUNNER_PATH = (
     Path(__file__).resolve().parents[1]
     / "model_tests"

@@ -48,7 +48,10 @@ def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
             return False
         target.mkdir(parents=True, exist_ok=True)
         document["environments"][name] = {
-            "state": "ready", "path": str(target), "python": None, "lock_sha256": None,
+            "state": "ready",
+            "path": str(target),
+            "python": None,
+            "lock_sha256": None,
             "created_utc": _now(),
         }
         registry.save_registry(document)
@@ -62,8 +65,11 @@ def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
     # Intent first: a crash between here and the flip leaves a `creating` entry, which
     # reads as absent and as reclaimable rather than as a working environment.
     document["environments"][name] = {
-        "state": "creating", "path": str(target), "python": environment.python,
-        "lock_sha256": lock_digest, "created_utc": _now(),
+        "state": "creating",
+        "path": str(target),
+        "python": environment.python,
+        "lock_sha256": lock_digest,
+        "created_utc": _now(),
     }
     registry.save_registry(document)
 
@@ -74,6 +80,7 @@ def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
 
 
 # -- packages ----------------------------------------------------------------------
+
 
 def pull(
     toolchain: Toolchain,
@@ -133,8 +140,9 @@ def pull(
             skipped.append(package.id)
             continue
 
-        missing_tool = next((tool for tool in package.requires_tool
-                             if toolchain.which(tool) is None), None)
+        missing_tool = next(
+            (tool for tool in package.requires_tool if toolchain.which(tool) is None), None
+        )
         if missing_tool is not None:
             if stack is None:
                 raise _toolchain_missing(package, missing_tool)
@@ -147,9 +155,13 @@ def pull(
         previous = document["packages"].get(package.id, {})
         pre_existing = _pre_existing_revisions(package, previous, cached)
         entry = {
-            "state": "pulling", "environment": package.environment, "kind": package.kind,
-            "source": package.source, "license_declared": package.license_declared,
-            "license_reviewed": package.license_reviewed, "pulled_utc": _now(),
+            "state": "pulling",
+            "environment": package.environment,
+            "kind": package.kind,
+            "source": package.source,
+            "license_declared": package.license_declared,
+            "license_reviewed": package.license_reviewed,
+            "pulled_utc": _now(),
             # Decided before any bytes move, and carried across a retry: see
             # _pre_existing_revisions for why re-deciding would be wrong.
             "hub_revisions_pre_existing": sorted(pre_existing),
@@ -165,15 +177,23 @@ def pull(
         document["packages"][package.id] = entry
         registry.save_registry(document)
 
-        receipt = {"package": package.id, "environment": package.environment,
-                   "bytes": materialized.get("bytes")}
-        for key in ("revision", "revisions", "digest_verified", "built", "product_runs",
-                    "patches_applied"):
+        receipt = {
+            "package": package.id,
+            "environment": package.environment,
+            "bytes": materialized.get("bytes"),
+        }
+        for key in (
+            "revision",
+            "revisions",
+            "digest_verified",
+            "built",
+            "product_runs",
+            "patches_applied",
+        ):
             if key in materialized:
                 receipt[key] = materialized[key]
         if materialized.get("hub_revisions_pre_existing"):
-            receipt["hub_revisions_pre_existing"] = \
-                materialized["hub_revisions_pre_existing"]
+            receipt["hub_revisions_pre_existing"] = materialized["hub_revisions_pre_existing"]
             receipt["pre_existing_note"] = (
                 "already in the Hugging Face cache; not downloaded, and teardown here will "
                 "not delete it"
@@ -188,18 +208,22 @@ def pull(
     if blocked:
         tools = sorted({tool for _, tool in blocked})
         names = [package.id for package, _ in blocked]
-        warnings.append({
-            "code": "toolchain_missing", "blocking": True,
-            "packages": names, "requires_tool": tools,
-            "detail": (
-                f"{', '.join(names)} {'needs' if len(names) == 1 else 'need'} "
-                f"{', '.join(tools)}, which {'is' if len(tools) == 1 else 'are'} not on "
-                f"PATH, so {'it' if len(names) == 1 else 'they'} "
-                f"{'was' if len(names) == 1 else 'were'} not provisioned; the rest of "
-                f"{f'stack {stack}' if stack else 'the selection'} was. Install the "
-                f"toolchain and pull {'it' if len(names) == 1 else 'them'} by name."
-            ),
-        })
+        warnings.append(
+            {
+                "code": "toolchain_missing",
+                "blocking": True,
+                "packages": names,
+                "requires_tool": tools,
+                "detail": (
+                    f"{', '.join(names)} {'needs' if len(names) == 1 else 'need'} "
+                    f"{', '.join(tools)}, which {'is' if len(tools) == 1 else 'are'} not on "
+                    f"PATH, so {'it' if len(names) == 1 else 'they'} "
+                    f"{'was' if len(names) == 1 else 'were'} not provisioned; the rest of "
+                    f"{f'stack {stack}' if stack else 'the selection'} was. Install the "
+                    f"toolchain and pull {'it' if len(names) == 1 else 'them'} by name."
+                ),
+            }
+        )
 
     # A blocked package provisioned nothing, so it carries no license claim and no bytes.
     # `pulled_known_bytes` says what this pull added, and a skipped package added none of it.
@@ -207,19 +231,23 @@ def pull(
     provisioned = [p for p in selection if p.id not in blocked_ids]
     unreviewed = sorted(p.id for p in provisioned if not p.license_reviewed)
     if unreviewed:
-        warnings.append({
-            "code": "license_unreviewed", "blocking": False,
-            "packages": unreviewed,
-            "detail": (
-                f"{', '.join(unreviewed)} "
-                f"{'reports' if len(unreviewed) == 1 else 'report'} a license their model "
-                "card declares but nobody has reviewed. A declared license is evidence "
-                "that one exists, not a redistribution clearance."
-            ),
-        })
+        warnings.append(
+            {
+                "code": "license_unreviewed",
+                "blocking": False,
+                "packages": unreviewed,
+                "detail": (
+                    f"{', '.join(unreviewed)} "
+                    f"{'reports' if len(unreviewed) == 1 else 'report'} a license their model "
+                    "card declares but nobody has reviewed. A declared license is evidence "
+                    "that one exists, not a redistribution clearance."
+                ),
+            }
+        )
 
     known, unsized = _selection_bytes(
-        [p for p in provisioned if p.id not in set(skipped)], document)
+        [p for p in provisioned if p.id not in set(skipped)], document
+    )
     report = {
         "pulled": pulled,
         "skipped": skipped,
@@ -242,8 +270,7 @@ def pull(
     return report
 
 
-def _pre_existing_revisions(package: Package, previous: dict,
-                            cached: set[str]) -> set[str]:
+def _pre_existing_revisions(package: Package, previous: dict, cached: set[str]) -> set[str]:
     """Which of this package's revisions the Hub cache held before this root wanted them.
 
     Two rules, and the second is the subtle one:

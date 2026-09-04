@@ -151,9 +151,7 @@ def test_export_writer_preserves_a_protected_file_renamed_to_output_mid_write(
         os.replace(source, output)
         return type("Uuid", (), {"hex": "fixed"})()
 
-    monkeypatch.setattr(
-        "audio_cli.export.writers.uuid.uuid4", move_source_to_output
-    )
+    monkeypatch.setattr("audio_cli.export.writers.uuid.uuid4", move_source_to_output)
     with pytest.raises(UnsafeOutputError):
         write_text_atomic(
             output,

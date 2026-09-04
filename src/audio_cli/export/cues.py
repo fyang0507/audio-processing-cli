@@ -11,8 +11,8 @@ import math
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
-
 
 _SENTENCE_FINAL = frozenset(".!?…。！？；‼⁇⁈⁉")
 _CLAUSE_FINAL = frozenset(",;:，；：、")
@@ -181,7 +181,7 @@ def _map_words(
                 cursor -= 1
                 continue
             if wrapper in _AMBIGUOUS_ASCII_QUOTES:
-                before = separator[:cursor - 1]
+                before = separator[: cursor - 1]
                 after = separator[cursor:]
                 # Straight quotes are symmetric.  Treat one as opening only when
                 # its local typography says it introduces the next lexical token:
@@ -192,9 +192,7 @@ def _map_words(
                     cursor -= 1
                     continue
             break
-        word_starts.append(
-            separator_start + cursor if cursor < wrapper_end else lexical_start
-        )
+        word_starts.append(separator_start + cursor if cursor < wrapper_end else lexical_start)
 
     mapped: list[_MappedWord] = []
     previous_end = -1.0
@@ -203,22 +201,20 @@ def _map_words(
         start = _finite_number(word["start"], f"{field}.start")
         end = _finite_number(word["end"], f"{field}.end")
         if start < 0 or end < start or end > duration:
-            raise CueError(
-                f"{field} bounds must satisfy 0 <= start <= end <= source duration"
-            )
+            raise CueError(f"{field} bounds must satisfy 0 <= start <= end <= source duration")
         if start < previous_end:
             raise CueError(f"{field} overlaps the preceding word")
         previous_end = end
-        mapped.append(_MappedWord(
-            start=start,
-            end=end,
-            char_start=word_starts[word_index],
-            char_end=(
-                word_starts[word_index + 1]
-                if word_index + 1 < len(words)
-                else len(text)
-            ),
-        ))
+        mapped.append(
+            _MappedWord(
+                start=start,
+                end=end,
+                char_start=word_starts[word_index],
+                char_end=(
+                    word_starts[word_index + 1] if word_index + 1 < len(words) else len(text)
+                ),
+            )
+        )
     return mapped
 
 
@@ -266,9 +262,7 @@ def _wrap(
 ) -> tuple[str, bool]:
     """Balance at a real word boundary and report an unavoidable overlong line."""
     width = (
-        policy.max_chars_per_line_cjk
-        if _contains_cjk(text)
-        else policy.max_chars_per_line_latin
+        policy.max_chars_per_line_cjk if _contains_cjk(text) else policy.max_chars_per_line_latin
     )
     one_line = _one_line(text)
     if _visible_length(one_line) <= width:
@@ -286,18 +280,19 @@ def _wrap(
             continue
         head_length = _visible_length(head)
         tail_length = _visible_length(tail)
-        candidates.append((
-            (max(head_length, tail_length), abs(head_length - tail_length)),
-            head,
-            tail,
-        ))
+        candidates.append(
+            (
+                (max(head_length, tail_length), abs(head_length - tail_length)),
+                head,
+                tail,
+            )
+        )
     if not candidates:
         return one_line, True
     within = [
         candidate
         for candidate in candidates
-        if _visible_length(candidate[1]) <= width
-        and _visible_length(candidate[2]) <= width
+        if _visible_length(candidate[1]) <= width and _visible_length(candidate[2]) <= width
     ]
     _, head, tail = min(within or candidates, key=lambda item: item[0])
     rendered = f"{head}\n{tail}"
@@ -307,11 +302,10 @@ def _wrap(
 
 def _to_ms(seconds: float, quantum_ms: int) -> int:
     try:
-        units = int(round(seconds * 1000 / quantum_ms))
+        units = round(seconds * 1000 / quantum_ms)
     except (OverflowError, ValueError) as exc:
         raise CueError(
-            "word timestamp is finite but too large for subtitle millisecond "
-            "quantization"
+            "word timestamp is finite but too large for subtitle millisecond quantization"
         ) from exc
     return units * quantum_ms
 
@@ -340,11 +334,11 @@ def build_cues(
         speaker = segment.get("speaker")
         current: list[_MappedWord] = []
 
-        def flush() -> None:
+        def flush(*, segment_text: str = text, segment_speaker: object = speaker) -> None:
             nonlocal current
             if not current:
                 return
-            cue_text = _text_for(text, current)
+            cue_text = _text_for(segment_text, current)
             start_ms = _to_ms(current[0].start, policy.quantization_ms)
             end_ms = _to_ms(current[-1].end, policy.quantization_ms)
             if cue_text:
@@ -353,39 +347,47 @@ def build_cues(
                 exact_cue_bounds.append((current[0].start, current[-1].end))
             if cue_text and end_ms > start_ms:
                 wrapped, overlong = _wrap(cue_text, current, policy=policy)
-                cues.append(Cue(
-                    start_ms=start_ms,
-                    end_ms=end_ms,
-                    text=wrapped,
-                    speaker=speaker if isinstance(speaker, str) else None,
-                ))
+                cues.append(
+                    Cue(
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        text=wrapped,
+                        speaker=(segment_speaker if isinstance(segment_speaker, str) else None),
+                    )
+                )
                 if overlong:
-                    warnings.append({
-                        "code": "cue_line_overlong",
-                        "blocking": False,
-                        "detail": (
-                            "a cue cannot meet the line-width policy without splitting "
-                            "inside a timed word"
-                        ),
-                    })
+                    warnings.append(
+                        {
+                            "code": "cue_line_overlong",
+                            "blocking": False,
+                            "detail": (
+                                "a cue cannot meet the line-width policy without splitting "
+                                "inside a timed word"
+                            ),
+                        }
+                    )
                 if current[-1].end - current[0].start > policy.max_duration_s:
-                    warnings.append({
-                        "code": "cue_duration_overlong",
+                    warnings.append(
+                        {
+                            "code": "cue_duration_overlong",
+                            "blocking": False,
+                            "detail": (
+                                "a single timed word exceeds the cue-duration policy and "
+                                "cannot be split without fabricating a word boundary"
+                            ),
+                        }
+                    )
+            elif cue_text:
+                warnings.append(
+                    {
+                        "code": "cue_dropped_after_quantization",
                         "blocking": False,
                         "detail": (
-                            "a single timed word exceeds the cue-duration policy and "
-                            "cannot be split without fabricating a word boundary"
+                            "a cue whose exact word bounds collapse on the millisecond grid "
+                            "was omitted rather than assigned fabricated timing"
                         ),
-                    })
-            elif cue_text:
-                warnings.append({
-                    "code": "cue_dropped_after_quantization",
-                    "blocking": False,
-                    "detail": (
-                        "a cue whose exact word bounds collapse on the millisecond grid "
-                        "was omitted rather than assigned fabricated timing"
-                    ),
-                })
+                    }
+                )
             current = []
 
         for word in mapped:
@@ -394,15 +396,11 @@ def build_cues(
                 prospective_text = _text_for(text, prospective)
                 cjk = _contains_cjk(prospective_text)
                 line_width = (
-                    policy.max_chars_per_line_cjk
-                    if cjk
-                    else policy.max_chars_per_line_latin
+                    policy.max_chars_per_line_cjk if cjk else policy.max_chars_per_line_latin
                 )
                 gap = word.start - current[-1].end
                 too_long = word.end - current[0].start > policy.max_duration_s
-                too_wide = _visible_length(prospective_text) > (
-                    line_width * policy.max_lines
-                )
+                too_wide = _visible_length(prospective_text) > (line_width * policy.max_lines)
                 too_many = (
                     not cjk
                     and policy.max_words_latin > 0
@@ -413,22 +411,20 @@ def build_cues(
             current.append(word)
             current_text = _text_for(text, current)
             word_text = text[word.char_start : word.char_end]
-            if _ends_with(word_text, _SENTENCE_FINAL):
-                flush()
-            elif (
+            if _ends_with(word_text, _SENTENCE_FINAL) or (
                 _ends_with(word_text, _CLAUSE_FINAL)
                 and _visible_length(current_text) >= policy.min_clause_chars
             ):
                 flush()
         flush()
 
-    for previous, current in zip(exact_cue_bounds, exact_cue_bounds[1:]):
+    for previous, current in pairwise(exact_cue_bounds):
         if current[0] < previous[1]:
             raise CueError(
                 "word-derived cues overlap before millisecond quantization; refusing to "
                 "trim or nudge a real word bound"
             )
-    for previous, current in zip(cues, cues[1:]):
+    for previous, current in pairwise(cues):
         if current.start_ms < previous.end_ms:
             raise CueError(
                 "word-derived cues overlap after millisecond quantization; refusing to "

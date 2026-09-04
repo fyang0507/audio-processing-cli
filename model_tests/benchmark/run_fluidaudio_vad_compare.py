@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import wave
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from audio_cli.vad import MODEL_SHA256, MODEL_URL, MODEL_VERSION, SileroOnnxVad
-
+_vad = import_module("audio_cli.vad")
 
 PROBE_SOURCE = Path(__file__).with_name("fluidaudio_vad_probe.swift")
 
@@ -49,9 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-silence-ms", type=int, default=300)
     parser.add_argument("--speech-pad-ms", type=int, default=120)
     parser.add_argument("--score-frame-ms", type=float, default=10.0)
-    parser.add_argument(
-        "--compute-units", choices=("all", "cpu-only", "ane"), default="all"
-    )
+    parser.add_argument("--compute-units", choices=("all", "cpu-only", "ane"), default="all")
     return parser.parse_args()
 
 
@@ -133,10 +131,7 @@ def regions_from_probabilities(
             merged[-1] = (merged[-1][0], end)
         else:
             merged.append((start, end))
-    return [
-        {"start_s": start / sample_rate, "end_s": end / sample_rate}
-        for start, end in merged
-    ]
+    return [{"start_s": start / sample_rate, "end_s": end / sample_rate} for start, end in merged]
 
 
 def _is_active(intervals: list[tuple[float, float]], time_s: float) -> bool:
@@ -189,12 +184,12 @@ def make_probe_package(directory: Path, fluid_source: Path) -> None:
         "// swift-tools-version: 6.0\n"
         "import PackageDescription\n"
         "let package = Package(\n"
-        "    name: \"FluidAudioVADProbe\",\n"
+        '    name: "FluidAudioVADProbe",\n'
         "    platforms: [.macOS(.v14)],\n"
-        f"    dependencies: [.package(name: \"FluidAudio\", path: {json.dumps(str(fluid_source))})],\n"
+        f'    dependencies: [.package(name: "FluidAudio", path: {json.dumps(str(fluid_source))})],\n'
         "    targets: [.executableTarget(\n"
-        "        name: \"FluidAudioVADProbe\",\n"
-        "        dependencies: [.product(name: \"FluidAudio\", package: \"FluidAudio\")]\n"
+        '        name: "FluidAudioVADProbe",\n'
+        '        dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]\n'
         "    )]\n"
         ")\n",
         encoding="utf-8",
@@ -210,9 +205,19 @@ def run_fluid_probe(
         probe_output = package_dir / "probe.json"
         make_probe_package(package_dir, fluid_source)
         command = [
-            "swift", "run", "--package-path", str(package_dir), "-c", "release",
-            "FluidAudioVADProbe", "--audio", str(audio), "--output", str(probe_output),
-            "--compute-units", compute_units,
+            "swift",
+            "run",
+            "--package-path",
+            str(package_dir),
+            "-c",
+            "release",
+            "FluidAudioVADProbe",
+            "--audio",
+            str(audio),
+            "--output",
+            str(probe_output),
+            "--compute-units",
+            compute_units,
         ]
         start = time.perf_counter()
         process = subprocess.run(command, capture_output=True, text=True, check=False)
@@ -253,7 +258,7 @@ def main() -> int:
     ):
         raise ValueError("audio duration does not match reference")
 
-    onnx = SileroOnnxVad()
+    onnx = _vad.SileroOnnxVad()
     onnx_start = time.perf_counter()
     onnx_probabilities = onnx.probabilities(samples, 16_000).tolist()
     onnx_inference_s = time.perf_counter() - onnx_start
@@ -288,8 +293,7 @@ def main() -> int:
         speech_pad_ms=args.speech_pad_ms,
     )
     reference_intervals = [
-        (item["start_ms"] / 1000, item["end_ms"] / 1000)
-        for item in reference["segments"]
+        (item["start_ms"] / 1000, item["end_ms"] / 1000) for item in reference["segments"]
     ]
     onnx_intervals = [(item["start_s"], item["end_s"]) for item in onnx_regions]
     fluid_intervals = [(item["start_s"], item["end_s"]) for item in fluid_regions]
@@ -303,15 +307,92 @@ def main() -> int:
             "The FluidAudio wall includes a temporary Swift-package build and model initialization, so it is not a performance comparison with the ONNX Python call.",
             "CantoMap activity labels are the union of ELAN speaker intervals, not independent VAD ground truth.",
         ],
-        "input": {"path": str(audio), "sha256": sha256(audio), "duration_s": duration_s, "sample_rate_hz": 16_000, "channels": 1},
-        "reference": {"path": str(reference_path), "sha256": sha256(reference_path), "scope": "union of CantoMap ELAN speaker tiers", "interval_count": len(reference["segments"])},
-        "shared_policy": {"threshold": args.threshold, "exit_threshold": args.exit_threshold, "min_speech_ms": args.min_speech_ms, "min_silence_ms": args.min_silence_ms, "speech_pad_ms": args.speech_pad_ms},
-        "onnx": {"model": {"name": "Silero VAD", "version": MODEL_VERSION, "source": MODEL_URL, "expected_sha256": MODEL_SHA256, "resolved_sha256": sha256(onnx.model_path)}, "timing": {"inference_s": onnx_inference_s}, "output": {"frame_samples": onnx.frame_samples, "probabilities": onnx_probabilities, "regions": onnx_regions}, "reference_activity": activity_score(reference_intervals, onnx_intervals, duration_s=duration_s, frame_s=frame_s, labels=("reference", "onnx"))},
-        "fluidaudio": {"version": args.fluid_version, "commit": args.fluid_commit, "source": str(fluid_source), "source_package_sha256": sha256(fluid_source / "Package.swift"), "compute_units": args.compute_units, "probe_source_sha256": sha256(PROBE_SOURCE), "raw_log": {"path": str(raw_log), "sha256": sha256(raw_log)}, "timing": {"harness_wall_s": fluid_wall_s, "probe": fluid["timing"]}, "output": {"frame_samples": fluid_frame_samples, "frames": fluid["output"]["frames"], "regions": fluid_regions}, "reference_activity": activity_score(reference_intervals, fluid_intervals, duration_s=duration_s, frame_s=frame_s, labels=("reference", "fluid"))},
-        "comparison": {"region_activity_agreement": activity_score(onnx_intervals, fluid_intervals, duration_s=duration_s, frame_s=frame_s, labels=("onnx", "fluid"))},
+        "input": {
+            "path": str(audio),
+            "sha256": sha256(audio),
+            "duration_s": duration_s,
+            "sample_rate_hz": 16_000,
+            "channels": 1,
+        },
+        "reference": {
+            "path": str(reference_path),
+            "sha256": sha256(reference_path),
+            "scope": "union of CantoMap ELAN speaker tiers",
+            "interval_count": len(reference["segments"]),
+        },
+        "shared_policy": {
+            "threshold": args.threshold,
+            "exit_threshold": args.exit_threshold,
+            "min_speech_ms": args.min_speech_ms,
+            "min_silence_ms": args.min_silence_ms,
+            "speech_pad_ms": args.speech_pad_ms,
+        },
+        "onnx": {
+            "model": {
+                "name": "Silero VAD",
+                "version": _vad.MODEL_VERSION,
+                "source": _vad.MODEL_URL,
+                "expected_sha256": _vad.MODEL_SHA256,
+                "resolved_sha256": sha256(onnx.model_path),
+            },
+            "timing": {"inference_s": onnx_inference_s},
+            "output": {
+                "frame_samples": onnx.frame_samples,
+                "probabilities": onnx_probabilities,
+                "regions": onnx_regions,
+            },
+            "reference_activity": activity_score(
+                reference_intervals,
+                onnx_intervals,
+                duration_s=duration_s,
+                frame_s=frame_s,
+                labels=("reference", "onnx"),
+            ),
+        },
+        "fluidaudio": {
+            "version": args.fluid_version,
+            "commit": args.fluid_commit,
+            "source": str(fluid_source),
+            "source_package_sha256": sha256(fluid_source / "Package.swift"),
+            "compute_units": args.compute_units,
+            "probe_source_sha256": sha256(PROBE_SOURCE),
+            "raw_log": {"path": str(raw_log), "sha256": sha256(raw_log)},
+            "timing": {"harness_wall_s": fluid_wall_s, "probe": fluid["timing"]},
+            "output": {
+                "frame_samples": fluid_frame_samples,
+                "frames": fluid["output"]["frames"],
+                "regions": fluid_regions,
+            },
+            "reference_activity": activity_score(
+                reference_intervals,
+                fluid_intervals,
+                duration_s=duration_s,
+                frame_s=frame_s,
+                labels=("reference", "fluid"),
+            ),
+        },
+        "comparison": {
+            "region_activity_agreement": activity_score(
+                onnx_intervals,
+                fluid_intervals,
+                duration_s=duration_s,
+                frame_s=frame_s,
+                labels=("onnx", "fluid"),
+            )
+        },
     }
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"onnx_regions": len(onnx_regions), "fluid_regions": len(fluid_regions), "region_agreement_f1": result["comparison"]["region_activity_agreement"]["f1"], "fluid_harness_wall_s": fluid_wall_s}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "onnx_regions": len(onnx_regions),
+                "fluid_regions": len(fluid_regions),
+                "region_agreement_f1": result["comparison"]["region_activity_agreement"]["f1"],
+                "fluid_harness_wall_s": fluid_wall_s,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

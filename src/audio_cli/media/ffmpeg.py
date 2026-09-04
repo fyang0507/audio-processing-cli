@@ -19,9 +19,7 @@ from .files import hash_file
 ENHANCED_MARKER = "audio-processing-cli enhanced"
 
 
-def _run(
-    args: Sequence[str], *, capture_stdout: bool = True
-) -> subprocess.CompletedProcess[bytes]:
+def _run(args: Sequence[str], *, capture_stdout: bool = True) -> subprocess.CompletedProcess[bytes]:
     try:
         return subprocess.run(
             list(args),
@@ -69,15 +67,11 @@ def probe_media(path: Path) -> dict[str, object]:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise MediaError(f"ffprobe returned invalid JSON for {path}") from exc
-    audio_streams = [
-        s for s in payload.get("streams", []) if s.get("codec_type") == "audio"
-    ]
+    audio_streams = [s for s in payload.get("streams", []) if s.get("codec_type") == "audio"]
     if not audio_streams:
         raise MediaError(f"No audio stream found in {path}")
     payload["primary_audio_stream"] = audio_streams[0]
-    payload["has_video"] = any(
-        s.get("codec_type") == "video" for s in payload.get("streams", [])
-    )
+    payload["has_video"] = any(s.get("codec_type") == "video" for s in payload.get("streams", []))
     return payload
 
 
@@ -187,8 +181,7 @@ def measure_loudness(
     target_true_peak: float = -1.5,
 ) -> dict[str, float]:
     filter_spec = (
-        f"loudnorm=I={target_lufs}:LRA={target_lra}:TP={target_true_peak}:"
-        "print_format=json"
+        f"loudnorm=I={target_lufs}:LRA={target_lra}:TP={target_true_peak}:print_format=json"
     )
     try:
         result = subprocess.run(

@@ -71,9 +71,7 @@ def process_stages(
     elif not profile.stage_enabled(stage):
         stages.append(_disabled_stage(stage, profile))
     else:
-        current, result = apply_environment_cleanup(
-            current, sample_rate, profile, analysis
-        )
+        current, result = apply_environment_cleanup(current, sample_rate, profile, analysis)
         stages.append(_stage_result(stage, profile, result))
 
     current, frequency_adjustments = apply_frequency_adjustments(
@@ -91,9 +89,7 @@ def process_stages(
     elif not profile.stage_enabled(stage):
         stages.append(_disabled_stage(stage, profile))
     else:
-        current, result = apply_voice_enhancement(
-            current, sample_rate, profile, analysis
-        )
+        current, result = apply_voice_enhancement(current, sample_rate, profile, analysis)
         stages.append(_stage_result(stage, profile, result))
 
     stage = "source-balance"
@@ -104,9 +100,7 @@ def process_stages(
         source_stage_report = _disabled_stage(stage, profile)
         stages.append(source_stage_report)
     else:
-        current, result = apply_source_balance(
-            current, sample_rate, profile, analysis
-        )
+        current, result = apply_source_balance(current, sample_rate, profile, analysis)
         source_stage_report = _stage_result(stage, profile, result)
         stages.append(source_stage_report)
     raw_abstained_regions = source_stage_report.get("abstained_regions", [])

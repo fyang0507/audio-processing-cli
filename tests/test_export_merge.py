@@ -40,16 +40,13 @@ def test_merge_partial_and_resume_preserves_source_time_and_reids(tmp_path: Path
     )
     first_path = _write(tmp_path / "partial.json", partial)
     second_path = _write(tmp_path / "rest.json", resumed)
-    merged = merge_documents([
-        load_result_document(first_path), load_result_document(second_path)
-    ])
+    merged = merge_documents([load_result_document(first_path), load_result_document(second_path)])
 
     assert [segment["segment_id"] for segment in merged.segments] == ["seg_0", "seg_1"]
-    assert [
-        word["word_id"]
-        for segment in merged.segments
-        for word in segment["words"]
-    ] == ["w_0", "w_1"]
+    assert [word["word_id"] for segment in merged.segments for word in segment["words"]] == [
+        "w_0",
+        "w_1",
+    ]
     assert [segment["words"][0]["start"] for segment in merged.segments] == [0.1, 1.1]
 
 
@@ -57,25 +54,29 @@ def test_merge_refuses_independent_vibevoice_native_speaker_labels(
     tmp_path: Path,
 ) -> None:
     left = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "Left.",
-            "start": 0.1,
-            "end": 0.8,
-            "speaker": "Speaker 0",
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "Left.",
+                "start": 0.1,
+                "end": 0.8,
+                "speaker": "Speaker 0",
+            }
+        ],
         outcomes={"diarization": "produced", "segment_timestamps": "produced"},
         run_range=[0.0, 1.0],
         stack="vibevoice",
     )
     right = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "Right.",
-            "start": 1.1,
-            "end": 1.8,
-            "speaker": "Speaker 0",
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "Right.",
+                "start": 1.1,
+                "end": 1.8,
+                "speaker": "Speaker 0",
+            }
+        ],
         outcomes={"diarization": "produced", "segment_timestamps": "produced"},
         run_range=[1.0, 2.0],
         stack="vibevoice",
@@ -85,10 +86,12 @@ def test_merge_refuses_independent_vibevoice_native_speaker_labels(
         IncompatibleResultsError,
         match="native speaker labels are local to each independent generation",
     ):
-        merge_documents([
-            load_result_document(_write(tmp_path / "left-vibe.json", left)),
-            load_result_document(_write(tmp_path / "right-vibe.json", right)),
-        ])
+        merge_documents(
+            [
+                load_result_document(_write(tmp_path / "left-vibe.json", left)),
+                load_result_document(_write(tmp_path / "right-vibe.json", right)),
+            ]
+        )
 
 
 def test_merge_accepts_nondiarized_vibevoice_ranged_documents(tmp_path: Path) -> None:
@@ -105,10 +108,12 @@ def test_merge_accepts_nondiarized_vibevoice_ranged_documents(tmp_path: Path) ->
         stack="vibevoice",
     )
 
-    merged = merge_documents([
-        load_result_document(_write(tmp_path / "left-vibe.json", left)),
-        load_result_document(_write(tmp_path / "right-vibe.json", right)),
-    ])
+    merged = merge_documents(
+        [
+            load_result_document(_write(tmp_path / "left-vibe.json", left)),
+            load_result_document(_write(tmp_path / "right-vibe.json", right)),
+        ]
+    )
 
     assert [segment["text"] for segment in merged.segments] == ["Left.", "Right."]
 
@@ -122,16 +127,16 @@ def test_merge_plan_comparison_distinguishes_json_booleans_from_numbers(
     right["provenance"]["plan"]["flag"] = 0
 
     with pytest.raises(IncompatibleResultsError, match="executed plans differ"):
-        merge_documents([
-            load_result_document(_write(tmp_path / "left.json", left)),
-            load_result_document(_write(tmp_path / "right.json", right)),
-        ])
+        merge_documents(
+            [
+                load_result_document(_write(tmp_path / "left.json", left)),
+                load_result_document(_write(tmp_path / "right.json", right)),
+            ]
+        )
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_merge_rejects_duplicate_or_reversed_timeline_inputs(
-    tmp_path: Path, reverse: bool
-) -> None:
+def test_merge_rejects_duplicate_or_reversed_timeline_inputs(tmp_path: Path, reverse: bool) -> None:
     left = _payload(
         [_timed_segment("Left.", [("Left", 0.1, 0.8)])],
         outcomes={"word_timestamps": "produced"},

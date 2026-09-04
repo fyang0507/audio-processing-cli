@@ -69,20 +69,22 @@ class ExportProduct:
 
     def summary(self, output: Path | None) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "input": str(self.inputs[0]) if len(self.inputs) == 1 else [
-                str(path) for path in self.inputs
-            ],
+            "input": str(self.inputs[0])
+            if len(self.inputs) == 1
+            else [str(path) for path in self.inputs],
             "output": str(output) if output is not None else None,
             "format": self.output_format,
         }
         if self.output_format in _TIMED_FORMATS:
-            payload.update({
-                "cues": self.cue_count,
-                "source_capability": "word_timestamps",
-                "speaker_labels_rendered": self.speaker_labels_rendered,
-                "cue_policy": V1_CUE_POLICY.as_dict(),
-                "warnings": [dict(item) for item in self.warnings],
-            })
+            payload.update(
+                {
+                    "cues": self.cue_count,
+                    "source_capability": "word_timestamps",
+                    "speaker_labels_rendered": self.speaker_labels_rendered,
+                    "cue_policy": V1_CUE_POLICY.as_dict(),
+                    "warnings": [dict(item) for item in self.warnings],
+                }
+            )
         else:
             payload["segments"] = self.segment_count
         return payload

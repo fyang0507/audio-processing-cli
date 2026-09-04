@@ -64,9 +64,9 @@ def _verify_mlx_guard(toolchain: Toolchain, document: dict) -> dict:
         return report
     report["mlx_audio_private_api_source_hash"] = observed["sha256"]
     report["mlx_audio_private_api_matches_expected"] = observed["sha256"] == expected
-    report["mlx_audio_private_api_signature_ok"] = set(
-        signature["required_parameters"]
-    ).issubset(observed["params"])
+    report["mlx_audio_private_api_signature_ok"] = set(signature["required_parameters"]).issubset(
+        observed["params"]
+    )
     report["mlx_audio_private_api_target"] = target
     return report
 

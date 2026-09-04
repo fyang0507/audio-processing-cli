@@ -31,18 +31,27 @@ def documented_errors() -> dict[str, dict]:
     [
         {"stack_id": None, "input_path": Path("meeting.m4a"), "wants": "diarization"},
         {"stack_id": "qwen-1.7b", "input_path": None, "wants": "diarization"},
-        {"stack_id": "qwen-1.7b", "input_path": Path("meeting.m4a"),
-         "wants": "word_timing"},
-        {"stack_id": "qwen-1.7b", "input_path": Path("meeting.m4a"),
-         "wants": "segment_timestamps"},
-        {"stack_id": "firered", "input_path": Path("meeting.m4a"),
-         "wants": "token_lid"},
-        {"stack_id": "vibevoice", "input_path": Path("demo.mp4"), "wants": "verbatim",
-         "language": "Cantonese"},
-        {"stack_id": "qwen-1.7b", "input_path": Path("meeting.m4a"), "wants": None,
-         "language": "EN"},
-        {"stack_id": "vibevoice", "input_path": Path("demo.mp4"),
-         "wants": "diarization", "diarizer": "fluidaudio"},
+        {"stack_id": "qwen-1.7b", "input_path": Path("meeting.m4a"), "wants": "word_timing"},
+        {"stack_id": "qwen-1.7b", "input_path": Path("meeting.m4a"), "wants": "segment_timestamps"},
+        {"stack_id": "firered", "input_path": Path("meeting.m4a"), "wants": "token_lid"},
+        {
+            "stack_id": "vibevoice",
+            "input_path": Path("demo.mp4"),
+            "wants": "verbatim",
+            "language": "Cantonese",
+        },
+        {
+            "stack_id": "qwen-1.7b",
+            "input_path": Path("meeting.m4a"),
+            "wants": None,
+            "language": "EN",
+        },
+        {
+            "stack_id": "vibevoice",
+            "input_path": Path("demo.mp4"),
+            "wants": "diarization",
+            "diarizer": "fluidaudio",
+        },
     ],
 )
 def test_every_worked_request_refusal_is_field_for_field(request_args: dict) -> None:
@@ -131,49 +140,110 @@ EXPECTED_KEYS = {
     "stack_required": {"code", "field", "allowed", "stacks", "fix"},
     "input_required": {"code", "field", "note", "fix"},
     "capability_unknown": {
-        "code", "field", "provided", "did_you_mean", "available_on_stack", "fix",
+        "code",
+        "field",
+        "provided",
+        "did_you_mean",
+        "available_on_stack",
+        "fix",
     },
     "option_unsupported_on_stack": {
-        "code", "field", "provided", "allowed", "stacks_accepting", "fix",
+        "code",
+        "field",
+        "provided",
+        "allowed",
+        "stacks_accepting",
+        "fix",
     },
     "option_value_unsupported": {
-        "code", "field", "provided", "allowed", "did_you_mean", "fix",
+        "code",
+        "field",
+        "provided",
+        "allowed",
+        "did_you_mean",
+        "fix",
     },
     "capability_unsatisfiable_on_stack": {
-        "code", "capability", "allowed", "available_on_stack", "fix",
+        "code",
+        "capability",
+        "allowed",
+        "available_on_stack",
+        "fix",
     },
     "capability_unsupported": {"code", "capability", "allowed", "reason", "fix"},
     "pin_conflicts_with_native_capability": {
-        "code", "field", "provided", "allowed", "capability", "fix",
+        "code",
+        "field",
+        "provided",
+        "allowed",
+        "capability",
+        "fix",
     },
     "range_invalid": {"code", "field", "provided", "reason", "fix"},
     "output_exists": {"code", "field", "provided", "existing", "fix"},
     "output_is_canonical_input": {
-        "code", "field", "provided", "resolved_target", "fix",
+        "code",
+        "field",
+        "provided",
+        "resolved_target",
+        "fix",
     },
     "output_path_invalid": {
-        "code", "field", "provided", "target", "reason", "fix",
+        "code",
+        "field",
+        "provided",
+        "target",
+        "reason",
+        "fix",
     },
     "output_required_for_force": {
-        "code", "field", "provided", "requires", "fix",
+        "code",
+        "field",
+        "provided",
+        "requires",
+        "fix",
     },
     "export_input_invalid": {
-        "code", "field", "provided", "reason", "fix",
+        "code",
+        "field",
+        "provided",
+        "reason",
+        "fix",
     },
     "export_inputs_incompatible": {
-        "code", "field", "provided", "reason", "fix",
+        "code",
+        "field",
+        "provided",
+        "reason",
+        "fix",
     },
     "timing_required_for_format": {
-        "code", "field", "provided", "requires_capability", "found", "note", "fix",
+        "code",
+        "field",
+        "provided",
+        "requires_capability",
+        "found",
+        "note",
+        "fix",
     },
     "packages_not_provisioned": {
-        "code", "missing", "total_known_download_bytes", "unsized_packages", "fix",
+        "code",
+        "missing",
+        "total_known_download_bytes",
+        "unsized_packages",
+        "fix",
     },
     "package_integrity_failed": {"code", "failed", "fix"},
     "package_build_unusable": {"code", "package", "product", "built", "fix"},
     "backend_failed": {"code", "role", "backend", "detail", "fix"},
     "run_incomplete": {
-        "code", "role", "backend", "detail", "coverage", "output", "fix",
+        "code",
+        "role",
+        "backend",
+        "detail",
+        "coverage",
+        "output",
+        "fix",
     },
 }
 
@@ -200,54 +270,83 @@ def all_refusal_examples() -> list[refusals.Refusal]:
             vibe, "demo.mp4", "--language", "Cantonese", ("verbatim",)
         ),
         refusals.option_value_unsupported(
-            qwen, "meeting.m4a", "--language", "EN",
-            stacks.language_vocabulary("qwen"), (), "English",
+            qwen,
+            "meeting.m4a",
+            "--language",
+            "EN",
+            stacks.language_vocabulary("qwen"),
+            (),
+            "English",
         ),
         refusals.capability_unsatisfiable_on_stack(
             qwen, "meeting.m4a", "segment_timestamps", ("segment_timestamps",)
         ),
         refusals.capability_unsupported(
-            "token_lid", "no_backend_declares",
+            "token_lid",
+            "no_backend_declares",
             "no stack or add-on satisfies this; use region-level lid instead",
         ),
         refusals.pin_conflicts_with_native_capability(
-            vibe, "demo.mp4", "--diarizer", "fluidaudio", "diarization",
+            vibe,
+            "demo.mp4",
+            "--diarizer",
+            "fluidaudio",
+            "diarization",
             ("diarization",),
         ),
         refusals.range_invalid(
-            "meeting.m4a", "qwen-1.7b", ("diarization",), "bad",
+            "meeting.m4a",
+            "qwen-1.7b",
+            ("diarization",),
+            "bad",
             "--range must be START: or START:END",
         ),
         refusals.output_exists(
-            "meeting.m4a", "qwen-1.7b", ("diarization",),
-            "meeting.json", "meeting.json",
+            "meeting.m4a",
+            "qwen-1.7b",
+            ("diarization",),
+            "meeting.json",
+            "meeting.json",
         ),
         refusals.output_is_canonical_input("meeting.m4a", "meeting.m4a"),
-        refusals.output_path_invalid(
-            "meeting.json", "meeting.partial.json", "Symlink loop"
-        ),
+        refusals.output_path_invalid("meeting.json", "meeting.partial.json", "Symlink loop"),
         refusals.output_required_for_force(),
         refusals.export_input_invalid("meeting.json", "schema mismatch"),
         refusals.export_inputs_incompatible(
             ("meeting.part1.json", "other.json"), "canonical sources differ"
         ),
-        refusals.timing_required_for_format(
-            "meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)
-        ),
+        refusals.timing_required_for_format("meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)),
         refusals.packages_not_provisioned(
-            "qwen-1.7b", ({
-                "package": "qwen3-asr-1.7b-8bit", "kind": "weights", "bytes": 123,
-            },), 123, ()
+            "qwen-1.7b",
+            (
+                {
+                    "package": "qwen3-asr-1.7b-8bit",
+                    "kind": "weights",
+                    "bytes": 123,
+                },
+            ),
+            123,
+            (),
         ),
-        refusals.package_integrity_failed(({
-            "package": "qwen3-forcedaligner", "check": "weight_digest",
-            "expected": "a", "actual": "b",
-        },)),
+        refusals.package_integrity_failed(
+            (
+                {
+                    "package": "qwen3-forcedaligner",
+                    "check": "weight_digest",
+                    "expected": "a",
+                    "actual": "b",
+                },
+            )
+        ),
         refusals.package_build_unusable("fluidaudio", "fluidaudiocli"),
         refusals.backend_failed("asr", "vibevoice-asr-7b", "oom", "free memory"),
         refusals.run_incomplete(
-            "asr", "qwen3-asr-1.7b-8bit", "budget", coverage,
-            "partial.json", "audio transcribe run --range 1.0:",
+            "asr",
+            "qwen3-asr-1.7b-8bit",
+            "budget",
+            coverage,
+            "partial.json",
+            "audio transcribe run --range 1.0:",
         ),
     ]
 
@@ -271,7 +370,8 @@ def test_timing_fix_is_runnable_for_an_option_like_transcript_filename() -> None
 
 
 def test_timing_refusal_stays_typed_when_no_sibling_path_can_be_probed(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -300,9 +400,7 @@ def test_timing_refusal_stays_typed_when_no_sibling_path_can_be_probed(
 
 
 def test_output_exists_fix_is_runnable_for_option_like_media_and_output() -> None:
-    refusal = refusals.output_exists(
-        "-source.wav", "qwen-1.7b", (), "-out.json", "-out.json"
-    )
+    refusal = refusals.output_exists("-source.wav", "qwen-1.7b", (), "-out.json", "-out.json")
     parsed = cli._parser().parse_args(shlex.split(refusal.payload["fix"])[1:])
     assert parsed.input == Path("-source.wav")
     assert parsed.output == Path("-out.json")

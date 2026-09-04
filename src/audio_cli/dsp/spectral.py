@@ -52,9 +52,7 @@ def apply_environment_cleanup(
         analysis.subbass_power_ratio >= profile.subbass_ratio_threshold
         or abs(analysis.dc_offset) > 1e-4
     ):
-        sos = signal.butter(
-            2, profile.highpass_hz, btype="highpass", fs=sample_rate, output="sos"
-        )
+        sos = signal.butter(2, profile.highpass_hz, btype="highpass", fs=sample_rate, output="sos")
         processed = signal.sosfilt(sos, processed, axis=0)
         operations.append(
             {
@@ -94,11 +92,7 @@ def apply_environment_cleanup(
             "status": "abstained",
             "reason": "conservative_v1_has_no_reliable_stationary_noise_profile",
         }
-    output = (
-        _blend(audio, np.asarray(processed, dtype=np.float32), mask)
-        if operations
-        else audio
-    )
+    output = _blend(audio, np.asarray(processed, dtype=np.float32), mask) if operations else audio
     if operations:
         status, reason = "applied", "eligible_environmental_cleanup_resolved"
     elif broadband["status"] == "abstained":
@@ -155,9 +149,7 @@ def apply_frequency_adjustments(
         b, a = _peaking_coefficients(adjustment.gain_db, center, quality, sample_rate)
         filtered = signal.lfilter(b, a, output, axis=0).astype(np.float32)
         end = adjustment.resolved_end(duration)
-        mask = smooth_time_mask(
-            output.shape[0], [(adjustment.start, end)], sample_rate, fade_ms
-        )
+        mask = smooth_time_mask(output.shape[0], [(adjustment.start, end)], sample_rate, fade_ms)
         output = _blend(output, filtered, mask)
         item = adjustment.as_dict(duration)
         item["resolved_filter"] = {

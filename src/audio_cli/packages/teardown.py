@@ -17,8 +17,11 @@ from .models import ProvisioningError
 def _toolchain_missing(package: Package, tool: str) -> ProvisioningError:
     """The exit-3 refusal for a package whose external toolchain is absent."""
     return ProvisioningError(
-        "toolchain_missing", f"{package.id} needs {tool}, which is not on PATH",
-        missing_tool=tool, package=package.id, requires_tool=[tool],
+        "toolchain_missing",
+        f"{package.id} needs {tool}, which is not on PATH",
+        missing_tool=tool,
+        package=package.id,
+        requires_tool=[tool],
     )
 
 
@@ -111,9 +114,7 @@ def _owned_tree_bytes_at(parent_descriptor: int, name: str) -> int:
         with os.scandir(directory_descriptor) as entries:
             for entry in entries:
                 try:
-                    total += _owned_tree_bytes_at(
-                        directory_descriptor, entry.name
-                    )
+                    total += _owned_tree_bytes_at(directory_descriptor, entry.name)
                 except FileNotFoundError:
                     continue
         return total
@@ -142,8 +143,10 @@ def _delete_managed(target: Path) -> int:
     absolute = Path(os.path.abspath(target))
     if absolute == root or not absolute.is_relative_to(root):
         raise ProvisioningError(
-            "delete_refused", f"managed deletion target is outside the provisioning root: {target}",
-            target=str(target), fix="Inspect the provisioning registry and managed cache root",
+            "delete_refused",
+            f"managed deletion target is outside the provisioning root: {target}",
+            target=str(target),
+            fix="Inspect the provisioning registry and managed cache root",
         )
     opened = False
     try:
@@ -180,20 +183,24 @@ def _delete_managed(target: Path) -> int:
                 fix=f"Remove or replace redirected parent paths for {target} and retry",
             ) from exc
         raise ProvisioningError(
-            "delete_failed", f"could not delete managed target {target}: {exc}",
-            target=str(target), fix=f"Restore access to {target} and retry",
+            "delete_failed",
+            f"could not delete managed target {target}: {exc}",
+            target=str(target),
+            fix=f"Restore access to {target} and retry",
         ) from exc
 
 
 def _teardown_revisions(
-    package: Package | None, materialized: dict,
+    package: Package | None,
+    materialized: dict,
 ) -> tuple[list[str], list[str]]:
     """Bound mutable ownership receipts to revisions shipped for one known package."""
     allowed = set(_source_revisions(package)) if package is not None else set()
 
     def strings(value: object) -> set[str]:
-        return {item for item in value if isinstance(item, str)} \
-            if isinstance(value, list) else set()
+        return (
+            {item for item in value if isinstance(item, str)} if isinstance(value, list) else set()
+        )
 
     claimed = strings(materialized.get("hub_revisions"))
     pre_existing = strings(materialized.get("hub_revisions_pre_existing"))

@@ -117,7 +117,8 @@ transcription stacks, and deterministic transcript export. Issue #21 is merged; 
 - [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) records the completed phase
   boundaries. [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is the historical design
   record and still explains the risks and rejected alternatives.
-- `tests/test_spec_docs.py` holds the spec documents' invariants and runs in the normal suite.
+- The `tests/test_spec_docs*.py` suite holds the spec documents' invariants and runs in the
+  normal suite.
 
 ## Current candidate: issues #22–#24
 

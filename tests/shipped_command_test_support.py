@@ -13,11 +13,45 @@ from audio_cli import packages as pkg
 from audio_cli import paths
 from audio_cli.media import hash_file
 from audio_cli.packages import integrity as package_integrity
-from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+from audio_cli.transcribe.execution import runtime as orchestrator_runtime
+from audio_cli.transcribe.result import NormalizedResult, serialize_result
 
 REPO = Path(__file__).resolve().parents[1]
 HAPPY_PATH = REPO / "TRANSCRIBE_HAPPY_PATH.md"
 CONTRACT = REPO / "TRANSCRIBE_CONTRACT.md"
+
+
+def write_export_result(
+    path: Path,
+    *,
+    source: str | Path,
+    segments: list[dict],
+    outcomes: dict[str, str],
+    language: str | None,
+) -> None:
+    optional_arrays = {"turns": []} if "diarization" in outcomes else {}
+    payload = serialize_result(
+        NormalizedResult(
+            source={
+                "path": str(source),
+                "duration_seconds": 10.0,
+                "timebase": "seconds",
+            },
+            segments=segments,
+            abstentions=[],
+            provenance={
+                "stack": "qwen-1.7b",
+                "outcomes": outcomes,
+                "observed": {},
+                "plan": {
+                    "roles": {"asr": {"config": {"language": language}}},
+                },
+            },
+            requested_capabilities=frozenset(outcomes),
+            **optional_arrays,
+        )
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def configure_isolated_root(tmp_path, monkeypatch):
@@ -31,11 +65,7 @@ def configure_isolated_root(tmp_path, monkeypatch):
             return orchestrator_runtime._CheckoutState(
                 head=package.source["commit"], modified=modified, untracked=()
             )
-        package_id = (
-            "vibevoice-asr-7b"
-            if "vibevoice-asr-7b" in str(checkout)
-            else "firered-asr2s"
-        )
+        package_id = "vibevoice-asr-7b" if "vibevoice-asr-7b" in str(checkout) else "firered-asr2s"
         package = env.packages()[package_id]
         _patches, modified, _digests = pkg.checkout_patch_expectation(package)
         return orchestrator_runtime._CheckoutState(
@@ -78,18 +108,87 @@ def configure_isolated_root(tmp_path, monkeypatch):
         for package in env.packages().values():
             source = package.source
             repositories = (
-                source["repos"] if source["type"] == "huggingface_multi"
-                else [source] if source["type"] == "huggingface"
+                source["repos"]
+                if source["type"] == "huggingface_multi"
+                else [source]
+                if source["type"] == "huggingface"
                 else []
             )
             for repository in repositories:
                 found[(repository["repo"], repository["revision"])] = (
-                    tmp_path / "hub" / f"models--{repository['repo'].replace('/', '--')}"
-                    / "snapshots" / repository["revision"]
+                    tmp_path
+                    / "hub"
+                    / f"models--{repository['repo'].replace('/', '--')}"
+                    / "snapshots"
+                    / repository["revision"]
                 )
         return found
 
     monkeypatch.setattr(package_integrity, "_hub_snapshot_index", snapshot_index)
+
+
+def _native_package_entry(tmp_path: Path, identifier: str) -> dict:
+    package = env.packages()[identifier]
+    source = package.source
+    checkout = paths.checkout_dir(package.environment, package.id)
+    checkout.mkdir(parents=True)
+    if source["type"] == "huggingface_multi":
+        locations = {}
+        for repository in source["repos"]:
+            target = (
+                tmp_path
+                / "hub"
+                / f"models--{repository['repo'].replace('/', '--')}"
+                / "snapshots"
+                / repository["revision"]
+            )
+            target.mkdir(parents=True, exist_ok=True)
+            for pattern in repository.get("allow_patterns", ()):
+                destination = target / pattern
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(b"")
+            locations[repository["repo"]] = str(target)
+        materialized = {
+            "paths": locations,
+            "revisions": [item["revision"] for item in source["repos"]],
+            "bytes": 0,
+            "checkout": str(checkout),
+            "checkout_commit": package.checkout["resolved_commit"],
+        }
+        patch_name = package.checkout.get("patch")
+        if patch_name:
+            _patches, names, expected_digests = pkg.checkout_patch_expectation(package)
+            patched = checkout / names[0]
+            patched.parent.mkdir(parents=True, exist_ok=True)
+            patched.write_text("patched\n", encoding="utf-8")
+            materialized.update(
+                {
+                    "patches_applied": [Path(patch_name).name],
+                    "patched_file_digests": expected_digests,
+                }
+            )
+    else:
+        target = (
+            tmp_path
+            / "hub"
+            / f"models--{source['repo'].replace('/', '--')}"
+            / "snapshots"
+            / source["revision"]
+        )
+        target.mkdir(parents=True, exist_ok=True)
+        materialized = {
+            "path": str(target),
+            "revision": source["revision"],
+            "bytes": 0,
+        }
+    return {"state": "ready", "materialized": materialized}
+
+
+def _native_interpreter(tmp_path: Path, environment: str) -> None:
+    interpreter = tmp_path / "root" / "envs" / environment / "bin" / "python"
+    interpreter.parent.mkdir(parents=True, exist_ok=True)
+    interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+    interpreter.chmod(0o755)
 
 
 class StubToolchain(pkg.Toolchain):
@@ -155,10 +254,8 @@ def provisioned_like_the_document(tmp_path: Path) -> pkg.Provisioner:
 
 def documented_block(anchor: str, *, document: Path = HAPPY_PATH) -> dict:
     text = read_spec_document(document)
-    block = re.search(r"```json\n(.*?)```", text[text.index(anchor):], re.S)
-    assert block is not None, (
-        f"{document.name} no longer publishes a JSON block at {anchor!r}"
-    )
+    block = re.search(r"```json\n(.*?)```", text[text.index(anchor) :], re.S)
+    assert block is not None, f"{document.name} no longer publishes a JSON block at {anchor!r}"
     return json.loads(block.group(1))
 
 
@@ -171,7 +268,7 @@ def documented_fenced_block(
     text = read_spec_document(document)
     block = re.search(
         rf"```{re.escape(language)}\n(.*?)```",
-        text[text.index(anchor):],
+        text[text.index(anchor) :],
         re.S,
     )
     assert block is not None, (
@@ -188,12 +285,10 @@ def assert_documented_shape(actual: dict, documented: dict, label: str) -> None:
     actual_shape = shape(actual)
     documented_shape = shape(documented)
     assert sorted(set(actual_shape) - set(documented_shape)) == [], (
-        f"{label} emits undocumented fields: "
-        f"{sorted(set(actual_shape) - set(documented_shape))}"
+        f"{label} emits undocumented fields: {sorted(set(actual_shape) - set(documented_shape))}"
     )
     assert sorted(set(documented_shape) - set(actual_shape)) == [], (
-        f"{label} omits documented fields: "
-        f"{sorted(set(documented_shape) - set(actual_shape))}"
+        f"{label} omits documented fields: {sorted(set(documented_shape) - set(actual_shape))}"
     )
     for trail, expected in documented_shape.items():
         found = actual_shape[trail]

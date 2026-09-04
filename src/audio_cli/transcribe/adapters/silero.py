@@ -33,23 +33,15 @@ def normalize_vad_regions(regions: Iterable[Mapping[str, Any] | object]) -> list
         start = _finite_json_number(start_raw, f"region {index} start")
         end = _finite_json_number(end_raw, f"region {index} end")
         if start < 0 or end <= start:
-            raise ValueError(
-                f"Silero VAD region {index} must have non-negative increasing bounds"
-            )
+            raise ValueError(f"Silero VAD region {index} must have non-negative increasing bounds")
         if previous_end is not None and start < previous_end:
-            raise ValueError(
-                f"Silero VAD region {index} overlaps or precedes the previous region"
-            )
+            raise ValueError(f"Silero VAD region {index} overlaps or precedes the previous region")
         normalized_start = round(start, 6)
         normalized_end = round(end, 6)
         if normalized_end <= normalized_start:
-            raise ValueError(
-                f"Silero VAD region {index} is empty after timestamp rounding"
-            )
+            raise ValueError(f"Silero VAD region {index} is empty after timestamp rounding")
         if result and normalized_start < result[-1]["end"]:
-            raise ValueError(
-                f"Silero VAD region {index} overlaps after timestamp rounding"
-            )
+            raise ValueError(f"Silero VAD region {index} overlaps after timestamp rounding")
         result.append({"start": normalized_start, "end": normalized_end})
         previous_end = end
     return result

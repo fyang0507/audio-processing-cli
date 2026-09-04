@@ -32,9 +32,7 @@ def segments_from_run(run: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "start_s": float(item.get("start_s", item.get("startTimeSeconds"))),
             "end_s": float(item.get("end_s", item.get("endTimeSeconds"))),
-            "speaker": str(
-                item.get("speaker", item.get("speaker_id", item.get("speakerId")))
-            ),
+            "speaker": str(item.get("speaker", item.get("speaker_id", item.get("speakerId")))),
         }
         for item in raw
     ]
@@ -69,7 +67,7 @@ def frame_activity(
             continue
         differences[item["speaker"]][first] += 1
         differences[item["speaker"]][stop] -= 1
-    counts = {label: 0 for label in labels}
+    counts = dict.fromkeys(labels, 0)
     activity: list[frozenset[str]] = []
     for index in range(frame_count):
         for label in labels:
@@ -93,9 +91,7 @@ def boundary_agreement(
     errors: list[float] = []
     for boundary in hypothesis:
         candidates = [
-            index
-            for index in unmatched
-            if abs(reference[index] - boundary) <= tolerance_s
+            index for index in unmatched if abs(reference[index] - boundary) <= tolerance_s
         ]
         if not candidates:
             continue
@@ -134,9 +130,9 @@ def partial_reference_diagnostics(
         scores = {}
         for label in sorted(set().union(*activity)):
             hypothesis = [label in frame for frame in activity]
-            tp = sum(ref and hyp for ref, hyp in zip(reference_speech, hypothesis))
-            fp = sum(not ref and hyp for ref, hyp in zip(reference_speech, hypothesis))
-            fn = sum(ref and not hyp for ref, hyp in zip(reference_speech, hypothesis))
+            tp = sum(ref and hyp for ref, hyp in zip(reference_speech, hypothesis, strict=True))
+            fp = sum(not ref and hyp for ref, hyp in zip(reference_speech, hypothesis, strict=True))
+            fn = sum(ref and not hyp for ref, hyp in zip(reference_speech, hypothesis, strict=True))
             precision = tp / (tp + fp) if tp + fp else None
             recall = tp / (tp + fn) if tp + fn else None
             f1 = (
@@ -153,12 +149,14 @@ def partial_reference_diagnostics(
                 "f1": f1,
             }
         oracle = max(scores, key=lambda label: scores[label]["f1"] or -1)
-        halves.append({
-            "window": index,
-            "by_hypothesis_speaker": scores,
-            "oracle_best_hypothesis_speaker": oracle,
-            "oracle_best": scores[oracle],
-        })
+        halves.append(
+            {
+                "window": index,
+                "by_hypothesis_speaker": scores,
+                "oracle_best_hypothesis_speaker": oracle,
+                "oracle_best": scores[oracle],
+            }
+        )
     return {
         "epistemic_limit": (
             "The SpiCE reference labels participant utterance intervals only. "
@@ -179,21 +177,20 @@ def compare_windows(
         raise ValueError("repeat windows emitted different speaker counts")
     best: tuple[int, dict[str, str], list[frozenset[str]]] | None = None
     for targets in itertools.permutations(ref_labels):
-        mapping = dict(zip(hyp_labels, targets))
+        mapping = dict(zip(hyp_labels, targets, strict=True))
         mapped = [frozenset(mapping[label] for label in frame) for frame in hypothesis]
-        error = sum(len(left ^ right) for left, right in zip(reference, mapped))
+        error = sum(len(left ^ right) for left, right in zip(reference, mapped, strict=True))
         if best is None or error < best[0]:
             best = (error, mapping, mapped)
     assert best is not None
     error, mapping, mapped = best
     frame_count = len(reference)
     reference_speaker_frames = sum(len(frame) for frame in reference)
-    exact = sum(left == right for left, right in zip(reference, mapped))
-    speech = sum(bool(left) == bool(right) for left, right in zip(reference, mapped))
-    voiced_union = sum(bool(left or right) for left, right in zip(reference, mapped))
+    exact = sum(left == right for left, right in zip(reference, mapped, strict=True))
+    speech = sum(bool(left) == bool(right) for left, right in zip(reference, mapped, strict=True))
+    voiced_union = sum(bool(left or right) for left, right in zip(reference, mapped, strict=True))
     voiced_exact = sum(
-        left == right and bool(left or right)
-        for left, right in zip(reference, mapped)
+        left == right and bool(left or right) for left, right in zip(reference, mapped, strict=True)
     )
     return {
         "optimal_anonymous_speaker_mapping": mapping,
@@ -217,9 +214,7 @@ def interval_pair_counts(
     mapping: dict[str, str],
     tolerances_s: list[float],
 ) -> dict[str, int]:
-    mapped = [
-        {**item, "speaker": mapping[item["speaker"]]} for item in hypothesis
-    ]
+    mapped = [{**item, "speaker": mapping[item["speaker"]]} for item in hypothesis]
     counts: dict[str, int] = {}
     for tolerance in tolerances_s:
         unmatched = set(range(len(mapped)))
@@ -236,8 +231,10 @@ def interval_pair_counts(
                 continue
             match = min(
                 candidates,
-                key=lambda index: abs(mapped[index]["start_s"] - item["start_s"])
-                + abs(mapped[index]["end_s"] - item["end_s"]),
+                key=lambda index: (
+                    abs(mapped[index]["start_s"] - item["start_s"])
+                    + abs(mapped[index]["end_s"] - item["end_s"])
+                ),
             )
             unmatched.remove(match)
             matched += 1
@@ -268,9 +265,7 @@ def main() -> None:
         window_segments(segments, index * args.period_seconds, args.period_seconds)
         for index in range(2)
     ]
-    activity = [
-        frame_activity(items, args.period_seconds, frame_s) for items in window_items
-    ]
+    activity = [frame_activity(items, args.period_seconds, frame_s) for items in window_items]
     comparison = compare_windows(activity[0], activity[1], frame_s)
     mapped_hypothesis = comparison.pop("mapped_hypothesis_activity")
     interval_matches = interval_pair_counts(
@@ -332,14 +327,18 @@ def main() -> None:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "speaker_frame_error_rate": comparison["speaker_frame_error_rate"],
-        "exact_active_set_fraction": comparison[
-            "exact_active_set_frame_fraction_all_audio"
-        ],
-        "transition_f1": boundary_score["f1"],
-        "interval_counts": output["window_interval_counts"],
-    }))
+    print(
+        json.dumps(
+            {
+                "speaker_frame_error_rate": comparison["speaker_frame_error_rate"],
+                "exact_active_set_fraction": comparison[
+                    "exact_active_set_frame_fraction_all_audio"
+                ],
+                "transition_f1": boundary_score["f1"],
+                "interval_counts": output["window_interval_counts"],
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

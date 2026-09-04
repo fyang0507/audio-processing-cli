@@ -100,18 +100,16 @@ def _run_pipeline(
     completed_regions = 0
     failure: Exception | None = None
     for offset in range(0, len(regions), asr_batch_size):
-        batch = regions[offset:offset + asr_batch_size]
+        batch = regions[offset : offset + asr_batch_size]
         uttids = [
-            f"audio_s{int(float(item['start']) * 1000)}_e"
-            f"{int(float(item['end']) * 1000)}"
+            f"audio_s{int(float(item['start']) * 1000)}_e{int(float(item['end']) * 1000)}"
             for item in batch
         ]
         batch_wav = [
             (
                 sample_rate,
                 wav[
-                    int(float(item["start"]) * sample_rate):
-                    int(float(item["end"]) * sample_rate)
+                    int(float(item["start"]) * sample_rate) : int(float(item["end"]) * sample_rate)
                 ],
             )
             for item in batch
@@ -123,11 +121,13 @@ def _run_pipeline(
                 len(batch),
             )
             if lid_enabled:
-                lid_results: list[Mapping[str, Any] | None] = list(_result_array(
-                    system.lid.process(uttids, batch_wav),
-                    "FireRed LID batch",
-                    len(batch),
-                ))
+                lid_results: list[Mapping[str, Any] | None] = list(
+                    _result_array(
+                        system.lid.process(uttids, batch_wav),
+                        "FireRed LID batch",
+                        len(batch),
+                    )
+                )
             else:
                 lid_results = [None] * len(batch)
         except Exception as exc:  # noqa: BLE001 - retain the earlier unit prefix
@@ -150,13 +150,9 @@ def _run_pipeline(
                     if not isinstance(language, str) or not language:
                         # FireRedLID reports feature-extraction failures as data
                         # with ``lang: ""`` (fireredlid/lid.py:62-66).
-                        raise ValueError(
-                            "FireRed LID returned an empty region language label"
-                        )
+                        raise ValueError("FireRed LID returned an empty region language label")
                     try:
-                        _probability(
-                            lid_result.get("confidence"), "FireRed LID confidence"
-                        )
+                        _probability(lid_result.get("confidence"), "FireRed LID confidence")
                     except (TypeError, ValueError) as exc:
                         raise ValueError(
                             "FireRed LID confidence must be finite and between 0 and 1"
@@ -170,16 +166,16 @@ def _run_pipeline(
                         # VAD region. That raw shape cannot satisfy the public
                         # one-label-per-VAD invariant, so stop at the last
                         # publishable per-region prefix instead.
-                        raise ValueError(
-                            "FireRed cannot publish region LID for a blank ASR region"
-                        )
+                        raise ValueError("FireRed cannot publish region LID for a blank ASR region")
                 else:
-                    entries.append({
-                        "region_index": offset + local_index,
-                        "region": region,
-                        "asr": asr_result,
-                        "lid": lid_result,
-                    })
+                    entries.append(
+                        {
+                            "region_index": offset + local_index,
+                            "region": region,
+                            "asr": asr_result,
+                            "lid": lid_result,
+                        }
+                    )
                 accepted += 1
             except Exception as exc:  # noqa: BLE001 - retain valid earlier batch items
                 failure = exc
@@ -191,7 +187,7 @@ def _run_pipeline(
     punctuated: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
     first_unpunctuated_region: int | None = None
     for offset in range(0, len(entries), punc_batch_size):
-        batch = entries[offset:offset + punc_batch_size]
+        batch = entries[offset : offset + punc_batch_size]
         try:
             # The pinned runner uses ``get("timestamp", [])`` when timestamp
             # output is enabled (fireredasr2system.py:102-114), then punctuates
@@ -319,11 +315,13 @@ def main() -> int:
         # empty one) for a real external-VAD result.
         supplied_vad = request.get("vad_regions") is not None
         if supplied_vad:
-            captured_regions.extend(_region_records(
-                request["vad_regions"],
-                range_start=range_start,
-                range_end=range_end,
-            ))
+            captured_regions.extend(
+                _region_records(
+                    request["vad_regions"],
+                    range_start=range_start,
+                    range_end=range_end,
+                )
+            )
 
         print("firered stage: loading local co-resident models", file=sys.stderr, flush=True)
         import soundfile as sf
@@ -334,7 +332,7 @@ def main() -> int:
         from fireredasr2s.fireredvad import FireRedVadConfig
 
         # These are the six AED decode values used by the recorded runner at
-        # model_tests/benchmark/run_firered.py:360-370.  The stage takes them from
+        # model_tests/benchmark/run_firered.py:152-162.  The stage takes them from
         # the executed plan rather than maintaining a second set of defaults.
         asr_config = FireRedAsr2Config(
             use_gpu=False,
@@ -350,10 +348,8 @@ def main() -> int:
         system_config = FireRedAsr2SystemConfig(
             # The pinned FireRedVAD Hub repository contains several products;
             # the measured pipeline loads its ``VAD`` subdirectory
-            # (model_tests/benchmark/run_firered.py:253-258).
-            vad_model_dir=(
-                str(Path(str(models["vad"])) / "VAD") if not supplied_vad else ""
-            ),
+            # (model_tests/benchmark/run_firered.py:31-40).
+            vad_model_dir=(str(Path(str(models["vad"])) / "VAD") if not supplied_vad else ""),
             lid_model_dir=str(models.get("lid", "")),
             asr_type="aed",
             asr_model_dir=str(models["asr"]),
@@ -391,11 +387,13 @@ def main() -> int:
             timed_detect = _timed("vad", native_detect, stage_time)
             vad_result, _probability = timed_detect(str(request["audio"]))
             vad_result_map = _mapping(vad_result, "FireRedVAD result")
-            captured_regions.extend(_region_records(
-                vad_result_map.get("timestamps"),
-                range_start=range_start,
-                range_end=range_end,
-            ))
+            captured_regions.extend(
+                _region_records(
+                    vad_result_map.get("timestamps"),
+                    range_start=range_start,
+                    range_end=range_end,
+                )
+            )
 
         system.asr.transcribe = _timed("asr", system.asr.transcribe, stage_time)
         if lid_enabled:
@@ -426,9 +424,7 @@ def main() -> int:
         if pipeline_failure is not None:
             raise pipeline_failure
         output["complete"] = True
-        output["regions"] = [
-            {**item, "processed": True} for item in captured_regions
-        ]
+        output["regions"] = [{**item, "processed": True} for item in captured_regions]
         code = 0
     except Exception as exc:  # noqa: BLE001 - the stage must always write an envelope
         output["regions"] = [
@@ -447,9 +443,7 @@ def main() -> int:
 
     output["metrics"] = {
         "wall_seconds": round(time.perf_counter() - started, 6),
-        "stage_wall_seconds": {
-            name: round(value, 6) for name, value in stage_time.items()
-        },
+        "stage_wall_seconds": {name: round(value, 6) for name, value in stage_time.items()},
         "peak_rss_bytes": _rss_bytes(),
     }
     result_path.write_text(

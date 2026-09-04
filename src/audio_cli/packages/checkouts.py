@@ -36,9 +36,7 @@ def checkout_patch_expectation(
 ) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, str]]:
     """Exact patch receipt, tracked-file set, and post-patch hashes from the manifest."""
     specification = (
-        package.source
-        if package.source.get("type") == "git+build"
-        else package.checkout
+        package.source if package.source.get("type") == "git+build" else package.checkout
     )
     if specification is None:
         return (), (), {}
@@ -62,32 +60,28 @@ def materialize_checkout_patch(
     toolchain: Toolchain,
 ) -> tuple[list[str], dict[str, str]]:
     """Apply and prove the manifest-owned patch before install or build executes."""
-    expected_patches, expected_names, expected_digests = (
-        checkout_patch_expectation(package)
-    )
+    expected_patches, expected_names, expected_digests = checkout_patch_expectation(package)
     applied: list[str] = []
     digests: dict[str, str] = {}
     if expected_patches:
         specification = (
-            package.source
-            if package.source.get("type") == "git+build"
-            else package.checkout
+            package.source if package.source.get("type") == "git+build" else package.checkout
         )
         assert specification is not None
         patch_name = str(specification["patch"])
         patch = ENVIRONMENTS_DIR / patch_name
         if not patch.is_file():
             raise ProvisioningError(
-                "patch_missing", f"{patch} is not in the installed wheel",
-                patch=patch_name, package=package.id,
+                "patch_missing",
+                f"{patch} is not in the installed wheel",
+                patch=patch_name,
+                package=package.id,
             )
         toolchain.apply_patch(checkout, patch)
         applied.append(Path(patch_name).name)
         for touched in _patched_files(patch, checkout):
             if touched.is_file():
-                digests[str(touched.relative_to(checkout))] = (
-                    toolchain.file_digest(touched)
-                )
+                digests[str(touched.relative_to(checkout))] = toolchain.file_digest(touched)
     if (
         applied != list(expected_patches)
         or set(digests) != set(expected_names)
@@ -105,7 +99,10 @@ def materialize_checkout_patch(
 
 
 def checkout_file_matches(
-    checkout: Path, name: str, digest: str, hasher=integrity.sha256_file,
+    checkout: Path,
+    name: str,
+    digest: str,
+    hasher=integrity.sha256_file,
 ) -> bool:
     """Require a real in-checkout regular file before comparing its pinned digest."""
     target = checkout / name
@@ -133,9 +130,7 @@ def _checkout_integrity_issues(
         return []
 
     issues: list[str] = []
-    checkout, location_issue = managed_checkout_path(
-        package, materialized.get("checkout")
-    )
+    checkout, location_issue = managed_checkout_path(package, materialized.get("checkout"))
     if location_issue is not None:
         return [location_issue]
     assert checkout is not None
@@ -155,14 +150,10 @@ def _checkout_integrity_issues(
     except ValueError as exc:
         return [str(exc)]
     if state.head != expected_commit:
-        issues.append(
-            f"checkout HEAD is {state.head!r}, expected exact commit {expected_commit!r}"
-        )
+        issues.append(f"checkout HEAD is {state.head!r}, expected exact commit {expected_commit!r}")
 
     try:
-        expected_patches, expected_names, expected_digests = (
-            checkout_patch_expectation(package)
-        )
+        expected_patches, expected_names, expected_digests = checkout_patch_expectation(package)
     except (OSError, ValueError) as exc:
         return [f"shipped checkout patch cannot be read: {exc}"]
     applied = materialized.get("patches_applied", [])
@@ -234,25 +225,25 @@ def _checkout_and_install(toolchain: Toolchain, package: Package) -> dict:
     # an ordinary untracked setup hook could execute during install before later verification.
     _delete_managed(checkout)
     checkout.parent.mkdir(parents=True, exist_ok=True)
-    resolved_commit = package.checkout.get(
-        "resolved_commit", package.checkout["commit"])
+    resolved_commit = package.checkout.get("resolved_commit", package.checkout["commit"])
     toolchain.clone(package.checkout["repo"], resolved_commit, checkout)
 
-    applied, digests = materialize_checkout_patch(
-        package, checkout, toolchain
-    )
-    _expected_patches, expected_names, _expected_digests = (
-        checkout_patch_expectation(package)
-    )
+    applied, digests = materialize_checkout_patch(package, checkout, toolchain)
+    _expected_patches, expected_names, _expected_digests = checkout_patch_expectation(package)
     try:
         state = toolchain.inspect_checkout(checkout)
     except ValueError as exc:
         raise ProvisioningError(
-            "checkout_integrity_failed", f"could not inspect fresh checkout: {exc}",
-            package=package.id, fix=f"audio packages pull --repair {package.id}",
+            "checkout_integrity_failed",
+            f"could not inspect fresh checkout: {exc}",
+            package=package.id,
+            fix=f"audio packages pull --repair {package.id}",
         ) from exc
-    if state.head != resolved_commit or set(state.modified) != set(expected_names) \
-            or state.untracked:
+    if (
+        state.head != resolved_commit
+        or set(state.modified) != set(expected_names)
+        or state.untracked
+    ):
         raise ProvisioningError(
             "checkout_integrity_failed",
             f"{package.id} checkout was not exact before install",
@@ -275,5 +266,9 @@ def _checkout_and_install(toolchain: Toolchain, package: Package) -> dict:
     # anything the wheel build left in the source tree makes a successful pull start
     # from the same inspectable state that run preflight requires.
     toolchain.clean_ignored_checkout(checkout)
-    return {"checkout": str(checkout), "checkout_commit": resolved_commit,
-            "patches_applied": applied, "patched_file_digests": digests}
+    return {
+        "checkout": str(checkout),
+        "checkout_commit": resolved_commit,
+        "patches_applied": applied,
+        "patched_file_digests": digests,
+    }

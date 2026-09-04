@@ -81,13 +81,11 @@ def _validate_export_order(payload: Mapping[str, Any]) -> None:
             end_value = float(word["end"])
             if end_value < start_value:
                 raise ValueError(
-                    f"segments[{segment_index}].words[{word_index}] must have "
-                    "non-negative duration"
+                    f"segments[{segment_index}].words[{word_index}] must have non-negative duration"
                 )
             if start_value < previous_end:
                 raise ValueError(
-                    f"segments[{segment_index}].words[{word_index}] overlaps the "
-                    "preceding word"
+                    f"segments[{segment_index}].words[{word_index}] overlaps the preceding word"
                 )
             previous_end = end_value
     _unique(payload["abstentions"], "abstention_id", "abstentions")
@@ -107,19 +105,18 @@ def _owned_intervals(payload: Mapping[str, Any]) -> tuple[tuple[float, float], .
         requested = run_range.get("requested")
         selected = run_range.get("selected_unit_scope")
         if not (
-            isinstance(requested, (list, tuple)) and len(requested) == 2
-            and isinstance(selected, (list, tuple)) and len(selected) == 2
+            isinstance(requested, (list, tuple))
+            and len(requested) == 2
+            and isinstance(selected, (list, tuple))
+            and len(selected) == 2
         ):
             raise ValueError(
-                "provenance.plan.execution.range must carry requested and "
-                "selected_unit_scope pairs"
+                "provenance.plan.execution.range must carry requested and selected_unit_scope pairs"
             )
 
         def range_number(value: object, field: str) -> float:
             if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValueError(
-                    f"provenance.plan.execution.range.{field} must contain numbers"
-                )
+                raise ValueError(f"provenance.plan.execution.range.{field} must contain numbers")
             parsed = float(value)
             if not math.isfinite(parsed):
                 raise ValueError(
@@ -140,20 +137,12 @@ def _owned_intervals(payload: Mapping[str, Any]) -> tuple[tuple[float, float], .
             ("requested", requested_pair),
             ("selected_unit_scope", selected_pair),
         ):
-            if not (
-                math.isfinite(start)
-                and math.isfinite(end)
-                and 0 <= start < end <= duration
-            ):
+            if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= duration):
                 raise ValueError(
                     f"provenance.plan.execution.range.{field} is not a source interval"
                 )
-        if max(requested_pair[0], selected_pair[0]) >= min(
-            requested_pair[1], selected_pair[1]
-        ):
-            raise ValueError(
-                "requested range and selected unit scope do not intersect"
-            )
+        if max(requested_pair[0], selected_pair[0]) >= min(requested_pair[1], selected_pair[1]):
+            raise ValueError("requested range and selected unit scope do not intersect")
         # A ranged document owns the processing units it actually selected.
         # The requested interval can begin before the first selectable unit (or
         # between PCM samples); unioning it back in creates overlap when a resume
@@ -161,18 +150,14 @@ def _owned_intervals(payload: Mapping[str, Any]) -> tuple[tuple[float, float], .
         range_owned = (selected_pair,)
     if not payload["complete"]:
         coverage_owned = tuple(
-            (float(start), float(end))
-            for start, end in payload["coverage"]["covered_intervals"]
+            (float(start), float(end)) for start, end in payload["coverage"]["covered_intervals"]
         )
         if range_owned is not None:
             coverage_scope = tuple(
-                (float(start), float(end))
-                for start, end in payload["coverage"]["scope_intervals"]
+                (float(start), float(end)) for start, end in payload["coverage"]["scope_intervals"]
             )
             if coverage_scope != range_owned:
-                raise ValueError(
-                    "incomplete coverage scope must equal the selected unit scope"
-                )
+                raise ValueError("incomplete coverage scope must equal the selected unit scope")
         return coverage_owned
     if range_owned is not None:
         return range_owned
@@ -186,9 +171,7 @@ def load_result_document(path: Path) -> LoadedResult:
     try:
         descriptor = os.open(
             input_path,
-            os.O_RDONLY
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_NONBLOCK", 0),
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0),
         )
         with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
             file_identity = file_identity_from_descriptor(handle.fileno(), input_path)
@@ -205,9 +188,7 @@ def load_result_document(path: Path) -> LoadedResult:
         # the UTF-8/no-BOM writers promised by export.  Reject it at the input boundary.
         json.dumps(canonical, ensure_ascii=False, allow_nan=False).encode("utf-8")
         if canonical != payload:
-            raise ValueError(
-                "document is not the exact current normalized result shape"
-            )
+            raise ValueError("document is not the exact current normalized result shape")
         _validate_export_order(payload)
         owned = _owned_intervals(payload)
         for index, (start, end) in enumerate(owned):

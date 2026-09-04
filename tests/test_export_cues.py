@@ -31,7 +31,8 @@ def test_cues_map_canonical_punctuation_and_use_only_word_bounds() -> None:
 
 @pytest.mark.parametrize("output_format", ["srt", "vtt"])
 def test_timed_export_rejects_non_whitespace_control_characters(
-    tmp_path: Path, output_format: str,
+    tmp_path: Path,
+    output_format: str,
 ) -> None:
     payload = _payload(
         [_timed_segment("Hel\0lo.", [("Hel\0lo", 0.1, 0.8)])],
@@ -92,7 +93,8 @@ def test_cues_assign_straight_opening_quote_to_the_following_timed_word() -> Non
 
 
 def test_literal_unknown_account_tilde_input_is_not_expanded(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     literal_directory = Path("~codex-no-such-account")
@@ -141,9 +143,7 @@ def test_cues_drop_collapsed_ms_bounds_and_never_trim_real_overlap() -> None:
     collapsed = _timed_segment("A.", [("A", 0.0001, 0.0004)])
     built = build_cues([collapsed], duration=1.0)
     assert built.cues == ()
-    assert [warning["code"] for warning in built.warnings] == [
-        "cue_dropped_after_quantization"
-    ]
+    assert [warning["code"] for warning in built.warnings] == ["cue_dropped_after_quantization"]
 
     overlapping = [
         _timed_segment("First.", [("First", 0.1, 0.6)], segment_id="seg_0"),
@@ -153,12 +153,8 @@ def test_cues_drop_collapsed_ms_bounds_and_never_trim_real_overlap() -> None:
         build_cues(overlapping, duration=1.0)
 
     submillisecond_overlap = [
-        _timed_segment(
-            "First.", [("First", 0.0994, 0.1004)], segment_id="seg_0"
-        ),
-        _timed_segment(
-            "Second.", [("Second", 0.1003, 0.1014)], segment_id="seg_1"
-        ),
+        _timed_segment("First.", [("First", 0.0994, 0.1004)], segment_id="seg_0"),
+        _timed_segment("Second.", [("Second", 0.1003, 0.1014)], segment_id="seg_1"),
     ]
     with pytest.raises(CueError, match="before millisecond quantization"):
         build_cues(submillisecond_overlap, duration=1.0)

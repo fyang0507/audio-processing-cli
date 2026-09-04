@@ -11,6 +11,7 @@ import threading
 import time
 import traceback
 from collections.abc import Mapping
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -83,10 +84,8 @@ class _MpsHighWater:
             self._sample()
 
     def start(self) -> None:
-        try:
+        with suppress(Exception):  # telemetry cannot suppress the result
             self._sample()
-        except Exception:  # noqa: BLE001 - telemetry cannot suppress the result
-            pass
         thread: threading.Thread | None = None
         try:
             thread = threading.Thread(
@@ -96,34 +95,24 @@ class _MpsHighWater:
             )
             thread.start()
         except Exception:  # noqa: BLE001 - synchronous sampling remains available
-            try:
+            with suppress(Exception):  # best-effort telemetry cleanup
                 self._stop.set()
                 if thread is not None and thread.is_alive():
                     thread.join()
-            except Exception:  # noqa: BLE001 - best-effort telemetry cleanup
-                pass
             return
         self._thread = thread
 
     def stop(self) -> int | None:
         thread = self._thread
-        try:
+        with suppress(Exception):  # telemetry cannot suppress the result
             self._sample()
-        except Exception:  # noqa: BLE001 - telemetry cannot suppress the result
-            pass
-        try:
+        with suppress(Exception):  # telemetry cannot suppress the result
             self._stop.set()
-        except Exception:  # noqa: BLE001 - telemetry cannot suppress the result
-            pass
         if thread is not None:
-            try:
+            with suppress(Exception):  # telemetry cannot suppress the result
                 thread.join()
-            except Exception:  # noqa: BLE001 - telemetry cannot suppress the result
-                pass
-        try:
+        with suppress(Exception):  # telemetry cannot suppress the result
             self._sample()
-        except Exception:  # noqa: BLE001 - telemetry cannot suppress the result
-            pass
         try:
             with self._lock:
                 return self._peak
@@ -159,24 +148,20 @@ def _complete_json_array(text: str) -> list[object]:
         if array_start < 0:
             raise ValueError("VibeVoice generated JSON code block has no array")
         if text[content_start:array_start].strip():
-            raise ValueError(
-                "VibeVoice generated JSON code block has content before its array"
-            )
+            raise ValueError("VibeVoice generated JSON code block has content before its array")
     else:
         if array_start < 0:
             raise ValueError("VibeVoice generated text has no JSON array")
         _validate_generated_preamble(text, array_start)
-    value, end = json.JSONDecoder(
-        object_pairs_hook=_reject_duplicate_json_keys
-    ).raw_decode(text, array_start)
+    value, end = json.JSONDecoder(object_pairs_hook=_reject_duplicate_json_keys).raw_decode(
+        text, array_start
+    )
     suffix = text[end:].strip()
     if fenced:
         if not suffix.startswith("```"):
             raise ValueError("VibeVoice generated JSON code block is incomplete")
-        if suffix[len("```"):].strip():
-            raise ValueError(
-                "VibeVoice generated text continues after its JSON code block"
-            )
+        if suffix[len("```") :].strip():
+            raise ValueError("VibeVoice generated text continues after its JSON code block")
     elif suffix:
         raise ValueError("VibeVoice generated text continues after its JSON array")
     if not isinstance(value, list):
@@ -225,13 +210,17 @@ def main() -> int:
             language_model_pretrained_name=str(tokenizer_path),
             local_files_only=True,
         )
-        model = VibeVoiceASRForConditionalGeneration.from_pretrained(
-            str(model_path),
-            dtype=torch.bfloat16,
-            attn_implementation=config["attention"],
-            trust_remote_code=True,
-            local_files_only=True,
-        ).to(config["device"]).eval()
+        model = (
+            VibeVoiceASRForConditionalGeneration.from_pretrained(
+                str(model_path),
+                dtype=torch.bfloat16,
+                attn_implementation=config["attention"],
+                trust_remote_code=True,
+                local_files_only=True,
+            )
+            .to(config["device"])
+            .eval()
+        )
         torch.mps.synchronize()
 
         inputs = processor(
@@ -242,8 +231,7 @@ def main() -> int:
             add_generation_prompt=True,
         )
         inputs = {
-            key: value.to(config["device"])
-            if isinstance(value, torch.Tensor) else value
+            key: value.to(config["device"]) if isinstance(value, torch.Tensor) else value
             for key, value in inputs.items()
         }
         input_tokens = int(inputs["input_ids"].shape[1])
@@ -266,25 +254,23 @@ def main() -> int:
         raw_text = processor.decode(generated, skip_special_tokens=True)
         if not isinstance(raw_text, str):
             raise TypeError("VibeVoice processor decode did not return a string")
-        hit_max_new_tokens = (
-            generated_tokens == config["max_new_tokens"] and not eos_observed
-        )
+        hit_max_new_tokens = generated_tokens == config["max_new_tokens"] and not eos_observed
         segments = processor.post_process_transcription(raw_text)
         if not isinstance(segments, list):
             raise TypeError("VibeVoice post-process result must be an array")
         if not hit_max_new_tokens:
             generated_array = _complete_json_array(raw_text)
             if len(segments) != len(generated_array):
-                raise ValueError(
-                    "VibeVoice post-process dropped generated array entries"
-                )
-        output.update({
-            "raw_text": raw_text,
-            "segments": segments,
-            "hit_max_new_tokens": hit_max_new_tokens,
-            "generated_tokens": generated_tokens,
-            "eos_observed": eos_observed,
-        })
+                raise ValueError("VibeVoice post-process dropped generated array entries")
+        output.update(
+            {
+                "raw_text": raw_text,
+                "segments": segments,
+                "hit_max_new_tokens": hit_max_new_tokens,
+                "generated_tokens": generated_tokens,
+                "eos_observed": eos_observed,
+            }
+        )
         code = 4 if hit_max_new_tokens else 0
     except Exception as exc:  # noqa: BLE001 - every stage failure needs a result envelope
         output["error"] = {
@@ -295,9 +281,7 @@ def main() -> int:
         code = 1
 
     try:
-        peak_mps_live_bytes = (
-            mps_high_water.stop() if mps_high_water is not None else None
-        )
+        peak_mps_live_bytes = mps_high_water.stop() if mps_high_water is not None else None
     except Exception:  # noqa: BLE001 - telemetry cannot suppress the result envelope
         peak_mps_live_bytes = None
     output["metrics"] = {

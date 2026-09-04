@@ -35,14 +35,11 @@ class ProtectedOutputError(OSError):
             else ""
         )
         super().__init__(
-            f"output {self.output} resolves to protected input {self.protected}"
-            f"{preservation}"
+            f"output {self.output} resolves to protected input {self.protected}{preservation}"
         )
 
 
-def _rename_exchange(
-    directory_descriptor: int, left_name: str, right_name: str
-) -> None:
+def _rename_exchange(directory_descriptor: int, left_name: str, right_name: str) -> None:
     """Atomically exchange two descriptor-relative directory entries."""
     library = ctypes.CDLL(None, use_errno=True)
     left = os.fsencode(left_name)
@@ -75,13 +72,16 @@ def _rename_exchange(
         function.restype = ctypes.c_int
     else:
         raise OSError(errno.ENOTSUP, "atomic rename exchange is unavailable")
-    if function(
-        directory_descriptor,
-        left,
-        directory_descriptor,
-        right,
-        0x00000002,
-    ) != 0:
+    if (
+        function(
+            directory_descriptor,
+            left,
+            directory_descriptor,
+            right,
+            0x00000002,
+        )
+        != 0
+    ):
         error = ctypes.get_errno()
         raise OSError(error, os.strerror(error), right_name)
 
@@ -109,9 +109,7 @@ def publish_temporary_file(
     if not identity.entry_matches_file_identity(
         directory_descriptor, temporary_name, temporary_identity
     ):
-        raise OSError(
-            f"writer temporary changed identity before publication: {output_path}"
-        )
+        raise OSError(f"writer temporary changed identity before publication: {output_path}")
 
     if not force:
         protected = identity.matching_protected_identity(
@@ -130,12 +128,9 @@ def publish_temporary_file(
             directory_descriptor, output_name, temporary_identity
         ):
             raise OSError(
-                f"published destination does not contain the writer temporary: "
-                f"{output_path}"
+                f"published destination does not contain the writer temporary: {output_path}"
             )
-        cleanup_temporary_file(
-            directory_descriptor, temporary_name, temporary_identity
-        )
+        cleanup_temporary_file(directory_descriptor, temporary_name, temporary_identity)
         return
 
     for _attempt in range(8):
@@ -160,17 +155,12 @@ def publish_temporary_file(
                 directory_descriptor, output_name, temporary_identity
             ):
                 raise OSError(
-                    f"published destination does not contain the writer temporary: "
-                    f"{output_path}"
-                )
-            cleanup_temporary_file(
-                directory_descriptor, temporary_name, temporary_identity
-            )
+                    f"published destination does not contain the writer temporary: {output_path}"
+                ) from None
+            cleanup_temporary_file(directory_descriptor, temporary_name, temporary_identity)
             return
         try:
-            _rename_exchange(
-                directory_descriptor, temporary_name, output_name
-            )
+            _rename_exchange(directory_descriptor, temporary_name, output_name)
         except FileNotFoundError:
             continue
 
@@ -178,17 +168,13 @@ def publish_temporary_file(
             directory_descriptor, output_name, temporary_identity
         ):
             try:
-                _rename_exchange(
-                    directory_descriptor, temporary_name, output_name
-                )
+                _rename_exchange(directory_descriptor, temporary_name, output_name)
             except OSError as exc:
                 raise OSError(
                     f"could not atomically restore destination after writer "
                     f"temporary identity changed for {output_path}: {exc}"
                 ) from exc
-            raise OSError(
-                f"writer temporary changed identity during publication: {output_path}"
-            )
+            raise OSError(f"writer temporary changed identity during publication: {output_path}")
 
         state = os.stat(
             temporary_name,
@@ -203,9 +189,7 @@ def publish_temporary_file(
         )
         if refused_kind or protected is not None:
             try:
-                _rename_exchange(
-                    directory_descriptor, temporary_name, output_name
-                )
+                _rename_exchange(directory_descriptor, temporary_name, output_name)
             except OSError as exc:
                 if protected is not None:
                     raise ProtectedOutputError(
@@ -219,14 +203,11 @@ def publish_temporary_file(
             if protected is not None:
                 raise ProtectedOutputError(output_path, protected.path)
             raise OSError(
-                f"destination changed to a non-regular file during publication: "
-                f"{output_path}"
+                f"destination changed to a non-regular file during publication: {output_path}"
             )
         os.unlink(temporary_name, dir_fd=directory_descriptor)
         return
-    raise FileExistsError(
-        f"destination changed repeatedly during publication: {output_path}"
-    )
+    raise FileExistsError(f"destination changed repeatedly during publication: {output_path}")
 
 
 def cleanup_temporary_file(
@@ -279,8 +260,7 @@ def atomic_write_text(
         try:
             descriptor = os.open(
                 temporary_name,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL
-                | getattr(os, "O_NOFOLLOW", 0),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
                 0o666,
                 dir_fd=parent_descriptor,
             )
@@ -294,8 +274,7 @@ def atomic_write_text(
                     os.close(descriptor)
             if temporary_identity is None:
                 raise OSError(
-                    f"writer temporary is not a regular file: "
-                    f"{path.parent / temporary_name}"
+                    f"writer temporary is not a regular file: {path.parent / temporary_name}"
                 )
             with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(text)
@@ -314,9 +293,7 @@ def atomic_write_text(
             created = False
         finally:
             if created and temporary_identity is not None:
-                cleanup_temporary_file(
-                    parent_descriptor, temporary_name, temporary_identity
-                )
+                cleanup_temporary_file(parent_descriptor, temporary_name, temporary_identity)
 
 
 def atomic_write_json(

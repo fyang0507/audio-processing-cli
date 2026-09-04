@@ -21,12 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("input", type=Path)
     inspect_parser.add_argument("--profile", choices=sorted(PROFILES))
-    inspect_parser.add_argument(
-        "--vad-model", type=Path, help="Use a local Silero ONNX model."
-    )
-    inspect_parser.add_argument(
-        "--report", type=Path, help="Also write the JSON inspection here."
-    )
+    inspect_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")
+    inspect_parser.add_argument("--report", type=Path, help="Also write the JSON inspection here.")
     inspect_parser.add_argument(
         "--force",
         action="store_true",
@@ -51,9 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     enhance_parser.add_argument("--dry-run", action="store_true")
     enhance_parser.add_argument("--list-stages", action="store_true")
     enhance_parser.add_argument("--report", type=Path)
-    enhance_parser.add_argument(
-        "--vad-model", type=Path, help="Use a local Silero ONNX model."
-    )
+    enhance_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")
     enhance_parser.add_argument(
         "--allow-enhanced-input",
         action="store_true",
@@ -62,10 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     enhance_parser.add_argument(
         "--force",
         action="store_true",
-        help=(
-            "Replace an existing output/report only after the new render verifies "
-            "successfully."
-        ),
+        help=("Replace an existing output/report only after the new render verifies successfully."),
     )
 
     subparsers.add_parser(
@@ -77,9 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
         "packages",
         help="Provision, verify, and remove model packages and their environments.",
     )
-    package_commands = packages_parser.add_subparsers(
-        dest="packages_command", required=True
-    )
+    package_commands = packages_parser.add_subparsers(dest="packages_command", required=True)
 
     package_commands.add_parser("list", help="What is provisioned, and what it occupies.")
     package_commands.add_parser("path", help="Resolved root and per-package locations.")
@@ -128,9 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
         "transcribe",
         help="Inspect transcription capabilities and resolve an execution plan.",
     )
-    transcribe_commands = transcribe_parser.add_subparsers(
-        dest="transcribe_command", required=True
-    )
+    transcribe_commands = transcribe_parser.add_subparsers(dest="transcribe_command", required=True)
     capabilities_parser = transcribe_commands.add_parser(
         "capabilities", help="Report what one stack can do with one input."
     )
@@ -144,9 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--input", type=Path)
     plan_parser.add_argument("--want", help="Comma-separated capability names.")
     plan_parser.add_argument("--language")
-    plan_parser.add_argument(
-        "--vad", help="Pin the VAD backend for a requested vad capability."
-    )
+    plan_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
     plan_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
@@ -157,9 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--input", type=Path)
     run_parser.add_argument("--want", help="Comma-separated capability names.")
     run_parser.add_argument("--language")
-    run_parser.add_argument(
-        "--vad", help="Pin the VAD backend for a requested vad capability."
-    )
+    run_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
     run_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
@@ -181,10 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         type=Path,
         required=True,
-        help=(
-            "Normalized result JSON; repeat in source-timeline order to merge "
-            "continuations."
-        ),
+        help=("Normalized result JSON; repeat in source-timeline order to merge continuations."),
     )
     export_parser.add_argument(
         "--format", choices=("srt", "vtt", "md", "txt", "jsonl"), required=True

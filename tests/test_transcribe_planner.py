@@ -27,12 +27,16 @@ def test_omitted_want_is_a_floors_only_request() -> None:
     assert set(emitted["roles"]) == {"decode", "asr"}
     assert emitted["capabilities"] == {}
     assert set(emitted["sample_output"]) == {
-        "sample", "note", "schema_version", "complete", "source", "segments",
-        "abstentions", "provenance",
+        "sample",
+        "note",
+        "schema_version",
+        "complete",
+        "source",
+        "segments",
+        "abstentions",
+        "provenance",
     }
-    assert emitted["sample_output"]["segments"] == [
-        {"segment_id": "seg_0", "text": None}
-    ]
+    assert emitted["sample_output"]["segments"] == [{"segment_id": "seg_0", "text": None}]
     assert "outcomes" not in emitted
     assert emitted["sample_output"]["provenance"]["outcomes"] == {}
 
@@ -87,9 +91,13 @@ def test_every_satisfiable_cell_drives_plan_and_sample_shape(
 @pytest.mark.parametrize(
     ("stack_id", "capability", "code"),
     [
-        (stack_id, capability,
-         "capability_unsupported" if cell["resolution"] == "unsupported"
-         else "capability_unsatisfiable_on_stack")
+        (
+            stack_id,
+            capability,
+            "capability_unsupported"
+            if cell["resolution"] == "unsupported"
+            else "capability_unsatisfiable_on_stack",
+        )
         for stack_id, definition in stacks.stack_definitions().items()
         for capability, cell in definition.capabilities.items()
         if cell["resolution"] in {"unsupported", "unsatisfiable_on_stack"}
@@ -162,48 +170,42 @@ def test_sample_provenance_embeds_the_executable_plan_without_recursing() -> Non
 
 def test_vibevoice_plan_records_both_executed_hub_revisions() -> None:
     emitted = plan_for("vibevoice")
-    assert emitted["roles"]["asr"]["revision"] == (
-        "d0c9efdb8d614685062c04425d91e01b6f37d944"
-    )
+    assert emitted["roles"]["asr"]["revision"] == ("d0c9efdb8d614685062c04425d91e01b6f37d944")
     assert emitted["roles"]["asr"]["tokenizer"] == {
         "materialized_role": "tokenizer",
         "repository": "Qwen/Qwen2.5-7B",
         "revision": "d149729398750b98c0af14eb82c78cfe92750796",
     }
-    assert emitted["packages"] == [{
-        "package": "vibevoice-asr-7b",
-        "environment": "torch-vibevoice",
-        "kind": "weights",
-        "bytes": 17_361_048_135,
-        "provisioned": False,
-    }]
+    assert emitted["packages"] == [
+        {
+            "package": "vibevoice-asr-7b",
+            "environment": "torch-vibevoice",
+            "kind": "weights",
+            "bytes": 17_361_048_135,
+            "provisioned": False,
+        }
+    ]
     assert emitted["total_known_download_bytes"] == 17_361_048_135
 
 
 @pytest.mark.parametrize("stack_id", ["qwen-1.7b", "qwen-0.6b", "vibevoice"])
 def test_word_timing_plan_records_the_executed_aligner_revision(stack_id: str) -> None:
     emitted = plan_for(stack_id, "word_timestamps")
-    assert emitted["roles"]["aligner"]["revision"] == (
-        "0e1a68e91d815300c7c9754b2a7639378b23db15"
-    )
+    assert emitted["roles"]["aligner"]["revision"] == ("0e1a68e91d815300c7c9754b2a7639378b23db15")
 
 
 def test_firered_plan_records_every_weight_revision_and_checkout_commit() -> None:
     emitted = plan_for("firered", "lid")
     roles = emitted["roles"]
-    assert {
-        role: roles[role]["revision"]
-        for role in ("vad", "lid", "asr", "punctuator")
-    } == {
+    assert {role: roles[role]["revision"] for role in ("vad", "lid", "asr", "punctuator")} == {
         "vad": "7990aaccc6b7aec1e527743bd30201f2c4a03b8c",
         "lid": "1bb4d285c8456429385d9c0810300df4297bc11b",
         "asr": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
         "punctuator": "e448fd967f44182a1c323cc30f5d89f2400c28da",
     }
-    assert {
-        roles[role]["source_commit"]
-        for role in ("vad", "lid", "asr", "punctuator")
-    } == {"4e7d9aaf4482a47cec1724807026b9b151926eb5"}
+    assert {roles[role]["source_commit"] for role in ("vad", "lid", "asr", "punctuator")} == {
+        "4e7d9aaf4482a47cec1724807026b9b151926eb5"
+    }
 
 
 def test_firered_determinism_policy_matches_the_recorded_artifact() -> None:

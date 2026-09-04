@@ -58,15 +58,19 @@ def isolated_root(tmp_path, monkeypatch):
         for package in env.packages().values():
             source = package.source
             repositories = (
-                source["repos"] if source["type"] == "huggingface_multi"
-                else [source] if source["type"] == "huggingface"
+                source["repos"]
+                if source["type"] == "huggingface_multi"
+                else [source]
+                if source["type"] == "huggingface"
                 else []
             )
             for repository in repositories:
                 found[(repository["repo"], repository["revision"])] = (
-                    tmp_path / "hub"
+                    tmp_path
+                    / "hub"
                     / f"models--{repository['repo'].replace('/', '--')}"
-                    / "snapshots" / repository["revision"]
+                    / "snapshots"
+                    / repository["revision"]
                 )
         return found
 
@@ -87,8 +91,13 @@ class FakeToolchain(pkg.Toolchain):
     broken repair pass.
     """
 
-    def __init__(self, *, missing: tuple[str, ...] = (), drift: dict | None = None,
-                 private_api_hash: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        missing: tuple[str, ...] = (),
+        drift: dict | None = None,
+        private_api_hash: str | None = None,
+    ) -> None:
         self.calls: list[list[str]] = []
         self.missing = set(missing)
         self._drift = dict(drift or {})
@@ -116,10 +125,12 @@ class FakeToolchain(pkg.Toolchain):
         # `-c` invocation in the tool is the private-API probe.
         if self.private_api_hash is not None and list(args)[1:2] == ["-c"]:
             guards = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}
-            Result.stdout = json.dumps({
-                "sha256": self.private_api_hash,
-                "params": sorted(guards["signature"]["required_parameters"]),
-            })
+            Result.stdout = json.dumps(
+                {
+                    "sha256": self.private_api_hash,
+                    "params": sorted(guards["signature"]["required_parameters"]),
+                }
+            )
         return Result()
 
     def create_environment(self, environment, target: Path) -> None:
@@ -144,9 +155,7 @@ class FakeToolchain(pkg.Toolchain):
         touched = target / "vibevoice" / "modular"
         touched.mkdir(parents=True, exist_ok=True)
         (touched / "modeling_vibevoice_asr.py").write_text("original\n")
-        fluid_process = (
-            target / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
-        )
+        fluid_process = target / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
         fluid_process.parent.mkdir(parents=True, exist_ok=True)
         fluid_process.write_text("original fluid process\n", encoding="utf-8")
         package = env.packages()[target.name]
@@ -164,10 +173,7 @@ class FakeToolchain(pkg.Toolchain):
 
     def apply_patch(self, checkout: Path, patch: Path) -> None:
         if checkout.name == "fluidaudio":
-            target = (
-                checkout / "Sources" / "FluidAudioCLI" / "Commands"
-                / "ProcessCommand.swift"
-            )
+            target = checkout / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
             target.write_text("patched fluid process\n", encoding="utf-8")
             return
         target = checkout / "vibevoice" / "modular" / "modeling_vibevoice_asr.py"
@@ -186,8 +192,10 @@ class FakeToolchain(pkg.Toolchain):
     def file_digest(self, path: Path) -> str:
         fluid = env.packages()["fluidaudio"].source.get("patched_file_sha256", {})
         for name, digest in fluid.items():
-            if path.as_posix().endswith(f"/{name}") \
-                    and path.read_bytes() == b"patched fluid process\n":
+            if (
+                path.as_posix().endswith(f"/{name}")
+                and path.read_bytes() == b"patched fluid process\n"
+            ):
                 return digest
         expected = env.packages()["vibevoice-asr-7b"].checkout["patched_file_sha256"]
         for name, digest in expected.items():
@@ -197,16 +205,14 @@ class FakeToolchain(pkg.Toolchain):
 
     def inspect_checkout(self, checkout: Path) -> pkg.CheckoutState:
         tracked = self._checkout_tracked[checkout]
-        modified = tuple(sorted(
-            name
-            for name, contents in tracked.items()
-            if not (checkout / name).is_file() or (checkout / name).read_bytes() != contents
-        ))
-        files = {
-            str(path.relative_to(checkout))
-            for path in checkout.rglob("*")
-            if path.is_file()
-        }
+        modified = tuple(
+            sorted(
+                name
+                for name, contents in tracked.items()
+                if not (checkout / name).is_file() or (checkout / name).read_bytes() != contents
+            )
+        )
+        files = {str(path.relative_to(checkout)) for path in checkout.rglob("*") if path.is_file()}
         return pkg.CheckoutState(
             head=self._checkout_commits[checkout],
             modified=modified,
@@ -229,8 +235,9 @@ class FakeFetcher(pkg.Fetcher):
 
     WEIGHTS = b"w" * 2048
 
-    def __init__(self, tmp_path: Path, *, corrupt: bool = False,
-                 already_cached: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, tmp_path: Path, *, corrupt: bool = False, already_cached: tuple[str, ...] = ()
+    ) -> None:
         self.hub = tmp_path / "hub"
         self.corrupt = corrupt
         self.already_cached = set(already_cached)
@@ -260,14 +267,10 @@ class FakeFetcher(pkg.Fetcher):
             self.forced.append((repo, revision))
         if allow_patterns is not None:
             self.filtered.append((repo, revision, allow_patterns))
-        target = (
-            self.hub / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
-        )
+        target = self.hub / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
         artifacts = (
             [
-                target / (
-                    f"{name[:-3]}/model.mil" if name.endswith("/**") else name
-                )
+                target / (f"{name[:-3]}/model.mil" if name.endswith("/**") else name)
                 for name in allow_patterns
             ]
             if allow_patterns is not None
@@ -308,14 +311,18 @@ def _snapshot_index_for(hub: Path) -> dict[tuple[str, str], Path]:
     for package in env.packages().values():
         source = package.source
         repositories = (
-            source["repos"] if source["type"] == "huggingface_multi"
-            else [source] if source["type"] == "huggingface"
+            source["repos"]
+            if source["type"] == "huggingface_multi"
+            else [source]
+            if source["type"] == "huggingface"
             else []
         )
         for repository in repositories:
             found[(repository["repo"], repository["revision"])] = (
-                hub / f"models--{repository['repo'].replace('/', '--')}"
-                / "snapshots" / repository["revision"]
+                hub
+                / f"models--{repository['repo'].replace('/', '--')}"
+                / "snapshots"
+                / repository["revision"]
             )
     return found
 
@@ -356,14 +363,39 @@ def the_fake_download_satisfies_the_pin(monkeypatch):
 
 
 __all__ = [
-    "ALIGNER_REVISION", "FIRERED_REVISIONS", "FakeFetcher", "FakeToolchain",
-    "Path", "QWEN_REPO", "QWEN_REVISION",
-    "VIBE_MODEL_REVISION", "VIBE_TOKENIZER_REVISION", "_snapshot_index_for",
-    "env", "hashlib", "io", "isolated_root", "json", "main", "media_module",
-    "os", "package_catalog", "package_fetcher", "package_integrity",
-    "package_environment_verification", "package_registry", "package_requirements",
+    "ALIGNER_REVISION",
+    "FIRERED_REVISIONS",
+    "QWEN_REPO",
+    "QWEN_REVISION",
+    "VIBE_MODEL_REVISION",
+    "VIBE_TOKENIZER_REVISION",
+    "FakeFetcher",
+    "FakeToolchain",
+    "Path",
+    "_snapshot_index_for",
+    "env",
+    "hashlib",
+    "io",
+    "isolated_root",
+    "json",
+    "main",
+    "media_module",
+    "os",
+    "package_catalog",
+    "package_environment_verification",
+    "package_fetcher",
+    "package_integrity",
+    "package_registry",
+    "package_requirements",
     "package_teardown",
-    "paths", "pkg",
-    "provisioner", "pytest", "replace", "shutil",
-    "subprocess", "sys", "the_fake_download_satisfies_the_pin", "types",
+    "paths",
+    "pkg",
+    "provisioner",
+    "pytest",
+    "replace",
+    "shutil",
+    "subprocess",
+    "sys",
+    "the_fake_download_satisfies_the_pin",
+    "types",
 ]

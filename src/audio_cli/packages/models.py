@@ -41,9 +41,9 @@ class ProvisioningError(RuntimeError):
 
 
 __all__ = [
-    "CheckoutState",
     "HUB_CACHE_NOTE",
-    "ProvisioningError",
     "REGISTRY_SCHEMA_VERSION",
     "UNTOUCHED",
+    "CheckoutState",
+    "ProvisioningError",
 ]

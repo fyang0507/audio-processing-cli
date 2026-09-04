@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import subprocess
@@ -39,11 +40,17 @@ class RecordingRunner:
             Path(command[-1]).write_bytes(b"wav")
         else:
             request = json.loads(Path(command[-2]).read_text())
-            Path(command[-1]).write_text(json.dumps({
-                "units": [{"unit_id": item["unit_id"], "processed": True, "text": "ok"}
-                          for item in request["units"]],
-                "metrics": {"wall_seconds": 1.25, "peak_rss_bytes": 40},
-            }))
+            Path(command[-1]).write_text(
+                json.dumps(
+                    {
+                        "units": [
+                            {"unit_id": item["unit_id"], "processed": True, "text": "ok"}
+                            for item in request["units"]
+                        ],
+                        "metrics": {"wall_seconds": 1.25, "peak_rss_bytes": 40},
+                    }
+                )
+            )
         return subprocess.CompletedProcess(command, 0, "", "")
 
 
@@ -107,18 +114,42 @@ def test_stage_sources_pin_the_measured_private_api_and_aligner_language_rule() 
     qwen = (stages / "qwen.py").read_text()
     aligner = (stages / "aligner.py").read_text()
     assert "model._generate_chunks_batched" in qwen
-    assert 'max_tokens=remaining' in qwen
+    assert "max_tokens=remaining" in qwen
     assert "mx.clear_cache()" in qwen
     assert 'CJK = re.compile(r"[一-鿿]")' in aligner
     assert '"Chinese" if CJK.search(text) else "English"' in aligner
     assert 'request.get("language")' not in aligner
     assert '"words": None' in aligner
-    runner = (
-        Path(__file__).parents[1]
-        / "model_tests/benchmark/run_turn_attributed_mlx_asr.py"
+    inference = (
+        Path(__file__).parents[1] / "model_tests/benchmark/turn_attributed_mlx_asr/inference.py"
     ).read_text(encoding="utf-8")
-    assert "group_texts, group_generated, group_prompts, group_processed" in runner
+    assert "group_texts, group_generated, group_prompts, group_processed" in inference
     assert "texts, generated, prompts, processed = method(" in qwen
+
+
+def test_turn_attributed_runner_provenance_hashes_every_source(monkeypatch) -> None:
+    benchmark = Path(__file__).parents[1] / "model_tests/benchmark"
+    monkeypatch.syspath_prepend(str(benchmark))
+    turn_report = importlib.import_module("turn_attributed_mlx_asr.report")
+    turn_runtime = importlib.import_module("turn_attributed_mlx_asr.runtime")
+    runner = benchmark / "run_turn_attributed_mlx_asr.py"
+    provenance = turn_report.runner_provenance(runner)
+    expected_names = [
+        "run_turn_attributed_mlx_asr.py",
+        "turn_attributed_mlx_asr/__init__.py",
+        "turn_attributed_mlx_asr/inference.py",
+        "turn_attributed_mlx_asr/plan.py",
+        "turn_attributed_mlx_asr/report.py",
+        "turn_attributed_mlx_asr/runtime.py",
+    ]
+    assert [item["name"] for item in provenance["source_files"]] == expected_names
+    assert provenance["path"] == str(runner.resolve())
+    assert provenance["sha256"] == turn_runtime.sha256(runner)
+    for item in provenance["source_files"]:
+        assert item["sha256"] == turn_runtime.sha256(Path(item["path"]))
+    assert provenance["source_set_sha256"] == turn_runtime.stable_json_sha256(
+        [{"name": item["name"], "sha256": item["sha256"]} for item in provenance["source_files"]]
+    )
 
 
 def test_missing_stage_script_preserves_dispatchable_role_and_backend() -> None:
@@ -163,7 +194,9 @@ def test_failed_stage_without_result_preserves_transport_metrics(tmp_path) -> No
     ],
 )
 def test_stage_rejects_valid_json_with_the_wrong_envelope_shape(
-    tmp_path, payload, detail,
+    tmp_path,
+    payload,
+    detail,
 ) -> None:
     class InvalidEnvelopeRunner:
         def run(self, command):
@@ -215,9 +248,7 @@ def test_json_stage_rejects_duplicate_envelope_keys_with_transport_outcome(
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
-    with pytest.raises(
-        StageFailure, match="duplicate JSON object key 'units'"
-    ) as caught:
+    with pytest.raises(StageFailure, match="duplicate JSON object key 'units'") as caught:
         StageTransport(DuplicateResultRunner()).qwen(
             backend="qwen3-asr-0.6b-8bit",
             model=tmp_path / "model",
@@ -248,12 +279,10 @@ def test_json_stage_rejects_duplicate_envelope_keys_with_transport_outcome(
 def test_stage_rejects_non_numeric_wall_metrics(tmp_path, metrics) -> None:
     class InvalidMetricsRunner:
         def run(self, command):
-            Path(command[-1]).write_text(
-                json.dumps({"metrics": metrics}), encoding="utf-8"
-            )
+            Path(command[-1]).write_text(json.dumps({"metrics": metrics}), encoding="utf-8")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-    with pytest.raises(StageFailure, match="must be (a JSON number|JSON numbers)"):
+    with pytest.raises(StageFailure, match=r"must be (a JSON number|JSON numbers)"):
         StageTransport(InvalidMetricsRunner()).align(
             model=tmp_path / "model",
             audio=tmp_path / "audio.wav",
@@ -326,18 +355,23 @@ def test_qwen_stage_salvages_completed_units_after_mid_generation_error(
 
     request_path = tmp_path / "request.json"
     result_path = tmp_path / "result.json"
-    request_path.write_text(json.dumps({
-        "model": str(tmp_path / "model"),
-        "audio": str(tmp_path / "audio.wav"),
-        "units": [
-            {"unit_id": "u0", "start": 0.0, "end": 1.0},
-            {"unit_id": "u1", "start": 1.0, "end": 2.0},
-        ],
-        "language": None,
-        "max_tokens": 100,
-        "batch_size": 1,
-        "clear_cache_after_every_batch": True,
-    }), encoding="utf-8")
+    request_path.write_text(
+        json.dumps(
+            {
+                "model": str(tmp_path / "model"),
+                "audio": str(tmp_path / "audio.wav"),
+                "units": [
+                    {"unit_id": "u0", "start": 0.0, "end": 1.0},
+                    {"unit_id": "u1", "start": 1.0, "end": 2.0},
+                ],
+                "language": None,
+                "max_tokens": 100,
+                "batch_size": 1,
+                "clear_cache_after_every_batch": True,
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(sys, "argv", ["qwen.py", str(request_path), str(result_path)])
     assert qwen_stage.main() == 4
     result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -348,11 +382,13 @@ def test_qwen_stage_salvages_completed_units_after_mid_generation_error(
 
 def test_real_subprocess_runner_streams_stderr_and_samples_child_rss() -> None:
     progress = io.StringIO()
-    completed = SubprocessRunner(progress).run([
-        sys.executable,
-        "-c",
-        "import sys,time; value=bytearray(1000000); print('working', file=sys.stderr, flush=True); time.sleep(0.1)",
-    ])
+    completed = SubprocessRunner(progress).run(
+        [
+            sys.executable,
+            "-c",
+            "import sys,time; value=bytearray(1000000); print('working', file=sys.stderr, flush=True); time.sleep(0.1)",
+        ]
+    )
     assert completed.returncode == 0
     assert completed.stderr == "working\n"
     assert progress.getvalue() == "working\n"

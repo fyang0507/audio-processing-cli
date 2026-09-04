@@ -42,32 +42,38 @@ def main() -> int:
         for index, segment in enumerate(request["segments"]):
             text = segment["text"]
             start_s, end_s = float(segment["start"]), float(segment["end"])
-            clip = audio[round(start_s * rate):round(end_s * rate)]
+            clip = audio[round(start_s * rate) : round(end_s * rate)]
             language = "Chinese" if CJK.search(text) else "English"
             print(
-                f"aligner stage: processing segment {index + 1}/"
-                f"{len(request['segments'])}",
+                f"aligner stage: processing segment {index + 1}/{len(request['segments'])}",
                 file=sys.stderr,
                 flush=True,
             )
             try:
                 generated = model.generate(audio=clip, text=text, language=language)
-                output["segments"].append({
-                    "unit_id": segment["unit_id"],
-                    "language": language,
-                    "words": [{
-                        "text": item.text,
-                        "start": round(float(item.start_time) + start_s, 3),
-                        "end": round(float(item.end_time) + start_s, 3),
-                    } for item in generated],
-                })
+                output["segments"].append(
+                    {
+                        "unit_id": segment["unit_id"],
+                        "language": language,
+                        "words": [
+                            {
+                                "text": item.text,
+                                "start": round(float(item.start_time) + start_s, 3),
+                                "end": round(float(item.end_time) + start_s, 3),
+                            }
+                            for item in generated
+                        ],
+                    }
+                )
             except Exception as exc:  # noqa: BLE001 - this capability may abstain per segment
-                output["segments"].append({
-                    "unit_id": segment["unit_id"],
-                    "language": language,
-                    "words": None,
-                    "error": {"type": type(exc).__name__, "message": str(exc)},
-                })
+                output["segments"].append(
+                    {
+                        "unit_id": segment["unit_id"],
+                        "language": language,
+                        "words": None,
+                        "error": {"type": type(exc).__name__, "message": str(exc)},
+                    }
+                )
         output["metrics"] = {
             "wall_seconds": round(time.perf_counter() - started, 6),
             "peak_rss_bytes": _rss_bytes(),
@@ -76,7 +82,8 @@ def main() -> int:
         code = 0
     except Exception as exc:  # noqa: BLE001 - the stage must always write a result envelope
         output["error"] = {
-            "type": type(exc).__name__, "message": str(exc),
+            "type": type(exc).__name__,
+            "message": str(exc),
             "traceback": traceback.format_exc(),
         }
         output["metrics"] = {
@@ -84,9 +91,7 @@ def main() -> int:
             "peak_rss_bytes": _rss_bytes(),
         }
         code = 1
-    result_path.write_text(
-        json.dumps(output, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    result_path.write_text(json.dumps(output, ensure_ascii=False) + "\n", encoding="utf-8")
     return code
 
 

@@ -18,7 +18,7 @@ from transcribe_native_test_support import (
     trusted_checkout_probe as trusted_checkout_probe,
 )
 
-from audio_cli.transcribe import _native_scope as native_scope
+from audio_cli.transcribe.native import scope as native_scope
 
 
 @pytest.mark.parametrize(
@@ -26,53 +26,42 @@ from audio_cli.transcribe import _native_scope as native_scope
     [
         (
             [
-                {"region_id": "same", "start": 0.1, "end": 0.5,
-                 "processed": True},
-                {"region_id": "same", "start": 0.6, "end": 1.0,
-                 "processed": False},
+                {"region_id": "same", "start": 0.1, "end": 0.5, "processed": True},
+                {"region_id": "same", "start": 0.6, "end": 1.0, "processed": False},
             ],
             "unique non-empty strings",
         ),
         (
-            [{"region_id": "vad_0", "start": True, "end": 0.5,
-              "processed": True}],
+            [{"region_id": "vad_0", "start": True, "end": 0.5, "processed": True}],
             "start must be a number",
         ),
         (
-            [{"region_id": "vad_0", "start": 10**400, "end": 1.0,
-              "processed": True}],
+            [{"region_id": "vad_0", "start": 10**400, "end": 1.0, "processed": True}],
             "start must be finite",
         ),
         (
-            [{"region_id": "vad_0", "start": 0.5, "end": 0.5,
-              "processed": True}],
+            [{"region_id": "vad_0", "start": 0.5, "end": 0.5, "processed": True}],
             "positive bounds within the source timeline",
         ),
         (
             [
-                {"region_id": "vad_0", "start": 0.2, "end": 0.8,
-                 "processed": True},
-                {"region_id": "vad_1", "start": 0.7, "end": 1.0,
-                 "processed": False},
+                {"region_id": "vad_0", "start": 0.2, "end": 0.8, "processed": True},
+                {"region_id": "vad_1", "start": 0.7, "end": 1.0, "processed": False},
             ],
             "chronological and non-overlapping",
         ),
         (
-            [{"region_id": "vad_0", "start": 0.2, "end": 2.1,
-              "processed": True}],
+            [{"region_id": "vad_0", "start": 0.2, "end": 2.1, "processed": True}],
             "within the source timeline",
         ),
         (
-            [{"region_id": "vad_0", "start": 0.2, "end": 0.8,
-              "processed": True}],
+            [{"region_id": "vad_0", "start": 0.2, "end": 0.8, "processed": True}],
             "does not intersect the requested processing range",
         ),
         (
             [
-                {"region_id": "vad_0", "start": 0.2, "end": 0.8,
-                 "processed": False},
-                {"region_id": "vad_1", "start": 0.9, "end": 1.2,
-                 "processed": True},
+                {"region_id": "vad_0", "start": 0.2, "end": 0.8, "processed": False},
+                {"region_id": "vad_1", "start": 0.9, "end": 1.2, "processed": True},
             ],
             "processed regions must form a prefix",
         ),
@@ -91,28 +80,30 @@ def test_firered_region_ledger_rejects_untrusted_stage_mutations(
 
 
 def test_firered_ledger_comparison_uses_the_stage_millisecond_truncation() -> None:
-    ledger = native_scope._firered_published_region_ledger([
-        {
-            "region_id": "vad_0",
-            "start": 0.2009,
-            "end": 0.9999,
-            "processed": True,
-        },
-        {
-            "region_id": "vad_1",
-            "start": 1.1119,
-            "end": 1.5559,
-            "processed": False,
-        },
-    ])
-    assert native_scope._firered_published_vad_prefix(ledger) == (
-        {"start": 0.2, "end": 0.999},
+    ledger = native_scope._firered_published_region_ledger(
+        [
+            {
+                "region_id": "vad_0",
+                "start": 0.2009,
+                "end": 0.9999,
+                "processed": True,
+            },
+            {
+                "region_id": "vad_1",
+                "start": 1.1119,
+                "end": 1.5559,
+                "processed": False,
+            },
+        ]
     )
+    assert native_scope._firered_published_vad_prefix(ledger) == ({"start": 0.2, "end": 0.999},)
 
 
 @pytest.mark.parametrize("mutation", ["dropped", "reordered_ids", "raw_bounds"])
 def test_firered_external_silero_stage_ledger_must_preserve_every_selected_unit(
-    tmp_path: Path, monkeypatch, mutation: str,
+    tmp_path: Path,
+    monkeypatch,
+    mutation: str,
 ) -> None:
     _runtime(tmp_path, monkeypatch, "torch-firered")
     source = tmp_path / f"external-ledger-{mutation}.wav"
@@ -152,7 +143,8 @@ def test_firered_external_silero_stage_ledger_must_preserve_every_selected_unit(
                 regions.pop()
             elif mutation == "reordered_ids":
                 regions[0]["region_id"], regions[1]["region_id"] = (
-                    regions[1]["region_id"], regions[0]["region_id"]
+                    regions[1]["region_id"],
+                    regions[0]["region_id"],
                 )
             else:
                 # This remains the same 200 ms public FireRed bound, so only
@@ -188,8 +180,7 @@ def test_firered_external_silero_stage_ledger_must_preserve_every_selected_unit(
                         "sentences": sentences,
                         "words": words,
                         "vad_segments_ms": [
-                            [int(item["start"] * 1000), int(item["end"] * 1000)]
-                            for item in regions
+                            [int(item["start"] * 1000), int(item["end"] * 1000)] for item in regions
                         ],
                     },
                     "regions": regions,
@@ -204,11 +195,7 @@ def test_firered_external_silero_stage_ledger_must_preserve_every_selected_unit(
             metadata,
             registry={
                 "environments": {"torch-firered": {"state": "ready"}},
-                "packages": {
-                    "firered-asr2s": _ready_multi_package(
-                        tmp_path, "firered-asr2s"
-                    )
-                },
+                "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
             },
             transport=Transport(),
             vad_detector=Detector(),
@@ -303,9 +290,7 @@ def test_firered_silero_preserves_exact_fractional_vad_provenance(
         metadata,
         registry={
             "environments": {"torch-firered": {"state": "ready"}},
-            "packages": {
-                "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")
-            },
+            "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
         },
         transport=Transport(),
         vad_detector=Detector(),
@@ -353,18 +338,22 @@ def test_firered_partial_silero_preserves_exact_processed_fractional_prefix(
                 {
                     "complete": False,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 300,
-                            "end_ms": 900,
-                            "text": "First.",
-                            "lang": None,
-                            "lang_confidence": 0,
-                        }],
-                        "words": [{
-                            "start_ms": 300,
-                            "end_ms": 900,
-                            "text": "first",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 300,
+                                "end_ms": 900,
+                                "text": "First.",
+                                "lang": None,
+                                "lang_confidence": 0,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 300,
+                                "end_ms": 900,
+                                "text": "first",
+                            }
+                        ],
                         "vad_segments_ms": [[200, 999]],
                     },
                     "regions": [
@@ -384,11 +373,7 @@ def test_firered_partial_silero_preserves_exact_processed_fractional_prefix(
             metadata,
             registry={
                 "environments": {"torch-firered": {"state": "ready"}},
-                "packages": {
-                    "firered-asr2s": _ready_multi_package(
-                        tmp_path, "firered-asr2s"
-                    )
-                },
+                "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
             },
             transport=Transport(),
             vad_detector=Detector(),
@@ -397,8 +382,6 @@ def test_firered_partial_silero_preserves_exact_processed_fractional_prefix(
 
     assert caught.value.exit_code == 4
     partial = json.loads(
-        (tmp_path / "fractional-silero-partial.partial.json").read_text(
-            encoding="utf-8"
-        )
+        (tmp_path / "fractional-silero-partial.partial.json").read_text(encoding="utf-8")
     )
     assert partial["vad_regions"] == [selected[0]]

@@ -14,18 +14,20 @@ from typing import Any
 
 from audio_cli import environments as env
 
-from .result import CAPABILITY_NAMES
+from .result.types import CAPABILITY_NAMES
 
 HERE = Path(__file__).resolve().parent
 TABLE = HERE / "stacks.json"
 
-RESOLUTIONS = frozenset({
-    "native",
-    "native_stage",
-    "add_on",
-    "unsatisfiable_on_stack",
-    "unsupported",
-})
+RESOLUTIONS = frozenset(
+    {
+        "native",
+        "native_stage",
+        "add_on",
+        "unsatisfiable_on_stack",
+        "unsupported",
+    }
+)
 
 
 class StackTableError(RuntimeError):
@@ -125,8 +127,7 @@ def allowed_stacks(capability: str) -> list[str]:
     return [
         stack.id
         for stack in stack_definitions().values()
-        if stack.capabilities[capability]["resolution"]
-        in {"native", "native_stage", "add_on"}
+        if stack.capabilities[capability]["resolution"] in {"native", "native_stage", "add_on"}
     ]
 
 
@@ -149,9 +150,7 @@ def validate() -> list[str]:
 
     manifest_packages = env.packages()
     manifest_backends = env.backends()
-    manifest_stacks = {
-        stack for package in manifest_packages.values() for stack in package.stacks
-    }
+    manifest_stacks = {stack for package in manifest_packages.values() for stack in package.stacks}
     table_stacks = set(stack_definitions())
     if table_stacks != manifest_stacks:
         problems.append(
@@ -161,9 +160,7 @@ def validate() -> list[str]:
 
     for stack in stack_definitions().values():
         if set(stack.capabilities) != set(order):
-            problems.append(
-                f"{stack.id}: capability cells disagree with capability_order"
-            )
+            problems.append(f"{stack.id}: capability cells disagree with capability_order")
         if stack.environment not in env.environments():
             problems.append(f"{stack.id}: unknown environment {stack.environment!r}")
         if stack.language_vocabulary is not None:
@@ -174,9 +171,7 @@ def validate() -> list[str]:
             else:
                 folded = [name.casefold() for name in vocabulary]
                 if not vocabulary or len(folded) != len(set(folded)):
-                    problems.append(
-                        f"{stack.id}: language vocabulary must be non-empty and unique"
-                    )
+                    problems.append(f"{stack.id}: language vocabulary must be non-empty and unique")
 
         for role, backend_id in stack.base_roles.items():
             backend = manifest_backends.get(backend_id)
@@ -187,17 +182,13 @@ def validate() -> list[str]:
                     f"{stack.id}: backend {backend_id!r} fills {backend.role!r}, not {role!r}"
                 )
             elif stack.id not in manifest_packages[backend.package].stacks:
-                problems.append(
-                    f"{stack.id}: package {backend.package!r} does not list this stack"
-                )
+                problems.append(f"{stack.id}: package {backend.package!r} does not list this stack")
 
         for capability in order:
             cell = stack.capabilities.get(capability, {})
             resolution = cell.get("resolution")
             if resolution not in RESOLUTIONS:
-                problems.append(
-                    f"{stack.id}/{capability}: invalid resolution {resolution!r}"
-                )
+                problems.append(f"{stack.id}/{capability}: invalid resolution {resolution!r}")
                 continue
             if not isinstance(cell.get("catalog_note"), str) or len(cell["catalog_note"]) < 20:
                 problems.append(f"{stack.id}/{capability}: catalog_note is not substantive")
@@ -234,7 +225,8 @@ def validate() -> list[str]:
                     )
             if resolution == "add_on" and cell.get("package") in manifest_packages:
                 bindings = [
-                    backend for backend in manifest_backends.values()
+                    backend
+                    for backend in manifest_backends.values()
                     if backend.package == cell["package"]
                 ]
                 if len(bindings) != 1:
@@ -244,20 +236,16 @@ def validate() -> list[str]:
     for capability in order:
         cells = [stack.capabilities[capability] for stack in stack_definitions().values()]
         available = allowed_stacks(capability)
-        if any(cell["resolution"] == "unsatisfiable_on_stack" for cell in cells) \
-                and not available:
+        if any(cell["resolution"] == "unsatisfiable_on_stack" for cell in cells) and not available:
             problems.append(
                 f"{capability}: unsatisfiable_on_stack requires a non-empty alternative"
             )
         unsupported = [cell for cell in cells if cell["resolution"] == "unsupported"]
         if unsupported and available:
-            problems.append(
-                f"{capability}: unsupported cannot have an available stack"
-            )
-        if unsupported and len({
-            (cell.get("reason"), cell.get("refusal_fix")) for cell in unsupported
-        }) != 1:
-            problems.append(
-                f"{capability}: unsupported reason and refusal_fix disagree by stack"
-            )
+            problems.append(f"{capability}: unsupported cannot have an available stack")
+        if (
+            unsupported
+            and len({(cell.get("reason"), cell.get("refusal_fix")) for cell in unsupported}) != 1
+        ):
+            problems.append(f"{capability}: unsupported reason and refusal_fix disagree by stack")
     return problems

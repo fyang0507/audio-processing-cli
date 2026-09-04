@@ -41,14 +41,18 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
             "stack_conflicts_with_named_packages",
             f"--stack {stack} was passed alongside named packages; a stack selects every package "
             "it can use and named ids select exactly those, so one of the two has to go",
-            exit_code=2, stack=stack, packages=list(package_ids),
+            exit_code=2,
+            stack=stack,
+            packages=list(package_ids),
             fix=f"audio packages pull {' '.join(package_ids)}",
         )
     if package_ids:
         unknown = sorted(set(package_ids) - set(package_catalog))
         if unknown:
             raise ProvisioningError(
-                "package_unknown", f"no such package: {', '.join(unknown)}", exit_code=2,
+                "package_unknown",
+                f"no such package: {', '.join(unknown)}",
+                exit_code=2,
                 allowed=sorted(package_catalog),
             )
         # A repeated positional id is still one package selection.  Besides duplicating the
@@ -57,12 +61,12 @@ def select(package_ids: list[str] | None = None, *, stack: str | None = None) ->
         # first-occurrence order while making the selection a stable set.
         return [package_catalog[identifier] for identifier in dict.fromkeys(package_ids)]
     if stack is not None:
-        chosen = [
-            package for package in package_catalog.values() if stack in package.stacks
-        ]
+        chosen = [package for package in package_catalog.values() if stack in package.stacks]
         if not chosen:
             raise ProvisioningError(
-                "stack_unknown", f"no packages are registered for stack {stack!r}", exit_code=2,
+                "stack_unknown",
+                f"no packages are registered for stack {stack!r}",
+                exit_code=2,
                 allowed=sorted(
                     {name for package in package_catalog.values() for name in package.stacks}
                 ),
@@ -105,7 +109,7 @@ def path_report() -> dict:
         "weights": {
             "location": "the Hugging Face cache, shared with other tools",
             "note": "per-package `location` or `locations` below is authoritative; the "
-                    "registry records the revisions this root materialized there",
+            "registry records the revisions this root materialized there",
         },
         "models": {
             "path": str(paths.models_dir()),
@@ -113,19 +117,23 @@ def path_report() -> dict:
             "holds": "hash-pinned single-file artifacts only, currently silero-vad",
         },
         "environments": {
-            name: {"path": str(paths.env_dir(name)),
-                   "python": str(paths.env_python(name)) if environment.has_interpreter else None,
-                   "state": document["environments"].get(name, {}).get("state", "absent")}
-            for name, environment in environments().items() if environment.provisioned
+            name: {
+                "path": str(paths.env_dir(name)),
+                "python": str(paths.env_python(name)) if environment.has_interpreter else None,
+                "state": document["environments"].get(name, {}).get("state", "absent"),
+            }
+            for name, environment in environments().items()
+            if environment.provisioned
         },
         "packages": {
             identifier: {
                 "state": entry.get("state", "absent"),
                 **(
-                    {"location": str(
-                        paths.models_dir()
-                        / str(package_catalog[identifier].source["filename"])
-                    )}
+                    {
+                        "location": str(
+                            paths.models_dir() / str(package_catalog[identifier].source["filename"])
+                        )
+                    }
                     if identifier in package_catalog
                     and package_catalog[identifier].source["type"] == "url"
                     else _path_location_fields(entry)
@@ -151,26 +159,28 @@ def list_report() -> dict:
             unsized.append(identifier)
         else:
             total_known += size
-        listed.append({
-            "package": identifier,
-            "environment": package.environment if package else entry.get("environment"),
-            "state": entry.get("state"),
-            "bytes": size,
-            "license_declared": (
-                package.license_declared if package else entry.get("license_declared")
-            ),
-            "license_reviewed": (
-                package.license_reviewed
-                if package else entry.get("license_reviewed", False)
-            ),
-            "used_by_stacks": list(package.stacks) if package else [],
-        })
+        listed.append(
+            {
+                "package": identifier,
+                "environment": package.environment if package else entry.get("environment"),
+                "state": entry.get("state"),
+                "bytes": size,
+                "license_declared": (
+                    package.license_declared if package else entry.get("license_declared")
+                ),
+                "license_reviewed": (
+                    package.license_reviewed if package else entry.get("license_reviewed", False)
+                ),
+                "used_by_stacks": list(package.stacks) if package else [],
+            }
+        )
     return {
         "root": str(paths.root()),
         "packages": listed,
         "environments": {
             name: document["environments"].get(name, {}).get("state", "absent")
-            for name, environment in environments().items() if environment.provisioned
+            for name, environment in environments().items()
+            if environment.provisioned
         },
         "total_known_bytes": total_known,
         "unsized_packages": unsized,

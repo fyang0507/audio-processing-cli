@@ -24,18 +24,23 @@ from transcribe_orchestrator_test_support import (
     provisioned_runtime_root as provisioned_runtime_root,
 )
 
-from audio_cli.transcribe import _orchestrator_output as orchestrator_output
+from audio_cli.transcribe.execution import publication as orchestrator_output
 
 
 def test_qwen_floor_run_uses_fixed_units_and_never_publishes_container_bounds(tmp_path) -> None:
     resolved, metadata, run_range = request(tmp_path)
     fake = FakeTransport()
     product = orchestrator.run(
-        resolved, metadata, registry=registry(tmp_path), transport=fake,
+        resolved,
+        metadata,
+        registry=registry(tmp_path),
+        transport=fake,
         run_range=run_range,
     )
     assert [(item["start"], item["end"]) for item in fake.units] == [
-        (0.0, 180.0), (180.0, 360.0), (360.0, 361.0),
+        (0.0, 180.0),
+        (180.0, 360.0),
+        (360.0, 361.0),
     ]
     assert product.payload["segments"] == [
         {"segment_id": "seg_0", "text": "Hello."},
@@ -86,8 +91,11 @@ def test_partial_qwen_run_writes_conforming_result_and_exact_resume_ledger(tmp_p
     output = tmp_path / "requested.md"
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=registry(tmp_path),
-            transport=FakeTransport(partial=True), output=output,
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
+            transport=FakeTransport(partial=True),
+            output=output,
         )
     assert raised.value.exit_code == 4
     assert raised.value.payload["code"] == "run_incomplete"
@@ -113,11 +121,14 @@ def test_qwen_malformed_partial_ledger_is_backend_failure_without_publication(
             if malformation == "absent_units":
                 payload = {}
             else:
-                rows = [{
-                    "unit_id": item["unit_id"],
-                    "processed": index == 0,
-                    "text": "language English<asr_text>Hello.",
-                } for index, item in enumerate(units)]
+                rows = [
+                    {
+                        "unit_id": item["unit_id"],
+                        "processed": index == 0,
+                        "text": "language English<asr_text>Hello.",
+                    }
+                    for index, item in enumerate(units)
+                ]
                 if malformation == "missing_row":
                     rows.pop()
                 else:
@@ -182,7 +193,9 @@ def test_repeated_implicit_partial_outputs_choose_unused_siblings(tmp_path) -> N
     resolved, metadata, _ = request(tmp_path)
     with pytest.raises(refusals.Refusal) as first:
         orchestrator.run(
-            resolved, metadata, registry=registry(tmp_path),
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
             transport=FakeTransport(partial=True),
         )
     first_partial = Path(first.value.payload["output"])
@@ -190,7 +203,9 @@ def test_repeated_implicit_partial_outputs_choose_unused_siblings(tmp_path) -> N
 
     with pytest.raises(refusals.Refusal) as second:
         orchestrator.run(
-            resolved, metadata, registry=registry(tmp_path),
+            resolved,
+            metadata,
+            registry=registry(tmp_path),
             transport=FakeTransport(partial=True),
         )
     second_partial = Path(second.value.payload["output"])
@@ -269,9 +284,22 @@ def test_zero_completed_units_write_a_partial_without_a_replaying_fix(tmp_path) 
     class ExhaustedTransport(FakeTransport):
         def qwen(self, *, units, **kwargs):
             self.units = units
-            return StageOutcome("asr", "qwen3-asr-0.6b-8bit", {"units": [{
-                "unit_id": item["unit_id"], "processed": False, "text": "",
-            } for item in units]}, 3.0, returncode=4)
+            return StageOutcome(
+                "asr",
+                "qwen3-asr-0.6b-8bit",
+                {
+                    "units": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "processed": False,
+                            "text": "",
+                        }
+                        for item in units
+                    ]
+                },
+                3.0,
+                returncode=4,
+            )
 
     resolved, metadata, _ = request(tmp_path)
     with pytest.raises(refusals.Refusal) as raised:
@@ -292,9 +320,7 @@ def test_zero_completed_units_write_a_partial_without_a_replaying_fix(tmp_path) 
         "no processing unit completed; --range would repeat the same deterministic work, "
         "so inspect the first unit or backend budget before retrying"
     )
-    partial = json.loads(
-        Path(raised.value.payload["output"]).read_text(encoding="utf-8")
-    )
+    partial = json.loads(Path(raised.value.payload["output"]).read_text(encoding="utf-8"))
     assert partial["complete"] is False
     assert partial["segments"] == []
 
@@ -302,14 +328,29 @@ def test_zero_completed_units_write_a_partial_without_a_replaying_fix(tmp_path) 
 def test_zero_prefix_partial_does_not_claim_diarizer_abstained(tmp_path) -> None:
     class ExhaustedDiarizedTransport(FullFakeTransport):
         def qwen(self, *, units, **kwargs):
-            return StageOutcome("asr", "qwen3-asr-0.6b-8bit", {"units": [{
-                "unit_id": item["unit_id"], "processed": False, "text": "",
-            } for item in units]}, 1.0, returncode=4)
+            return StageOutcome(
+                "asr",
+                "qwen3-asr-0.6b-8bit",
+                {
+                    "units": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "processed": False,
+                            "text": "",
+                        }
+                        for item in units
+                    ]
+                },
+                1.0,
+                returncode=4,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     with pytest.raises(refusals.Refusal) as raised:
@@ -319,7 +360,5 @@ def test_zero_prefix_partial_does_not_claim_diarizer_abstained(tmp_path) -> None
             registry=full_registry(tmp_path),
             transport=ExhaustedDiarizedTransport(),
         )
-    partial = json.loads(
-        Path(raised.value.payload["output"]).read_text(encoding="utf-8")
-    )
+    partial = json.loads(Path(raised.value.payload["output"]).read_text(encoding="utf-8"))
     assert partial["provenance"]["outcomes"]["diarization"] == "produced"

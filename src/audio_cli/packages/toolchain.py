@@ -25,8 +25,9 @@ class Toolchain:
     def which(self, tool: str) -> str | None:
         return shutil.which(tool)
 
-    def run(self, args: list[str], *, cwd: Path | None = None,
-            timeout: int = 3600) -> subprocess.CompletedProcess:
+    def run(
+        self, args: list[str], *, cwd: Path | None = None, timeout: int = 3600
+    ) -> subprocess.CompletedProcess:
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
     def file_digest(self, path: Path) -> str:
@@ -37,8 +38,10 @@ class Toolchain:
         """`uv venv` then `uv pip sync` — no resolution at provisioning time, ever."""
         if self.which("uv") is None:
             raise ProvisioningError(
-                "toolchain_missing", "uv is not on PATH and is required to create environments",
-                missing_tool="uv", fix="Install uv: https://docs.astral.sh/uv/",
+                "toolchain_missing",
+                "uv is not on PATH and is required to create environments",
+                missing_tool="uv",
+                fix="Install uv: https://docs.astral.sh/uv/",
             )
         created = self.run(["uv", "venv", "--python", environment.python, str(target)])
         if created.returncode != 0:
@@ -47,13 +50,15 @@ class Toolchain:
                 f"could not create {environment.name}: {created.stderr.strip()}",
                 environment=environment.name,
             )
-        synced = self.run(["uv", "pip", "sync", "--python", str(target / "bin" / "python"),
-                           str(environment.lock)])
+        synced = self.run(
+            ["uv", "pip", "sync", "--python", str(target / "bin" / "python"), str(environment.lock)]
+        )
         if synced.returncode != 0:
             raise ProvisioningError(
                 "environment_sync_failed",
                 f"could not sync {environment.name} from its lock: {synced.stderr.strip()}",
-                environment=environment.name, lock=environment.lock.name,
+                environment=environment.name,
+                lock=environment.lock.name,
             )
 
     def frozen_packages(self, environment_python: Path) -> dict[str, str]:
@@ -89,18 +94,21 @@ class Toolchain:
     def clone(self, repo: str, commit: str, target: Path) -> None:
         if self.which("git") is None:
             raise ProvisioningError(
-                "toolchain_missing", "git is not on PATH and is required for source checkouts",
+                "toolchain_missing",
+                "git is not on PATH and is required for source checkouts",
                 missing_tool="git",
             )
         if not target.exists():
             cloned = self.run(["git", "clone", "--quiet", repo, str(target)])
             if cloned.returncode != 0:
-                raise ProvisioningError("checkout_failed",
-                                        f"could not clone {repo}: {cloned.stderr.strip()}")
+                raise ProvisioningError(
+                    "checkout_failed", f"could not clone {repo}: {cloned.stderr.strip()}"
+                )
         checked = self.run(["git", "checkout", "--quiet", commit], cwd=target)
         if checked.returncode != 0:
-            raise ProvisioningError("checkout_failed",
-                                    f"could not check out {commit}: {checked.stderr.strip()}")
+            raise ProvisioningError(
+                "checkout_failed", f"could not check out {commit}: {checked.stderr.strip()}"
+            )
 
     def apply_patch(self, checkout: Path, patch: Path) -> None:
         applied = self.run(["git", "apply", str(patch)], cwd=checkout)
@@ -115,13 +123,21 @@ class Toolchain:
                 )
 
     def install_checkout(self, environment_python: Path, checkout: Path) -> None:
-        result = self.run(["uv", "pip", "install", "--python", str(environment_python),
-                           "--no-deps", str(checkout)])
+        result = self.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(environment_python),
+                "--no-deps",
+                str(checkout),
+            ]
+        )
         if result.returncode != 0:
             raise ProvisioningError(
                 "checkout_install_failed",
-                f"could not install {checkout.name} into the environment: "
-                f"{result.stderr.strip()}",
+                f"could not install {checkout.name} into the environment: {result.stderr.strip()}",
             )
 
     def clean_ignored_checkout(self, checkout: Path) -> None:
@@ -149,22 +165,43 @@ class Toolchain:
                 raise ValueError(f"could not inspect source checkout: {exc}") from exc
             if result.returncode != 0:
                 detail = result.stderr.strip() or result.stdout.strip()
-                raise ValueError(
-                    f"git {' '.join(arguments)} failed for {checkout}: {detail}"
-                )
+                raise ValueError(f"git {' '.join(arguments)} failed for {checkout}: {detail}")
             return result.stdout
 
         head = git("rev-parse", "--verify", "HEAD^{commit}").strip()
-        modified = tuple(sorted(filter(None, git(
-            "diff", "--name-only", "--no-ext-diff", "--no-textconv", "--no-renames",
-            "HEAD", "--",
-        ).splitlines())))
-        ordinary_untracked = filter(None, git(
-            "ls-files", "--others", "--exclude-standard",
-        ).splitlines())
-        ignored_untracked = filter(None, git(
-            "ls-files", "--others", "--ignored", "--exclude-standard",
-        ).splitlines())
+        modified = tuple(
+            sorted(
+                filter(
+                    None,
+                    git(
+                        "diff",
+                        "--name-only",
+                        "--no-ext-diff",
+                        "--no-textconv",
+                        "--no-renames",
+                        "HEAD",
+                        "--",
+                    ).splitlines(),
+                )
+            )
+        )
+        ordinary_untracked = filter(
+            None,
+            git(
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+            ).splitlines(),
+        )
+        ignored_untracked = filter(
+            None,
+            git(
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+            ).splitlines(),
+        )
         return CheckoutState(
             head=head,
             modified=modified,
@@ -176,12 +213,14 @@ class Toolchain:
             raise ProvisioningError(
                 "toolchain_missing",
                 "swift is not on PATH; it is required only for the swift environment's packages",
-                missing_tool="swift", requires_tool=["swift"],
+                missing_tool="swift",
+                requires_tool=["swift"],
             )
         built = self.run(["swift", "build", "-c", "release"], cwd=checkout)
         if built.returncode != 0:
-            raise ProvisioningError("swift_build_failed",
-                                    f"swift build failed: {built.stderr.strip()[-600:]}")
+            raise ProvisioningError(
+                "swift_build_failed", f"swift build failed: {built.stderr.strip()[-600:]}"
+            )
 
     def swift_product_runs(self, checkout: Path, product: str) -> bool:
         """Whether the built executable actually launches.
@@ -192,8 +231,9 @@ class Toolchain:
         and this check could never return True. A name that lives beside the commit it belongs to
         is reviewable when the commit moves; a literal buried in a runner is not.
         """
-        result = self.run(["swift", "run", "-c", "release", product, "--help"],
-                          cwd=checkout, timeout=600)
+        result = self.run(
+            ["swift", "run", "-c", "release", product, "--help"], cwd=checkout, timeout=600
+        )
         return result.returncode == 0
 
     def built_product_runs(self, executable: Path) -> bool:

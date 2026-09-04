@@ -65,16 +65,19 @@ def load_pcm16_mono_16k(path: Path) -> tuple[np.ndarray, float]:
 
 def rss_bytes() -> int | None:
     try:
-        return int(subprocess.check_output(
-            ["ps", "-o", "rss=", "-p", str(os.getpid())], text=True
-        ).strip()) * 1024
+        return (
+            int(
+                subprocess.check_output(
+                    ["ps", "-o", "rss=", "-p", str(os.getpid())], text=True
+                ).strip()
+            )
+            * 1024
+        )
     except (OSError, subprocess.CalledProcessError, ValueError):
         return None
 
 
-def interval_active(
-    intervals: list[tuple[float, float]], time_s: float
-) -> bool:
+def interval_active(intervals: list[tuple[float, float]], time_s: float) -> bool:
     return any(start <= time_s < end for start, end in intervals)
 
 
@@ -201,14 +204,19 @@ def main() -> int:
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "regions": len(region_dicts),
-        "load_s": load_s,
-        "inference_s": inference_s,
-        "precision": score["precision"],
-        "recall": score["recall"],
-        "f1": score["f1"],
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "regions": len(region_dicts),
+                "load_s": load_s,
+                "inference_s": inference_s,
+                "precision": score["precision"],
+                "recall": score["recall"],
+                "f1": score["f1"],
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

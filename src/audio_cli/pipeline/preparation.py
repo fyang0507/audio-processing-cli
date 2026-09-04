@@ -43,9 +43,9 @@ def _vad_audio(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     if sample_rate == 16_000:
         return mono
     divisor = math.gcd(sample_rate, 16_000)
-    resampled = signal.resample_poly(
-        mono, 16_000 // divisor, sample_rate // divisor
-    ).astype(np.float32)
+    resampled = signal.resample_poly(mono, 16_000 // divisor, sample_rate // divisor).astype(
+        np.float32
+    )
     return resampled[: mono.size * 16_000 // sample_rate]
 
 

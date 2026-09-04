@@ -39,23 +39,36 @@ def test_verify_reports_the_private_api_guard_as_unchecked_without_the_environme
 
 def test_selecting_by_stack_covers_every_package_that_stack_can_use() -> None:
     chosen = {package.id for package in pkg.select(stack="qwen-1.7b")}
-    assert chosen == {"silero-vad", "qwen3-asr-1.7b-8bit", "qwen3-forcedaligner",
-                      "fluidaudio", "speaker-diarization-coreml"}
+    assert chosen == {
+        "silero-vad",
+        "qwen3-asr-1.7b-8bit",
+        "qwen3-forcedaligner",
+        "fluidaudio",
+        "speaker-diarization-coreml",
+    }
 
 
 def test_named_selection_stably_deduplicates_repeated_ids(provisioner) -> None:
-    selection = pkg.select([
+    selection = pkg.select(
+        [
+            "qwen3-asr-1.7b-8bit",
+            "qwen3-forcedaligner",
+            "qwen3-asr-1.7b-8bit",
+        ]
+    )
+    assert [package.id for package in selection] == [
         "qwen3-asr-1.7b-8bit",
         "qwen3-forcedaligner",
-        "qwen3-asr-1.7b-8bit",
-    ])
-    assert [package.id for package in selection] == [
-        "qwen3-asr-1.7b-8bit", "qwen3-forcedaligner",
     ]
 
-    receipt = provisioner.pull(pkg.select([
-        "qwen3-asr-1.7b-8bit", "qwen3-asr-1.7b-8bit",
-    ]))
+    receipt = provisioner.pull(
+        pkg.select(
+            [
+                "qwen3-asr-1.7b-8bit",
+                "qwen3-asr-1.7b-8bit",
+            ]
+        )
+    )
     assert [item["package"] for item in receipt["pulled"]] == ["qwen3-asr-1.7b-8bit"]
     assert receipt["skipped"] == []
 
@@ -65,9 +78,15 @@ def test_repair_deduplicates_before_forcing_a_download(tmp_path) -> None:
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
 
-    receipt = provisioner.pull(pkg.select([
-        "qwen3-asr-1.7b-8bit", "qwen3-asr-1.7b-8bit",
-    ]), repair=True)
+    receipt = provisioner.pull(
+        pkg.select(
+            [
+                "qwen3-asr-1.7b-8bit",
+                "qwen3-asr-1.7b-8bit",
+            ]
+        ),
+        repair=True,
+    )
 
     assert fetcher.forced == [(QWEN_REPO, QWEN_REVISION)]
     assert [item["package"] for item in receipt["pulled"]] == ["qwen3-asr-1.7b-8bit"]
@@ -85,8 +104,9 @@ def test_unknown_names_fail_with_the_menu_rather_than_a_guess() -> None:
 
 
 def test_a_missing_required_tool_blocks_only_the_package_that_needs_it(tmp_path) -> None:
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
-                                 fetcher=FakeFetcher(tmp_path))
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(missing=("swift",)), fetcher=FakeFetcher(tmp_path)
+    )
     with pytest.raises(pkg.ProvisioningError) as caught:
         provisioner.pull(pkg.select(["fluidaudio"]))
     assert caught.value.code == "toolchain_missing"
@@ -120,7 +140,9 @@ def test_registry_with_a_future_schema_version_is_refused(isolated_root) -> None
 @pytest.mark.parametrize("foreign_kind", ["copy", "symlink"])
 @pytest.mark.parametrize("teardown", ["remove", "purge"])
 def test_foreign_registry_never_authorizes_hub_deletion(
-    tmp_path, foreign_kind: str, teardown: str,
+    tmp_path,
+    foreign_kind: str,
+    teardown: str,
 ) -> None:
     """Hub ownership belongs to one provisioning root, not to a movable receipt."""
     foreign_root = tmp_path / "foreign-root"
@@ -149,9 +171,7 @@ def test_foreign_registry_never_authorizes_hub_deletion(
         def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
             raise AssertionError(f"foreign registry authorized deletion of {revisions}")
 
-    provisioner = pkg.Provisioner(
-        toolchain=FakeToolchain(), fetcher=DeletionTripwire(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=DeletionTripwire(tmp_path))
     with pytest.raises(pkg.ProvisioningError) as caught:
         if teardown == "remove":
             provisioner.remove([package.id])
@@ -161,9 +181,17 @@ def test_foreign_registry_never_authorizes_hub_deletion(
     assert caught.value.code == "registry_unreadable"
 
 
-@pytest.mark.parametrize("document", [[], {"schema_version": 1, "packages": []}, {
-    "schema_version": 1, "packages": {"broken": []},
-}])
+@pytest.mark.parametrize(
+    "document",
+    [
+        [],
+        {"schema_version": 1, "packages": []},
+        {
+            "schema_version": 1,
+            "packages": {"broken": []},
+        },
+    ],
+)
 def test_registry_container_shapes_are_validated(document) -> None:
     paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
     paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
@@ -210,11 +238,10 @@ def test_cli_readers_refuse_a_nonfile_registry(command, capsys) -> None:
     assert "not a regular file" in error["detail"]
 
 
-@pytest.mark.parametrize(
-    "revisions_key", ["hub_revisions", "hub_revisions_pre_existing"]
-)
+@pytest.mark.parametrize("revisions_key", ["hub_revisions", "hub_revisions_pre_existing"])
 def test_registry_rejects_nonstring_revision_ownership_receipts(
-    revisions_key, capsys,
+    revisions_key,
+    capsys,
 ) -> None:
     package = env.packages()["qwen3-asr-0.6b-8bit"]
     document = pkg.blank_registry()
@@ -251,7 +278,8 @@ def test_repair_refuses_a_malformed_top_level_retry_ownership_ledger(capsys) -> 
 
 
 def test_registry_read_error_is_a_machine_readable_cli_failure(
-    monkeypatch, capsys,
+    monkeypatch,
+    capsys,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -271,7 +299,8 @@ def test_registry_read_error_is_a_machine_readable_cli_failure(
 
 
 def test_registry_loader_never_follows_a_leaf_substituted_before_open(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -302,11 +331,13 @@ def test_registry_loader_never_follows_a_leaf_substituted_before_open(
 
 @pytest.mark.parametrize("command", ["list", "path", "verify"])
 def test_cli_readers_refuse_nonobject_materialized_registry_entry(
-    command, capsys,
+    command,
+    capsys,
 ) -> None:
     document = pkg.blank_registry()
     document["packages"]["silero-vad"] = {
-        "state": "ready", "materialized": "not-an-object",
+        "state": "ready",
+        "materialized": "not-an-object",
     }
     paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
     paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
@@ -320,7 +351,8 @@ def test_cli_readers_refuse_nonobject_materialized_registry_entry(
 def test_cli_readers_refuse_nonnumeric_materialized_bytes(command, capsys) -> None:
     document = pkg.blank_registry()
     document["packages"]["silero-vad"] = {
-        "state": "ready", "materialized": {"bytes": "not-a-number"},
+        "state": "ready",
+        "materialized": {"bytes": "not-a-number"},
     }
     paths.registry_path().parent.mkdir(parents=True, exist_ok=True)
     paths.registry_path().write_text(json.dumps(document), encoding="utf-8")
@@ -353,8 +385,12 @@ def test_cli_exit_codes(capsys, provisioner) -> None:
 
 def test_verify_exits_three_when_a_check_fails(capsys, provisioner) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
-    patched = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b") / "vibevoice" / "modular" / \
-        "modeling_vibevoice_asr.py"
+    patched = (
+        paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+        / "vibevoice"
+        / "modular"
+        / "modeling_vibevoice_asr.py"
+    )
     patched.write_text("original\n")
     assert main(["packages", "verify"]) == 3
     codes = {item["code"] for item in json.loads(capsys.readouterr().out)["failed"]}
@@ -377,9 +413,7 @@ def test_fluidaudio_patch_applies_to_exact_pinned_source_and_forces_offline_mode
     assert pkg.sha256_file(fixture) == (
         "2a90c1f8848b21a89a18361458ac3c58fc785fb110d93e706cc2af9b0f01dc41"
     ), "fixture drifted from FluidAudio 19600a485baa4998812e4654b70d2bab8f2c9949"
-    target = (
-        tmp_path / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
-    )
+    target = tmp_path / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
     target.parent.mkdir(parents=True)
     shutil.copyfile(fixture, target)
     patch = env.HERE / "patches/fluidaudio-pinned-model-dir.patch"

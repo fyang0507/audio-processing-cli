@@ -17,12 +17,9 @@ def test_firered_fixture_provenance_and_strict_normalization() -> None:
     provenance = fixture["provenance"]
     assert provenance == {
         "source_artifact": (
-            "model_tests/benchmark_runs/"
-            "firered_lidon_batch4_multispeaker_codeswitch_20260815.json"
+            "model_tests/benchmark_runs/firered_lidon_batch4_multispeaker_codeswitch_20260815.json"
         ),
-        "source_sha256": (
-            "df32268dad30a0322745c1df85653240fc65ab7c87b428463e8e7abd65308b9d"
-        ),
+        "source_sha256": ("df32268dad30a0322745c1df85653240fc65ab7c87b428463e8e7abd65308b9d"),
         "excerpt_rule": (
             "output.result.vad_segments_ms[0], every output.result sentence contained by "
             "that region, and the leading output.result words that reproduce those sentences"
@@ -53,12 +50,14 @@ def test_firered_fixture_provenance_and_strict_normalization() -> None:
         },
     )
     assert normalized.vad_regions == ({"start": 0.59, "end": 1.81},)
-    assert normalized.lid_regions == ({
-        "start": 0.59,
-        "end": 1.81,
-        "language": "zh xinan",
-        "confidence": 0.958,
-    },)
+    assert normalized.lid_regions == (
+        {
+            "start": 0.59,
+            "end": 1.81,
+            "language": "zh xinan",
+            "confidence": 0.958,
+        },
+    )
     assert not {"lang", "lang_confidence", "asr_confidence", "confidence"} & _all_keys(
         normalized.segments
     )
@@ -77,26 +76,29 @@ def test_firered_word_partition_fails_when_a_recorded_word_is_dropped() -> None:
 
 
 def test_firered_partition_is_casefolded_and_keeps_asr_contractions() -> None:
-    normalized = normalize_firered_result({
-        "sentences": [{
-            "start_ms": 0,
-            "end_ms": 1000,
-            "text": "It's Fine!",
-            "asr_confidence": 0.9,
-            "lang": None,
-            "lang_confidence": 0,
-        }],
-        "words": [
-            {"start_ms": 10, "end_ms": 300, "text": "it's"},
-            {"start_ms": 300, "end_ms": 800, "text": "fine"},
-        ],
-        "vad_segments_ms": [[0, 1000]],
-    }, lid_enabled=False)
+    normalized = normalize_firered_result(
+        {
+            "sentences": [
+                {
+                    "start_ms": 0,
+                    "end_ms": 1000,
+                    "text": "It's Fine!",
+                    "asr_confidence": 0.9,
+                    "lang": None,
+                    "lang_confidence": 0,
+                }
+            ],
+            "words": [
+                {"start_ms": 10, "end_ms": 300, "text": "it's"},
+                {"start_ms": 300, "end_ms": 800, "text": "fine"},
+            ],
+            "vad_segments_ms": [[0, 1000]],
+        },
+        lid_enabled=False,
+    )
     assert [word["text"] for word in normalized.segments[0]["words"]] == ["it's", "fine"]
     assert normalized.lid_regions is None
-    assert not {"lang", "lang_confidence", "asr_confidence"} & _all_keys(
-        normalized.segments
-    )
+    assert not {"lang", "lang_confidence", "asr_confidence"} & _all_keys(normalized.segments)
 
 
 def test_firered_rejects_word_schema_or_timeline_drift() -> None:

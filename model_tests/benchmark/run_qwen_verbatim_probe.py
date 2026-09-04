@@ -18,8 +18,8 @@ left unanswered:
 Call shape
 ----------
 Model load and the private batched-inference call are reused verbatim in
-spirit from model_tests/benchmark/run_turn_attributed_mlx_asr.py (see its
-~lines 545-680): `mlx_audio.stt.utils.load_model` followed by
+spirit from model_tests/benchmark/turn_attributed_mlx_asr/inference.py
+(lines 31-84 and 128-142): `mlx_audio.stt.utils.load_model` followed by
 `model._generate_chunks_batched(chunks, max_tokens=..., sampler=make_sampler(
 temp=0.0), language=..., system_prompt=..., batch_size=..., verbose=False)`.
 That runner verifies the private method's signature before use; this script
@@ -110,17 +110,26 @@ def main() -> int:
             "a Latin word token only. Chinese repetition is not "
             "regex-counted; see the report's qualitative notes."
         ),
-        "runtime_packages": _support.package_versions([
-            "mlx", "mlx-metal", "mlx-audio", "mlx-lm", "numpy", "miniaudio",
-        ]),
+        "runtime_packages": _support.package_versions(
+            [
+                "mlx",
+                "mlx-metal",
+                "mlx-audio",
+                "mlx-lm",
+                "numpy",
+                "miniaudio",
+            ]
+        ),
         "offline_environment": {
-            name: os.environ.get(name) for name in (
-                "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE",
+            name: os.environ.get(name)
+            for name in (
+                "HF_HUB_OFFLINE",
+                "TRANSFORMERS_OFFLINE",
+                "HF_DATASETS_OFFLINE",
             )
         },
         "fixtures": {
-            key: _support.build_fixture_info(path)
-            for key, path in _support.FIXTURES.items()
+            key: _support.build_fixture_info(path) for key, path in _support.FIXTURES.items()
         },
         "models": {
             key: {
@@ -167,34 +176,34 @@ def main() -> int:
                 continue
             prepared_audio[key] = audio_np
             info["prepared_audio_sha256"] = _support.array_sha256(audio_np)
-            info["prepared_audio_samples"] = int(len(audio_np))
+            info["prepared_audio_samples"] = len(audio_np)
             info["prepared_audio_duration_s"] = len(audio_np) / _support.SAMPLE_RATE
             info["prepared_audio_decode_wall_s"] = time.perf_counter() - t0
             print(
-                f"[fixture:{key}] decoded {len(audio_np)/_support.SAMPLE_RATE:.3f}s "
+                f"[fixture:{key}] decoded {len(audio_np) / _support.SAMPLE_RATE:.3f}s "
                 f"in {info['prepared_audio_decode_wall_s']:.2f}s "
                 f"sha256={info['prepared_audio_sha256'][:12]}...",
                 flush=True,
             )
 
         # --- Run each model in the plan once, executing all its runs ---
-        model_keys_in_order = list(
-            dict.fromkeys(item[0] for item in _support.RUN_PLAN)
-        )
+        model_keys_in_order = list(dict.fromkeys(item[0] for item in _support.RUN_PLAN))
         for model_key in model_keys_in_order:
             spec = _support.MODELS[model_key]
-            model_runs = [
-                item for item in _support.RUN_PLAN if item[0] == model_key
-            ]
+            model_runs = [item for item in _support.RUN_PLAN if item[0] == model_key]
 
             if not spec["path"].is_dir():
                 for _, audio_key, prompt_key, label in model_runs:
-                    result["runs"].append({
-                        "model_key": model_key, "audio_key": audio_key,
-                        "prompt_key": prompt_key, "label": label,
-                        "status": "error",
-                        "error": f"local model snapshot not found: {spec['path']}",
-                    })
+                    result["runs"].append(
+                        {
+                            "model_key": model_key,
+                            "audio_key": audio_key,
+                            "prompt_key": prompt_key,
+                            "label": label,
+                            "status": "error",
+                            "error": f"local model snapshot not found: {spec['path']}",
+                        }
+                    )
                 print(f"[model:{model_key}] SKIPPED: snapshot dir missing", flush=True)
                 continue
 
@@ -208,22 +217,25 @@ def main() -> int:
                 load_s = time.perf_counter() - t0
             except Exception as exc:
                 for _, audio_key, prompt_key, label in model_runs:
-                    result["runs"].append({
-                        "model_key": model_key, "audio_key": audio_key,
-                        "prompt_key": prompt_key, "label": label,
-                        "status": "error", "phase": "model_load",
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "traceback": traceback.format_exc(),
-                    })
+                    result["runs"].append(
+                        {
+                            "model_key": model_key,
+                            "audio_key": audio_key,
+                            "prompt_key": prompt_key,
+                            "label": label,
+                            "status": "error",
+                            "phase": "model_load",
+                            "error": f"{type(exc).__name__}: {exc}",
+                            "traceback": traceback.format_exc(),
+                        }
+                    )
                 print(f"[model:{model_key}] LOAD FAILED: {exc}", flush=True)
                 continue
 
             if result["api_probe"] is None:
                 method = model._generate_chunks_batched
                 signature = inspect.signature(method)
-                signature_ok = _support.REQUIRED_BATCHED_API_PARAMS.issubset(
-                    signature.parameters
-                )
+                signature_ok = _support.REQUIRED_BATCHED_API_PARAMS.issubset(signature.parameters)
                 source_path = Path(inspect.getfile(type(model))).resolve()
                 source_hash = _support.sha256_file(source_path)
                 result["api_probe"] = {
@@ -233,9 +245,7 @@ def main() -> int:
                     "signature_matches_runner_contract": signature_ok,
                     "source_path": str(source_path),
                     "source_sha256": source_hash,
-                    "expected_source_sha256": (
-                        _support.EXPECTED_QWEN3_ASR_SOURCE_SHA256
-                    ),
+                    "expected_source_sha256": (_support.EXPECTED_QWEN3_ASR_SOURCE_SHA256),
                     "source_sha256_matches_expected": (
                         source_hash == _support.EXPECTED_QWEN3_ASR_SOURCE_SHA256
                     ),
@@ -260,12 +270,10 @@ def main() -> int:
             model_info = {
                 "load_s": load_s,
                 "weight_sha256": (
-                    _support.sha256_file(weights_path)
-                    if weights_path.is_file() else None
+                    _support.sha256_file(weights_path) if weights_path.is_file() else None
                 ),
                 "config_sha256": (
-                    _support.sha256_file(config_path)
-                    if config_path.is_file() else None
+                    _support.sha256_file(config_path) if config_path.is_file() else None
                 ),
                 "loaded_parameter_bytes": model_parameter_bytes,
                 "mlx_peak_active_bytes_after_load": int(mx.get_peak_memory()),
@@ -280,18 +288,24 @@ def main() -> int:
             for _, audio_key, prompt_key, label in model_runs:
                 audio_np = prepared_audio.get(audio_key)
                 if audio_np is None:
-                    result["runs"].append({
-                        "model_key": model_key, "audio_key": audio_key,
-                        "prompt_key": prompt_key, "label": label,
-                        "status": "error",
-                        "error": "prepared audio unavailable for this fixture",
-                    })
+                    result["runs"].append(
+                        {
+                            "model_key": model_key,
+                            "audio_key": audio_key,
+                            "prompt_key": prompt_key,
+                            "label": label,
+                            "status": "error",
+                            "error": "prepared audio unavailable for this fixture",
+                        }
+                    )
                     continue
 
                 system_prompt = _support.SYSTEM_PROMPTS[prompt_key]
                 run_record: dict[str, Any] = {
-                    "model_key": model_key, "audio_key": audio_key,
-                    "prompt_key": prompt_key, "label": label,
+                    "model_key": model_key,
+                    "audio_key": audio_key,
+                    "prompt_key": prompt_key,
+                    "label": label,
                     "system_prompt": system_prompt,
                     "language_argument": None,
                     "max_tokens": _support.MAX_TOKENS,
@@ -323,29 +337,29 @@ def main() -> int:
                     filler_counts = _support.count_fillers(clean_text)
                     repeats = _support.find_repetitions(clean_text)
 
-                    run_record.update({
-                        "status": "ok" if was_processed else "not_processed_budget_exhausted",
-                        "processed": was_processed,
-                        "prompt_tokens": int(prompt_tokens[0]),
-                        "generation_tokens": int(gen_tokens[0]),
-                        "wall_s": wall_s,
-                        "raw_text": raw_text,
-                        "raw_text_had_language_prefix": has_language_prefix,
-                        "detected_language": detected_language,
-                        "text": clean_text,
-                        "text_sha256": _support.sha256_bytes(
-                            clean_text.encode("utf-8")
-                        ),
-                        "filler_counts": filler_counts,
-                        "filler_total": sum(filler_counts.values()),
-                        "repetitions_detected": repeats,
-                        "repetition_count": len(repeats),
-                        "mlx_peak_active_bytes": int(mx.get_peak_memory()),
-                        "mlx_active_bytes_after": int(mx.get_active_memory()),
-                        "mlx_cache_bytes_after": int(mx.get_cache_memory()),
-                        "rss_high_water_bytes_so_far": _support.peak_rss_bytes(),
-                        "rss_source": rss_reader.source,
-                    })
+                    run_record.update(
+                        {
+                            "status": "ok" if was_processed else "not_processed_budget_exhausted",
+                            "processed": was_processed,
+                            "prompt_tokens": int(prompt_tokens[0]),
+                            "generation_tokens": int(gen_tokens[0]),
+                            "wall_s": wall_s,
+                            "raw_text": raw_text,
+                            "raw_text_had_language_prefix": has_language_prefix,
+                            "detected_language": detected_language,
+                            "text": clean_text,
+                            "text_sha256": _support.sha256_bytes(clean_text.encode("utf-8")),
+                            "filler_counts": filler_counts,
+                            "filler_total": sum(filler_counts.values()),
+                            "repetitions_detected": repeats,
+                            "repetition_count": len(repeats),
+                            "mlx_peak_active_bytes": int(mx.get_peak_memory()),
+                            "mlx_active_bytes_after": int(mx.get_active_memory()),
+                            "mlx_cache_bytes_after": int(mx.get_cache_memory()),
+                            "rss_high_water_bytes_so_far": _support.peak_rss_bytes(),
+                            "rss_source": rss_reader.source,
+                        }
+                    )
                     print(
                         f"[run] {model_key} / {audio_key} / {prompt_key} "
                         f"({label}): {wall_s:.2f}s, {gen_tokens[0]} tokens, "
@@ -354,14 +368,15 @@ def main() -> int:
                         flush=True,
                     )
                 except Exception as exc:
-                    run_record.update({
-                        "status": "error",
-                        "error": f"{type(exc).__name__}: {exc}",
-                        "traceback": traceback.format_exc(),
-                    })
+                    run_record.update(
+                        {
+                            "status": "error",
+                            "error": f"{type(exc).__name__}: {exc}",
+                            "traceback": traceback.format_exc(),
+                        }
+                    )
                     print(
-                        f"[run] {model_key} / {audio_key} / {prompt_key} "
-                        f"({label}): FAILED: {exc}",
+                        f"[run] {model_key} / {audio_key} / {prompt_key} ({label}): FAILED: {exc}",
                         flush=True,
                     )
                 mx.clear_cache()
@@ -390,7 +405,9 @@ def main() -> int:
             "ru_stime_s": usage.ru_stime,
         }
         output_path = (
-            _support.REPO_ROOT / "model_tests" / "benchmark_runs"
+            _support.REPO_ROOT
+            / "model_tests"
+            / "benchmark_runs"
             / "qwen_verbatim_probe_multispeaker_20260817.json"
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)

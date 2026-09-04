@@ -26,7 +26,11 @@ def test_sample_uses_the_production_serializer(monkeypatch) -> None:
         captured.append(value)
         return {"through": "serializer"}
 
-    monkeypatch.setattr(sample.result, "serialize_result", recording_serializer)
+    monkeypatch.setattr(
+        sample.result_serialization,
+        "serialize_result",
+        recording_serializer,
+    )
     assert build("diarization") == {"through": "serializer"}
     assert len(captured) == 1
     assert captured[0].sample is True
@@ -56,8 +60,14 @@ def test_each_capability_produces_exactly_its_licensed_shape(capability: str) ->
 
 def test_combined_sample_contains_every_requested_shape_once() -> None:
     capabilities = (
-        "languages", "verbatim", "diarization", "overlapped_speech", "vad",
-        "word_timestamps", "segment_timestamps", "lid",
+        "languages",
+        "verbatim",
+        "diarization",
+        "overlapped_speech",
+        "vad",
+        "word_timestamps",
+        "segment_timestamps",
+        "lid",
     )
     emitted = sample.build_sample_output(
         source=SOURCE,
@@ -67,13 +77,26 @@ def test_combined_sample_contains_every_requested_shape_once() -> None:
         abstention_reason="raw_fragment",
     )
     assert set(emitted) == {
-        "sample", "note", "schema_version", "complete", "source", "segments", "turns",
-        "vad_regions", "lid_regions", "overlapped_speech", "abstentions", "provenance",
+        "sample",
+        "note",
+        "schema_version",
+        "complete",
+        "source",
+        "segments",
+        "turns",
+        "vad_regions",
+        "lid_regions",
+        "overlapped_speech",
+        "abstentions",
+        "provenance",
     }
     assert emitted["complete"] is True
     assert emitted["source"] == SOURCE
     assert emitted["provenance"] == {
-        "stack": "qwen-1.7b", "outcomes": {}, "observed": {}, "plan": {"roles": {}},
+        "stack": "qwen-1.7b",
+        "outcomes": {},
+        "observed": {},
+        "plan": {"roles": {}},
     }
     assert len(emitted["abstentions"]) == 1
     assert emitted["abstentions"][0]["reason"] == "raw_fragment"
@@ -92,12 +115,17 @@ def test_placeholder_has_null_content_and_bounds_not_plausible_values() -> None:
 
 
 def test_serializer_rejects_mutated_placeholder_content_and_zero_bound() -> None:
-    original = sample.result.NormalizedResult(
+    original = sample.NormalizedResult(
         source=SOURCE,
         segments=[{"segment_id": "seg_0", "text": None, "start": None, "end": None}],
-        abstentions=[{
-            "abstention_id": "ab_0", "reason": "raw_fragment", "start": None, "end": None,
-        }],
+        abstentions=[
+            {
+                "abstention_id": "ab_0",
+                "reason": "raw_fragment",
+                "start": None,
+                "end": None,
+            }
+        ],
         provenance={"stack": "firered", "outcomes": {}, "observed": {}, "plan": {}},
         requested_capabilities=frozenset({"segment_timestamps", "diarization"}),
         turns=[],
@@ -105,16 +133,21 @@ def test_serializer_rejects_mutated_placeholder_content_and_zero_bound() -> None
         note=sample.SAMPLE_NOTE,
     )
     with pytest.raises(ResultError, match="text placeholder must be null"):
-        serialize_result(replace(
-            original,
-            segments=[{"segment_id": "seg_0", "text": "placeholder", "start": None,
-                       "end": None}],
-        ))
+        serialize_result(
+            replace(
+                original,
+                segments=[
+                    {"segment_id": "seg_0", "text": "placeholder", "start": None, "end": None}
+                ],
+            )
+        )
     with pytest.raises(ResultError, match="placeholder bounds must be null"):
-        serialize_result(replace(
-            original,
-            segments=[{"segment_id": "seg_0", "text": None, "start": 0.0, "end": 0.0}],
-        ))
+        serialize_result(
+            replace(
+                original,
+                segments=[{"segment_id": "seg_0", "text": None, "start": 0.0, "end": 0.0}],
+            )
+        )
 
 
 def test_sample_rejects_an_unknown_capability() -> None:

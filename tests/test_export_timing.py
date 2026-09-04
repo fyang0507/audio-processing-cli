@@ -18,12 +18,14 @@ def test_timed_export_rejects_mixed_event_only_and_untimed_documents(
     tmp_path: Path,
 ) -> None:
     event = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "[Music]",
-            "start": 0.0,
-            "end": 0.8,
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "[Music]",
+                "start": 0.0,
+                "end": 0.8,
+            }
+        ],
         outcomes={
             "word_timestamps": "produced",
             "segment_timestamps": "produced",
@@ -31,24 +33,28 @@ def test_timed_export_rejects_mixed_event_only_and_untimed_documents(
         run_range=[0.0, 1.0],
     )
     ordinary = _payload(
-        [{
-            "segment_id": "seg_0",
-            "text": "Ordinary untimed speech.",
-            "start": 1.0,
-            "end": 1.8,
-        }],
+        [
+            {
+                "segment_id": "seg_0",
+                "text": "Ordinary untimed speech.",
+                "start": 1.0,
+                "end": 1.8,
+            }
+        ],
         outcomes={
             "word_timestamps": "abstained",
             "segment_timestamps": "produced",
         },
         run_range=[1.0, 2.0],
     )
-    ordinary["abstentions"] = [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 1.0,
-        "end": 1.8,
-    }]
+    ordinary["abstentions"] = [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 1.0,
+            "end": 1.8,
+        }
+    ]
     event_path = _write(tmp_path / "event.json", event)
     ordinary_path = _write(tmp_path / "ordinary.json", ordinary)
 
@@ -147,12 +153,14 @@ def test_mixed_timed_and_abstained_untimed_text_omits_untimed_segment(
             "segment_timestamps": "produced",
         },
     )
-    payload["abstentions"] = [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.9,
-        "end": 1.9,
-    }]
+    payload["abstentions"] = [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.9,
+            "end": 1.9,
+        }
+    ]
     path = _write(tmp_path / "mixed.json", payload)
     product = export_documents([path], "srt")
     assert product.cue_count == 1
@@ -169,12 +177,14 @@ def test_mixed_timed_and_unbounded_abstained_text_refuses_unprovable_omission(
         [timed, untimed],
         outcomes={"word_timestamps": "abstained"},
     )
-    payload["abstentions"] = [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.9,
-        "end": 1.9,
-    }]
+    payload["abstentions"] = [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.9,
+            "end": 1.9,
+        }
+    ]
 
     with pytest.raises(TimingRequiredError):
         export_documents([_write(tmp_path / "unbounded.json", payload)], "srt")
@@ -185,8 +195,10 @@ def test_bounded_wordless_speech_rejects_an_unrelated_alignment_abstention(
 ) -> None:
     timed = _timed_segment("Timed.", [("Timed", 0.1, 0.8)])
     missing = {
-        "segment_id": "seg_1", "text": "Missing timing.",
-        "start": 1.0, "end": 1.8,
+        "segment_id": "seg_1",
+        "text": "Missing timing.",
+        "start": 1.0,
+        "end": 1.8,
     }
     payload = _payload(
         [timed, missing],
@@ -195,12 +207,14 @@ def test_bounded_wordless_speech_rejects_an_unrelated_alignment_abstention(
             "segment_timestamps": "produced",
         },
     )
-    payload["abstentions"] = [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.9,
-        "end": 1.9,
-    }]
+    payload["abstentions"] = [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.9,
+            "end": 1.9,
+        }
+    ]
 
     with pytest.raises(InvalidResultError, match="same-bounds"):
         export_documents([_write(tmp_path / "mismatched.json", payload)], "srt")
@@ -231,9 +245,7 @@ def test_explicit_empty_words_remain_valid_for_punctuation_only_text(
         outcomes={"word_timestamps": "produced"},
     )
 
-    product = export_documents(
-        [_write(tmp_path / "punctuation.json", payload)], "srt"
-    )
+    product = export_documents([_write(tmp_path / "punctuation.json", payload)], "srt")
     assert product.cue_count == 1
     assert "Timed." in product.content
 

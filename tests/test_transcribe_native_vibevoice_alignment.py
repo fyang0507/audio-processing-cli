@@ -49,9 +49,7 @@ def test_vibevoice_nonconforming_speech_alignment_is_a_segment_abstention(
     _runtime(tmp_path, monkeypatch, "mlx")
     source = tmp_path / "bad-alignment.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="vibevoice", input_path=source, wants="word_timestamps"
-    )
+    request = resolve_request(stack_id="vibevoice", input_path=source, wants="word_timestamps")
     metadata = InputMetadata(str(source), 5.0, "wav", 48_000, 1)
 
     class Transport:
@@ -64,37 +62,47 @@ def test_vibevoice_nonconforming_speech_alignment_is_a_segment_abstention(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **_kwargs):
-            return StageOutcome("asr", "vibevoice-asr-7b", _complete_vibe_payload(
-                [
-                    {
-                        "start_time": 0.0,
-                        "end_time": 2.0,
-                        "speaker_id": 0,
-                        "text": "Hello.",
-                    },
-                    {
-                        "start_time": 2.0,
-                        "end_time": 3.0,
-                        "text": "[Environmental Sounds]",
-                    },
-                    {
-                        "start_time": 3.0,
-                        "end_time": 5.0,
-                        "speaker_id": 0,
-                        "text": "Again.",
-                    },
-                ],
-                generated_tokens=4,
-                eos_observed=True,
-            ), 1.0)
+            return StageOutcome(
+                "asr",
+                "vibevoice-asr-7b",
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 2.0,
+                            "speaker_id": 0,
+                            "text": "Hello.",
+                        },
+                        {
+                            "start_time": 2.0,
+                            "end_time": 3.0,
+                            "text": "[Environmental Sounds]",
+                        },
+                        {
+                            "start_time": 3.0,
+                            "end_time": 5.0,
+                            "speaker_id": 0,
+                            "text": "Again.",
+                        },
+                    ],
+                    generated_tokens=4,
+                    eos_observed=True,
+                ),
+                1.0,
+            )
 
         def align(self, **_kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {
-                "segments": [
-                    {"unit_id": "native_0", "words": words},
-                    {"unit_id": "native_1", "words": None},
-                ],
-            }, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {"unit_id": "native_0", "words": words},
+                        {"unit_id": "native_1", "words": None},
+                    ],
+                },
+                1.0,
+            )
 
     registry = {
         "environments": {
@@ -102,12 +110,8 @@ def test_vibevoice_nonconforming_speech_alignment_is_a_segment_abstention(
             "mlx": {"state": "ready"},
         },
         "packages": {
-            "vibevoice-asr-7b": _ready_multi_package(
-                tmp_path, "vibevoice-asr-7b"
-            ),
-            "qwen3-forcedaligner": _ready_single_package(
-                tmp_path, "qwen3-forcedaligner"
-            ),
+            "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
+            "qwen3-forcedaligner": _ready_single_package(tmp_path, "qwen3-forcedaligner"),
         },
     }
     output = tmp_path / "alignment-abstention.json"
@@ -165,9 +169,7 @@ def test_vibevoice_punctuation_only_empty_mapping_differs_from_absence(
     _runtime(tmp_path, monkeypatch, "mlx")
     source = tmp_path / "punctuation-only.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="vibevoice", input_path=source, wants="word_timestamps"
-    )
+    request = resolve_request(stack_id="vibevoice", input_path=source, wants="word_timestamps")
     metadata = InputMetadata(str(source), 1.0, "wav", 48_000, 1)
 
     class Transport:
@@ -180,17 +182,31 @@ def test_vibevoice_punctuation_only_empty_mapping_differs_from_absence(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **_kwargs):
-            return StageOutcome("asr", "vibevoice-asr-7b", _complete_vibe_payload([{
-                    "start_time": 0.0,
-                    "end_time": 1.0,
-                    "speaker_id": 0,
-                    "text": "……？！",
-                }]), 1.0)
+            return StageOutcome(
+                "asr",
+                "vibevoice-asr-7b",
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 1.0,
+                            "speaker_id": 0,
+                            "text": "……？！",
+                        }
+                    ]
+                ),
+                1.0,
+            )
 
         def align(self, **_kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {
-                "segments": aligner_segments,
-            }, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": aligner_segments,
+                },
+                1.0,
+            )
 
     payload = orchestrator.run(
         request,
@@ -201,12 +217,8 @@ def test_vibevoice_punctuation_only_empty_mapping_differs_from_absence(
                 "mlx": {"state": "ready"},
             },
             "packages": {
-                "vibevoice-asr-7b": _ready_multi_package(
-                    tmp_path, "vibevoice-asr-7b"
-                ),
-                "qwen3-forcedaligner": _ready_single_package(
-                    tmp_path, "qwen3-forcedaligner"
-                ),
+                "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
+                "qwen3-forcedaligner": _ready_single_package(tmp_path, "qwen3-forcedaligner"),
             },
         },
         transport=Transport(),
@@ -216,12 +228,14 @@ def test_vibevoice_punctuation_only_empty_mapping_differs_from_absence(
     if expected_words is None:
         assert "words" not in segment
         assert payload["provenance"]["observed"]["segments_without_words"] == 1
-        assert payload["abstentions"] == [{
-            "abstention_id": "ab_0",
-            "reason": "alignment_unavailable",
-            "start": 0.0,
-            "end": 1.0,
-        }]
+        assert payload["abstentions"] == [
+            {
+                "abstention_id": "ab_0",
+                "reason": "alignment_unavailable",
+                "start": 0.0,
+                "end": 1.0,
+            }
+        ]
     else:
         assert segment["words"] == expected_words
         assert payload["provenance"]["observed"]["segments_without_words"] == 0
@@ -261,19 +275,21 @@ def test_vibevoice_rejects_incomplete_aligner_ledgers_without_publication(
             return StageOutcome(
                 "asr",
                 "vibevoice-asr-7b",
-                _complete_vibe_payload([{
-                    "start_time": 0.0,
-                    "end_time": 1.0,
-                    "speaker_id": 0,
-                    "text": "Hello.",
-                }]),
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 1.0,
+                            "speaker_id": 0,
+                            "text": "Hello.",
+                        }
+                    ]
+                ),
                 1.0,
             )
 
         def align(self, **_kwargs):
-            return StageOutcome(
-                "aligner", "qwen3-forcedaligner", aligner_payload, 1.0
-            )
+            return StageOutcome("aligner", "qwen3-forcedaligner", aligner_payload, 1.0)
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
@@ -289,12 +305,8 @@ def test_vibevoice_rejects_incomplete_aligner_ledgers_without_publication(
                     "mlx": {"state": "ready"},
                 },
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
-                    "qwen3-forcedaligner": _ready_single_package(
-                        tmp_path, "qwen3-forcedaligner"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
+                    "qwen3-forcedaligner": _ready_single_package(tmp_path, "qwen3-forcedaligner"),
                 },
             },
             transport=Transport(),
@@ -328,12 +340,16 @@ def test_vibevoice_rejects_nonzero_nonpartial_exit_without_publication(
             return StageOutcome(
                 "asr",
                 "vibevoice-asr-7b",
-                _complete_vibe_payload([{
-                    "start_time": 0.0,
-                    "end_time": 1.0,
-                    "speaker_id": 0,
-                    "text": "Must not publish.",
-                }]),
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 1.0,
+                            "speaker_id": 0,
+                            "text": "Must not publish.",
+                        }
+                    ]
+                ),
                 1.0,
                 returncode=1,
             )
@@ -345,9 +361,7 @@ def test_vibevoice_rejects_nonzero_nonpartial_exit_without_publication(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    )
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b")
                 },
             },
             transport=Transport(),
@@ -380,11 +394,20 @@ def test_vibevoice_overflowing_stage_number_is_a_typed_backend_failure(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **_kwargs):
-            return StageOutcome("asr", "vibevoice-asr-7b", _complete_vibe_payload([{
-                    "start_time": 10**400,
-                    "end_time": 1.0,
-                    "text": "Impossible.",
-                }]), 1.0)
+            return StageOutcome(
+                "asr",
+                "vibevoice-asr-7b",
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 10**400,
+                            "end_time": 1.0,
+                            "text": "Impossible.",
+                        }
+                    ]
+                ),
+                1.0,
+            )
 
     output = tmp_path / "overflow-result.json"
     with pytest.raises(refusals.Refusal) as caught:
@@ -394,9 +417,7 @@ def test_vibevoice_overflowing_stage_number_is_a_typed_backend_failure(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
                 },
             },
             transport=Transport(),
@@ -411,9 +432,7 @@ def test_vibevoice_overflowing_stage_number_is_a_typed_backend_failure(
     assert not output.exists()
 
 
-def test_vibevoice_complete_result_is_bound_to_generated_text(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_vibevoice_complete_result_is_bound_to_generated_text(tmp_path: Path, monkeypatch) -> None:
     _runtime(tmp_path, monkeypatch, "torch-vibevoice")
     source = tmp_path / "mismatched-postprocess.wav"
     source.write_bytes(b"source")
@@ -430,21 +449,32 @@ def test_vibevoice_complete_result_is_bound_to_generated_text(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **_kwargs):
-            return StageOutcome("asr", "vibevoice-asr-7b", {
-                "raw_text": json.dumps([{
-                    "Start": 0,
-                    "End": 1,
-                    "Speaker": 0,
-                    "Content": "model said raw",
-                }]),
-                "segments": [{
-                    "start_time": 0,
-                    "end_time": 1,
-                    "speaker_id": 0,
-                    "text": "postprocessor fabricated",
-                }],
-                "hit_max_new_tokens": False,
-            }, 1.0)
+            return StageOutcome(
+                "asr",
+                "vibevoice-asr-7b",
+                {
+                    "raw_text": json.dumps(
+                        [
+                            {
+                                "Start": 0,
+                                "End": 1,
+                                "Speaker": 0,
+                                "Content": "model said raw",
+                            }
+                        ]
+                    ),
+                    "segments": [
+                        {
+                            "start_time": 0,
+                            "end_time": 1,
+                            "speaker_id": 0,
+                            "text": "postprocessor fabricated",
+                        }
+                    ],
+                    "hit_max_new_tokens": False,
+                },
+                1.0,
+            )
 
     output = tmp_path / "must-not-exist.json"
     with pytest.raises(refusals.Refusal) as caught:
@@ -454,9 +484,7 @@ def test_vibevoice_complete_result_is_bound_to_generated_text(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
                 },
             },
             transport=Transport(),

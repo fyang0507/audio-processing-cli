@@ -40,9 +40,7 @@ def test_checkout_probe_reads_live_head_tracked_and_untracked_state(
         return completed.stdout.strip()
 
     git("init", "--quiet")
-    (checkout / ".gitignore").write_text(
-        "ignored.tmp\n__pycache__/\n", encoding="utf-8"
-    )
+    (checkout / ".gitignore").write_text("ignored.tmp\n__pycache__/\n", encoding="utf-8")
     (checkout / "tracked.py").write_text("original\n", encoding="utf-8")
     git("add", ".gitignore", "tracked.py")
     git(
@@ -106,9 +104,7 @@ def test_firered_malformed_canonical_wav_is_a_typed_decode_failure(
 
     registry = {
         "environments": {"torch-firered": {"state": "ready"}},
-        "packages": {
-            "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")
-        },
+        "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
     }
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
@@ -128,20 +124,23 @@ def test_firered_malformed_canonical_wav_is_a_typed_decode_failure(
 def _ready_single_package(tmp_path: Path, package_id: str) -> dict:
     package = env.packages()[package_id]
     target = (
-        tmp_path / "hub" / f"models--{package.source['repo'].replace('/', '--')}"
-        / "snapshots" / package.source["revision"]
+        tmp_path
+        / "hub"
+        / f"models--{package.source['repo'].replace('/', '--')}"
+        / "snapshots"
+        / package.source["revision"]
     )
     target.mkdir(parents=True, exist_ok=True)
     for pattern in package.source.get("allow_patterns", ()):
-        marker = target / (
-            f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern
-        )
+        marker = target / (f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern)
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_bytes(b"")
     return {
         "state": "ready",
         "materialized": {
-            "path": str(target), "revision": package.source["revision"], "bytes": 0,
+            "path": str(target),
+            "revision": package.source["revision"],
+            "bytes": 0,
         },
     }
 
@@ -239,9 +238,7 @@ def test_native_silero_bounds_are_typed_before_model_work(
     assert "exceeds canonical source duration" in caught.value.payload["detail"]
 
 
-def test_firered_run_crosses_transport_and_adapter_boundaries(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_firered_run_crosses_transport_and_adapter_boundaries(tmp_path: Path, monkeypatch) -> None:
     _runtime(tmp_path, monkeypatch, "torch-firered")
     source = tmp_path / "field.wav"
     source.write_bytes(b"source")
@@ -272,27 +269,40 @@ def test_firered_run_crosses_transport_and_adapter_boundaries(
                 {
                     "complete": True,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 100,
-                            "end_ms": 900,
-                            "text": "Hello!",
-                            "lang": "en",
-                            "lang_confidence": 0.9,
-                        }],
-                        "words": [{
-                            "start_ms": 120, "end_ms": 800, "text": "hello",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 100,
+                                "end_ms": 900,
+                                "text": "Hello!",
+                                "lang": "en",
+                                "lang_confidence": 0.9,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 120,
+                                "end_ms": 800,
+                                "text": "hello",
+                            }
+                        ],
                         "vad_segments_ms": [[100, 1000]],
                     },
-                    "regions": [{
-                        "region_id": "vad_0", "start": 0.1, "end": 1.0,
-                        "processed": True,
-                    }],
+                    "regions": [
+                        {
+                            "region_id": "vad_0",
+                            "start": 0.1,
+                            "end": 1.0,
+                            "processed": True,
+                        }
+                    ],
                 },
                 30.0,
                 peak_rss_bytes=100,
                 wall_seconds_by_stage={
-                    "vad": 0.2, "lid": 0.3, "asr": 2.0, "punctuator": 0.5,
+                    "vad": 0.2,
+                    "lid": 0.3,
+                    "asr": 2.0,
+                    "punctuator": 0.5,
                 },
             )
 
@@ -300,22 +310,32 @@ def test_firered_run_crosses_transport_and_adapter_boundaries(
         "environments": {"torch-firered": {"state": "ready"}},
         "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
     }
-    payload = orchestrator.run(
-        request, metadata, registry=registry, transport=Transport()
-    ).payload
-    assert payload["segments"] == [{
-        "segment_id": "seg_0",
-        "text": "Hello!",
-        "start": 0.1,
-        "end": 0.9,
-        "words": [{
-            "word_id": "w_0", "text": "hello", "start": 0.12, "end": 0.8,
-        }],
-    }]
+    payload = orchestrator.run(request, metadata, registry=registry, transport=Transport()).payload
+    assert payload["segments"] == [
+        {
+            "segment_id": "seg_0",
+            "text": "Hello!",
+            "start": 0.1,
+            "end": 0.9,
+            "words": [
+                {
+                    "word_id": "w_0",
+                    "text": "hello",
+                    "start": 0.12,
+                    "end": 0.8,
+                }
+            ],
+        }
+    ]
     assert payload["vad_regions"] == [{"start": 0.1, "end": 1.0}]
-    assert payload["lid_regions"] == [{
-        "start": 0.1, "end": 1.0, "language": "en", "confidence": 0.9,
-    }]
+    assert payload["lid_regions"] == [
+        {
+            "start": 0.1,
+            "end": 1.0,
+            "language": "en",
+            "confidence": 0.9,
+        }
+    ]
     observed = payload["provenance"]["observed"]
     assert observed["stage_wall_seconds"] == {
         "decode": 0.1,
@@ -327,6 +347,7 @@ def test_firered_run_crosses_transport_and_adapter_boundaries(
     }
     assert observed["total_wall_seconds"] == 30.1
     assert observed["peak_rss_bytes_by_stage"] == {
-        "decode": 10, "firered_process": 100,
+        "decode": 10,
+        "firered_process": 100,
     }
     assert observed["punctuation_invariant_checked"] is True

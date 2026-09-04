@@ -39,7 +39,8 @@ def test_high_level_write_is_atomic_and_never_overwrites_input_or_source(
 
 
 def test_producer_and_export_preserve_literal_existing_user_tilde_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     username = pwd.getpwuid(os.getuid()).pw_name
@@ -59,7 +60,10 @@ def test_producer_and_export_preserve_literal_existing_user_tilde_source(
     )
     with pytest.raises(UnsafeOutputError):
         export_documents(
-            [transcript], "txt", output=relative_source, force=True,
+            [transcript],
+            "txt",
+            output=relative_source,
+            force=True,
         )
     assert relative_source.read_bytes() == b"canonical"
 

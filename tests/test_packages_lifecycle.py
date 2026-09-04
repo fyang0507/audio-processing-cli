@@ -48,15 +48,17 @@ def test_list_uses_manifest_identity_and_license_facts_for_known_packages() -> N
 
     listed = pkg.list_report()["packages"]
 
-    assert listed == [{
-        "package": package.id,
-        "environment": package.environment,
-        "state": "ready",
-        "bytes": 7,
-        "license_declared": package.license_declared,
-        "license_reviewed": package.license_reviewed,
-        "used_by_stacks": list(package.stacks),
-    }]
+    assert listed == [
+        {
+            "package": package.id,
+            "environment": package.environment,
+            "state": "ready",
+            "bytes": 7,
+            "license_declared": package.license_declared,
+            "license_reviewed": package.license_reviewed,
+            "used_by_stacks": list(package.stacks),
+        }
+    ]
 
 
 def test_path_report_locates_things_before_anything_is_provisioned() -> None:
@@ -84,7 +86,8 @@ def test_pull_creates_the_environment_and_marks_the_package_ready(provisioner) -
 
 
 def test_pull_warns_that_a_declared_license_is_not_a_reviewed_one(
-    provisioner, tmp_path,
+    provisioner,
+    tmp_path,
 ) -> None:
     receipt = provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     warning = receipt["warnings"][0]
@@ -104,8 +107,7 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
         def hf_snapshot(self, repo: str, revision: str, *, force: bool = False) -> Path:
             raise pkg.ProvisioningError("download_failed", "network went away")
 
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
-                                 fetcher=ExplodingFetcher(tmp_path))
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=ExplodingFetcher(tmp_path))
     selection = pkg.select(["qwen3-asr-1.7b-8bit"])
     with pytest.raises(pkg.ProvisioningError):
         provisioner.pull(selection)
@@ -116,8 +118,9 @@ def test_a_crashed_pull_does_not_read_as_provisioned(tmp_path) -> None:
     assert [p.id for p in pkg.missing_packages(selection)] == ["qwen3-asr-1.7b-8bit"]
 
     # And it is still nameable, which is what purge needs.
-    assert "qwen3-asr-1.7b-8bit" in pkg.Provisioner().purge(dry_run=True)["would_remove"][
-        "packages"]
+    assert (
+        "qwen3-asr-1.7b-8bit" in pkg.Provisioner().purge(dry_run=True)["would_remove"]["packages"]
+    )
 
 
 def test_a_crashed_pull_is_recoverable_by_pulling_again(tmp_path) -> None:
@@ -145,15 +148,14 @@ def test_the_registry_is_written_atomically(provisioner, isolated_root) -> None:
 
 
 def test_registry_temporary_never_follows_a_precreated_symlink(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
-    monkeypatch.setattr(
-        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
     temporary.symlink_to(victim)
 
@@ -167,15 +169,14 @@ def test_registry_temporary_never_follows_a_precreated_symlink(
 
 
 def test_registry_writer_refuses_a_known_substituted_temporary(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
-    monkeypatch.setattr(
-        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
     real_assert = package_registry.assert_directory_binding
 
@@ -184,9 +185,7 @@ def test_registry_writer_refuses_a_known_substituted_temporary(
         temporary.unlink()
         temporary.symlink_to(victim)
 
-    monkeypatch.setattr(
-        package_registry, "assert_directory_binding", substitute_temporary
-    )
+    monkeypatch.setattr(package_registry, "assert_directory_binding", substitute_temporary)
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         pkg.save_registry(pkg.blank_registry())
@@ -199,7 +198,8 @@ def test_registry_writer_refuses_a_known_substituted_temporary(
 
 
 def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -209,15 +209,15 @@ def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
     before = target.read_bytes()
     victim = tmp_path / "victim.json"
     victim.write_text("owned elsewhere\n", encoding="utf-8")
-    monkeypatch.setattr(
-        package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(package_registry.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
     temporary = target.with_name(f".audio-registry-{os.getpid()}-fixed.tmp")
     real_exchange = media_publication._rename_exchange
     substituted = False
 
     def substitute_at_exchange(
-        directory_descriptor: int, left_name: str, right_name: str,
+        directory_descriptor: int,
+        left_name: str,
+        right_name: str,
     ) -> None:
         nonlocal substituted
         if not substituted:
@@ -241,7 +241,8 @@ def test_registry_writer_rolls_back_a_temporary_substitution_at_publication(
 
 
 def test_registry_writer_cannot_follow_a_parent_swapped_after_open(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True)
@@ -269,7 +270,8 @@ def test_registry_writer_cannot_follow_a_parent_swapped_after_open(
 
 @pytest.mark.parametrize("destination_kind", ["directory", "symlink"])
 def test_registry_writer_refuses_a_nonregular_destination(
-    tmp_path, destination_kind: str,
+    tmp_path,
+    destination_kind: str,
 ) -> None:
     target = paths.registry_path()
     target.parent.mkdir(parents=True)
@@ -293,8 +295,7 @@ def test_registry_writer_refuses_a_nonregular_destination(
 
 
 def test_remove_takes_the_environment_only_with_its_last_package(provisioner) -> None:
-    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "qwen3-forcedaligner",
-                                 "firered-asr2s"]))
+    provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "qwen3-forcedaligner", "firered-asr2s"]))
 
     first = provisioner.remove(["qwen3-asr-1.7b-8bit"])
     assert first["environments_removed"] == []
@@ -323,8 +324,9 @@ def test_remove_deletes_the_checkout_and_the_revision_it_materialized(provisione
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
     snapshots = [
         Path(value)
-        for value in pkg.load_registry()["packages"]["vibevoice-asr-7b"]
-        ["materialized"]["paths"].values()
+        for value in pkg.load_registry()["packages"]["vibevoice-asr-7b"]["materialized"][
+            "paths"
+        ].values()
     ]
     snapshot = snapshots[0]
     sibling = snapshot.parent / "another-revision"
@@ -387,8 +389,12 @@ def test_verify_reports_a_reverted_patch(provisioner) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     assert provisioner.verify()["failed"] == []
 
-    patched = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b") / "vibevoice" / "modular" / \
-        "modeling_vibevoice_asr.py"
+    patched = (
+        paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
+        / "vibevoice"
+        / "modular"
+        / "modeling_vibevoice_asr.py"
+    )
     patched.write_text("original\n")
 
     failure = provisioner.verify()["failed"]
@@ -405,7 +411,8 @@ def test_verify_reports_a_drifted_environment_and_repairs_it(tmp_path) -> None:
     environment that happens to share its name.
     """
     pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).pull(
-        pkg.select(["qwen3-asr-1.7b-8bit"]))
+        pkg.select(["qwen3-asr-1.7b-8bit"])
+    )
 
     toolchain = FakeToolchain(drift={"mlx": "0.31.0"})
     provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))

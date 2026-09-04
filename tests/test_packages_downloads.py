@@ -42,7 +42,8 @@ def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> N
     urllib.request.urlopen = explode
     try:
         resolved = pkg.Fetcher().url_file(
-            "https://example.invalid/x.onnx", hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+            "https://example.invalid/x.onnx", hashlib.sha256(b"onnx-bytes").hexdigest(), target
+        )
     finally:
         urllib.request.urlopen = original
     assert resolved == target
@@ -53,22 +54,21 @@ def test_a_url_package_needs_no_forced_download_because_it_is_hash_pinned() -> N
         urllib.request.urlopen = explode
         try:
             pkg.Fetcher().url_file(
-                "https://example.invalid/x.onnx",
-                hashlib.sha256(b"onnx-bytes").hexdigest(), target)
+                "https://example.invalid/x.onnx", hashlib.sha256(b"onnx-bytes").hexdigest(), target
+            )
         finally:
             urllib.request.urlopen = original
 
 
 def test_url_download_temporary_never_follows_a_precreated_symlink(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     target = paths.models_dir() / "model.onnx"
     target.parent.mkdir(parents=True, exist_ok=True)
     victim = tmp_path / "victim.bin"
     victim.write_bytes(b"owned elsewhere")
-    monkeypatch.setattr(
-        package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
     temporary = target.with_name(f".audio-download-{os.getpid()}-fixed.part")
     temporary.symlink_to(victim)
 
@@ -86,7 +86,8 @@ def test_url_download_temporary_never_follows_a_precreated_symlink(
 
 
 def test_hash_matching_url_target_symlink_is_replaced_not_accepted(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"model bytes"
     target = paths.models_dir() / "model.onnx"
@@ -121,7 +122,8 @@ def test_hash_matching_url_target_symlink_is_replaced_not_accepted(
 
 
 def test_url_download_rolls_back_a_private_temporary_substitution_at_publication(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     payload = b"new model bytes"
     target = paths.models_dir() / "model.onnx"
@@ -129,9 +131,7 @@ def test_url_download_rolls_back_a_private_temporary_substitution_at_publication
     target.write_bytes(b"prior managed cache")
     victim = tmp_path / "victim.bin"
     victim.write_bytes(b"owned elsewhere")
-    monkeypatch.setattr(
-        package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(package_fetcher.uuid, "uuid4", lambda: types.SimpleNamespace(hex="fixed"))
 
     class Response(io.BytesIO):
         def __enter__(self):
@@ -174,9 +174,7 @@ def test_url_download_rolls_back_a_private_temporary_substitution_at_publication
             target,
         )
 
-    temporary = target.with_name(
-        f".audio-download-{os.getpid()}-fixed.part"
-    )
+    temporary = target.with_name(f".audio-download-{os.getpid()}-fixed.part")
     assert raised.value.code == "download_failed"
     assert substituted is True
     assert target.read_bytes() == b"prior managed cache"
@@ -247,11 +245,14 @@ def test_url_download_replaces_an_unreadable_cache_entry(
         lambda *_args, **_kwargs: Response(payload),
     )
 
-    assert pkg.Fetcher().url_file(
-        "https://example.invalid/model.onnx",
-        hashlib.sha256(payload).hexdigest(),
-        target,
-    ) == target
+    assert (
+        pkg.Fetcher().url_file(
+            "https://example.invalid/model.onnx",
+            hashlib.sha256(payload).hexdigest(),
+            target,
+        )
+        == target
+    )
     assert len(digest_probes) == 1, "the facade hash probe override was not consulted"
     assert target.read_bytes() == payload
 
@@ -305,16 +306,16 @@ def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
     without a Swift toolchain got none of the ASR weights it could have had. §0 of
     TRANSCRIBE_HAPPY_PATH.md promises the opposite.
     """
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
-                                  fetcher=FakeFetcher(tmp_path))
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(missing=("swift",)), fetcher=FakeFetcher(tmp_path)
+    )
     receipt = provisioner.pull(pkg.select(stack="qwen-1.7b"), stack="qwen-1.7b")
 
     pulled = [entry["package"] for entry in receipt["pulled"]]
     assert "qwen3-asr-1.7b-8bit" in pulled and "qwen3-forcedaligner" in pulled
     assert "fluidaudio" not in pulled
 
-    blocked = next(item for item in receipt["warnings"]
-                   if item["code"] == "toolchain_missing")
+    blocked = next(item for item in receipt["warnings"] if item["code"] == "toolchain_missing")
     assert blocked["blocking"] is True
     assert blocked["packages"] == ["fluidaudio"]
     assert blocked["requires_tool"] == ["swift"]
@@ -324,8 +325,7 @@ def test_a_stack_pull_provisions_around_a_missing_toolchain(tmp_path) -> None:
     assert pkg.is_ready(document, "qwen3-asr-1.7b-8bit")
     assert "fluidaudio" not in document["packages"], "a blocked package left a registry entry"
     # A blocked package provisioned nothing, so it claims no license and no bytes.
-    licenses = next(item for item in receipt["warnings"]
-                    if item["code"] == "license_unreviewed")
+    licenses = next(item for item in receipt["warnings"] if item["code"] == "license_unreviewed")
     assert "fluidaudio" not in licenses["packages"]
     assert receipt["pulled_known_bytes"] > 0
 
@@ -336,8 +336,9 @@ def test_naming_a_toolchain_blocked_package_is_still_exit_three(tmp_path) -> Non
     Named *beside a package that did provision*, so this cannot pass by way of the
     nothing-was-provisionable rule below — the refusal has to come from the naming.
     """
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
-                                  fetcher=FakeFetcher(tmp_path))
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(missing=("swift",)), fetcher=FakeFetcher(tmp_path)
+    )
     with pytest.raises(pkg.ProvisioningError) as caught:
         provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "fluidaudio"]))
     assert caught.value.code == "toolchain_missing"

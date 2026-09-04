@@ -13,9 +13,7 @@ from export_cli_test_support import (
 )
 
 
-def test_export_cli_prints_human_formats_without_an_output(
-    tmp_path: Path, capsys
-) -> None:
+def test_export_cli_prints_human_formats_without_an_output(tmp_path: Path, capsys) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     transcript = _write_result(
@@ -24,15 +22,22 @@ def test_export_cli_prints_human_formats_without_an_output(
         segments=[{"segment_id": "seg_0", "text": "Hello."}],
         outcomes={"verbatim": "produced"},
     )
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-    ]) == 0
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+            ]
+        )
+        == 0
+    )
     assert capsys.readouterr().out == "Hello.\n"
 
 
-def test_export_cli_refuses_inert_force_without_output(
-    tmp_path: Path, capsys
-) -> None:
+def test_export_cli_refuses_inert_force_without_output(tmp_path: Path, capsys) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     transcript = _write_result(
@@ -41,9 +46,19 @@ def test_export_cli_refuses_inert_force_without_output(
         segments=[{"segment_id": "seg_0", "text": "Hello."}],
         outcomes={"verbatim": "produced"},
     )
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt", "--force",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "--force",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
     assert error == {
         "code": "output_required_for_force",
@@ -54,9 +69,7 @@ def test_export_cli_refuses_inert_force_without_output(
     }
 
 
-def test_export_cli_refuses_directory_output_even_with_force(
-    tmp_path: Path, capsys
-) -> None:
+def test_export_cli_refuses_directory_output_even_with_force(tmp_path: Path, capsys) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     transcript = _write_result(
@@ -67,10 +80,21 @@ def test_export_cli_refuses_directory_output_even_with_force(
     )
     output = tmp_path / "directory-output"
     output.mkdir()
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "-o", str(output), "--force",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "-o",
+                str(output),
+                "--force",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
     assert error["code"] == "output_exists"
     assert "directory cannot be replaced" in error["fix"]
@@ -78,7 +102,8 @@ def test_export_cli_refuses_directory_output_even_with_force(
 
 
 def test_export_cli_refuses_replacing_a_fifo_even_with_force(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -91,10 +116,21 @@ def test_export_cli_refuses_replacing_a_fifo_even_with_force(
     output = tmp_path / "out.pipe"
     os.mkfifo(output)
 
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "--output", str(output), "--force",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "--output",
+                str(output),
+                "--force",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
 
     assert error["code"] == "output_exists"
@@ -103,7 +139,8 @@ def test_export_cli_refuses_replacing_a_fifo_even_with_force(
 
 
 def test_export_cli_refuses_overwriting_an_input_transcript_with_truthful_fix(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -114,10 +151,21 @@ def test_export_cli_refuses_overwriting_an_input_transcript_with_truthful_fix(
         outcomes={"verbatim": "produced"},
     )
 
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "-o", str(transcript), "--force",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "-o",
+                str(transcript),
+                "--force",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
 
     assert error["code"] == "output_is_canonical_input"
@@ -126,9 +174,7 @@ def test_export_cli_refuses_overwriting_an_input_transcript_with_truthful_fix(
     assert transcript.read_text(encoding="utf-8").startswith("{")
 
 
-def test_export_cli_rejects_a_self_referential_output_symlink(
-    tmp_path: Path, capsys
-) -> None:
+def test_export_cli_rejects_a_self_referential_output_symlink(tmp_path: Path, capsys) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     transcript = _write_result(
@@ -139,10 +185,21 @@ def test_export_cli_rejects_a_self_referential_output_symlink(
     )
     output = tmp_path / "loop"
     output.symlink_to(output.name)
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "-o", str(output), "--force",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "-o",
+                str(output),
+                "--force",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
     assert error == {
         "code": "output_path_invalid",
@@ -159,13 +216,23 @@ def test_export_cli_rejects_a_self_referential_output_symlink(
 
 
 def test_export_cli_types_invalid_and_incompatible_inputs(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     invalid = tmp_path / "invalid.json"
     invalid.write_text("{}", encoding="utf-8")
-    assert cli.main([
-        "export", "--input", str(invalid), "--format", "txt",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(invalid),
+                "--format",
+                "txt",
+            ]
+        )
+        == 2
+    )
     invalid_error = json.loads(capsys.readouterr().err)
     assert invalid_error["code"] == "export_input_invalid"
     assert set(invalid_error) == {"code", "field", "provided", "reason", "fix"}
@@ -187,10 +254,20 @@ def test_export_cli_types_invalid_and_incompatible_inputs(
         segments=[{"segment_id": "seg_0", "text": "Second."}],
         outcomes={"verbatim": "produced"},
     )
-    assert cli.main([
-        "export", "--input", str(first), "--input", str(second),
-        "--format", "txt",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(first),
+                "--input",
+                str(second),
+                "--format",
+                "txt",
+            ]
+        )
+        == 2
+    )
     incompatible_error = json.loads(capsys.readouterr().err)
     assert incompatible_error["code"] == "export_inputs_incompatible"
     assert set(incompatible_error) == {"code", "field", "provided", "reason", "fix"}

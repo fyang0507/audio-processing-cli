@@ -72,8 +72,7 @@ def test_lock_headers_name_the_input_they_were_compiled_from() -> None:
             continue
         header = environment.lock.read_text()[:400]
         assert environment.requirements.name in header, (
-            f"{environment.lock.name} does not record {environment.requirements.name} as its "
-            "input"
+            f"{environment.lock.name} does not record {environment.requirements.name} as its input"
         )
 
 
@@ -84,18 +83,21 @@ def test_locks_agree_with_the_partition_the_resolver_derived() -> None:
         "the partition stopped being unique; the layout now contains an undocumented choice"
     )
     python_environments = [
-        name for name, environment in env.environments().items()
+        name
+        for name, environment in env.environments().items()
         if environment.provisioned and environment.has_interpreter
     ]
     assert len(python_environments) == len(partition["minimal_python_partition"]), (
         f"manifest has {len(python_environments)} Python environments, the resolver derived "
         f"{len(partition['minimal_python_partition'])}"
     )
-    assert partition["conflict_axis"]["conflicts_naming_transformers"] == \
-        partition["conflict_axis"]["groups_conflicting"], (
-            "not every conflict is about transformers any more; re-read the matrix before "
-            "describing the split that way"
-        )
+    assert (
+        partition["conflict_axis"]["conflicts_naming_transformers"]
+        == partition["conflict_axis"]["groups_conflicting"]
+    ), (
+        "not every conflict is about transformers any more; re-read the matrix before "
+        "describing the split that way"
+    )
 
 
 def test_mlx_stays_torch_free() -> None:
@@ -120,9 +122,9 @@ def test_the_private_api_guard_is_declared_where_it_is_checkable() -> None:
 def test_spec_documents_only_name_environments_that_exist(path: Path) -> None:
     """The defect this catches: `"environment": "torch"` outliving the environment named torch."""
     known = set(env.environments())
-    for index, body in enumerate(re.findall(
-            r"```json\n(.*?)```", read_spec_document(path), re.S),
-                                 start=1):
+    for index, body in enumerate(
+        re.findall(r"```json\n(.*?)```", read_spec_document(path), re.S), start=1
+    ):
         document = json.loads(body)
         for name in _environment_values(document):
             assert name in known, (
@@ -138,8 +140,12 @@ def _environment_values(node) -> list[str]:
         for key, value in node.items():
             if key == "environment" and isinstance(value, str):
                 found.append(value)
-            elif key in {"environments_spanned", "environments_created", "environments_kept",
-                         "environments_removed"} and isinstance(value, list):
+            elif key in {
+                "environments_spanned",
+                "environments_created",
+                "environments_kept",
+                "environments_removed",
+            } and isinstance(value, list):
                 found.extend(item for item in value if isinstance(item, str))
             elif key == "environments" and isinstance(value, dict):
                 found.extend(value)
@@ -156,9 +162,9 @@ def _environment_values(node) -> list[str]:
 @pytest.mark.parametrize("path", SPEC_DOCS, ids=lambda p: p.name)
 def test_spec_documents_only_name_packages_that_exist(path: Path) -> None:
     known = set(env.packages())
-    for index, body in enumerate(re.findall(
-            r"```json\n(.*?)```", read_spec_document(path), re.S),
-                                 start=1):
+    for index, body in enumerate(
+        re.findall(r"```json\n(.*?)```", read_spec_document(path), re.S), start=1
+    ):
         document = json.loads(body)
         for name in _package_values(document):
             assert name in known, (
@@ -173,8 +179,11 @@ def _package_values(node) -> list[str]:
             if key == "package" and isinstance(value, str):
                 found.append(value)
             elif key in {"missing", "pulled", "verified"} and isinstance(value, list):
-                found.extend(item["package"] for item in value
-                             if isinstance(item, dict) and "package" in item)
+                found.extend(
+                    item["package"]
+                    for item in value
+                    if isinstance(item, dict) and "package" in item
+                )
             else:
                 found.extend(_package_values(value))
     elif isinstance(node, list):
@@ -195,10 +204,15 @@ def test_a_license_is_never_reported_as_reviewed_without_a_source() -> None:
 
 def test_download_totals_report_unsized_packages_separately() -> None:
     """A total that quietly omitted an unsized package would understate a download."""
-    selection = env.packages_for("qwen-1.7b", {
-        "decode": "ffmpeg", "asr": "qwen3-asr-1.7b-8bit",
-        "aligner": "qwen3-forcedaligner", "diarizer": "fluidaudio",
-    })
+    selection = env.packages_for(
+        "qwen-1.7b",
+        {
+            "decode": "ffmpeg",
+            "asr": "qwen3-asr-1.7b-8bit",
+            "aligner": "qwen3-forcedaligner",
+            "diarizer": "fluidaudio",
+        },
+    )
     known, unsized = env.download_bytes(selection)
     assert unsized == ["fluidaudio"]
     assert known == sum(p.bytes for p in selection if p.sized)
@@ -216,13 +230,16 @@ def test_packages_for_rejects_a_backend_that_does_not_fill_the_role() -> None:
 
 
 def test_packages_for_resolves_all_firered_backends_to_one_package() -> None:
-    selection = env.packages_for("firered", {
-        "decode": "ffmpeg",
-        "vad": "firered-vad",
-        "lid": "firered-lid",
-        "asr": "firered-asr2-aed",
-        "punctuator": "firered-punc",
-    })
+    selection = env.packages_for(
+        "firered",
+        {
+            "decode": "ffmpeg",
+            "vad": "firered-vad",
+            "lid": "firered-lid",
+            "asr": "firered-asr2-aed",
+            "punctuator": "firered-punc",
+        },
+    )
     assert [package.id for package in selection] == ["firered-asr2s"]
 
 

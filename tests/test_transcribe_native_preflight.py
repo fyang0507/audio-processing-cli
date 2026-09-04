@@ -19,7 +19,7 @@ from transcribe_native_test_support import (
     trusted_checkout_probe as trusted_checkout_probe,
 )
 
-from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+from audio_cli.transcribe.execution import runtime as orchestrator_runtime
 
 
 @pytest.mark.parametrize(
@@ -59,13 +59,9 @@ def test_native_preflight_rejects_untrusted_source_checkout_before_decode(
         materialized["checkout_commit"] = env.packages()[package_id].checkout["commit"]
     elif mutation == "patch":
         patched_name = next(iter(materialized["patched_file_digests"]))
-        (Path(materialized["checkout"]) / patched_name).write_text(
-            "tampered\n", encoding="utf-8"
-        )
+        (Path(materialized["checkout"]) / patched_name).write_text("tampered\n", encoding="utf-8")
     elif mutation in {"tokenizer_missing", "snapshot_file", "snapshot_revision"}:
-        tokenizer = Path(
-            materialized["paths"]["Qwen/Qwen2.5-7B"]
-        )
+        tokenizer = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
         if mutation == "tokenizer_missing":
             (tokenizer / "tokenizer.json").unlink()
         else:
@@ -81,13 +77,16 @@ def test_native_preflight_rejects_untrusted_source_checkout_before_decode(
     _patches, expected_modified, _expected_digests = pkg.checkout_patch_expectation(package)
     if mutation in {"head", "head_prefix", "tracked", "untracked", "not_git"}:
         if mutation == "not_git":
+
             def inspect(_checkout: Path) -> orchestrator_runtime._CheckoutState:
                 raise ValueError("not a Git checkout")
         else:
             state = orchestrator_runtime._CheckoutState(
                 head=(
-                    "0" * 40 if mutation == "head"
-                    else package.checkout["commit"] if mutation == "head_prefix"
+                    "0" * 40
+                    if mutation == "head"
+                    else package.checkout["commit"]
+                    if mutation == "head_prefix"
                     else package.checkout["resolved_commit"]
                 ),
                 modified=(
@@ -123,14 +122,13 @@ def test_native_preflight_rejects_untrusted_source_checkout_before_decode(
             transport=NoDecode(),
         )
     refusal = raised.value
-    assert getattr(refusal, "exit_code") == 3
-    assert expected_check in {
-        item["check"] for item in refusal.payload["failed"]
-    }
+    assert refusal.exit_code == 3
+    assert expected_check in {item["check"] for item in refusal.payload["failed"]}
 
 
 def test_native_preflight_accepts_legacy_short_receipt_but_requires_full_live_head(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     environment = "torch-vibevoice"
     package_id = "vibevoice-asr-7b"
@@ -157,7 +155,8 @@ def test_native_preflight_accepts_legacy_short_receipt_but_requires_full_live_he
 
 
 def test_native_preflight_refuses_a_missing_checkout_install_before_decode(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     environment = "torch-vibevoice"
     package_id = "vibevoice-asr-7b"
@@ -173,9 +172,7 @@ def test_native_preflight_refuses_a_missing_checkout_install_before_decode(
             raise AssertionError("missing checkout install reached decode")
 
     monkeypatch.setattr(orchestrator_runtime, "_frozen_packages", lambda _path: {})
-    monkeypatch.setattr(
-        orchestrator_runtime, "_python_runtime_runs", lambda _path: True
-    )
+    monkeypatch.setattr(orchestrator_runtime, "_python_runtime_runs", lambda _path: True)
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
             request,
@@ -194,7 +191,8 @@ def test_native_preflight_refuses_a_missing_checkout_install_before_decode(
 
 
 def test_native_preflight_never_inspects_an_external_checkout_receipt(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     environment = "torch-vibevoice"
     package_id = "vibevoice-asr-7b"
@@ -229,13 +227,12 @@ def test_native_preflight_never_inspects_an_external_checkout_receipt(
         )
 
     assert raised.value.exit_code == 3
-    assert "checkout_directory_exists" in {
-        item["check"] for item in raised.value.payload["failed"]
-    }
+    assert "checkout_directory_exists" in {item["check"] for item in raised.value.payload["failed"]}
 
 
 def test_native_preflight_uses_manifest_pins_not_mutable_hub_receipt_revisions(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     environment = "torch-vibevoice"
     package_id = "vibevoice-asr-7b"
@@ -262,7 +259,9 @@ def test_native_preflight_uses_manifest_pins_not_mutable_hub_receipt_revisions(
 
 @pytest.mark.parametrize("package_id", ["vibevoice-asr-7b", "firered-asr2s"])
 def test_native_preflight_derives_exact_patch_state_independently_of_receipt(
-    tmp_path: Path, monkeypatch, package_id: str,
+    tmp_path: Path,
+    monkeypatch,
+    package_id: str,
 ) -> None:
     package = env.packages()[package_id]
     environment = package.environment
@@ -312,7 +311,7 @@ def test_native_preflight_derives_exact_patch_state_independently_of_receipt(
             },
             transport=NoDecode(),
         )
-    assert getattr(raised.value, "exit_code") == 3
+    assert raised.value.exit_code == 3
     checks = {item["check"] for item in raised.value.payload["failed"]}
     expected = {
         "checkout_patch_applied",
@@ -325,7 +324,8 @@ def test_native_preflight_derives_exact_patch_state_independently_of_receipt(
 
 
 def test_native_preflight_hashes_existing_auto_fetch_artifact_before_decode(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _runtime(tmp_path, monkeypatch, "torch-vibevoice")
     monkeypatch.delenv("AUDIO_PROCESSING_VAD_MODEL", raising=False)
@@ -335,9 +335,7 @@ def test_native_preflight_hashes_existing_auto_fetch_artifact_before_decode(
     artifact.write_bytes(b"corrupt")
     source = tmp_path / "vibe.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="vibevoice", input_path=source, wants="vad"
-    )
+    request = resolve_request(stack_id="vibevoice", input_path=source, wants="vad")
     metadata = InputMetadata(str(source), 1.0, "wav", 16_000, 1)
 
     class NoDecode:
@@ -351,25 +349,26 @@ def test_native_preflight_hashes_existing_auto_fetch_artifact_before_decode(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
                 },
             },
             transport=NoDecode(),
         )
 
     assert raised.value.payload["code"] == "package_integrity_failed"
-    assert raised.value.payload["failed"] == [{
-        "package": "silero-vad",
-        "check": "url_artifact_sha256",
-        "expected": silero_source["sha256"],
-        "actual": "missing, not a file, or digest changed",
-    }]
+    assert raised.value.payload["failed"] == [
+        {
+            "package": "silero-vad",
+            "check": "url_artifact_sha256",
+            "expected": silero_source["sha256"],
+            "actual": "missing, not a file, or digest changed",
+        }
+    ]
 
 
 def test_native_preflight_hashes_explicit_silero_override_before_decode(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _runtime(tmp_path, monkeypatch, "torch-vibevoice")
     override = tmp_path / "arbitrary.onnx"
@@ -377,9 +376,7 @@ def test_native_preflight_hashes_explicit_silero_override_before_decode(
     monkeypatch.setenv("AUDIO_PROCESSING_VAD_MODEL", str(override))
     source = tmp_path / "vibe.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="vibevoice", input_path=source, wants="vad"
-    )
+    request = resolve_request(stack_id="vibevoice", input_path=source, wants="vad")
 
     class NoDecode:
         def decode(self, *_args, **_kwargs):
@@ -392,9 +389,7 @@ def test_native_preflight_hashes_explicit_silero_override_before_decode(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
                 },
             },
             transport=NoDecode(),

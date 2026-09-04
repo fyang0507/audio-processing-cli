@@ -17,9 +17,9 @@ from audio_cli import packages as pkg
 from audio_cli import paths as audio_paths
 from audio_cli.export import UnsafeOutputError, export_documents
 from audio_cli.packages import integrity as package_integrity
-from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
 from audio_cli.transcribe import orchestrator, refusals
 from audio_cli.transcribe.catalog import InputMetadata
+from audio_cli.transcribe.execution import runtime as orchestrator_runtime
 from audio_cli.transcribe.plan import serialize_plan
 from audio_cli.transcribe.planner import build_plan, resolve_request
 from audio_cli.transcribe.transport import StageOutcome, StageTransport
@@ -45,14 +45,19 @@ def provisioned_runtime_root(tmp_path: Path, monkeypatch) -> None:
         for package in env.packages().values():
             source = package.source
             repositories = (
-                source["repos"] if source["type"] == "huggingface_multi"
-                else [source] if source["type"] == "huggingface"
+                source["repos"]
+                if source["type"] == "huggingface_multi"
+                else [source]
+                if source["type"] == "huggingface"
                 else []
             )
             for repository in repositories:
                 found[(repository["repo"], repository["revision"])] = (
-                    tmp_path / "hub" / f"models--{repository['repo'].replace('/', '--')}"
-                    / "snapshots" / repository["revision"]
+                    tmp_path
+                    / "hub"
+                    / f"models--{repository['repo'].replace('/', '--')}"
+                    / "snapshots"
+                    / repository["revision"]
                 )
         return found
 
@@ -62,9 +67,7 @@ def provisioned_runtime_root(tmp_path: Path, monkeypatch) -> None:
         "_inspect_checkout",
         lambda _checkout: orchestrator_runtime._CheckoutState(
             head=FLUID_REVISION,
-            modified=pkg.checkout_patch_expectation(
-                env.packages()["fluidaudio"]
-            )[1],
+            modified=pkg.checkout_patch_expectation(env.packages()["fluidaudio"])[1],
             untracked=(),
         ),
     )
@@ -83,7 +86,9 @@ def request(tmp_path: Path, *, wants=(), run_range=None):
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=wants,
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=wants,
     )
     metadata = InputMetadata(str(source), 361.0, "wav", 48_000, 2)
     return resolved, metadata, run_range
@@ -92,15 +97,18 @@ def request(tmp_path: Path, *, wants=(), run_range=None):
 def registry(tmp_path: Path) -> dict:
     source = env.packages()["qwen3-asr-0.6b-8bit"].source
     model = (
-        tmp_path / "hub" / f"models--{source['repo'].replace('/', '--')}"
-        / "snapshots" / REVISION
+        tmp_path / "hub" / f"models--{source['repo'].replace('/', '--')}" / "snapshots" / REVISION
     )
     model.mkdir(parents=True, exist_ok=True)
-    return {"environments": {"mlx": {"state": "ready"}}, "packages": {
-        "qwen3-asr-0.6b-8bit": {
-        "state": "ready",
-        "materialized": {"path": str(model), "revision": REVISION, "bytes": 0},
-    }}}
+    return {
+        "environments": {"mlx": {"state": "ready"}},
+        "packages": {
+            "qwen3-asr-0.6b-8bit": {
+                "state": "ready",
+                "materialized": {"path": str(model), "revision": REVISION, "bytes": 0},
+            }
+        },
+    }
 
 
 class FakeTransport:
@@ -120,13 +128,18 @@ class FakeTransport:
         self.units = units
         raw = []
         for index, item in enumerate(units):
-            raw.append({
-                "unit_id": item["unit_id"],
-                "processed": not self.partial or index == 0,
-                "text": "language English<asr_text>Hello.",
-            })
+            raw.append(
+                {
+                    "unit_id": item["unit_id"],
+                    "processed": not self.partial or index == 0,
+                    "text": "language English<asr_text>Hello.",
+                }
+            )
         return StageOutcome(
-            "asr", "qwen3-asr-0.6b-8bit", {"units": raw}, 3.0,
+            "asr",
+            "qwen3-asr-0.6b-8bit",
+            {"units": raw},
+            3.0,
             returncode=4 if self.partial else 0,
             peak_rss_bytes=100,
         )
@@ -149,18 +162,46 @@ class FullFakeTransport(FakeTransport):
     def diarize(self, *, overlap, **kwargs):
         self.diarizer_calls += 1
         self.overlap = overlap
-        return StageOutcome("diarizer", "fluidaudio", {"segments": [
-            {"startTimeSeconds": 0.0, "endTimeSeconds": 1.0, "speakerId": "S1",
-             "embedding": [0.0] * 256},
-            {"startTimeSeconds": 0.8, "endTimeSeconds": 1.8, "speakerId": "S2",
-             "embedding": [1.0] * 256},
-        ]}, 2.0, peak_rss_bytes=80)
+        return StageOutcome(
+            "diarizer",
+            "fluidaudio",
+            {
+                "segments": [
+                    {
+                        "startTimeSeconds": 0.0,
+                        "endTimeSeconds": 1.0,
+                        "speakerId": "S1",
+                        "embedding": [0.0] * 256,
+                    },
+                    {
+                        "startTimeSeconds": 0.8,
+                        "endTimeSeconds": 1.8,
+                        "speakerId": "S2",
+                        "embedding": [1.0] * 256,
+                    },
+                ]
+            },
+            2.0,
+            peak_rss_bytes=80,
+        )
 
     def align(self, *, segments, **kwargs):
-        return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
-            "unit_id": item["unit_id"],
-            "words": [{"text": "Hello", "start": item["start"], "end": item["end"]}],
-        } for item in segments]}, 4.0, peak_rss_bytes=200, peak_mps_live_bytes=150)
+        return StageOutcome(
+            "aligner",
+            "qwen3-forcedaligner",
+            {
+                "segments": [
+                    {
+                        "unit_id": item["unit_id"],
+                        "words": [{"text": "Hello", "start": item["start"], "end": item["end"]}],
+                    }
+                    for item in segments
+                ]
+            },
+            4.0,
+            peak_rss_bytes=200,
+            peak_mps_live_bytes=150,
+        )
 
 
 class FakeVad:
@@ -179,20 +220,23 @@ def full_registry(tmp_path: Path) -> dict:
     ):
         source = env.packages()[identifier].source
         target = (
-            tmp_path / "hub" / f"models--{source['repo'].replace('/', '--')}"
-            / "snapshots" / revision
+            tmp_path
+            / "hub"
+            / f"models--{source['repo'].replace('/', '--')}"
+            / "snapshots"
+            / revision
         )
         target.mkdir(parents=True, exist_ok=True)
         for pattern in source.get("allow_patterns", ()):
-            marker = target / (
-                f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern
-            )
+            marker = target / (f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern)
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_bytes(b"")
         packages[identifier] = {
             "state": "ready",
             "materialized": {
-                "path": str(target), "revision": revision, "bytes": 0,
+                "path": str(target),
+                "revision": revision,
+                "bytes": 0,
             },
         }
     fluid = audio_paths.checkout_dir("swift", "fluidaudio")
@@ -204,14 +248,16 @@ def full_registry(tmp_path: Path) -> dict:
     patched = fluid / "Sources" / "FluidAudioCLI" / "Commands" / "ProcessCommand.swift"
     patched.parent.mkdir(parents=True, exist_ok=True)
     patched.write_bytes(b"patched\n")
-    patch_name, patch_paths, patch_digests = pkg.checkout_patch_expectation(
+    patch_name, _patch_paths, patch_digests = pkg.checkout_patch_expectation(
         env.packages()["fluidaudio"]
     )
     packages["fluidaudio"] = {
         "state": "ready",
         "materialized": {
-            "path": str(fluid), "revision": FLUID_REVISION,
-            "built": True, "product_runs": True,
+            "path": str(fluid),
+            "revision": FLUID_REVISION,
+            "built": True,
+            "product_runs": True,
             "product_path": product.relative_to(fluid).as_posix(),
             "product_sha256": pkg.sha256_file(product),
             "patches_applied": list(patch_name),
@@ -230,23 +276,38 @@ class NoncontiguousTransport(FullFakeTransport):
         self.partial = partial
 
     def diarize(self, **kwargs):
-        return StageOutcome("diarizer", "fluidaudio", {"segments": [
-            {"startTimeSeconds": 0.0, "endTimeSeconds": 0.6, "speakerId": "S1"},
-            {"startTimeSeconds": 0.6, "endTimeSeconds": 1.3, "speakerId": "S2"},
-            {"startTimeSeconds": 1.35, "endTimeSeconds": 1.45, "speakerId": "S4"},
-            {"startTimeSeconds": 1.5, "endTimeSeconds": 2.0, "speakerId": "S3"},
-        ]}, 1.0)
+        return StageOutcome(
+            "diarizer",
+            "fluidaudio",
+            {
+                "segments": [
+                    {"startTimeSeconds": 0.0, "endTimeSeconds": 0.6, "speakerId": "S1"},
+                    {"startTimeSeconds": 0.6, "endTimeSeconds": 1.3, "speakerId": "S2"},
+                    {"startTimeSeconds": 1.35, "endTimeSeconds": 1.45, "speakerId": "S4"},
+                    {"startTimeSeconds": 1.5, "endTimeSeconds": 2.0, "speakerId": "S3"},
+                ]
+            },
+            1.0,
+        )
 
     def qwen(self, *, units, **kwargs):
         self.units = list(units)
-        return StageOutcome("asr", "qwen3-asr-0.6b-8bit", {"units": [
+        return StageOutcome(
+            "asr",
+            "qwen3-asr-0.6b-8bit",
             {
-                "unit_id": item["unit_id"],
-                "processed": not self.partial or item["unit_id"] != "turn_1",
-                "text": f"Text {item['unit_id']}.",
-            }
-            for item in units
-        ]}, 1.0, returncode=4 if self.partial else 0)
+                "units": [
+                    {
+                        "unit_id": item["unit_id"],
+                        "processed": not self.partial or item["unit_id"] != "turn_1",
+                        "text": f"Text {item['unit_id']}.",
+                    }
+                    for item in units
+                ]
+            },
+            1.0,
+            returncode=4 if self.partial else 0,
+        )
 
 
 __all__ = [

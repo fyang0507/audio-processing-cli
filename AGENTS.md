@@ -37,7 +37,7 @@ Two invariants that follow, and hold everywhere:
 | [HANDOFF.md](HANDOFF.md) | Repository-wide state and open evidence. Start here when unsure. |
 | [model_tests/](model_tests/) | Measured results and their scope limits. |
 
-Specification documents are enforced, not decorative: `tests/test_spec_docs.py` and
+Specification documents are enforced, not decorative: the `tests/test_spec_docs*.py` suite and
 `tests/test_environments.py` fail when a payload, a name, or an environment drifts from what
 these documents publish. Those two compare documents against documents, which cannot catch a
 document the *code* disagrees with, so `tests/test_shipped_commands_match_the_document.py` runs
@@ -58,8 +58,10 @@ interface, a **measured** result, and an **unresolved** question.
 ## Tooling
 
 `uv` manages every environment — `uv venv` and `uv pip install`, never `python3 -m venv` with
-`pip`. Tests are `uv run --extra dev pytest`. `ffmpeg` and `ffprobe` are machine runtime
-dependencies. Python 3.11+.
+`pip`. Tests are `uv run --extra dev pytest`. Install the repository hooks with
+`uv run --extra dev pre-commit install` and run the deterministic lint/format gate with
+`uv run --extra dev pre-commit run --all-files`; Ruff lint fixes run before Ruff formatting.
+`ffmpeg` and `ffprobe` are machine runtime dependencies. Python 3.11+.
 
 Model weights and their runtimes are provisioned **only** by `audio packages pull`. Never
 hand-download weights, hand-create a virtual environment, or edit a lock file to make an install

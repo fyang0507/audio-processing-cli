@@ -29,9 +29,7 @@ def _raise_timing_required(document: LoadedResult) -> None:
         stack=payload["provenance"]["stack"],
         wants=tuple(payload["provenance"]["outcomes"]),
         plan=payload["provenance"]["plan"],
-        word_timing_outcome=payload["provenance"]["outcomes"].get(
-            "word_timestamps"
-        ),
+        word_timing_outcome=payload["provenance"]["outcomes"].get("word_timestamps"),
     )
 
 
@@ -53,8 +51,7 @@ def _is_bounded_event(segment: Mapping[str, Any]) -> bool:
 
 def _has_lexical_text(text: str) -> bool:
     return any(
-        not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        not character.isspace() and not unicodedata.category(character).startswith("P")
         for character in text
     )
 
@@ -86,8 +83,7 @@ def _validate_word_timing_ledger(document: LoadedResult) -> None:
     if outcome not in {"produced", "abstained"}:
         return
     ordinary_wordless = [
-        segment for segment in document.payload["segments"]
-        if _is_ordinary_wordless(segment)
+        segment for segment in document.payload["segments"] if _is_ordinary_wordless(segment)
     ]
     if not ordinary_wordless:
         return
@@ -114,9 +110,7 @@ def _require_word_timing(merged: MergedTranscript) -> None:
     has_real_word_stream = False
     timing_produced_by: LoadedResult | None = None
     for document in merged.documents:
-        outcome = document.payload["provenance"]["outcomes"].get(
-            "word_timestamps"
-        )
+        outcome = document.payload["provenance"]["outcomes"].get("word_timestamps")
         if outcome == "produced" and timing_produced_by is None:
             timing_produced_by = document
         for segment in document.payload["segments"]:
@@ -127,9 +121,7 @@ def _require_word_timing(merged: MergedTranscript) -> None:
     # segment bounds, and v1 carries no segment-to-unit association; even a real
     # unit-level abstention elsewhere cannot prove which unbounded text it owns.
     for document in merged.documents:
-        outcome = document.payload["provenance"]["outcomes"].get(
-            "word_timestamps"
-        )
+        outcome = document.payload["provenance"]["outcomes"].get("word_timestamps")
         alignment_bounds = _alignment_abstention_bounds(document)
         for segment in document.payload["segments"]:
             if not _is_ordinary_wordless(segment):
@@ -142,25 +134,24 @@ def _require_word_timing(merged: MergedTranscript) -> None:
     if has_real_word_stream:
         return
     all_segments = [
-        segment
-        for document in merged.documents
-        for segment in document.payload["segments"]
+        segment for document in merged.documents for segment in document.payload["segments"]
     ]
-    if timing_produced_by is not None and all_segments and all(
-        _is_bounded_event(segment) for segment in all_segments
+    if (
+        timing_produced_by is not None
+        and all_segments
+        and all(_is_bounded_event(segment) for segment in all_segments)
     ):
         return
     # A produced-timing event document cannot repair ordinary speech in another
     # range.  Prefer the ordinary document whose timing was not produced so the
     # refusal can preserve its own plan/range in a runnable rerun command.
-    repairable = next((
-        document
-        for document in merged.documents
-        if document.payload["provenance"]["outcomes"].get("word_timestamps")
-        != "produced"
-        and any(
-            not _is_bounded_event(segment)
-            for segment in document.payload["segments"]
-        )
-    ), None)
+    repairable = next(
+        (
+            document
+            for document in merged.documents
+            if document.payload["provenance"]["outcomes"].get("word_timestamps") != "produced"
+            and any(not _is_bounded_event(segment) for segment in document.payload["segments"])
+        ),
+        None,
+    )
     _raise_timing_required(repairable or timing_produced_by or merged.documents[0])

@@ -6,14 +6,14 @@ import fnmatch
 import hashlib
 import os
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..environments import Package
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def sha256_file(path: Path) -> str:
@@ -73,16 +73,10 @@ def _inspect_hub_snapshot(
             f"{repository} snapshot path {snapshot} does not equal cache-indexed "
             f"revision path {expected}"
         ], None
-    if (
-        expected.is_symlink()
-        or expected.parent.is_symlink()
-        or expected.parent.parent.is_symlink()
-    ):
+    if expected.is_symlink() or expected.parent.is_symlink() or expected.parent.parent.is_symlink():
         return [f"{repository} snapshot is not the exact non-symlink cache-index path"], None
     if not expected.is_dir():
-        return [
-            f"{repository} snapshot is not a non-symlink directory: {expected}"
-        ], None
+        return [f"{repository} snapshot is not a non-symlink directory: {expected}"], None
     try:
         expected_resolved = expected.resolve(strict=True)
         repository_cache_root = expected.parent.parent.resolve(strict=True)
@@ -95,9 +89,7 @@ def _inspect_hub_snapshot(
         for entry in expected_resolved.rglob("*"):
             if entry.is_symlink():
                 target = entry.resolve(strict=True)
-                if not target.is_file() or not target.is_relative_to(
-                    repository_cache_root
-                ):
+                if not target.is_file() or not target.is_relative_to(repository_cache_root):
                     unsafe_entries.append(str(entry.relative_to(expected_resolved)))
             elif entry.is_file():
                 target = entry.resolve(strict=True)
@@ -127,7 +119,8 @@ def _inspect_hub_snapshot(
 
 
 def hub_materialization_issues(
-    package: Package, materialized: dict,
+    package: Package,
+    materialized: dict,
 ) -> list[str]:
     """Return cheap live integrity failures for revision-pinned Hub snapshots."""
     kind = package.source["type"]
@@ -137,23 +130,27 @@ def hub_materialization_issues(
     snapshots: list[tuple[str, str, Path | None, tuple[str, ...]]] = []
     if kind == "huggingface":
         value = materialized.get("path")
-        snapshots.append((
-            package.source["repo"],
-            package.source["revision"],
-            Path(str(value)) if value else None,
-            tuple(package.source.get("allow_patterns", ())),
-        ))
+        snapshots.append(
+            (
+                package.source["repo"],
+                package.source["revision"],
+                Path(str(value)) if value else None,
+                tuple(package.source.get("allow_patterns", ())),
+            )
+        )
     else:
         values = materialized.get("paths")
         values = values if isinstance(values, dict) else {}
         for repository in package.source["repos"]:
             value = values.get(repository["repo"])
-            snapshots.append((
-                repository["repo"],
-                repository["revision"],
-                Path(str(value)) if value else None,
-                tuple(repository.get("allow_patterns", ())),
-            ))
+            snapshots.append(
+                (
+                    repository["repo"],
+                    repository["revision"],
+                    Path(str(value)) if value else None,
+                    tuple(repository.get("allow_patterns", ())),
+                )
+            )
 
     try:
         snapshot_index = _hub_snapshot_index()
@@ -175,7 +172,5 @@ def hub_materialization_issues(
     if isinstance(recorded_bytes, bool) or not isinstance(recorded_bytes, int):
         issues.append("materialization receipt has no integer bytes measurement")
     elif all_usable and actual_bytes != recorded_bytes:
-        issues.append(
-            f"snapshot bytes changed: recorded {recorded_bytes}, current {actual_bytes}"
-        )
+        issues.append(f"snapshot bytes changed: recorded {recorded_bytes}, current {actual_bytes}")
     return issues

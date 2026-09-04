@@ -29,18 +29,25 @@ def verify_packages(
     failed: list[dict] = []
     for identifier, entry in sorted(document["packages"].items()):
         if entry.get("state") != "ready":
-            failed.append({"package": identifier, "code": "package_not_ready",
-                           "detail": f"state is {entry.get('state')!r}",
-                           "fix": f"audio packages pull --repair {identifier}"})
+            failed.append(
+                {
+                    "package": identifier,
+                    "code": "package_not_ready",
+                    "detail": f"state is {entry.get('state')!r}",
+                    "fix": f"audio packages pull --repair {identifier}",
+                }
+            )
             continue
         package = package_catalog.get(identifier)
         if package is None:
-            failed.append({
-                "package": identifier,
-                "code": "package_unknown",
-                "detail": "ready registry entry is not present in the installed manifest",
-                "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
-            })
+            failed.append(
+                {
+                    "package": identifier,
+                    "code": "package_unknown",
+                    "detail": "ready registry entry is not present in the installed manifest",
+                    "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
+                }
+            )
             continue
         # The environment-root verdict owns every path below it.  Once that root is
         # redirected, do not inspect a checkout or launch a product reached through it;
@@ -50,47 +57,51 @@ def verify_packages(
         record: dict = {"package": identifier}
         materialized = entry.get("materialized", {})
         if not isinstance(materialized, dict):
-            failed.append({
-                "package": identifier,
-                "code": "package_integrity_failed",
-                "detail": "materialized receipt is not an object",
-                "fix": f"audio packages pull --repair {identifier}",
-            })
+            failed.append(
+                {
+                    "package": identifier,
+                    "code": "package_integrity_failed",
+                    "detail": "materialized receipt is not an object",
+                    "fix": f"audio packages pull --repair {identifier}",
+                }
+            )
             continue
         # `digest: "ok"` is reserved for the one kind that has something to hash against.
         if package.source["type"] == "url":
-            location, location_issue = managed_url_artifact_path(
-                package, materialized.get("path")
-            )
+            location, location_issue = managed_url_artifact_path(package, materialized.get("path"))
             digest_matches = False
             if location_issue is None and location is not None:
                 try:
-                    digest_matches = (
-                        sha256_file(location) == package.source["sha256"]
-                    )
+                    digest_matches = sha256_file(location) == package.source["sha256"]
                 except OSError as exc:
                     location_issue = f"could not hash managed artifact {location}: {exc}"
             if digest_matches:
                 record["digest"] = "ok"
             else:
-                failed.append({
-                    "package": identifier, "code": "package_integrity_failed",
-                    "detail": location_issue or (
-                        f"{location} is missing or its digest changed"
-                    ),
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_integrity_failed",
+                        "detail": location_issue
+                        or (f"{location} is missing or its digest changed"),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
         elif package.source["type"] in {
-            "huggingface", "huggingface_multi",
+            "huggingface",
+            "huggingface_multi",
         }:
             issues = hub_materialization_issues(package, materialized)
             if issues:
-                failed.append({
-                    "package": identifier, "code": "package_integrity_failed",
-                    "detail": "; ".join(issues),
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
             # The receipt is not the pin.  It is mutable local history and may predate a
             # manifest correction; only the manifest revisions can be republished as the
@@ -135,23 +146,16 @@ def verify_packages(
                             f"recorded patches are {applied!r}, expected exactly "
                             f"{list(expected_patches)!r}"
                         )
-                    recorded_digests = materialized.get(
-                        "patched_file_digests", {}
-                    )
+                    recorded_digests = materialized.get("patched_file_digests", {})
                     if recorded_digests != expected_digests:
-                        issues.append(
-                            "recorded patched-file digests differ from manifest"
-                        )
+                        issues.append("recorded patched-file digests differ from manifest")
                     changed = [
-                        name for name, digest in expected_digests.items()
-                        if not checkout_file_matches(
-                            checkout, name, digest, toolchain.file_digest
-                        )
+                        name
+                        for name, digest in expected_digests.items()
+                        if not checkout_file_matches(checkout, name, digest, toolchain.file_digest)
                     ]
                     if changed:
-                        issues.append(
-                            f"live patched-file hashes changed for {sorted(changed)!r}"
-                        )
+                        issues.append(f"live patched-file hashes changed for {sorted(changed)!r}")
                 candidates = built_product_candidates(checkout, product)
                 if len(candidates) != 1:
                     issues.append(
@@ -165,11 +169,14 @@ def verify_packages(
                     if product_issue is not None:
                         issues.append(product_issue)
             if issues:
-                failed.append({
-                    "package": identifier, "code": "package_integrity_failed",
-                    "detail": "; ".join(issues),
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
             if package.environment in built_runtime_probes:
                 product_runs = built_runtime_probes[package.environment]
@@ -179,39 +186,53 @@ def verify_packages(
                 except OSError:
                     product_runs = False
             if not product_runs:
-                failed.append({
-                    "package": identifier, "code": "package_build_unusable",
-                    "detail": f"built product {product!r} does not run",
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_build_unusable",
+                        "detail": f"built product {product!r} does not run",
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
             record["product_runs"] = True
             record["product_digest"] = "ok"
             record["patches_applied"] = list(expected_patches)
         else:
-            locations = [Path(p) for p in (
-                [materialized["path"]] if materialized.get("path")
-                else list((materialized.get("paths") or {}).values()))]
+            locations = [
+                Path(p)
+                for p in (
+                    [materialized["path"]]
+                    if materialized.get("path")
+                    else list((materialized.get("paths") or {}).values())
+                )
+            ]
             gone = [str(location) for location in locations if not location.exists()]
             if gone:
                 # The shared-cache consequence: another root's purge, or a manual cache
                 # clear, can take weights out from under a root that still calls them
                 # ready. Better an exit 3 with a fix than a stack that fails mid-run.
-                failed.append({
-                    "package": identifier, "code": "package_integrity_failed",
-                    "detail": f"materialized path(s) no longer exist: {', '.join(gone)}",
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_integrity_failed",
+                        "detail": f"materialized path(s) no longer exist: {', '.join(gone)}",
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
 
         if package.checkout is not None:
             issues = _checkout_integrity_issues(package, materialized, toolchain)
             if issues:
-                failed.append({
-                    "package": identifier, "code": "package_integrity_failed",
-                    "detail": "; ".join(issues),
-                    "fix": f"audio packages pull --repair {identifier}",
-                })
+                failed.append(
+                    {
+                        "package": identifier,
+                        "code": "package_integrity_failed",
+                        "detail": "; ".join(issues),
+                        "fix": f"audio packages pull --repair {identifier}",
+                    }
+                )
                 continue
             record["patches_applied"] = materialized.get("patches_applied", [])
         verified.append(record)

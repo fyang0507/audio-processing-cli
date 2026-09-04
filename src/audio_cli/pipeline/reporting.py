@@ -124,9 +124,7 @@ def build_report(
             *prepared.analysis.observations,
             _program_observation(prepared.before_program),
         ],
-        "rule_evaluations": evaluate_profile(
-            prepared.analysis, profile, prepared.before_program
-        ),
+        "rule_evaluations": evaluate_profile(prepared.analysis, profile, prepared.before_program),
         "stages": staged.stages,
         "adjustments": staged.resolved_adjustments,
         "measurements": {
@@ -135,18 +133,14 @@ def build_report(
                 "regional": prepared.before_regional,
             },
             "predicted": {
-                "program_before_normalization": _round_loudness(
-                    loudness.pre_program
-                ),
+                "program_before_normalization": _round_loudness(loudness.pre_program),
                 "program": _round_loudness(loudness.simulated_program),
                 "regional": loudness.simulated_regional,
             },
         },
         "final_peak_validation": {
             "status": "predicted_pass",
-            "predicted_true_peak_dbtp": round(
-                loudness.simulated_program["input_tp"], 3
-            ),
+            "predicted_true_peak_dbtp": round(loudness.simulated_program["input_tp"], 3),
             "limit_true_peak_dbtp": loudness.simulated_peak_limit,
         },
         "timeline_preserved": True,

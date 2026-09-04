@@ -47,19 +47,19 @@ def test_freeze_parser_keeps_direct_editable_and_unknown_installed_lines(
     monkeypatch,
 ) -> None:
     toolchain = pkg.Toolchain()
-    stdout = "\n".join((
-        "locked_package==1.2.3",
-        "rogue @ file:///tmp/rogue",
-        "-e file:///tmp/editable#egg=editable_hook",
-        "-e http://[invalid",
-        "future-freeze-syntax",
-    ))
+    stdout = "\n".join(
+        (
+            "locked_package==1.2.3",
+            "rogue @ file:///tmp/rogue",
+            "-e file:///tmp/editable#egg=editable_hook",
+            "-e http://[invalid",
+            "future-freeze-syntax",
+        )
+    )
     monkeypatch.setattr(
         toolchain,
         "run",
-        lambda *_args, **_kwargs: types.SimpleNamespace(
-            returncode=0, stdout=stdout, stderr=""
-        ),
+        lambda *_args, **_kwargs: types.SimpleNamespace(returncode=0, stdout=stdout, stderr=""),
     )
 
     assert toolchain.frozen_packages(Path("/unused/python")) == {
@@ -102,12 +102,8 @@ def test_environment_drift_requires_the_exact_named_checkout_install(
     frozen: dict[str, str],
 ) -> None:
     required = Path("/managed/checkout")
-    drift = package_requirements._environment_drift(
-        {}, frozen, {"native-backend": required}
-    )
-    assert drift["native-backend"] == (
-        f"@ {required.as_uri()}", frozen.get("native-backend")
-    )
+    drift = package_requirements._environment_drift({}, frozen, {"native-backend": required})
+    assert drift["native-backend"] == (f"@ {required.as_uri()}", frozen.get("native-backend"))
 
 
 @pytest.mark.parametrize("package_id", ["vibevoice-asr-7b", "firered-asr2s"])
@@ -116,9 +112,7 @@ def test_verify_repair_reinstalls_ready_checkout_after_lock_sync(
     package_id: str,
 ) -> None:
     toolchain = FakeToolchain()
-    provisioner = pkg.Provisioner(
-        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
     package = env.packages()[package_id]
     provisioner.pull(pkg.select([package_id]))
     environment_name = package.environment
@@ -127,9 +121,9 @@ def test_verify_repair_reinstalls_ready_checkout_after_lock_sync(
 
     # Model a lock change plus uv sync: the direct install exists before repair,
     # create_environment removes it, and install_checkout must restore it.
-    locked_name = next(iter(
-        package_requirements._locked_versions(env.environments()[environment_name])
-    ))
+    locked_name = next(
+        iter(package_requirements._locked_versions(env.environments()[environment_name]))
+    )
     toolchain._synced.discard(environment_name)
     toolchain._drift[locked_name] = "0.invalid"
     document = pkg.load_registry()
@@ -143,9 +137,7 @@ def test_verify_repair_reinstalls_ready_checkout_after_lock_sync(
     assert repaired["environments"][environment_name] == "ok"
     assert repaired["failed"] == []
     assert toolchain.created == [environment_name]
-    assert [call[0] for call in toolchain.calls if call[0] == "install"] == [
-        "install"
-    ]
+    assert [call[0] for call in toolchain.calls if call[0] == "install"] == ["install"]
     assert distribution in toolchain._direct_installs[environment_name]
     registry = pkg.load_registry()
     assert registry["environments"][environment_name]["state"] == "ready"
@@ -163,9 +155,7 @@ def test_verify_repair_never_installs_a_tampered_ready_checkout(
     tmp_path: Path,
 ) -> None:
     toolchain = FakeToolchain()
-    provisioner = pkg.Provisioner(
-        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
     package_id = "vibevoice-asr-7b"
     package = env.packages()[package_id]
     provisioner.pull(pkg.select([package_id]))
@@ -174,9 +164,9 @@ def test_verify_repair_never_installs_a_tampered_ready_checkout(
         / "vibevoice/modular/modeling_vibevoice_asr.py"
     )
     patched.write_text("tampered\n", encoding="utf-8")
-    locked_name = next(iter(
-        package_requirements._locked_versions(env.environments()[package.environment])
-    ))
+    locked_name = next(
+        iter(package_requirements._locked_versions(env.environments()[package.environment]))
+    )
     toolchain._synced.discard(package.environment)
     toolchain._drift[locked_name] = "0.invalid"
     toolchain.calls.clear()
@@ -186,8 +176,7 @@ def test_verify_repair_never_installs_a_tampered_ready_checkout(
 
     assert report["environments"][package.environment] == "drifted"
     assert any(
-        item.get("package") == package_id
-        and item["code"] == "package_integrity_failed"
+        item.get("package") == package_id and item["code"] == "package_integrity_failed"
         for item in report["failed"]
     )
     assert toolchain.created == []
@@ -229,9 +218,7 @@ def test_pull_refuses_a_symlinked_provisioning_root_before_skip_or_fetch(
     tmp_path,
 ) -> None:
     package_id = "qwen3-asr-1.7b-8bit"
-    provisioner = pkg.Provisioner(
-        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
     provisioner.pull(pkg.select([package_id]))
     root = paths.root()
     external = tmp_path / "external-provisioning-root"
@@ -257,7 +244,8 @@ def test_pull_refuses_a_symlinked_provisioning_root_before_skip_or_fetch(
 
 
 def test_pull_refuses_a_symlinked_root_before_loading_its_registry(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     root = paths.root()
     external = tmp_path / "external-provisioning-root"
@@ -269,9 +257,9 @@ def test_pull_refuses_a_symlinked_root_before_loading_its_registry(
 
     monkeypatch.setattr(package_registry, "load_registry", forbidden_registry_read)
     with pytest.raises(pkg.ProvisioningError) as caught:
-        pkg.Provisioner(
-            toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
-        ).pull(pkg.select(["qwen3-asr-0.6b-8bit"]))
+        pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).pull(
+            pkg.select(["qwen3-asr-0.6b-8bit"])
+        )
 
     assert caught.value.code == "environment_drifted"
     assert caught.value.message == f"provisioning root is a symlink: {root}"
@@ -280,9 +268,7 @@ def test_pull_refuses_a_symlinked_root_before_loading_its_registry(
 def test_verify_never_probes_below_a_symlinked_provisioning_root(tmp_path) -> None:
     package_id = "vibevoice-asr-7b"
     toolchain = FakeToolchain(private_api_hash="would-execute-external-python")
-    provisioner = pkg.Provisioner(
-        toolchain=toolchain, fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=toolchain, fetcher=FakeFetcher(tmp_path))
     provisioner.pull(pkg.select([package_id]))
     root = paths.root()
     external = tmp_path / "external-provisioning-root"
@@ -307,10 +293,7 @@ def test_every_managed_path_rejects_a_symlinked_provisioning_root(tmp_path) -> N
     root = paths.root()
     environment = paths.env_dir("torch-vibevoice")
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
-    artifact = (
-        paths.models_dir()
-        / env.packages()["silero-vad"].source["filename"]
-    )
+    artifact = paths.models_dir() / env.packages()["silero-vad"].source["filename"]
     checkout.mkdir(parents=True)
     artifact.parent.mkdir(parents=True)
     artifact.write_bytes(b"model")
@@ -320,20 +303,21 @@ def test_every_managed_path_rejects_a_symlinked_provisioning_root(tmp_path) -> N
     expected_issue = f"provisioning root is a symlink: {root}"
 
     assert pkg.managed_environment_path("torch-vibevoice") == (
-        environment, expected_issue,
+        environment,
+        expected_issue,
     )
-    assert pkg.managed_checkout_path(
-        env.packages()["vibevoice-asr-7b"], checkout
-    ) == (checkout, f"package environment is not managed: {expected_issue}")
-    assert pkg.managed_url_artifact_path(
-        env.packages()["silero-vad"], artifact
-    ) == (artifact, expected_issue)
+    assert pkg.managed_checkout_path(env.packages()["vibevoice-asr-7b"], checkout) == (
+        checkout,
+        f"package environment is not managed: {expected_issue}",
+    )
+    assert pkg.managed_url_artifact_path(env.packages()["silero-vad"], artifact) == (
+        artifact,
+        expected_issue,
+    )
 
 
 def test_verify_refuses_an_in_root_symlinked_environments_parent(tmp_path) -> None:
-    provisioner = pkg.Provisioner(
-        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path))
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     envs = paths.envs_dir()
     alternate = paths.root() / "alternate-envs"
@@ -378,7 +362,8 @@ def test_verify_does_not_inspect_or_launch_below_a_redirected_environment_parent
 
     assert report["verified"] == []
     assert {item["environment"] for item in report["failed"]} == {
-        "torch-vibevoice", "swift",
+        "torch-vibevoice",
+        "swift",
     }
     assert all(item["code"] == "environment_drifted" for item in report["failed"])
 
@@ -422,8 +407,9 @@ def test_verify_fails_closed_when_ready_packages_have_no_ready_environment(
 
 
 def test_verify_reports_a_corrupted_single_file_artifact(tmp_path) -> None:
-    provisioner = pkg.Provisioner(toolchain=FakeToolchain(),
-                                 fetcher=FakeFetcher(tmp_path, corrupt=True))
+    provisioner = pkg.Provisioner(
+        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path, corrupt=True)
+    )
     provisioner.pull(pkg.select(["silero-vad"]))
     failure = provisioner.verify()["failed"]
     assert [item["code"] for item in failure] == ["package_integrity_failed"]

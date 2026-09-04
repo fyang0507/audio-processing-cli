@@ -14,9 +14,7 @@ from ..vad import SpeechRegion
 from .levels import EPSILON, rms_dbfs
 
 
-def _time_scope(
-    start: float | None = None, end: float | None = None
-) -> dict[str, object]:
+def _time_scope(start: float | None = None, end: float | None = None) -> dict[str, object]:
     time: str | dict[str, float]
     if start is None or end is None:
         time = "all"
@@ -63,9 +61,7 @@ class SignalAnalysis:
     dc_offset: float
 
 
-def _hard_region_mask(
-    length: int, regions: list[SpeechRegion], sample_rate: int
-) -> np.ndarray:
+def _hard_region_mask(length: int, regions: list[SpeechRegion], sample_rate: int) -> np.ndarray:
     mask = np.zeros(length, dtype=bool)
     for region in regions:
         start = max(0, round(region.start * sample_rate))
@@ -103,9 +99,7 @@ def smooth_time_mask(
         if transition_placement == "inside":
             width = min(fade, max(1, (end - start) // 2))
             local = np.ones(end - start, dtype=np.float32)
-            phase = np.linspace(
-                0.0, math.pi / 2.0, width, endpoint=False, dtype=np.float32
-            )
+            phase = np.linspace(0.0, math.pi / 2.0, width, endpoint=False, dtype=np.float32)
             ramp = np.square(np.sin(phase))
             local[:width] = ramp
             local[-width:] = ramp[::-1]
@@ -142,9 +136,7 @@ def smooth_time_mask(
     return mask
 
 
-def _speech_samples(
-    audio: np.ndarray, regions: list[SpeechRegion], sample_rate: int
-) -> np.ndarray:
+def _speech_samples(audio: np.ndarray, regions: list[SpeechRegion], sample_rate: int) -> np.ndarray:
     mask = _hard_region_mask(audio.shape[0], regions, sample_rate)
     return audio[mask]
 
@@ -214,9 +206,7 @@ def resolve_speech_treatment_intervals(
     resolutions: list[dict[str, object]] = []
     for index, region in enumerate(analysis.speech_regions, 1):
         overlapping = [
-            cluster
-            for cluster in clusters
-            if cluster[0] < region.end and cluster[1] > region.start
+            cluster for cluster in clusters if cluster[0] < region.end and cluster[1] > region.start
         ]
         if overlapping:
             acoustic_start = max(
@@ -236,16 +226,12 @@ def resolve_speech_treatment_intervals(
             end = region.end
 
         preceding_machine_ends = [
-            machine.end
-            for machine in analysis.machine_regions
-            if machine.end <= region.start
+            machine.end for machine in analysis.machine_regions if machine.end <= region.start
         ]
         if preceding_machine_ends:
             start = max(start, max(preceding_machine_ends) + fade_seconds)
         following_machine_starts = [
-            machine.start
-            for machine in analysis.machine_regions
-            if machine.start >= region.end
+            machine.start for machine in analysis.machine_regions if machine.start >= region.end
         ]
         if following_machine_starts:
             end = min(end, min(following_machine_starts) - fade_seconds)
@@ -305,9 +291,7 @@ def _spectral_environment_metrics(
         noverlap=None,
         detrend="constant",
     )
-    voice_band = (frequencies >= 20.0) & (
-        frequencies <= min(8000.0, sample_rate / 2 - 1)
-    )
+    voice_band = (frequencies >= 20.0) & (frequencies <= min(8000.0, sample_rate / 2 - 1))
     subbass = (frequencies >= 20.0) & (frequencies < 70.0)
     total_power = float(np.sum(power[voice_band])) + EPSILON
     subbass_ratio = float(np.sum(power[subbass]) / total_power)

@@ -26,7 +26,7 @@ FIXTURE = ROOT / "tests/fixtures/firered_lidon_first_vad_region.json"
 # 8bfada7cfc7ff424c73484a94150bc6fa5030a05b7146db983cb7ac374ad1782; the
 # body-AST digest below keeps the parity test source-backed when that ignored
 # upstream checkout is absent in CI.
-_PINNED_FIRERED_PROCESS = r'''
+_PINNED_FIRERED_PROCESS = r"""
 def process(self, wav_path, uttid="tmpid"):
         wav_np, sample_rate = sf.read(wav_path, dtype="int16")
         dur = wav_np.shape[0]/sample_rate
@@ -182,7 +182,7 @@ def process(self, wav_path, uttid="tmpid"):
             "wav_path": wav_path
         }
         return result
-'''
+"""
 
 
 def _fixture() -> dict[str, Any]:
@@ -229,32 +229,31 @@ def _install_fake_firered(monkeypatch: pytest.MonkeyPatch, record: dict[str, Any
             results = []
             for uttid in uttids:
                 start_ms, end_ms = bounds(uttid)
-                text = (
-                    ""
-                    if start_ms in record.get("blank_starts", set())
-                    else f"region{start_ms}"
-                )
+                text = "" if start_ms in record.get("blank_starts", set()) else f"region{start_ms}"
                 record.setdefault("asr_text", {})[uttid] = text
-                results.append({
-                    "uttid": uttid,
-                    "text": text,
-                    "confidence": 0.9,
-                    "timestamp": (
-                        []
-                        if not text
-                        else [(
-                            text,
-                            0.001,
-                            (
-                                (end_ms - start_ms) / 1000 + 0.5
-                                if start_ms in record.get(
-                                    "out_of_region_word_starts", set()
+                results.append(
+                    {
+                        "uttid": uttid,
+                        "text": text,
+                        "confidence": 0.9,
+                        "timestamp": (
+                            []
+                            if not text
+                            else [
+                                (
+                                    text,
+                                    0.001,
+                                    (
+                                        (end_ms - start_ms) / 1000 + 0.5
+                                        if start_ms
+                                        in record.get("out_of_region_word_starts", set())
+                                        else (end_ms - start_ms) / 1000 - 0.001
+                                    ),
                                 )
-                                else (end_ms - start_ms) / 1000 - 0.001
-                            ),
-                        )]
-                    ),
-                })
+                            ]
+                        ),
+                    }
+                )
             return results
 
     class Lid:
@@ -272,10 +271,7 @@ def _install_fake_firered(monkeypatch: pytest.MonkeyPatch, record: dict[str, Any
                 # Pinned FireRedLID uses this data shape for a caught feature
                 # extraction failure (fireredlid/lid.py:62-66).
                 return [{"uttid": uttid, "lang": ""} for uttid in uttids]
-            return [
-                {"uttid": uttid, "lang": "en", "confidence": 0.9}
-                for uttid in uttids
-            ]
+            return [{"uttid": uttid, "lang": "en", "confidence": 0.9} for uttid in uttids]
 
     class Punc:
         def process_with_timestamp(
@@ -297,14 +293,18 @@ def _install_fake_firered(monkeypatch: pytest.MonkeyPatch, record: dict[str, Any
                     if start_ms in record.get("mismatched_punc_starts", set())
                     else text + "."
                 )
-                results.append({
-                    "uttid": uttid,
-                    "punc_sentences": [{
-                        "start_s": 0.0,
-                        "end_s": (end_ms - start_ms) / 1000,
-                        "punc_text": punctuated,
-                    }],
-                })
+                results.append(
+                    {
+                        "uttid": uttid,
+                        "punc_sentences": [
+                            {
+                                "start_s": 0.0,
+                                "end_s": (end_ms - start_ms) / 1000,
+                                "punc_text": punctuated,
+                            }
+                        ],
+                    }
+                )
             if record.get("malformed_punc_call") == call:
                 del results[0]["punc_sentences"][0]["punc_text"]
             return results
@@ -325,9 +325,7 @@ def _install_fake_firered(monkeypatch: pytest.MonkeyPatch, record: dict[str, Any
 
         def process(self, _audio: str, _uttid: str) -> dict[str, Any]:
             record["process_calls"] = record.get("process_calls", 0) + 1
-            raise AssertionError(
-                "the stage must mirror upstream phases without resetting batches"
-            )
+            raise AssertionError("the stage must mirror upstream phases without resetting batches")
 
     root = types.ModuleType("fireredasr2s")
     root.__path__ = []
@@ -389,9 +387,7 @@ def _run_stage(
     request_path = tmp_path / "firered.request.json"
     result_path = tmp_path / "firered.result.json"
     request_path.write_text(json.dumps(request), encoding="utf-8")
-    monkeypatch.setattr(
-        sys, "argv", ["firered.py", str(request_path), str(result_path)]
-    )
+    monkeypatch.setattr(sys, "argv", ["firered.py", str(request_path), str(result_path)])
     code = firered_stage.main()
     return code, json.loads(result_path.read_text(encoding="utf-8"))
 

@@ -85,9 +85,9 @@ def _managed_checkout_requirements(
         ):
             continue
         distribution = _distribution_name(str(package.checkout["distribution"]))
-        required[distribution] = Path(os.path.abspath(
-            paths.checkout_dir(package.environment, identifier)
-        ))
+        required[distribution] = Path(
+            os.path.abspath(paths.checkout_dir(package.environment, identifier))
+        )
     return required
 
 
@@ -115,9 +115,7 @@ def _checkout_install_drift(
     drift: dict[str, tuple[str | None, str | None]] = {}
     for name, required_path in required_checkouts.items():
         installed = frozen.get(name)
-        direct_path = (
-            _direct_file_install_path(installed) if installed is not None else None
-        )
+        direct_path = _direct_file_install_path(installed) if installed is not None else None
         if direct_path is None or Path(os.path.abspath(direct_path)) != required_path:
             drift[name] = (f"@ {required_path.as_uri()}", installed)
     return drift

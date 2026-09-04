@@ -56,8 +56,11 @@ def test_a_pre_existing_revision_is_never_deleted_by_teardown(tmp_path) -> None:
     assert done["hub_revisions_deleted"] == []
     assert done["hub_revisions_retained"] == [ALIGNER_REVISION]
     snapshot = (
-        tmp_path / "hub" / "models--mlx-community--Qwen3-ForcedAligner-0.6B-8bit"
-        / "snapshots" / ALIGNER_REVISION
+        tmp_path
+        / "hub"
+        / "models--mlx-community--Qwen3-ForcedAligner-0.6B-8bit"
+        / "snapshots"
+        / ALIGNER_REVISION
     )
     assert snapshot.is_dir(), "purge deleted a revision it did not download"
 
@@ -73,9 +76,9 @@ def test_remove_keeps_pre_existing_revisions_and_deletes_its_own(tmp_path) -> No
     assert set(report["hub_revisions_retained"]) == set(FIRERED_REVISIONS[:2])
     assert "not this root's to delete" in report["hub_revisions_retained_reason"]
     for revision in FIRERED_REVISIONS[:2]:
-        assert list((tmp_path / "hub").glob(
-            f"models--*/snapshots/{revision}"
-        )), f"{revision} was deleted"
+        assert list((tmp_path / "hub").glob(f"models--*/snapshots/{revision}")), (
+            f"{revision} was deleted"
+        )
 
 
 def test_a_multi_repo_receipt_names_every_revision_it_materialized(provisioner) -> None:
@@ -102,17 +105,20 @@ def test_vibevoice_materializes_only_the_pinned_tokenizer_files(provisioner) -> 
         VIBE_MODEL_REVISION,
         VIBE_TOKENIZER_REVISION,
     ]
-    assert provisioner.fetcher.filtered == [(
-        "Qwen/Qwen2.5-7B",
-        VIBE_TOKENIZER_REVISION,
-        patterns,
-    )]
+    assert provisioner.fetcher.filtered == [
+        (
+            "Qwen/Qwen2.5-7B",
+            VIBE_TOKENIZER_REVISION,
+            patterns,
+        )
+    ]
     tokenizer_path = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
     assert {path.name for path in tokenizer_path.iterdir()} == set(patterns)
 
 
 def test_pull_refuses_an_unindexed_hub_return_before_traversing_it(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     package = env.packages()["qwen3-asr-0.6b-8bit"]
     external = tmp_path / "outside-cache" / package.source["revision"]
@@ -131,9 +137,7 @@ def test_pull_refuses_an_unindexed_hub_return_before_traversing_it(
         return original_tree_bytes(path)
 
     monkeypatch.setattr(package_integrity, "_tree_bytes", refuse_external_traversal)
-    provisioner = pkg.Provisioner(
-        toolchain=FakeToolchain(), fetcher=UnindexedFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=UnindexedFetcher(tmp_path))
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         provisioner.pull([package])
@@ -150,15 +154,9 @@ def test_multi_hub_pull_refuses_a_missing_allowlist_before_later_work(
 ) -> None:
     original = env.packages()["vibevoice-asr-7b"]
     tokenizer = next(
-        repository
-        for repository in original.source["repos"]
-        if repository["role"] == "tokenizer"
+        repository for repository in original.source["repos"] if repository["role"] == "tokenizer"
     )
-    asr = next(
-        repository
-        for repository in original.source["repos"]
-        if repository["role"] == "asr"
-    )
+    asr = next(repository for repository in original.source["repos"] if repository["role"] == "asr")
     package = replace(
         original,
         source={**original.source, "repos": [tokenizer, asr]},
@@ -202,9 +200,13 @@ def test_speaker_model_globs_require_nested_files_not_only_directories(
     materialized = pkg.load_registry()["packages"][package.id]["materialized"]
     snapshot = Path(materialized["path"])
 
-    assert provisioner.fetcher.filtered == [(
-        package.source["repo"], package.source["revision"], patterns,
-    )]
+    assert provisioner.fetcher.filtered == [
+        (
+            package.source["repo"],
+            package.source["revision"],
+            patterns,
+        )
+    ]
     assert pkg.hub_materialization_issues(package, materialized) == []
     nested = snapshot / "Segmentation.mlmodelc" / "model.mil"
     replaced_bytes = nested.stat().st_size
@@ -249,8 +251,7 @@ def test_verify_flags_weights_another_root_deleted(provisioner, tmp_path) -> Non
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     assert provisioner.verify()["failed"] == []
 
-    snapshot = Path(
-        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+    snapshot = Path(pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
     shutil.rmtree(snapshot)
 
     failure = provisioner.verify()["failed"]
@@ -260,9 +261,7 @@ def test_verify_flags_weights_another_root_deleted(provisioner, tmp_path) -> Non
 
 def test_verify_flags_hub_snapshot_byte_drift(provisioner) -> None:
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
-    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
-        "materialized"
-    ]
+    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]
     snapshot = Path(materialized["path"])
     next(path for path in snapshot.rglob("*") if path.is_file()).unlink()
 
@@ -273,12 +272,12 @@ def test_verify_flags_hub_snapshot_byte_drift(provisioner) -> None:
 
 @pytest.mark.parametrize("mutation", ["external_file", "snapshot_symlink"])
 def test_verify_rejects_hub_snapshot_redirection(
-    provisioner, tmp_path, mutation: str,
+    provisioner,
+    tmp_path,
+    mutation: str,
 ) -> None:
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
-    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
-        "materialized"
-    ]
+    materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]
     snapshot = Path(materialized["path"])
     if mutation == "external_file":
         model = next(path for path in snapshot.rglob("*") if path.is_file())
@@ -299,9 +298,7 @@ def test_verify_rejects_hub_snapshot_redirection(
 
 def test_verify_flags_a_missing_allowlisted_tokenizer_file(provisioner) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
-    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"][
-        "materialized"
-    ]
+    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"]["materialized"]
     tokenizer = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
     (tokenizer / "tokenizer.json").unlink()
 
@@ -312,9 +309,7 @@ def test_verify_flags_a_missing_allowlisted_tokenizer_file(provisioner) -> None:
 
 def test_verify_requires_allowlisted_tokenizer_matches_to_be_files(provisioner) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
-    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"][
-        "materialized"
-    ]
+    materialized = pkg.load_registry()["packages"]["vibevoice-asr-7b"]["materialized"]
     tokenizer = Path(materialized["paths"]["Qwen/Qwen2.5-7B"])
     required = tokenizer / "tokenizer.json"
     replaced_bytes = required.stat().st_size
@@ -330,7 +325,8 @@ def test_verify_requires_allowlisted_tokenizer_matches_to_be_files(provisioner) 
 
 
 def test_verify_rejects_hub_path_outside_the_cache_index(
-    provisioner, tmp_path,
+    provisioner,
+    tmp_path,
 ) -> None:
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     document = pkg.load_registry()
@@ -353,16 +349,11 @@ def test_pull_receipt_bytes_are_named_for_this_pull_not_the_total(provisioner) -
     # The old name invited reading a per-pull figure as a running total, and it is not one:
     # each receipt covers only its own packages, while `list` accumulates.
     assert "reclaimable_known_bytes" not in first
-    assert first["pulled_known_bytes"] == env.packages()[
-        "qwen3-asr-1.7b-8bit"
-    ].bytes
-    assert second["pulled_known_bytes"] == env.packages()[
-        "qwen3-asr-0.6b-8bit"
-    ].bytes
+    assert first["pulled_known_bytes"] == env.packages()["qwen3-asr-1.7b-8bit"].bytes
+    assert second["pulled_known_bytes"] == env.packages()["qwen3-asr-0.6b-8bit"].bytes
     document = pkg.load_registry()
     assert pkg.list_report()["total_known_bytes"] == sum(
-        entry["materialized"]["bytes"]
-        for entry in document["packages"].values()
+        entry["materialized"]["bytes"] for entry in document["packages"].values()
     )
 
 
@@ -377,9 +368,15 @@ def test_path_says_where_weights_actually_live(provisioner) -> None:
 def test_path_reports_single_and_multi_repo_materializations_without_null_aliases(
     provisioner,
 ) -> None:
-    provisioner.pull(pkg.select([
-        "qwen3-asr-1.7b-8bit", "firered-asr2s", "vibevoice-asr-7b",
-    ]))
+    provisioner.pull(
+        pkg.select(
+            [
+                "qwen3-asr-1.7b-8bit",
+                "firered-asr2s",
+                "vibevoice-asr-7b",
+            ]
+        )
+    )
     document = pkg.load_registry()
     report = pkg.path_report()["packages"]
 
@@ -412,7 +409,7 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
         def hf_snapshot(self, repo: str, revision_: str, *, force: bool = False) -> Path:
             path = super().hf_snapshot(repo, revision_, force=force)
             if not self.already_cached:
-                self.already_cached = {revision_}   # the partial snapshot is now visible
+                self.already_cached = {revision_}  # the partial snapshot is now visible
                 raise pkg.ProvisioningError("download_failed", "interrupted mid-download")
             return path
 
@@ -422,8 +419,9 @@ def test_a_retry_does_not_disown_its_own_partial_download(tmp_path) -> None:
 
     with pytest.raises(pkg.ProvisioningError):
         provisioner.pull(selection)
-    assert pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"][
-        "hub_revisions_pre_existing"] == []
+    assert (
+        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["hub_revisions_pre_existing"] == []
+    )
 
     provisioner.pull(selection)
     materialized = pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]

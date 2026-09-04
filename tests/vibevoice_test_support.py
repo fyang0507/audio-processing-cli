@@ -217,9 +217,7 @@ def _install_fake_vibevoice(
         current_allocated_memory=current_allocated_memory,
     )
     numpy = types.ModuleType("numpy")
-    numpy.random = types.SimpleNamespace(
-        seed=lambda seed: state["numpy_seeds"].append(seed)
-    )
+    numpy.random = types.SimpleNamespace(seed=lambda seed: state["numpy_seeds"].append(seed))
 
     modules = {
         "numpy": numpy,
@@ -234,12 +232,8 @@ def _install_fake_vibevoice(
             "vibevoice.processor.vibevoice_asr_processor"
         ),
     }
-    modules[
-        "vibevoice.modular.modeling_vibevoice_asr"
-    ].VibeVoiceASRForConditionalGeneration = Model
-    modules[
-        "vibevoice.processor.vibevoice_asr_processor"
-    ].VibeVoiceASRProcessor = Processor
+    modules["vibevoice.modular.modeling_vibevoice_asr"].VibeVoiceASRForConditionalGeneration = Model
+    modules["vibevoice.processor.vibevoice_asr_processor"].VibeVoiceASRProcessor = Processor
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
     return state
@@ -273,9 +267,9 @@ def _stage_request(tmp_path: Path) -> tuple[Path, Path, dict]:
 
 
 __all__ = [
-    "Path",
     "ROOT",
     "_PINNED_POST_PROCESS_TRANSCRIPTION",
+    "Path",
     "_fixture",
     "_install_fake_vibevoice",
     "_stage_request",

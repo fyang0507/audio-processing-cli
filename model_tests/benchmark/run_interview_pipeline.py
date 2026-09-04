@@ -85,9 +85,7 @@ def main() -> int:
         (model_path, "Qwen model snapshot"),
     ):
         require_dir(path, label)
-    generated_paths = (
-        diarization_output, diarization_raw_output, asr_output, output
-    )
+    generated_paths = (diarization_output, diarization_raw_output, asr_output, output)
     if len(set(generated_paths)) != len(generated_paths):
         raise SystemExit("all output paths must be distinct")
     for path in generated_paths:
@@ -100,51 +98,64 @@ def main() -> int:
     fluid_command = [
         sys.executable,
         str(fluid_runner),
-        "--binary", str(fluid_binary),
-        "--audio", str(audio),
-        "--output", str(diarization_output),
-        "--raw-output", str(diarization_raw_output),
-        "--fluid-version", args.fluid_version,
-        "--fluid-commit", args.fluid_commit,
-        "--num-speakers", "2",
-        "--threshold", "0.6",
-        "--step-ratio", "0.1",
-        "--min-segment-duration", "0",
-        "--batch-size", "32",
+        "--binary",
+        str(fluid_binary),
+        "--audio",
+        str(audio),
+        "--output",
+        str(diarization_output),
+        "--raw-output",
+        str(diarization_raw_output),
+        "--fluid-version",
+        args.fluid_version,
+        "--fluid-commit",
+        args.fluid_commit,
+        "--num-speakers",
+        "2",
+        "--threshold",
+        "0.6",
+        "--step-ratio",
+        "0.1",
+        "--min-segment-duration",
+        "0",
+        "--batch-size",
+        "32",
         "--allow-overlap",
-        "--model-dir", str(fluid_model_dir),
+        "--model-dir",
+        str(fluid_model_dir),
     ]
     asr_command = [
         sys.executable,
         str(asr_runner),
-        "--model-path", str(model_path),
-        "--audio", str(audio),
-        "--diarization-run", str(diarization_output),
-        "--output", str(asr_output),
-        "--language", args.language,
-        "--batch-size", "1",
-        "--max-tokens", str(args.max_tokens),
+        "--model-path",
+        str(model_path),
+        "--audio",
+        str(audio),
+        "--diarization-run",
+        str(diarization_output),
+        "--output",
+        str(asr_output),
+        "--language",
+        args.language,
+        "--batch-size",
+        "1",
+        "--max-tokens",
+        str(args.max_tokens),
     ]
 
     pipeline_start = time.perf_counter()
     fluid_start = time.perf_counter()
-    fluid_process = subprocess.run(
-        fluid_command, capture_output=True, text=True, check=False
-    )
+    fluid_process = subprocess.run(fluid_command, capture_output=True, text=True, check=False)
     fluid_wall_s = time.perf_counter() - fluid_start
     asr_process: subprocess.CompletedProcess[str] | None = None
     asr_wall_s: float | None = None
     if fluid_process.returncode == 0 and diarization_output.is_file():
         asr_start = time.perf_counter()
-        asr_process = subprocess.run(
-            asr_command, capture_output=True, text=True, check=False
-        )
+        asr_process = subprocess.run(asr_command, capture_output=True, text=True, check=False)
         asr_wall_s = time.perf_counter() - asr_start
     pipeline_wall_s = time.perf_counter() - pipeline_start
 
-    fluid_artifact = (
-        load_json(diarization_output) if diarization_output.is_file() else None
-    )
+    fluid_artifact = load_json(diarization_output) if diarization_output.is_file() else None
     asr_artifact = load_json(asr_output) if asr_output.is_file() else None
     status = (
         "ok"
@@ -221,20 +232,20 @@ def main() -> int:
             ),
             "raw_artifact": str(diarization_raw_output),
             "raw_artifact_sha256": (
-                sha256(diarization_raw_output)
-                if diarization_raw_output.is_file() else None
+                sha256(diarization_raw_output) if diarization_raw_output.is_file() else None
             ),
             "fresh_cli_wall_s": (
                 fluid_artifact.get("timing", {}).get("fresh_process_wall_s")
-                if fluid_artifact else None
+                if fluid_artifact
+                else None
             ),
             "peak_sampled_cli_rss_bytes": (
-                fluid_artifact.get("memory", {}).get("peak_rss_bytes")
-                if fluid_artifact else None
+                fluid_artifact.get("memory", {}).get("peak_rss_bytes") if fluid_artifact else None
             ),
             "segments": (
                 len(fluid_artifact.get("output", {}).get("segments", []))
-                if fluid_artifact else None
+                if fluid_artifact
+                else None
             ),
         },
         "asr": {
@@ -245,42 +256,44 @@ def main() -> int:
             "artifact_sha256": sha256(asr_output) if asr_output.is_file() else None,
             "status": asr_artifact.get("status") if asr_artifact else None,
             "fresh_runner_wall_s": (
-                asr_artifact.get("timing", {}).get("fresh_runner_wall_s")
-                if asr_artifact else None
+                asr_artifact.get("timing", {}).get("fresh_runner_wall_s") if asr_artifact else None
             ),
             "service_job_after_model_load_s": (
-                asr_artifact.get("timing", {}).get(
-                    "service_job_after_model_load_s"
-                ) if asr_artifact else None
+                asr_artifact.get("timing", {}).get("service_job_after_model_load_s")
+                if asr_artifact
+                else None
             ),
             "peak_sampled_process_rss_bytes": (
                 asr_artifact.get("memory", {}).get("peak_sampled_rss_bytes")
-                if asr_artifact else None
+                if asr_artifact
+                else None
             ),
             "peak_sampled_mlx_active_plus_cache_bytes": (
-                asr_artifact.get("memory", {}).get(
-                    "peak_sampled_mlx_active_plus_cache_bytes"
-                ) if asr_artifact else None
+                asr_artifact.get("memory", {}).get("peak_sampled_mlx_active_plus_cache_bytes")
+                if asr_artifact
+                else None
             ),
             "turn_plan_sha256": (
-                asr_artifact.get("turn_plan", {}).get("plan_sha256")
-                if asr_artifact else None
+                asr_artifact.get("turn_plan", {}).get("plan_sha256") if asr_artifact else None
             ),
             "output_segments_sha256": (
-                asr_artifact.get("output", {}).get("segments_sha256")
-                if asr_artifact else None
+                asr_artifact.get("output", {}).get("segments_sha256") if asr_artifact else None
             ),
         },
     }
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "status": status,
-        "external_pipeline_wall_s": pipeline_wall_s,
-        "fluid_returncode": fluid_process.returncode,
-        "asr_returncode": asr_process.returncode if asr_process else None,
-        "fluid_segments": result["fluid"]["segments"],
-        "asr_output_segments_sha256": result["asr"]["output_segments_sha256"],
-    }))
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "external_pipeline_wall_s": pipeline_wall_s,
+                "fluid_returncode": fluid_process.returncode,
+                "asr_returncode": asr_process.returncode if asr_process else None,
+                "fluid_segments": result["fluid"]["segments"],
+                "asr_output_segments_sha256": result["asr"]["output_segments_sha256"],
+            }
+        )
+    )
     return 0 if status == "ok" else 1
 
 

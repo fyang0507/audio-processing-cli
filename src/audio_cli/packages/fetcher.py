@@ -56,12 +56,14 @@ class Fetcher:
                 missing_tool="huggingface_hub",
                 fix="uv pip install huggingface_hub",
             ) from exc
-        return Path(snapshot_download(
-            repo,
-            revision=revision,
-            force_download=force,
-            allow_patterns=list(allow_patterns) if allow_patterns is not None else None,
-        ))
+        return Path(
+            snapshot_download(
+                repo,
+                revision=revision,
+                force_download=force,
+                allow_patterns=list(allow_patterns) if allow_patterns is not None else None,
+            )
+        )
 
     def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
         """Delete exactly these revisions from the Hub cache and report reclaimed bytes."""
@@ -75,11 +77,7 @@ class Fetcher:
             cache = scan_cache_dir()
         except Exception:  # noqa: BLE001 - a missing or unreadable cache frees nothing
             return [], 0
-        present = {
-            revision.commit_hash
-            for repo in cache.repos
-            for revision in repo.revisions
-        }
+        present = {revision.commit_hash for repo in cache.repos for revision in repo.revisions}
         deletable = sorted(set(revisions) & present)
         if not deletable:
             return [], 0
@@ -104,15 +102,15 @@ class Fetcher:
                     existing = None
                 if existing == sha256:
                     return target
-                partial_name = (
-                    f".audio-download-{os.getpid()}-{uuid.uuid4().hex}.part"
-                )
+                partial_name = f".audio-download-{os.getpid()}-{uuid.uuid4().hex}.part"
                 created = False
                 temporary_identity = None
                 try:
                     descriptor = os.open(
                         partial_name,
-                        os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
                         | getattr(os, "O_NOFOLLOW", 0)
                         | getattr(os, "O_CLOEXEC", 0),
                         0o666,
@@ -132,7 +130,8 @@ class Fetcher:
                             f"{target.parent / partial_name}"
                         )
                     request = urllib.request.Request(
-                        url, headers={"User-Agent": "audio-processing-cli/0.1"})
+                        url, headers={"User-Agent": "audio-processing-cli/0.1"}
+                    )
                     with os.fdopen(descriptor, "wb") as output:
                         response = urllib.request.urlopen(request, timeout=60)
                         with response:
@@ -147,7 +146,8 @@ class Fetcher:
                         raise ProvisioningError(
                             "package_integrity_failed",
                             f"{target.name} checksum mismatch: expected {sha256}, got {actual}",
-                            expected=sha256, actual=actual,
+                            expected=sha256,
+                            actual=actual,
                         )
                     assert_directory_binding(parent_descriptor, target.parent)
                     publish_temporary_file(
@@ -162,13 +162,9 @@ class Fetcher:
                     created = False
                 finally:
                     if created and temporary_identity is not None:
-                        cleanup_temporary_file(
-                            parent_descriptor, partial_name, temporary_identity
-                        )
+                        cleanup_temporary_file(parent_descriptor, partial_name, temporary_identity)
         except (OSError, urllib.error.URLError) as exc:
-            raise ProvisioningError(
-                "download_failed", f"could not download {url}: {exc}"
-            ) from exc
+            raise ProvisioningError("download_failed", f"could not download {url}: {exc}") from exc
         return target
 
 

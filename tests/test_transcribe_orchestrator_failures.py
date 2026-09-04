@@ -56,9 +56,7 @@ def test_qwen_exit_status_must_match_the_unfinished_unit_ledger(
     assert raised.value.exit_code == 1
     assert raised.value.payload["code"] == "backend_failed"
     assert raised.value.payload["role"] == "asr"
-    assert "exit status disagrees with unfinished unit ledger" in (
-        raised.value.payload["detail"]
-    )
+    assert "exit status disagrees with unfinished unit ledger" in (raised.value.payload["detail"])
 
 
 def test_invalid_internal_stage_walls_are_a_typed_backend_refusal(tmp_path) -> None:
@@ -87,9 +85,7 @@ def test_invalid_internal_stage_walls_are_a_typed_backend_refusal(tmp_path) -> N
     assert raised.value.exit_code == 1
     assert raised.value.payload["code"] == "backend_failed"
     assert raised.value.payload["role"] == "asr"
-    assert "internal wall metrics exceed its process wall" in (
-        raised.value.payload["detail"]
-    )
+    assert "internal wall metrics exceed its process wall" in (raised.value.payload["detail"])
 
 
 @pytest.mark.parametrize(
@@ -124,16 +120,27 @@ def test_malformed_canonical_wav_is_a_typed_decode_failure(
 def test_backend_derived_result_error_is_one_json_refusal(tmp_path) -> None:
     class NonLabelTransport(FullFakeTransport):
         def diarize(self, **kwargs):
-            return StageOutcome("diarizer", "fluidaudio", {"segments": [{
-                "startTimeSeconds": 0.0,
-                "endTimeSeconds": 1.0,
-                "speakerId": "N/A",
-            }]}, 1.0)
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {
+                    "segments": [
+                        {
+                            "startTimeSeconds": 0.0,
+                            "endTimeSeconds": 1.0,
+                            "speakerId": "N/A",
+                        }
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     with pytest.raises(refusals.Refusal) as raised:
@@ -179,7 +186,9 @@ def test_invalid_diarizer_artifact_is_a_typed_backend_refusal(
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
 
@@ -208,7 +217,9 @@ def test_invalid_vad_artifact_is_a_typed_backend_refusal(tmp_path) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("vad",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("vad",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
 
@@ -231,12 +242,19 @@ def test_invalid_vad_artifact_is_a_typed_backend_refusal(tmp_path) -> None:
 def test_abstentions_are_reidentified_in_source_order(tmp_path) -> None:
     class MixedEvidenceTransport(FullFakeTransport):
         def diarize(self, **kwargs):
-            return StageOutcome("diarizer", "fluidaudio", {"segments": [
-                {"startTimeSeconds": 0.0, "endTimeSeconds": 0.8, "speakerId": "S1"},
-                {"startTimeSeconds": 0.4, "endTimeSeconds": 1.0, "speakerId": "S2"},
-                {"startTimeSeconds": 1.2, "endTimeSeconds": 1.3, "speakerId": "S3"},
-                {"startTimeSeconds": 1.4, "endTimeSeconds": 2.0, "speakerId": "S4"},
-            ]}, 1.0)
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {
+                    "segments": [
+                        {"startTimeSeconds": 0.0, "endTimeSeconds": 0.8, "speakerId": "S1"},
+                        {"startTimeSeconds": 0.4, "endTimeSeconds": 1.0, "speakerId": "S2"},
+                        {"startTimeSeconds": 1.2, "endTimeSeconds": 1.3, "speakerId": "S3"},
+                        {"startTimeSeconds": 1.4, "endTimeSeconds": 2.0, "speakerId": "S4"},
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -262,16 +280,27 @@ def test_abstentions_are_reidentified_in_source_order(tmp_path) -> None:
 def test_empty_transcript_keeps_diarizer_abstention_evidence(tmp_path) -> None:
     class RawOnlyTransport(FullFakeTransport):
         def diarize(self, **kwargs):
-            return StageOutcome("diarizer", "fluidaudio", {"segments": [{
-                "startTimeSeconds": 0.2,
-                "endTimeSeconds": 0.3,
-                "speakerId": "S1",
-            }]}, 1.0)
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {
+                    "segments": [
+                        {
+                            "startTimeSeconds": 0.2,
+                            "endTimeSeconds": 0.3,
+                            "speakerId": "S1",
+                        }
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     payload = orchestrator.run(
@@ -283,10 +312,12 @@ def test_empty_transcript_keeps_diarizer_abstention_evidence(tmp_path) -> None:
     assert payload["complete"] is True
     assert payload["segments"] == []
     assert payload["turns"] == []
-    assert payload["abstentions"] == [{
-        "abstention_id": "ab_0",
-        "reason": "raw_fragment",
-        "start": 0.2,
-        "end": 0.3,
-    }]
+    assert payload["abstentions"] == [
+        {
+            "abstention_id": "ab_0",
+            "reason": "raw_fragment",
+            "start": 0.2,
+            "end": 0.3,
+        }
+    ]
     assert payload["provenance"]["outcomes"]["diarization"] == "produced"

@@ -18,16 +18,13 @@ import unicodedata
 import wave
 import xml.etree.ElementTree as ET
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS_ROOT = REPO_ROOT / "model_tests/benchmark_data/cantomap"
-DEFAULT_MANIFEST = (
-    Path(__file__).resolve().parent
-    / "manifests/cantomap_yue_hk_37_38_d.json"
-)
+DEFAULT_MANIFEST = Path(__file__).resolve().parent / "manifests/cantomap_yue_hk_37_38_d.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "model_tests/benchmark_data/prepared"
 ANNOTATION_TOKEN = re.compile(r"&[A-Za-z]+[0-9]+")
 UNKNOWN_TOKEN = re.compile(r"(?<![A-Za-z])xxx(?![A-Za-z])", re.IGNORECASE)
@@ -100,11 +97,7 @@ def wav_metadata(path: Path) -> dict[str, int]:
                 "sample_width_bytes": source.getsampwidth(),
             }
     except (EOFError, wave.Error) as exc:
-        pointer_hint = (
-            " (is this still a Git LFS pointer?)"
-            if path.stat().st_size < 1024
-            else ""
-        )
+        pointer_hint = " (is this still a Git LFS pointer?)" if path.stat().st_size < 1024 else ""
         raise ValueError(f"cannot read WAV {path}{pointer_hint}") from exc
 
 
@@ -123,8 +116,7 @@ def normalize_for_cer(text: str) -> str:
     return "".join(
         character.casefold()
         for character in text
-        if not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
 
@@ -171,13 +163,9 @@ def parse_segments(eaf_path: Path, manifest: dict[str, Any]) -> list[dict[str, A
     segments: list[dict[str, Any]] = []
 
     for speaker in suffixes["speakers"]:
-        characters = aligned_tier(
-            document, time_slots, speaker + suffixes["character_suffix"]
-        )
+        characters = aligned_tier(document, time_slots, speaker + suffixes["character_suffix"])
         words = aligned_tier(document, time_slots, speaker + suffixes["word_suffix"])
-        jyutping = aligned_tier(
-            document, time_slots, speaker + suffixes["jyutping_suffix"]
-        )
+        jyutping = aligned_tier(document, time_slots, speaker + suffixes["jyutping_suffix"])
         require(
             characters.keys() == words.keys() == jyutping.keys(),
             f"{speaker} character, word, and Jyutping intervals do not match",
@@ -185,8 +173,7 @@ def parse_segments(eaf_path: Path, manifest: dict[str, Any]) -> list[dict[str, A
         crossing = [
             interval
             for interval in characters
-            if (interval[0] < start_ms < interval[1])
-            or (interval[0] < end_ms < interval[1])
+            if (interval[0] < start_ms < interval[1]) or (interval[0] < end_ms < interval[1])
         ]
         require(not crossing, f"clip boundary cuts {speaker} annotations: {crossing}")
 
@@ -214,9 +201,7 @@ def parse_segments(eaf_path: Path, manifest: dict[str, Any]) -> list[dict[str, A
                 }
             )
 
-    segments.sort(
-        key=lambda item: (item["start_ms"], item["end_ms"], item["speaker"])
-    )
+    segments.sort(key=lambda item: (item["start_ms"], item["end_ms"], item["speaker"]))
     for index, segment in enumerate(segments, start=1):
         segment["segment_id"] = f"seg-{index:04d}"
     return segments
@@ -243,9 +228,7 @@ def overlap_regions(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return regions
 
 
-def build_references(
-    segments: list[dict[str, Any]], speakers: list[str]
-) -> dict[str, Any]:
+def build_references(segments: list[dict[str, Any]], speakers: list[str]) -> dict[str, Any]:
     def concatenate(items: list[dict[str, Any]]) -> dict[str, str]:
         return {
             "characters_raw": "\n".join(item["text"]["characters_raw"] for item in items),
@@ -256,9 +239,7 @@ def build_references(
     return {
         "chronological": concatenate(segments),
         "by_speaker": {
-            speaker: concatenate(
-                [item for item in segments if item["speaker"] == speaker]
-            )
+            speaker: concatenate([item for item in segments if item["speaker"] == speaker])
             for speaker in speakers
         },
     }
@@ -271,10 +252,7 @@ def validate_selection(
 ) -> dict[str, Any]:
     speakers = manifest["tiers"]["speakers"]
     by_speaker = Counter(item["speaker"] for item in segments)
-    transitions = sum(
-        left["speaker"] != right["speaker"]
-        for left, right in zip(segments, segments[1:])
-    )
+    transitions = sum(left["speaker"] != right["speaker"] for left, right in pairwise(segments))
     counts = {
         "segments": len(segments),
         "segments_by_speaker": {speaker: by_speaker[speaker] for speaker in speakers},
@@ -296,8 +274,7 @@ def validate_selection(
         "speaker-transition count drift",
     )
     require(
-        counts["cross_speaker_overlap_pairs"]
-        == expected["expected_cross_speaker_overlap_pairs"],
+        counts["cross_speaker_overlap_pairs"] == expected["expected_cross_speaker_overlap_pairs"],
         "cross-speaker overlap count drift",
     )
     return counts
@@ -408,9 +385,7 @@ def main() -> int:
             else None
         )
     else:
-        prepared_audio = prepare_audio(
-            audio_path, prepared_path, manifest, args.force
-        )
+        prepared_audio = prepare_audio(audio_path, prepared_path, manifest, args.force)
 
     clip = manifest["clip"]
     speakers = manifest["tiers"]["speakers"]

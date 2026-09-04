@@ -29,26 +29,38 @@ def _write_result(
                 "selected_unit_scope": list(run_range),
             }
         }
-    payload = serialize_result(NormalizedResult(
-        source={
-            "path": str(source), "duration_seconds": 2.0, "timebase": "seconds",
-        },
-        segments=segments,
-        abstentions=abstentions or [],
-        provenance={
-            "stack": stack,
-            "outcomes": outcomes,
-            "observed": {},
-            "plan": plan,
-        },
-        requested_capabilities=frozenset(outcomes),
-        turns=[] if "diarization" in outcomes else ABSENT,
-    ))
+    payload = serialize_result(
+        NormalizedResult(
+            source={
+                "path": str(source),
+                "duration_seconds": 2.0,
+                "timebase": "seconds",
+            },
+            segments=segments,
+            abstentions=abstentions or [],
+            provenance={
+                "stack": stack,
+                "outcomes": outcomes,
+                "observed": {},
+                "plan": plan,
+            },
+            requested_capabilities=frozenset(outcomes),
+            turns=[] if "diarization" in outcomes else ABSENT,
+        )
+    )
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
 
 __all__ = [
-    "ABSENT", "NormalizedResult", "Path", "_write_result", "cli", "json", "os",
-    "serialize_result", "shlex", "stat",
+    "ABSENT",
+    "NormalizedResult",
+    "Path",
+    "_write_result",
+    "cli",
+    "json",
+    "os",
+    "serialize_result",
+    "shlex",
+    "stat",
 ]

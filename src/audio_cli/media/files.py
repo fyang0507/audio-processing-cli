@@ -31,9 +31,7 @@ def assert_directory_binding(descriptor: int, directory: Path) -> None:
     """Require a pathname to still name the directory held open by ``descriptor``."""
 
     current = os.stat(directory, follow_symlinks=False)
-    if not stat.S_ISDIR(current.st_mode) or not os.path.samestat(
-        os.fstat(descriptor), current
-    ):
+    if not stat.S_ISDIR(current.st_mode) or not os.path.samestat(os.fstat(descriptor), current):
         raise OSError(f"managed directory identity changed during operation: {directory}")
 
 
@@ -41,9 +39,7 @@ def assert_resolved_directory_binding(descriptor: int, directory: Path) -> None:
     """Require a possibly symlinked caller path to still resolve to an open directory."""
 
     current = os.stat(directory, follow_symlinks=True)
-    if not stat.S_ISDIR(current.st_mode) or not os.path.samestat(
-        os.fstat(descriptor), current
-    ):
+    if not stat.S_ISDIR(current.st_mode) or not os.path.samestat(os.fstat(descriptor), current):
         raise OSError(f"output directory identity changed during operation: {directory}")
 
 
@@ -65,9 +61,7 @@ def bound_directory(
     root_path = Path(os.path.abspath(root))
     directory_path = Path(os.path.abspath(directory))
     if not directory_path.is_relative_to(root_path):
-        raise OSError(
-            f"managed directory is outside provisioning root: {directory_path}"
-        )
+        raise OSError(f"managed directory is outside provisioning root: {directory_path}")
     if create:
         root_path.mkdir(parents=True, exist_ok=True)
     flags = _directory_open_flags()

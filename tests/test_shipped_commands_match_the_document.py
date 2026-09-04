@@ -38,12 +38,10 @@ def test_doctor_emits_the_shape_the_document_publishes() -> None:
     undocumented = sorted(set(actual) - set(documented))
     unimplemented = sorted(set(documented) - set(actual))
     assert not undocumented, (
-        "audio doctor emits fields TRANSCRIBE_HAPPY_PATH.md §0 does not publish: "
-        f"{undocumented}"
+        f"audio doctor emits fields TRANSCRIBE_HAPPY_PATH.md §0 does not publish: {undocumented}"
     )
     assert not unimplemented, (
-        "TRANSCRIBE_HAPPY_PATH.md §0 publishes fields audio doctor does not emit: "
-        f"{unimplemented}"
+        f"TRANSCRIBE_HAPPY_PATH.md §0 publishes fields audio doctor does not emit: {unimplemented}"
     )
 
     # A nullable field is legitimately null on one side and populated on the other, so NoneType
@@ -98,7 +96,10 @@ VERIFY_CONDITIONAL = {
     # Shape disputed: TRANSCRIBE_CONTRACT.md §64 declares (package, check, expected, actual)
     # and the implementation emits (package, code, detail, fix). Until that is ruled on, this
     # test does not ratify either side by asserting on it.
-    "failed[].package", "failed[].code", "failed[].detail", "failed[].fix",
+    "failed[].package",
+    "failed[].code",
+    "failed[].detail",
+    "failed[].fix",
     # Absence is meaningful: set when the interpreter yields no verdict, so that
     # `matches_expected: null` cannot read as a passing check.
     "mlx_audio_private_api_error",
@@ -126,8 +127,9 @@ def test_packages_verify_emits_no_field_the_document_does_not_publish(tmp_path) 
     silent = provisioned_like_the_document(tmp_path)
     emitted = set(shape(silent.verify()))
 
-    expected_hash = {guard["kind"]: guard
-                     for guard in env.environments()["mlx"].guards}["source_hash"]["sha256"]
+    expected_hash = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}[
+        "source_hash"
+    ]["sha256"]
     # Keep the same double that provisioned the source checkouts: live verification now reads
     # their tracked baselines as well as answering the private-API probe.
     assert isinstance(silent.toolchain, FakeToolchain)
@@ -182,24 +184,54 @@ def test_transcribe_capabilities_emits_the_shape_happy_path_publishes() -> None:
 
 
 @pytest.mark.parametrize(
-    ("anchor", "input_name", "duration", "container", "sample_rate", "channels",
-     "stack", "wants", "language", "provisioned"),
+    (
+        "anchor",
+        "input_name",
+        "duration",
+        "container",
+        "sample_rate",
+        "channels",
+        "stack",
+        "wants",
+        "language",
+        "provisioned",
+    ),
     [
         (
             "audio transcribe plan --input meeting.m4a \\",
-            "meeting.m4a", 1794.2, "m4a", 44100, 2, "qwen-1.7b",
-            "diarization,word_timestamps", "Cantonese", (),
+            "meeting.m4a",
+            1794.2,
+            "m4a",
+            44100,
+            2,
+            "qwen-1.7b",
+            "diarization,word_timestamps",
+            "Cantonese",
+            (),
         ),
         (
             "audio transcribe plan --input demo.mp4 --stack vibevoice \\",
-            "demo.mp4", 112.4, "mp4", 48000, 2, "vibevoice",
-            "verbatim,diarization,segment_timestamps,word_timestamps", None,
+            "demo.mp4",
+            112.4,
+            "mp4",
+            48000,
+            2,
+            "vibevoice",
+            "verbatim,diarization,segment_timestamps,word_timestamps",
+            None,
             ("qwen3-forcedaligner",),
         ),
         (
             "audio transcribe plan --input field.wav --stack firered \\",
-            "field.wav", 27.8, "wav", 48000, 1, "firered",
-            "verbatim,word_timestamps,vad,segment_timestamps,lid", None, (),
+            "field.wav",
+            27.8,
+            "wav",
+            48000,
+            1,
+            "firered",
+            "verbatim,word_timestamps,vad,segment_timestamps,lid",
+            None,
+            (),
         ),
     ],
 )
@@ -222,23 +254,21 @@ def test_transcribe_plan_emits_the_shape_happy_path_publishes(
         wants=wants,
         language=language,
     )
-    actual = serialize_plan(
-        build_plan(request, metadata, provisioned_packages=provisioned)
-    )
+    actual = serialize_plan(build_plan(request, metadata, provisioned_packages=provisioned))
     documented = documented_block(anchor)
 
     # The prose explicitly elides this recursive-sized object as a string. Phase A guarantees
     # and tests its real structure; replace only its value so every surrounding plan/result key
     # is still diffed against the published example.
     assert set(actual["sample_output"]["provenance"]) == {
-        "stack", "outcomes", "observed", "plan",
+        "stack",
+        "outcomes",
+        "observed",
+        "plan",
     }
     assert actual["sample_output"]["provenance"]["outcomes"] == {}
     actual["sample_output"]["provenance"] = documented["sample_output"]["provenance"]
     assert_documented_shape(actual, documented, f"audio transcribe plan --stack {stack}")
     if stack == "firered":
         assert actual["execution"]["note"] == documented["execution"]["note"]
-        assert (
-            actual["capabilities"]["vad"]["note"]
-            == documented["capabilities"]["vad"]["note"]
-        )
+        assert actual["capabilities"]["vad"]["note"] == documented["capabilities"]["vad"]["note"]

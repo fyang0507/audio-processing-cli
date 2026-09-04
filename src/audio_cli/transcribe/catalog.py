@@ -99,9 +99,7 @@ def _unit_count(definition: stacks.StackDefinition, duration: float) -> int | No
         return None
     if kind == "fixed_seconds":
         return math.ceil(duration / float(rule["seconds"]))
-    raise stacks.StackTableError(
-        f"{definition.id}: unknown unit-count rule {kind!r}"
-    )
+    raise stacks.StackTableError(f"{definition.id}: unknown unit-count rule {kind!r}")
 
 
 def build_catalog(

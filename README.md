@@ -248,6 +248,14 @@ unbounded failures and all-ordinary-wordless results rather than inventing cue b
 uv run --extra dev pytest
 ```
 
+Install the pinned Ruff hooks once per checkout, then run the same deterministic lint and format
+gate over the repository before submitting a change:
+
+```bash
+uv run --extra dev pre-commit install
+uv run --extra dev pre-commit run --all-files
+```
+
 One agent skill travels with the CLI in the source distribution.
 [`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix
 or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix,

@@ -14,7 +14,8 @@ from typing import Any
 
 def _number(value: object, field: str) -> float:
     # FireRed can retain NumPy/Torch scalar timestamps in-process; the recorded
-    # runner likewise serializes scalar ``item()`` values in run_firered.py:224-230.
+    # runner likewise serializes scalar ``item()`` values in
+    # model_tests/benchmark/_firered_benchmark_support.py:243-249.
     if not isinstance(value, (bool, int, float)):
         item = getattr(value, "item", None)
         if callable(item):
@@ -41,8 +42,7 @@ def _plain(text: str) -> str:
     return "".join(
         character.casefold()
         for character in text
-        if not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
 
@@ -102,9 +102,7 @@ def _region_records(
         # timeline so a continuation at the next published start cannot
         # reselect a predecessor whose raw end falls inside the same millisecond.
         published_start, published_end = _public_region_bounds(start, end)
-        if published_end > range_start and (
-            range_end is None or published_start < range_end
-        ):
+        if published_end > range_start and (range_end is None or published_start < range_end):
             result.append({"region_id": identifier, "start": start, "end": end})
     return result
 
@@ -142,9 +140,7 @@ def _format_region(
     raw_sentences = punc_result.get("punc_sentences")
     if not isinstance(raw_sentences, list) or not raw_sentences:
         raise ValueError("FireRed punctuation must return at least one sentence")
-    confidence = _probability(
-        asr_result.get("confidence"), "FireRed ASR sentence confidence"
-    )
+    confidence = _probability(asr_result.get("confidence"), "FireRed ASR sentence confidence")
 
     sentences: list[dict[str, Any]] = []
     for index, raw_sentence in enumerate(raw_sentences):
@@ -188,11 +184,13 @@ def _format_region(
             raise TypeError(f"FireRed ASR timestamp {index} text must be a string")
         start_s = _number(start, f"FireRed ASR timestamp {index} start")
         end_s = _number(end, f"FireRed ASR timestamp {index} end")
-        words.append({
-            "start_ms": int(start_s * 1000 + start_ms),
-            "end_ms": int(end_s * 1000 + start_ms),
-            "text": text,
-        })
+        words.append(
+            {
+                "start_ms": int(start_s * 1000 + start_ms),
+                "end_ms": int(end_s * 1000 + start_ms),
+                "text": text,
+            }
+        )
     return sentences, words
 
 
@@ -247,9 +245,7 @@ def _validate_region_semantics(
                 raise TypeError(f"{word_field} text must be a string")
             plain_word = _plain(word_text)
             if not plain_word:
-                raise ValueError(
-                    f"{word_field} text must contain a non-punctuation character"
-                )
+                raise ValueError(f"{word_field} text must contain a non-punctuation character")
             word_start = _number(word.get("start_ms"), f"{word_field} start_ms")
             word_end = _number(word.get("end_ms"), f"{word_field} end_ms")
             if word_end <= word_start:
@@ -257,9 +253,7 @@ def _validate_region_semantics(
             if word_start < region_start or word_end > region_end:
                 raise ValueError("FireRed word must stay within its VAD region")
             if word_start <= previous_word_start or word_start < previous_word_end:
-                raise ValueError(
-                    "FireRed words must be strictly chronological and non-overlapping"
-                )
+                raise ValueError("FireRed words must be strictly chronological and non-overlapping")
             candidate = joined + plain_word
             if not target.startswith(candidate):
                 raise ValueError(

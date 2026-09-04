@@ -15,10 +15,10 @@ from audio_cli import paths as audio_paths
 from audio_cli.export import export_documents, load_result_document
 from audio_cli.media import hash_file
 from audio_cli.packages import integrity as package_integrity
-from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
 from audio_cli.transcribe import orchestrator, refusals
 from audio_cli.transcribe.adapters import normalize_vibevoice_result
 from audio_cli.transcribe.catalog import InputMetadata
+from audio_cli.transcribe.execution import runtime as orchestrator_runtime
 from audio_cli.transcribe.planner import build_plan, resolve_request
 from audio_cli.transcribe.transport import StageOutcome
 
@@ -26,7 +26,8 @@ _REAL_INSPECT_CHECKOUT = orchestrator_runtime._inspect_checkout
 
 
 def _complete_vibe_payload(
-    segments: list[dict], **extra: object,
+    segments: list[dict],
+    **extra: object,
 ) -> dict[str, object]:
     """Build the two equivalent streams emitted by the pinned post-processor."""
 
@@ -59,11 +60,7 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
             return orchestrator_runtime._CheckoutState(
                 head=package.source["commit"], modified=modified, untracked=()
             )
-        package_id = (
-            "vibevoice-asr-7b"
-            if "vibevoice-asr-7b" in str(checkout)
-            else "firered-asr2s"
-        )
+        package_id = "vibevoice-asr-7b" if "vibevoice-asr-7b" in str(checkout) else "firered-asr2s"
         package = env.packages()[package_id]
         _patches, modified, _digests = pkg.checkout_patch_expectation(package)
         return orchestrator_runtime._CheckoutState(
@@ -100,23 +97,26 @@ def trusted_checkout_probe(tmp_path: Path, monkeypatch) -> None:
         return installed
 
     monkeypatch.setattr(orchestrator_runtime, "_frozen_packages", frozen)
-    monkeypatch.setattr(
-        orchestrator_runtime, "_python_runtime_runs", lambda _path: True
-    )
+    monkeypatch.setattr(orchestrator_runtime, "_python_runtime_runs", lambda _path: True)
 
     def snapshot_index() -> dict[tuple[str, str], Path]:
         found = {}
         for package in env.packages().values():
             source = package.source
             repositories = (
-                source["repos"] if source["type"] == "huggingface_multi"
-                else [source] if source["type"] == "huggingface"
+                source["repos"]
+                if source["type"] == "huggingface_multi"
+                else [source]
+                if source["type"] == "huggingface"
                 else []
             )
             for repository in repositories:
                 found[(repository["repo"], repository["revision"])] = (
-                    tmp_path / "hub" / f"models--{repository['repo'].replace('/', '--')}"
-                    / "snapshots" / repository["revision"]
+                    tmp_path
+                    / "hub"
+                    / f"models--{repository['repo'].replace('/', '--')}"
+                    / "snapshots"
+                    / repository["revision"]
                 )
         return found
 
@@ -128,8 +128,11 @@ def _ready_multi_package(tmp_path: Path, package_id: str) -> dict:
     locations = {}
     for repository in package.source["repos"]:
         target = (
-            tmp_path / "hub" / f"models--{repository['repo'].replace('/', '--')}"
-            / "snapshots" / repository["revision"]
+            tmp_path
+            / "hub"
+            / f"models--{repository['repo'].replace('/', '--')}"
+            / "snapshots"
+            / repository["revision"]
         )
         target.mkdir(parents=True, exist_ok=True)
         for pattern in repository.get("allow_patterns", ()):
@@ -152,10 +155,12 @@ def _ready_multi_package(tmp_path: Path, package_id: str) -> dict:
         patched = checkout / names[0]
         patched.parent.mkdir(parents=True, exist_ok=True)
         patched.write_text("patched\n", encoding="utf-8")
-        materialized.update({
-            "patches_applied": [Path(patch_name).name],
-            "patched_file_digests": expected_digests,
-        })
+        materialized.update(
+            {
+                "patches_applied": [Path(patch_name).name],
+                "patched_file_digests": expected_digests,
+            }
+        )
     return {
         "state": "ready",
         "materialized": materialized,
@@ -174,20 +179,23 @@ def _runtime(tmp_path: Path, monkeypatch, name: str) -> None:
 def _ready_single_package(tmp_path: Path, package_id: str) -> dict:
     package = env.packages()[package_id]
     target = (
-        tmp_path / "hub" / f"models--{package.source['repo'].replace('/', '--')}"
-        / "snapshots" / package.source["revision"]
+        tmp_path
+        / "hub"
+        / f"models--{package.source['repo'].replace('/', '--')}"
+        / "snapshots"
+        / package.source["revision"]
     )
     target.mkdir(parents=True, exist_ok=True)
     for pattern in package.source.get("allow_patterns", ()):
-        marker = target / (
-            f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern
-        )
+        marker = target / (f"{pattern[:-3]}/model.mil" if pattern.endswith("/**") else pattern)
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_bytes(b"")
     return {
         "state": "ready",
         "materialized": {
-            "path": str(target), "revision": package.source["revision"], "bytes": 0,
+            "path": str(target),
+            "revision": package.source["revision"],
+            "bytes": 0,
         },
     }
 
@@ -220,10 +228,10 @@ def _ready_fluidaudio(tmp_path: Path) -> dict:
 
 
 __all__ = [
+    "_REAL_INSPECT_CHECKOUT",
     "InputMetadata",
     "Path",
     "StageOutcome",
-    "_REAL_INSPECT_CHECKOUT",
     "_complete_vibe_payload",
     "_ready_fluidaudio",
     "_ready_multi_package",

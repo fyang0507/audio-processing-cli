@@ -11,7 +11,8 @@ from ..environments import Package
 
 
 def managed_checkout_path(
-    package: Package, value: object,
+    package: Package,
+    value: object,
 ) -> tuple[Path | None, str | None]:
     """Resolve only the manifest-derived checkout, rejecting symlink/parent escapes."""
     expected = paths.checkout_dir(package.environment, package.id)
@@ -99,7 +100,8 @@ def managed_environment_creation_target_issue(name: str) -> str | None:
 
 
 def managed_url_artifact_path(
-    package: Package, value: object,
+    package: Package,
+    value: object,
 ) -> tuple[Path | None, str | None]:
     """Bind a single-file receipt to its manifest-owned path and provisioning root."""
     expected = paths.models_dir() / str(package.source["filename"])

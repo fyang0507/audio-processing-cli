@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import json
@@ -16,8 +17,9 @@ import threading
 import time
 import traceback
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 try:
     from . import _firered_benchmark_support as _support
@@ -60,11 +62,13 @@ def main() -> int:
 
     def sample_memory() -> None:
         while True:
-            samples.append({
-                "elapsed_s": time.perf_counter() - process_start,
-                "phase": phase["name"],
-                "rss_bytes": rss_reader.read(),
-            })
+            samples.append(
+                {
+                    "elapsed_s": time.perf_counter() - process_start,
+                    "phase": phase["name"],
+                    "rss_bytes": rss_reader.read(),
+                }
+            )
             if stop.wait(args.sample_interval):
                 break
 
@@ -73,13 +77,24 @@ def main() -> int:
     temporary = tempfile.TemporaryDirectory(prefix="firered-benchmark-")
     canonical_audio = Path(temporary.name) / "audio-16k-mono.wav"
     ffmpeg_command = [
-        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-        "-i", str(audio_path), "-vn", "-ac", "1", "-ar", "16000",
-        "-c:a", "pcm_s16le", str(canonical_audio),
+        "ffmpeg",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(audio_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-c:a",
+        "pcm_s16le",
+        str(canonical_audio),
     ]
-    recorded_ffmpeg_command = [
-        *ffmpeg_command[:-1], "<temporary>/audio-16k-mono.wav"
-    ]
+    recorded_ffmpeg_command = [*ffmpeg_command[:-1], "<temporary>/audio-16k-mono.wav"]
 
     try:
         if not firered_root.is_dir():
@@ -97,9 +112,7 @@ def main() -> int:
         t0 = time.perf_counter()
         try:
             source_probe = _support.ffprobe(audio_path)
-            completed = subprocess.run(
-                ffmpeg_command, text=True, capture_output=True, check=False
-            )
+            completed = subprocess.run(ffmpeg_command, text=True, capture_output=True, check=False)
             if completed.returncode != 0:
                 message = completed.stderr.strip() or "ffmpeg conversion failed"
                 raise RuntimeError(message)
@@ -171,9 +184,7 @@ def main() -> int:
             phase["name"] = "load_vad"
             t0 = time.perf_counter()
             try:
-                vad_model = FireRedVad.from_pretrained(
-                    str(model_paths["vad"]), vad_config
-                )
+                vad_model = FireRedVad.from_pretrained(str(model_paths["vad"]), vad_config)
             finally:
                 timing["model_load_s"]["vad"] = time.perf_counter() - t0
 
@@ -182,9 +193,7 @@ def main() -> int:
                 phase["name"] = "load_lid"
                 t0 = time.perf_counter()
                 try:
-                    lid_model = FireRedLid.from_pretrained(
-                        str(model_paths["lid"]), lid_config
-                    )
+                    lid_model = FireRedLid.from_pretrained(str(model_paths["lid"]), lid_config)
                 finally:
                     timing["model_load_s"]["lid"] = time.perf_counter() - t0
             else:
@@ -193,18 +202,14 @@ def main() -> int:
             phase["name"] = "load_asr"
             t0 = time.perf_counter()
             try:
-                asr_model = FireRedAsr2.from_pretrained(
-                    "aed", str(model_paths["asr"]), asr_config
-                )
+                asr_model = FireRedAsr2.from_pretrained("aed", str(model_paths["asr"]), asr_config)
             finally:
                 timing["model_load_s"]["asr"] = time.perf_counter() - t0
 
             phase["name"] = "load_punc"
             t0 = time.perf_counter()
             try:
-                punc_model = FireRedPunc.from_pretrained(
-                    str(model_paths["punc"]), punc_config
-                )
+                punc_model = FireRedPunc.from_pretrained(str(model_paths["punc"]), punc_config)
             finally:
                 timing["model_load_s"]["punc"] = time.perf_counter() - t0
         finally:
@@ -226,15 +231,14 @@ def main() -> int:
                 finally:
                     stage_time[stage_name] += time.perf_counter() - stage_start
                     stage_calls[stage_name] += 1
+
             return wrapper
 
         system.vad.detect = timed("vad", system.vad.detect)
         system.asr.transcribe = timed("asr", system.asr.transcribe)
         if lid_enabled and system.lid is not None:
             system.lid.process = timed("lid", system.lid.process)
-        system.punc.process_with_timestamp = timed(
-            "punc", system.punc.process_with_timestamp
-        )
+        system.punc.process_with_timestamp = timed("punc", system.punc.process_with_timestamp)
 
         phase["name"] = "inference"
         t0 = time.perf_counter()
@@ -247,9 +251,7 @@ def main() -> int:
         # identity are already recorded under ``audio``.
         fire_result.pop("wav_path", None)
         stage_total = sum(stage_time.values())
-        timing["inference_framework_overhead_s"] = max(
-            0.0, timing["inference_s"] - stage_total
-        )
+        timing["inference_framework_overhead_s"] = max(0.0, timing["inference_s"] - stage_total)
         timing["end_to_end_s"] = time.perf_counter() - process_start
         status = "ok"
 
@@ -265,16 +267,16 @@ def main() -> int:
         timing.setdefault("end_to_end_s", time.perf_counter() - process_start)
     finally:
         if canonical_sha256 is None and canonical_audio.is_file():
-            try:
+            with contextlib.suppress(OSError):
                 canonical_sha256 = _support.sha256(canonical_audio)
-            except OSError:
-                pass
         phase["name"] = "complete"
-        samples.append({
-            "elapsed_s": time.perf_counter() - process_start,
-            "phase": phase["name"],
-            "rss_bytes": rss_reader.read(),
-        })
+        samples.append(
+            {
+                "elapsed_s": time.perf_counter() - process_start,
+                "phase": phase["name"],
+                "rss_bytes": rss_reader.read(),
+            }
+        )
         stop.set()
         sampler.join()
         temporary.cleanup()
@@ -291,8 +293,11 @@ def main() -> int:
 
     normalized_output = fire_result
     normalized_json = json.dumps(
-        normalized_output, ensure_ascii=False, sort_keys=True,
-        separators=(",", ":"), default=_support.json_default,
+        normalized_output,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_support.json_default,
     )
     sentences = fire_result.get("sentences", [])
     words = fire_result.get("words", [])
@@ -323,14 +328,16 @@ def main() -> int:
         if "inference_s" in timing:
             rtf_inference = timing["inference_s"] / duration
         rtf_end_to_end = timing["end_to_end_s"] / duration
-    timing.update({
-        "stage_s": dict(stage_time),
-        "stage_calls": dict(stage_calls),
-        "rtf_inference": rtf_inference,
-        "rtf_end_to_end": rtf_end_to_end,
-        "cpu_user_s": usage_end.ru_utime - usage_start.ru_utime,
-        "cpu_system_s": usage_end.ru_stime - usage_start.ru_stime,
-    })
+    timing.update(
+        {
+            "stage_s": dict(stage_time),
+            "stage_calls": dict(stage_calls),
+            "rtf_inference": rtf_inference,
+            "rtf_end_to_end": rtf_end_to_end,
+            "cpu_user_s": usage_end.ru_utime - usage_start.ru_utime,
+            "cpu_system_s": usage_end.ru_stime - usage_start.ru_stime,
+        }
+    )
 
     result = {
         "schema_version": 1,
@@ -347,16 +354,26 @@ def main() -> int:
             "cpu_count": os.cpu_count(),
         },
         "runtime": {
-            "packages": _support.package_versions([
-                "fireredasr2s", "torch", "transformers", "numpy",
-                "soundfile", "torchaudio", "kaldi-native-fbank",
-            ]),
+            "packages": _support.package_versions(
+                [
+                    "fireredasr2s",
+                    "torch",
+                    "transformers",
+                    "numpy",
+                    "soundfile",
+                    "torchaudio",
+                    "kaldi-native-fbank",
+                ]
+            ),
             "ffmpeg": _support.command_version(["ffmpeg", "-version"]),
             "ffprobe": _support.command_version(["ffprobe", "-version"]),
             "environment": {
-                name: os.environ.get(name) for name in (
-                    "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-                    "VECLIB_MAXIMUM_THREADS", "PYTORCH_ENABLE_MPS_FALLBACK",
+                name: os.environ.get(name)
+                for name in (
+                    "OMP_NUM_THREADS",
+                    "MKL_NUM_THREADS",
+                    "VECLIB_MAXIMUM_THREADS",
+                    "PYTORCH_ENABLE_MPS_FALLBACK",
                 )
             },
         },
@@ -378,8 +395,7 @@ def main() -> int:
         "source": {
             "code": _support.git_metadata(firered_root),
             "models": {
-                name: _support.huggingface_revision(path)
-                for name, path in model_paths.items()
+                name: _support.huggingface_revision(path) for name, path in model_paths.items()
             },
         },
         "audio": {
@@ -405,17 +421,20 @@ def main() -> int:
             "samples": samples,
         },
         "stability": {
-            "output_parse_valid": status == "ok" and isinstance(fire_result, dict)
-            and isinstance(sentences, list) and isinstance(words, list),
-            "sentence_timestamps_monotonic": _support.monotonic(
-                sentences, "start_ms", "end_ms"
-            ) if sentences else None,
-            "word_timestamps_monotonic": _support.monotonic(
-                words, "start_ms", "end_ms"
-            ) if words else None,
+            "output_parse_valid": status == "ok"
+            and isinstance(fire_result, dict)
+            and isinstance(sentences, list)
+            and isinstance(words, list),
+            "sentence_timestamps_monotonic": _support.monotonic(sentences, "start_ms", "end_ms")
+            if sentences
+            else None,
+            "word_timestamps_monotonic": _support.monotonic(words, "start_ms", "end_ms")
+            if words
+            else None,
             "last_sentence_end_s": last_end_s,
             "last_sentence_end_ratio": last_end_s / duration
-            if last_end_s is not None and duration else None,
+            if last_end_s is not None and duration
+            else None,
             "vad_segment_count": len(fire_result.get("vad_segments_ms", [])),
             "sentence_count": len(sentences),
             "word_count": len(words),
@@ -423,37 +442,39 @@ def main() -> int:
         "output": {
             "result": fire_result,
             "segments": normalized_segments,
-            "normalized_segments_sha256": hashlib.sha256(json.dumps(
-                normalized_segments, ensure_ascii=False, sort_keys=True,
-                separators=(",", ":"), default=_support.json_default,
-            ).encode()).hexdigest(),
-            "normalized_result_sha256": hashlib.sha256(
-                normalized_json.encode()
+            "normalized_segments_sha256": hashlib.sha256(
+                json.dumps(
+                    normalized_segments,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=_support.json_default,
+                ).encode()
             ).hexdigest(),
+            "normalized_result_sha256": hashlib.sha256(normalized_json.encode()).hexdigest(),
         },
     }
     output_path.write_text(
-        json.dumps(
-            result, ensure_ascii=False, indent=2, default=_support.json_default
-        ) + "\n",
+        json.dumps(result, ensure_ascii=False, indent=2, default=_support.json_default) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps({
-        "status": status,
-        "output": str(output_path),
-        "timing": timing,
-        "memory": {
-            key: value for key, value in result["memory"].items()
-            if key != "samples"
-        },
-        "normalized_result_sha256": result["output"][
-            "normalized_result_sha256"
-        ],
-        "normalized_segments_sha256": result["output"][
-            "normalized_segments_sha256"
-        ],
-        "error": error,
-    }, ensure_ascii=False, default=_support.json_default))
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "output": str(output_path),
+                "timing": timing,
+                "memory": {
+                    key: value for key, value in result["memory"].items() if key != "samples"
+                },
+                "normalized_result_sha256": result["output"]["normalized_result_sha256"],
+                "normalized_segments_sha256": result["output"]["normalized_segments_sha256"],
+                "error": error,
+            },
+            ensure_ascii=False,
+            default=_support.json_default,
+        )
+    )
     return 0 if status == "ok" else 1
 
 

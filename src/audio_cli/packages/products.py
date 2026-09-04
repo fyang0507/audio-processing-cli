@@ -52,9 +52,7 @@ def validated_built_product(
         return None, "built product receipt has no valid product_sha256"
     candidates = built_product_candidates(checkout, product)
     if len(candidates) != 1:
-        return None, (
-            f"expected one executable built product {product!r}, found {len(candidates)}"
-        )
+        return None, (f"expected one executable built product {product!r}, found {len(candidates)}")
     executable = candidates[0]
     try:
         relative = executable.relative_to(checkout.resolve(strict=True)).as_posix()
@@ -115,9 +113,7 @@ def _environment_built_runtime_runs(
     except ValueError:
         return False
     try:
-        expected_patches, expected_names, expected_digests = (
-            checkout_patch_expectation(package)
-        )
+        expected_patches, expected_names, expected_digests = checkout_patch_expectation(package)
     except (OSError, ValueError):
         return False
     materialized = entry["materialized"]
@@ -133,9 +129,7 @@ def _environment_built_runtime_runs(
     ):
         return False
     product = str(package.source["product"])
-    executable, product_issue = validated_built_product(
-        checkout, product, materialized
-    )
+    executable, product_issue = validated_built_product(checkout, product, materialized)
     if product_issue is not None or executable is None:
         return False
     try:

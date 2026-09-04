@@ -71,14 +71,18 @@ def test_vibevoice_cap_salvage_has_honest_zero_of_one_units_and_runnable_resume(
             )
 
         def diarize(self, **_kwargs):
-            return StageOutcome("diarizer", "fluidaudio", {"segments": [
-                {"startTimeSeconds": 0.2, "endTimeSeconds": 1.2,
-                 "speakerId": "S0"},
-                {"startTimeSeconds": 4.0, "endTimeSeconds": 6.0,
-                 "speakerId": "S1"},
-                {"startTimeSeconds": 5.0, "endTimeSeconds": 7.0,
-                 "speakerId": "S2"},
-            ]}, 0.2)
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {
+                    "segments": [
+                        {"startTimeSeconds": 0.2, "endTimeSeconds": 1.2, "speakerId": "S0"},
+                        {"startTimeSeconds": 4.0, "endTimeSeconds": 6.0, "speakerId": "S1"},
+                        {"startTimeSeconds": 5.0, "endTimeSeconds": 7.0, "speakerId": "S2"},
+                    ]
+                },
+                0.2,
+            )
 
     registry = {
         "environments": {
@@ -104,7 +108,7 @@ def test_vibevoice_cap_salvage_has_honest_zero_of_one_units_and_runnable_resume(
             output=output,
         )
     refusal = raised.value
-    assert getattr(refusal, "exit_code") == 4
+    assert refusal.exit_code == 4
     assert refusal.payload["coverage"] == {
         "scope_intervals": [[0.0, 10.0]],
         "covered_through_seconds": 2.0,
@@ -117,9 +121,14 @@ def test_vibevoice_cap_salvage_has_honest_zero_of_one_units_and_runnable_resume(
     assert "--range 2.0:" in refusal.payload["fix"]
     partial = json.loads((tmp_path / "long.partial.json").read_text(encoding="utf-8"))
     assert partial["complete"] is False
-    assert partial["segments"] == [{
-        "segment_id": "seg_0", "text": "Complete.", "start": 0.0, "end": 2.0,
-    }]
+    assert partial["segments"] == [
+        {
+            "segment_id": "seg_0",
+            "text": "Complete.",
+            "start": 0.0,
+            "end": 2.0,
+        }
+    ]
     assert partial["vad_regions"] == [{"start": 0.5, "end": 1.0}]
     assert partial["overlapped_speech"] == []
     assert all(item["start"] < 2.0 for item in partial["abstentions"])
@@ -181,9 +190,7 @@ def test_vibevoice_complete_range_restores_canonical_source_timeline(
         registry={
             "environments": {"torch-vibevoice": {"state": "ready"}},
             "packages": {
-                "vibevoice-asr-7b": _ready_multi_package(
-                    tmp_path, "vibevoice-asr-7b"
-                ),
+                "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
             },
         },
         transport=Transport(),
@@ -199,10 +206,10 @@ def test_vibevoice_complete_range_restores_canonical_source_timeline(
         "requested": [3.0, 7.0],
         "selected_unit_scope": [3.0, 7.0],
     }
-    assert [
-        (segment["start"], segment["end"])
-        for segment in payload["segments"]
-    ] == [(3.25, 4.5), (6.0, 7.0)]
+    assert [(segment["start"], segment["end"]) for segment in payload["segments"]] == [
+        (3.25, 4.5),
+        (6.0, 7.0),
+    ]
 
 
 def test_vibevoice_non_frame_aligned_range_uses_actual_clip_bounds(
@@ -233,15 +240,21 @@ def test_vibevoice_non_frame_aligned_range_uses_actual_clip_bounds(
             return StageOutcome(
                 "asr",
                 "vibevoice-asr-7b",
-                _complete_vibe_payload([{
-                        "start_time": 0.0,
-                        # The pinned post-processor may be one microsecond over
-                        # the exact selected clip. The adapter clamps only that
-                        # accepted tolerance before restoring source time.
-                        "end_time": (1_600 / 16_000) + 1e-6,
-                        "speaker_id": 0,
-                        "text": "Sample aligned.",
-                    }], generated_tokens=4, eos_observed=True),
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            # The pinned post-processor may be one microsecond over
+                            # the exact selected clip. The adapter clamps only that
+                            # accepted tolerance before restoring source time.
+                            "end_time": (1_600 / 16_000) + 1e-6,
+                            "speaker_id": 0,
+                            "text": "Sample aligned.",
+                        }
+                    ],
+                    generated_tokens=4,
+                    eos_observed=True,
+                ),
                 1.0,
             )
 
@@ -252,9 +265,7 @@ def test_vibevoice_non_frame_aligned_range_uses_actual_clip_bounds(
         registry={
             "environments": {"torch-vibevoice": {"state": "ready"}},
             "packages": {
-                "vibevoice-asr-7b": _ready_multi_package(
-                    tmp_path, "vibevoice-asr-7b"
-                ),
+                "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
             },
         },
         transport=Transport(),
@@ -289,9 +300,7 @@ def test_vibevoice_non_frame_partial_and_resume_merge_without_overlap(
     registry = {
         "environments": {"torch-vibevoice": {"state": "ready"}},
         "packages": {
-            "vibevoice-asr-7b": _ready_multi_package(
-                tmp_path, "vibevoice-asr-7b"
-            ),
+            "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
         },
     }
 
@@ -329,12 +338,18 @@ def test_vibevoice_non_frame_partial_and_resume_merge_without_overlap(
             return StageOutcome(
                 "asr",
                 "vibevoice-asr-7b",
-                _complete_vibe_payload([{
-                        "start_time": 0.0,
-                        "end_time": 0.1,
-                        "speaker_id": 0,
-                        "text": "Second.",
-                    }], generated_tokens=4, eos_observed=True),
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 0.1,
+                            "speaker_id": 0,
+                            "text": "Second.",
+                        }
+                    ],
+                    generated_tokens=4,
+                    eos_observed=True,
+                ),
                 1.0,
             )
 
@@ -348,11 +363,9 @@ def test_vibevoice_non_frame_partial_and_resume_merge_without_overlap(
             output=first_output,
             run_range=orchestrator.parse_range("0.00003:0.50004"),
         )
-    assert getattr(raised.value, "exit_code") == 4
+    assert raised.value.exit_code == 4
     partial = Path(raised.value.payload["output"])
-    assert raised.value.payload["coverage"]["covered_intervals"] == [
-        [0.000063, 0.10004]
-    ]
+    assert raised.value.payload["coverage"]["covered_intervals"] == [[0.000063, 0.10004]]
 
     rest = tmp_path / "rest.json"
     orchestrator.run(

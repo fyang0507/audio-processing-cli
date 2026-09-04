@@ -26,14 +26,27 @@ from transcribe_orchestrator_test_support import (
 def test_alignment_abstention_is_observable_and_does_not_invent_words(tmp_path) -> None:
     class AbstainingAligner(FullFakeTransport):
         def align(self, *, segments, **kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
-                "unit_id": item["unit_id"], "words": None,
-            } for item in segments]}, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "words": None,
+                        }
+                        for item in segments
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     payload = orchestrator.run(
@@ -45,12 +58,14 @@ def test_alignment_abstention_is_observable_and_does_not_invent_words(tmp_path) 
     assert all("words" not in item for item in payload["segments"])
     assert payload["provenance"]["outcomes"]["word_timestamps"] == "abstained"
     assert payload["provenance"]["observed"]["segments_without_words"] == 1
-    assert payload["abstentions"] == [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.0,
-        "end": 2.0,
-    }]
+    assert payload["abstentions"] == [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.0,
+            "end": 2.0,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
@@ -67,9 +82,7 @@ def test_qwen_rejects_incomplete_aligner_ledgers_without_publication(
 ) -> None:
     class MalformedAligner(FullFakeTransport):
         def align(self, **kwargs):
-            return StageOutcome(
-                "aligner", "qwen3-forcedaligner", aligner_payload, 1.0
-            )
+            return StageOutcome("aligner", "qwen3-forcedaligner", aligner_payload, 1.0)
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -97,15 +110,27 @@ def test_qwen_rejects_incomplete_aligner_ledgers_without_publication(
 def test_alignment_text_mismatch_records_the_attempted_unit_bounds(tmp_path) -> None:
     class MismatchedAligner(FullFakeTransport):
         def align(self, *, segments, **kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
-                "unit_id": item["unit_id"],
-                "words": [{"text": "Goodbye", "start": 0.0, "end": 1.0}],
-            } for item in segments]}, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "words": [{"text": "Goodbye", "start": 0.0, "end": 1.0}],
+                        }
+                        for item in segments
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
     )
     payload = orchestrator.run(
         resolved,
@@ -114,12 +139,14 @@ def test_alignment_text_mismatch_records_the_attempted_unit_bounds(tmp_path) -> 
         transport=MismatchedAligner(),
     ).payload
 
-    assert payload["abstentions"] == [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.0,
-        "end": 2.0,
-    }]
+    assert payload["abstentions"] == [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.0,
+            "end": 2.0,
+        }
+    ]
     assert all("words" not in item for item in payload["segments"])
 
 
@@ -128,14 +155,27 @@ def test_partial_qwen_alignment_abstention_covers_only_the_completed_prefix(
 ) -> None:
     class PartialAbstainingAligner(FakeTransport):
         def align(self, *, segments, **kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
-                "unit_id": item["unit_id"], "words": None,
-            } for item in segments]}, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "words": None,
+                        }
+                        for item in segments
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
     )
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
@@ -145,15 +185,15 @@ def test_partial_qwen_alignment_abstention_covers_only_the_completed_prefix(
             transport=PartialAbstainingAligner(partial=True),
         )
 
-    payload = json.loads(
-        Path(raised.value.payload["output"]).read_text(encoding="utf-8")
-    )
-    assert payload["abstentions"] == [{
-        "abstention_id": "ab_0",
-        "reason": "alignment_unavailable",
-        "start": 0.0,
-        "end": 180.0,
-    }]
+    payload = json.loads(Path(raised.value.payload["output"]).read_text(encoding="utf-8"))
+    assert payload["abstentions"] == [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "start": 0.0,
+            "end": 180.0,
+        }
+    ]
 
 
 def test_punctuation_only_alignment_with_empty_words_is_produced_not_abstained(
@@ -161,19 +201,44 @@ def test_punctuation_only_alignment_with_empty_words_is_produced_not_abstained(
 ) -> None:
     class PunctuationTransport(FakeTransport):
         def qwen(self, *, units, **kwargs):
-            return StageOutcome("asr", "qwen3-asr-0.6b-8bit", {"units": [{
-                "unit_id": item["unit_id"], "processed": True, "text": "……？！",
-            } for item in units]}, 1.0)
+            return StageOutcome(
+                "asr",
+                "qwen3-asr-0.6b-8bit",
+                {
+                    "units": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "processed": True,
+                            "text": "……？！",
+                        }
+                        for item in units
+                    ]
+                },
+                1.0,
+            )
 
         def align(self, *, segments, **kwargs):
-            return StageOutcome("aligner", "qwen3-forcedaligner", {"segments": [{
-                "unit_id": item["unit_id"], "words": [],
-            } for item in segments]}, 1.0)
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {
+                            "unit_id": item["unit_id"],
+                            "words": [],
+                        }
+                        for item in segments
+                    ]
+                },
+                1.0,
+            )
 
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
     )
     payload = orchestrator.run(
         resolved,
@@ -224,7 +289,9 @@ def test_whole_aligner_failure_is_a_backend_error_and_writes_no_result(
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("word_timestamps",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     output = tmp_path / "must-not-exist.json"
@@ -279,43 +346,60 @@ def test_range_filters_auxiliary_observations_to_selected_processing_scope(tmp_p
         vad_detector=FakeVad(),
         run_range=orchestrator.parse_range("1.2:1.5"),
     ).payload
-    assert payload["turns"] == [{
-        "turn_id": "turn_1", "speaker": "S2", "start": 1.0, "end": 1.8,
-    }]
+    assert payload["turns"] == [
+        {
+            "turn_id": "turn_1",
+            "speaker": "S2",
+            "start": 1.0,
+            "end": 1.8,
+        }
+    ]
     assert payload["overlapped_speech"] == []
     assert payload["vad_regions"] == []
     assert payload["provenance"]["plan"]["execution"]["range"] == {
-        "requested": [1.2, 1.5], "selected_unit_scope": [1.0, 1.8],
+        "requested": [1.2, 1.5],
+        "selected_unit_scope": [1.0, 1.8],
     }
 
 
-@pytest.mark.parametrize("wants", [
-    (),
-    ("languages",),
-    ("verbatim",),
-    ("diarization",),
-    ("overlapped_speech",),
-    ("vad",),
-    ("word_timestamps",),
-    ("languages", "verbatim", "diarization", "overlapped_speech", "vad",
-     "word_timestamps"),
-])
+@pytest.mark.parametrize(
+    "wants",
+    [
+        (),
+        ("languages",),
+        ("verbatim",),
+        ("diarization",),
+        ("overlapped_speech",),
+        ("vad",),
+        ("word_timestamps",),
+        ("languages", "verbatim", "diarization", "overlapped_speech", "vad", "word_timestamps"),
+    ],
+)
 def test_real_qwen_result_shape_matches_its_plan_sample_over_derivation_cells(
     tmp_path, wants
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=wants,
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=wants,
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 2)
     document = full_registry(tmp_path)
     ready = set(document["packages"])
-    sample = serialize_plan(build_plan(
-        resolved, metadata, provisioned_packages=ready,
-    ))["sample_output"]
+    sample = serialize_plan(
+        build_plan(
+            resolved,
+            metadata,
+            provisioned_packages=ready,
+        )
+    )["sample_output"]
     actual = orchestrator.run(
-        resolved, metadata, registry=document, transport=FullFakeTransport(),
+        resolved,
+        metadata,
+        registry=document,
+        transport=FullFakeTransport(),
         vad_detector=FakeVad(),
     ).payload
 

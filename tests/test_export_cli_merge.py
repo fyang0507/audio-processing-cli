@@ -12,20 +12,23 @@ from export_cli_test_support import (
 
 
 def test_export_cli_refuses_multi_input_vibevoice_native_diarization(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     left = _write_result(
         tmp_path / "left.json",
         source=source,
-        segments=[{
-            "segment_id": "seg_0",
-            "text": "Left.",
-            "start": 0.1,
-            "end": 0.8,
-            "speaker": "Speaker 0",
-        }],
+        segments=[
+            {
+                "segment_id": "seg_0",
+                "text": "Left.",
+                "start": 0.1,
+                "end": 0.8,
+                "speaker": "Speaker 0",
+            }
+        ],
         outcomes={"diarization": "produced", "segment_timestamps": "produced"},
         stack="vibevoice",
         run_range=[0.0, 1.0],
@@ -33,21 +36,34 @@ def test_export_cli_refuses_multi_input_vibevoice_native_diarization(
     right = _write_result(
         tmp_path / "right.json",
         source=source,
-        segments=[{
-            "segment_id": "seg_0",
-            "text": "Right.",
-            "start": 1.1,
-            "end": 1.8,
-            "speaker": "Speaker 0",
-        }],
+        segments=[
+            {
+                "segment_id": "seg_0",
+                "text": "Right.",
+                "start": 1.1,
+                "end": 1.8,
+                "speaker": "Speaker 0",
+            }
+        ],
         outcomes={"diarization": "produced", "segment_timestamps": "produced"},
         stack="vibevoice",
         run_range=[1.0, 2.0],
     )
 
-    assert cli.main([
-        "export", "--input", str(left), "--input", str(right), "--format", "txt",
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(left),
+                "--input",
+                str(right),
+                "--format",
+                "txt",
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
     assert error == {
         "code": "export_inputs_incompatible",
@@ -65,7 +81,8 @@ def test_export_cli_refuses_multi_input_vibevoice_native_diarization(
 
 
 def test_export_cli_types_an_unresolvable_canonical_source_as_invalid_input(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
@@ -79,10 +96,20 @@ def test_export_cli_types_an_unresolvable_canonical_source_as_invalid_input(
     source.symlink_to(source.name)
     output = tmp_path / "out.txt"
 
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "--output", str(output),
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "--output",
+                str(output),
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
 
     assert error["code"] == "export_input_invalid"
@@ -93,7 +120,8 @@ def test_export_cli_types_an_unresolvable_canonical_source_as_invalid_input(
 
 
 def test_export_cli_types_an_embedded_nul_source_path_as_invalid_input(
-    tmp_path: Path, capsys,
+    tmp_path: Path,
+    capsys,
 ) -> None:
     transcript = _write_result(
         tmp_path / "meeting.json",
@@ -106,10 +134,20 @@ def test_export_cli_types_an_embedded_nul_source_path_as_invalid_input(
     transcript.write_text(json.dumps(payload), encoding="utf-8")
     output = tmp_path / "out.txt"
 
-    assert cli.main([
-        "export", "--input", str(transcript), "--format", "txt",
-        "--output", str(output),
-    ]) == 2
+    assert (
+        cli.main(
+            [
+                "export",
+                "--input",
+                str(transcript),
+                "--format",
+                "txt",
+                "--output",
+                str(output),
+            ]
+        )
+        == 2
+    )
     error = json.loads(capsys.readouterr().err)
 
     assert error["code"] == "export_input_invalid"

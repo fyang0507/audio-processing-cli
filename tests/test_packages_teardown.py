@@ -32,7 +32,8 @@ from spec_document_loader import read_spec_document
 
 
 def test_teardown_never_deletes_a_sibling_of_the_models_directory(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     """`str(models_dir) in path` is a substring test where a prefix test was meant.
 
@@ -41,6 +42,7 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(
     below was in the cache before this root wanted it, which is exactly the case teardown
     promises to retain.
     """
+
     class HubBesideModels(FakeFetcher):
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
@@ -53,8 +55,7 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit", "silero-vad"]))
 
-    snapshot = Path(
-        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+    snapshot = Path(pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
     artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
     assert str(paths.models_dir()) in str(snapshot), "the fixture no longer sets the trap"
 
@@ -102,8 +103,10 @@ def test_a_stack_beside_named_packages_is_a_conflict_not_a_precedence(capsys) ->
     assert caught.value.payload["fix"] == "audio packages pull silero-vad"
 
     assert main(["packages", "pull", "--stack", "qwen-1.7b", "silero-vad"]) == 2
-    assert json.loads(capsys.readouterr().err)["error"]["code"] == \
-        "stack_conflicts_with_named_packages"
+    assert (
+        json.loads(capsys.readouterr().err)["error"]["code"]
+        == "stack_conflicts_with_named_packages"
+    )
 
 
 def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys) -> None:
@@ -116,8 +119,7 @@ def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys)
 
     class Recorder:
         def pull(self, selection, *, repair: bool = False, stack: str | None = None) -> dict:
-            seen.update(packages=[package.id for package in selection], repair=repair,
-                        stack=stack)
+            seen.update(packages=[package.id for package in selection], repair=repair, stack=stack)
             return {"pulled": [], "skipped": [], "warnings": []}
 
     monkeypatch.setattr("audio_cli.cli.Provisioner", Recorder)
@@ -131,7 +133,10 @@ def test_the_cli_hands_repair_and_the_stack_through_to_pull(monkeypatch, capsys)
     assert seen["stack"] == "firered"
     assert seen["repair"] is False
     assert seen["packages"] == [
-        "firered-asr2s", "fluidaudio", "silero-vad", "speaker-diarization-coreml",
+        "firered-asr2s",
+        "fluidaudio",
+        "silero-vad",
+        "speaker-diarization-coreml",
     ]
 
 
@@ -147,21 +152,21 @@ def test_verify_does_not_require_the_provisioning_tool_to_run_a_built_product(
     report = provisioner.verify()
     assert report["environments"]["swift"] == "ok"
     assert report["failed"] == []
-    assert next(
-        item for item in report["verified"] if item["package"] == "fluidaudio"
-    )["product_runs"] is True
+    assert (
+        next(item for item in report["verified"] if item["package"] == "fluidaudio")["product_runs"]
+        is True
+    )
     assert any(call[0].endswith("fluidaudiocli") for call in toolchain.calls), (
         "verify trusted the receipt instead of launching the built executable"
     )
-    assert pkg.doctor(toolchain=toolchain)["environments"]["swift"][
-        "blocked_by_missing_tool"
-    ] == []
+    assert pkg.doctor(toolchain=toolchain)["environments"]["swift"]["blocked_by_missing_tool"] == []
 
 
 def test_a_weight_only_swift_environment_stays_blocked_without_a_build_tool(tmp_path) -> None:
     """Without the built runtime, a missing provisioning tool still blocks repair."""
-    absent_root = pkg.Provisioner(toolchain=FakeToolchain(missing=("swift",)),
-                                  fetcher=FakeFetcher(tmp_path))
+    absent_root = pkg.Provisioner(
+        toolchain=FakeToolchain(missing=("swift",)), fetcher=FakeFetcher(tmp_path)
+    )
     assert absent_root.verify()["environments"]["swift"] == "absent"
 
     absent_root.pull(pkg.select(["speaker-diarization-coreml"]))
@@ -177,17 +182,17 @@ def test_vocabulary_names_every_environment_state_verify_can_emit() -> None:
     """
     import re
 
-    emitted = set(re.findall(
-        r'environment_states\[name\] = "(\w+)"',
-        Path(package_environment_verification.__file__).read_text(),
-    ))
+    emitted = set(
+        re.findall(
+            r'environment_states\[name\] = "(\w+)"',
+            Path(package_environment_verification.__file__).read_text(),
+        )
+    )
     assert emitted == {"absent", "ok", "drifted", "blocked"}, (
         f"verify emits environment states {sorted(emitted)}; register the new one in "
         "VOCABULARY.md and add it here"
     )
-    vocabulary = read_spec_document(
-        Path(__file__).resolve().parents[1] / "VOCABULARY.md"
-    )
+    vocabulary = read_spec_document(Path(__file__).resolve().parents[1] / "VOCABULARY.md")
     for state in sorted(emitted):
         assert f"`{state}`" in vocabulary, f"VOCABULARY.md does not name the {state!r} state"
 
@@ -204,12 +209,10 @@ def test_remove_validates_every_name_before_deleting_anything(provisioner) -> No
     artifact = Path(document["packages"]["silero-vad"]["materialized"]["path"])
     snapshots = [
         Path(value)
-        for value in document["packages"]["vibevoice-asr-7b"]
-        ["materialized"]["paths"].values()
+        for value in document["packages"]["vibevoice-asr-7b"]["materialized"]["paths"].values()
     ]
     checkout = paths.checkout_dir("torch-vibevoice", "vibevoice-asr-7b")
-    assert artifact.is_file() and all(item.is_dir() for item in snapshots) \
-        and checkout.is_dir()
+    assert artifact.is_file() and all(item.is_dir() for item in snapshots) and checkout.is_dir()
 
     with pytest.raises(pkg.ProvisioningError) as caught:
         provisioner.remove(["silero-vad", "vibevoice-asr-7b", "not-a-package"])
@@ -227,8 +230,11 @@ def test_remove_validates_every_name_before_deleting_anything(provisioner) -> No
 
     # And the refusal is not a disabled teardown: the same names without the typo still work.
     provisioner.remove(["silero-vad", "vibevoice-asr-7b"])
-    assert not artifact.exists() and not checkout.exists() \
+    assert (
+        not artifact.exists()
+        and not checkout.exists()
         and not any(item.exists() for item in snapshots)
+    )
     assert pkg.load_registry()["packages"] == {}
 
 
@@ -268,9 +274,9 @@ def test_remove_drops_unknown_registry_entry_without_following_its_paths(
     document["environments"]["../../victim"] = {"state": "ready"}
     pkg.save_registry(document)
 
-    report = pkg.Provisioner(
-        toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)
-    ).remove(["retired-or-tampered"])
+    report = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=FakeFetcher(tmp_path)).remove(
+        ["retired-or-tampered"]
+    )
 
     assert report["removed"] == ["retired-or-tampered"]
     assert report["hub_revisions_deleted"] == []
@@ -284,7 +290,8 @@ def test_remove_drops_unknown_registry_entry_without_following_its_paths(
 
 
 def test_remove_refuses_a_parent_symlink_escape_and_preserves_ownership(
-    provisioner, tmp_path,
+    provisioner,
+    tmp_path,
 ) -> None:
     provisioner.pull(pkg.select(["silero-vad"]))
     filename = env.packages()["silero-vad"].source["filename"]
@@ -304,12 +311,11 @@ def test_remove_refuses_a_parent_symlink_escape_and_preserves_ownership(
 
 
 def test_failed_deletion_reports_no_reclaim_and_keeps_registry_owner(
-    provisioner, monkeypatch,
+    provisioner,
+    monkeypatch,
 ) -> None:
     provisioner.pull(pkg.select(["silero-vad"]))
-    artifact = Path(
-        pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]
-    )
+    artifact = Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"])
     monkeypatch.setattr(package_teardown, "_delete_at", lambda _parent, _name: None)
 
     with pytest.raises(pkg.ProvisioningError) as raised:
@@ -375,16 +381,15 @@ def test_nonready_pull_replaces_dirty_checkout_before_install(tmp_path) -> None:
             assert not (checkout_ / "setup.py").exists()
             super().install_checkout(environment_python, checkout_)
 
-    provisioner = pkg.Provisioner(
-        toolchain=InstallTripwire(), fetcher=FakeFetcher(tmp_path)
-    )
+    provisioner = pkg.Provisioner(toolchain=InstallTripwire(), fetcher=FakeFetcher(tmp_path))
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
 
     assert provisioner.verify()["failed"] == []
 
 
 def test_verify_rejects_patched_file_symlink_even_when_target_bytes_match(
-    provisioner, tmp_path,
+    provisioner,
+    tmp_path,
 ) -> None:
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]))
     package = env.packages()["vibevoice-asr-7b"]

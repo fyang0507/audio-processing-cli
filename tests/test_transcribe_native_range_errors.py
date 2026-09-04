@@ -53,18 +53,22 @@ def test_firered_overflowing_stage_number_is_a_typed_backend_failure(
 
         def firered(self, **_kwargs):
             raw = {
-                "sentences": [{
-                    "start_ms": 0,
-                    "end_ms": 1000,
-                    "text": "Done.",
-                    "lang": "en",
-                    "lang_confidence": 0.9,
-                }],
-                "words": [{
-                    "start_ms": 100,
-                    "end_ms": 900,
-                    "text": "done",
-                }],
+                "sentences": [
+                    {
+                        "start_ms": 0,
+                        "end_ms": 1000,
+                        "text": "Done.",
+                        "lang": "en",
+                        "lang_confidence": 0.9,
+                    }
+                ],
+                "words": [
+                    {
+                        "start_ms": 100,
+                        "end_ms": 900,
+                        "text": "done",
+                    }
+                ],
                 "vad_segments_ms": [[0, 1000]],
             }
             if mutation == "timestamp":
@@ -77,12 +81,14 @@ def test_firered_overflowing_stage_number_is_a_typed_backend_failure(
                 {
                     "complete": True,
                     "result": raw,
-                    "regions": [{
-                        "region_id": "vad_0",
-                        "start": 0.0,
-                        "end": 1.0,
-                        "processed": True,
-                    }],
+                    "regions": [
+                        {
+                            "region_id": "vad_0",
+                            "start": 0.0,
+                            "end": 1.0,
+                            "processed": True,
+                        }
+                    ],
                 },
                 1.0,
             )
@@ -95,9 +101,7 @@ def test_firered_overflowing_stage_number_is_a_typed_backend_failure(
             registry={
                 "environments": {"torch-firered": {"state": "ready"}},
                 "packages": {
-                    "firered-asr2s": _ready_multi_package(
-                        tmp_path, "firered-asr2s"
-                    ),
+                    "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s"),
                 },
             },
             transport=Transport(),
@@ -148,9 +152,7 @@ def test_vibevoice_subsample_eof_range_is_typed_before_model_work(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    ),
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
                 },
             },
             transport=Transport(),
@@ -181,9 +183,7 @@ def test_vibevoice_failed_aligner_is_a_backend_error_and_writes_no_result(
     _runtime(tmp_path, monkeypatch, "mlx")
     source = tmp_path / "aligner-failure.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="vibevoice", input_path=source, wants="word_timestamps"
-    )
+    request = resolve_request(stack_id="vibevoice", input_path=source, wants="word_timestamps")
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 1)
 
     class Transport:
@@ -196,12 +196,21 @@ def test_vibevoice_failed_aligner_is_a_backend_error_and_writes_no_result(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **_kwargs):
-            return StageOutcome("asr", "vibevoice-asr-7b", _complete_vibe_payload([{
-                    "start_time": 0.0,
-                    "end_time": 1.0,
-                    "speaker_id": 0,
-                    "text": "Hello.",
-                }]), 1.0)
+            return StageOutcome(
+                "asr",
+                "vibevoice-asr-7b",
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 1.0,
+                            "speaker_id": 0,
+                            "text": "Hello.",
+                        }
+                    ]
+                ),
+                1.0,
+            )
 
         def align(self, **_kwargs):
             outcome = StageOutcome(
@@ -227,12 +236,8 @@ def test_vibevoice_failed_aligner_is_a_backend_error_and_writes_no_result(
             "mlx": {"state": "ready"},
         },
         "packages": {
-            "vibevoice-asr-7b": _ready_multi_package(
-                tmp_path, "vibevoice-asr-7b"
-            ),
-            "qwen3-forcedaligner": _ready_single_package(
-                tmp_path, "qwen3-forcedaligner"
-            ),
+            "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
+            "qwen3-forcedaligner": _ready_single_package(tmp_path, "qwen3-forcedaligner"),
         },
     }
     output = tmp_path / "must-not-exist.json"

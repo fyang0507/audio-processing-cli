@@ -16,14 +16,15 @@ import subprocess
 import sys
 import threading
 import time
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 SCRIPT_START = time.perf_counter()
 
-import numpy as np
-import psutil
-import torch
+np = importlib.import_module("numpy")
+psutil = importlib.import_module("psutil")
+torch = importlib.import_module("torch")
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,8 +61,13 @@ def sha256_bytes(value: bytes) -> str:
 
 def ffprobe(path: Path) -> dict[str, Any]:
     command = [
-        "ffprobe", "-v", "error", "-show_entries",
-        "format=duration:stream=codec_name,sample_rate,channels", "-of", "json",
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration:stream=codec_name,sample_rate,channels",
+        "-of",
+        "json",
         str(path),
     ]
     return json.loads(subprocess.check_output(command, text=True))
@@ -78,16 +84,17 @@ def package_versions(names: list[str]) -> dict[str, str | None]:
 
 
 def git_metadata(path: Path) -> dict[str, Any]:
-    metadata: dict[str, Any] = {"path": str(path), "commit": None,
-                                "tracked_dirty": None}
+    metadata: dict[str, Any] = {"path": str(path), "commit": None, "tracked_dirty": None}
     try:
         metadata["commit"] = subprocess.check_output(
-            ["git", "-C", str(path), "rev-parse", "HEAD"], text=True,
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
         status = subprocess.check_output(
-            ["git", "-C", str(path), "status", "--porcelain",
-             "--untracked-files=no"], text=True, stderr=subprocess.DEVNULL,
+            ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=no"],
+            text=True,
+            stderr=subprocess.DEVNULL,
         )
         metadata["tracked_dirty"] = bool(status.strip())
     except (OSError, subprocess.CalledProcessError):
@@ -119,9 +126,11 @@ def huggingface_revision(path: Path) -> dict[str, Any]:
     if cache_root.is_dir():
         for metadata_path in cache_root.rglob("*.metadata"):
             try:
-                first_line = metadata_path.read_text(
-                    encoding="utf-8", errors="replace"
-                ).splitlines()[0].strip()
+                first_line = (
+                    metadata_path.read_text(encoding="utf-8", errors="replace")
+                    .splitlines()[0]
+                    .strip()
+                )
             except (OSError, IndexError):
                 continue
             if len(first_line) == 40 and all(
@@ -202,16 +211,21 @@ def main() -> int:
     def sample_memory() -> None:
         while not stop.is_set():
             try:
-                samples.append({
-                    "elapsed_s": time.perf_counter() - process_start,
-                    "rss_bytes": rss_bytes(),
-                    **system_memory(),
-                    **mps_memory(args.device == "mps"),
-                })
+                samples.append(
+                    {
+                        "elapsed_s": time.perf_counter() - process_start,
+                        "rss_bytes": rss_bytes(),
+                        **system_memory(),
+                        **mps_memory(args.device == "mps"),
+                    }
+                )
             except Exception as exc:  # telemetry must not abort model inference
-                sampler_errors.append({
-                    "type": type(exc).__name__, "message": str(exc),
-                })
+                sampler_errors.append(
+                    {
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                    }
+                )
             stop.wait(args.sample_interval)
 
     process_start = time.perf_counter()
@@ -232,10 +246,16 @@ def main() -> int:
         processor = VibeVoiceASRProcessor.from_pretrained(
             str(model_path), language_model_pretrained_name="Qwen/Qwen2.5-7B"
         )
-        model = VibeVoiceASRForConditionalGeneration.from_pretrained(
-            str(model_path), dtype=dtype, attn_implementation=args.attention,
-            trust_remote_code=True,
-        ).to(args.device).eval()
+        model = (
+            VibeVoiceASRForConditionalGeneration.from_pretrained(
+                str(model_path),
+                dtype=dtype,
+                attn_implementation=args.attention,
+                trust_remote_code=True,
+            )
+            .to(args.device)
+            .eval()
+        )
         if args.full_prompt_logits:
             model._supports_logits_to_keep = lambda: False
         first_parameter = next(model.parameters())
@@ -247,8 +267,11 @@ def main() -> int:
 
         t0 = time.perf_counter()
         inputs = processor(
-            audio=[str(audio_path)], sampling_rate=None, return_tensors="pt",
-            padding=True, add_generation_prompt=True,
+            audio=[str(audio_path)],
+            sampling_rate=None,
+            return_tensors="pt",
+            padding=True,
+            add_generation_prompt=True,
         )
         inputs = {
             key: value.to(args.device) if isinstance(value, torch.Tensor) else value
@@ -262,16 +285,18 @@ def main() -> int:
         t0 = time.perf_counter()
         with torch.inference_mode():
             output_ids = model.generate(
-                **inputs, max_new_tokens=args.max_new_tokens,
+                **inputs,
+                max_new_tokens=args.max_new_tokens,
                 pad_token_id=processor.pad_id,
-                eos_token_id=processor.tokenizer.eos_token_id, do_sample=False,
+                eos_token_id=processor.tokenizer.eos_token_id,
+                do_sample=False,
             )
         if args.device == "mps":
             torch.mps.synchronize()
         timing["generate_s"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        generated = output_ids[0, inputs["input_ids"].shape[1]:]
+        generated = output_ids[0, inputs["input_ids"].shape[1] :]
         eos = (generated == processor.tokenizer.eos_token_id).nonzero(as_tuple=True)[0]
         eos_observed = bool(len(eos))
         if len(eos):
@@ -294,8 +319,9 @@ def main() -> int:
     audio = ffprobe(audio_path)
     duration = float(audio["format"]["duration"])
     parsed_segments = segments if isinstance(segments, list) else []
-    normalized = json.dumps(parsed_segments, ensure_ascii=False, sort_keys=True,
-                            separators=(",", ":"))
+    normalized = json.dumps(
+        parsed_segments, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     bounds: list[tuple[float, float]] = []
     for item in parsed_segments:
         if not isinstance(item, dict):
@@ -311,19 +337,22 @@ def main() -> int:
             bounds.append((start, end))
     starts = [item[0] for item in bounds]
     ends = [item[1] for item in bounds]
-    bounds_valid = bool(parsed_segments) and len(bounds) == len(parsed_segments) and all(
-        0 <= start <= end <= duration + 0.1
-        and (index == 0 or start >= starts[index - 1])
-        and (index == 0 or end >= ends[index - 1])
-        for index, (start, end) in enumerate(bounds)
+    bounds_valid = (
+        bool(parsed_segments)
+        and len(bounds) == len(parsed_segments)
+        and all(
+            0 <= start <= end <= duration + 0.1
+            and (index == 0 or start >= starts[index - 1])
+            and (index == 0 or end >= ends[index - 1])
+            for index, (start, end) in enumerate(bounds)
+        )
     )
     peak_swap_used = max(
         (int(item["system_swap_used_bytes"]) for item in samples),
         default=int(system_at_start["system_swap_used_bytes"]),
     )
     sample_gaps = [
-        current["elapsed_s"] - previous["elapsed_s"]
-        for previous, current in zip(samples, samples[1:])
+        current["elapsed_s"] - previous["elapsed_s"] for previous, current in pairwise(samples)
     ]
     result = {
         "schema_version": 1,
@@ -337,9 +366,15 @@ def main() -> int:
             "platform": platform.platform(),
             "python": sys.version,
             "torch": torch.__version__,
-            "packages": package_versions([
-                "torch", "transformers", "numpy", "psutil", "soundfile",
-            ]),
+            "packages": package_versions(
+                [
+                    "torch",
+                    "transformers",
+                    "numpy",
+                    "psutil",
+                    "soundfile",
+                ]
+            ),
         },
         "source": {
             "code": git_metadata(vibe_checkout),
@@ -354,8 +389,10 @@ def main() -> int:
             "model": huggingface_revision(model_path),
         },
         "configuration": {
-            "model_path": str(model_path), "device": args.device,
-            "dtype": args.dtype, "attention": args.attention,
+            "model_path": str(model_path),
+            "device": args.device,
+            "dtype": args.dtype,
+            "attention": args.attention,
             "max_new_tokens": args.max_new_tokens,
             "mps_limit_gib": args.mps_limit_gib,
             "mps_fallback": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
@@ -375,8 +412,10 @@ def main() -> int:
             ),
         },
         "audio": {
-            "path": str(audio_path), "sha256": sha256(audio_path),
-            "duration_s": duration, "probe": audio,
+            "path": str(audio_path),
+            "sha256": sha256(audio_path),
+            "duration_s": duration,
+            "probe": audio,
         },
         "timing": {
             **timing,
@@ -410,7 +449,8 @@ def main() -> int:
         },
         "stability": {
             "output_parse_valid": (
-                status == "ok" and isinstance(segments, list)
+                status == "ok"
+                and isinstance(segments, list)
                 and bool(parsed_segments)
                 and all(isinstance(item, dict) for item in parsed_segments)
             ),
@@ -420,27 +460,37 @@ def main() -> int:
             "segment_count": len(parsed_segments),
             "first_segment_start_s": starts[0] if starts else None,
             "last_segment_end_s": ends[-1] if ends else None,
-            "last_segment_end_ratio": ends[-1] / duration
-            if ends and duration else None,
-            "speaker_labels": sorted({
-                str(item.get("speaker_id", item.get("speaker")))
-                for item in parsed_segments
-                if item.get("speaker_id", item.get("speaker")) is not None
-            }),
+            "last_segment_end_ratio": ends[-1] / duration if ends and duration else None,
+            "speaker_labels": sorted(
+                {
+                    str(item.get("speaker_id", item.get("speaker")))
+                    for item in parsed_segments
+                    if item.get("speaker_id", item.get("speaker")) is not None
+                }
+            ),
         },
         "output": {
-            "raw_text": raw_text, "segments": parsed_segments,
+            "raw_text": raw_text,
+            "segments": parsed_segments,
             "normalized_segments_sha256": hashlib.sha256(normalized.encode()).hexdigest(),
         },
     }
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "status": status, "output": str(output_path), "timing": result["timing"],
-        "memory": {key: value for key, value in result["memory"].items()
-                   if key != "samples"},
-        "segments_sha256": result["output"]["normalized_segments_sha256"],
-        "error": error,
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "output": str(output_path),
+                "timing": result["timing"],
+                "memory": {
+                    key: value for key, value in result["memory"].items() if key != "samples"
+                },
+                "segments_sha256": result["output"]["normalized_segments_sha256"],
+                "error": error,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0 if status == "ok" else 1
 
 

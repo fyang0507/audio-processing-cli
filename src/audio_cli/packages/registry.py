@@ -75,7 +75,8 @@ def load_registry() -> dict:
                 )
             descriptor = os.open(
                 target.name,
-                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
                 | getattr(os, "O_CLOEXEC", 0)
                 | getattr(os, "O_NONBLOCK", 0),
                 dir_fd=parent_descriptor,
@@ -97,21 +98,22 @@ def load_registry() -> dict:
         raise
     except (OSError, UnicodeError) as exc:
         raise ProvisioningError(
-            "registry_unreadable", f"could not read {target}: {exc}",
+            "registry_unreadable",
+            f"could not read {target}: {exc}",
             fix=f"Restore access to {target}, or move it aside and run audio packages pull again",
         ) from exc
     try:
-        document = json.loads(
-            raw, object_pairs_hook=_reject_duplicate_registry_keys
-        )
+        document = json.loads(raw, object_pairs_hook=_reject_duplicate_registry_keys)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ProvisioningError(
-            "registry_unreadable", f"{target} is not valid JSON: {exc}",
+            "registry_unreadable",
+            f"{target} is not valid JSON: {exc}",
             fix=f"Move {target} aside and run audio packages pull again",
         ) from exc
     if not isinstance(document, dict):
         raise ProvisioningError(
-            "registry_unreadable", f"{target} must contain a JSON object",
+            "registry_unreadable",
+            f"{target} must contain a JSON object",
             fix=f"Move {target} aside and run audio packages pull again",
         )
     if document.get("schema_version") != REGISTRY_SCHEMA_VERSION:
@@ -143,8 +145,7 @@ def load_registry() -> dict:
             malformed = sorted(
                 identifier
                 for identifier, entry in value.items()
-                if "materialized" in entry
-                and not isinstance(entry["materialized"], dict)
+                if "materialized" in entry and not isinstance(entry["materialized"], dict)
             )
             if malformed:
                 raise ProvisioningError(
@@ -201,7 +202,8 @@ def load_registry() -> dict:
                         fix=f"Move {target} aside and run audio packages pull again",
                     )
                 for revisions_key in (
-                    "hub_revisions", "hub_revisions_pre_existing",
+                    "hub_revisions",
+                    "hub_revisions_pre_existing",
                 ):
                     revisions = materialized.get(revisions_key)
                     if revisions is not None and (
@@ -241,16 +243,13 @@ def save_registry(document: dict) -> None:
                     fix=f"Move {target} aside and run audio packages pull again",
                 )
 
-            partial_name = (
-                f".audio-registry-{os.getpid()}-{uuid.uuid4().hex}.tmp"
-            )
+            partial_name = f".audio-registry-{os.getpid()}-{uuid.uuid4().hex}.tmp"
             created = False
             temporary_identity = None
             try:
                 descriptor = os.open(
                     partial_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL
-                    | getattr(os, "O_NOFOLLOW", 0),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
                     0o666,
                     dir_fd=parent_descriptor,
                 )
@@ -264,19 +263,17 @@ def save_registry(document: dict) -> None:
                         os.close(descriptor)
                 if temporary_identity is None:
                     raise OSError(
-                        f"registry temporary is not a regular file: "
-                        f"{target.parent / partial_name}"
+                        f"registry temporary is not a regular file: {target.parent / partial_name}"
                     )
-                with os.fdopen(
-                    descriptor, "w", encoding="utf-8", newline="\n"
-                ) as handle:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
                     handle.write(
                         json.dumps(
                             document,
                             indent=2,
                             sort_keys=True,
                             ensure_ascii=False,
-                        ) + "\n"
+                        )
+                        + "\n"
                     )
                     handle.flush()
                     os.fsync(handle.fileno())
@@ -293,9 +290,7 @@ def save_registry(document: dict) -> None:
                 created = False
             finally:
                 if created and temporary_identity is not None:
-                    cleanup_temporary_file(
-                        parent_descriptor, partial_name, temporary_identity
-                    )
+                    cleanup_temporary_file(parent_descriptor, partial_name, temporary_identity)
     except ProvisioningError:
         raise
     except (OSError, UnicodeError) as exc:

@@ -48,10 +48,7 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     )
     after_lufs = report["measurements"]["after"]["program"]["input_i"]
     assert abs(after_lufs - PROFILES["product-demo"].target_lufs) <= 0.6
-    assert (
-        report["resolved_operations_sha256"]
-        == dry_run_report["resolved_operations_sha256"]
-    )
+    assert report["resolved_operations_sha256"] == dry_run_report["resolved_operations_sha256"]
 
 
 def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
@@ -64,12 +61,8 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     isolated_machine = (time >= 0.3) & (time < 0.8)
     adjacent_machine = (time >= 1.2) & (time < 1.5)
     speech = (time >= 1.5) & (time < 3.5)
-    audio[isolated_machine] = (0.10 * np.sin(2 * np.pi * 900 * time[isolated_machine]))[
-        :, None
-    ]
-    audio[adjacent_machine] = (
-        0.10 * np.sin(2 * np.pi * 1100 * time[adjacent_machine])
-    )[:, None]
+    audio[isolated_machine] = (0.10 * np.sin(2 * np.pi * 900 * time[isolated_machine]))[:, None]
+    audio[adjacent_machine] = (0.10 * np.sin(2 * np.pi * 1100 * time[adjacent_machine]))[:, None]
     audio[speech] = (0.006 * np.sin(2 * np.pi * 180 * time[speech]))[:, None]
     source = tmp_path / "mixed-regions.wav"
     output = tmp_path / "mixed-regions-enhanced.wav"
@@ -82,16 +75,12 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
         correction_calls.append(set(corrections_db))
         return apply_corrections(samples, rate, analysis, corrections_db, fade_ms)
 
-    monkeypatch.setattr(
-        pipeline_runner, "apply_machine_region_corrections", record_corrections
-    )
+    monkeypatch.setattr(pipeline_runner, "apply_machine_region_corrections", record_corrections)
     report = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad()).run(
         source, output=output, dry_run=False
     )
 
-    source_stage = next(
-        stage for stage in report["stages"] if stage["name"] == "source-balance"
-    )
+    source_stage = next(stage for stage in report["stages"] if stage["name"] == "source-balance")
     abstained = set(source_stage["abstained_regions"])
     operated = {operation["region_id"] for operation in source_stage["operations"]}
 
@@ -102,12 +91,9 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     assert abstained.isdisjoint(operated)
     assert all(abstained.isdisjoint(call) for call in correction_calls)
     final_evaluations = {
-        item["region_id"]: item["status"]
-        for item in source_stage["final_region_evaluations"]
+        item["region_id"]: item["status"] for item in source_stage["final_region_evaluations"]
     }
-    assert all(
-        final_evaluations[region_id] == "abstained_overlap" for region_id in abstained
-    )
+    assert all(final_evaluations[region_id] == "abstained_overlap" for region_id in abstained)
 
 
 def test_an_enhanced_render_is_refused_as_input_unless_it_is_allowed(tmp_path) -> None:

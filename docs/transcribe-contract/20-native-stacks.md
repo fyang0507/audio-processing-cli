@@ -30,7 +30,7 @@ fields that differ from §1.1** — the envelope, `packages`, and
                            "seed": 1234, "max_new_tokens": 16384},
                 "deterministic": true,
                 "determinism_tolerance_ms": 0.0,
-                "determinism_basis": "three seeded repeats shared one normalized-output hash; text decode is do_sample=False (run_vibevoice.py:267)",
+                "determinism_basis": "three seeded repeats shared one normalized-output hash; text decode is do_sample=False (model_tests/benchmark/run_vibevoice.py:285-293)",
                 "determinism_note": "acoustic tokenizer samples a Gaussian latent; fixed seed required",
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
@@ -64,7 +64,7 @@ fields that differ from §1.1** — the envelope, `packages`, and
 
 The aligner rule is executable provenance, not a language-quality claim: the recorded probe
 selects `Chinese` when its text regex sees a CJK ideograph and `English` otherwise
-(`model_tests/benchmark/run_mlx_forced_aligner_probe.py:55,94`). It does not forward Qwen's
+(`model_tests/benchmark/run_mlx_forced_aligner_probe.py:53-55,85-102`). It does not forward Qwen's
 `Cantonese` hint. The pinned aligner implementation branches only for Japanese and Korean;
 Chinese, Cantonese, English, and every other value use `tokenize_space_lang`, whose own CJK
 splitter handles ideographs (`qwen3_forced_aligner.py:129-145,236-247`). There is therefore no

@@ -19,9 +19,9 @@ import subprocess
 import sys
 import time
 import wave
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
-
 
 MODEL_ID = "pyannote/speaker-diarization-community-1"
 
@@ -35,9 +35,9 @@ def sha256_file(path: Path) -> str:
 
 
 def sha256_json(value: Any) -> str:
-    payload = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -59,9 +59,7 @@ def duration_s(path: Path) -> float:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Profile direct pyannote Community-1 diarization"
-    )
+    parser = argparse.ArgumentParser(description="Profile direct pyannote Community-1 diarization")
     parser.add_argument("--audio", required=True)
     parser.add_argument("--output", required=True, help="Normalized evidence JSON")
     parser.add_argument("--raw-output", required=True, help="Direct pipeline JSON")
@@ -73,7 +71,9 @@ def parse_args() -> argparse.Namespace:
         help="Hugging Face revision to load; record an immutable commit for a final run",
     )
     parser.add_argument("--cache-dir", help="Optional Hugging Face model cache directory")
-    parser.add_argument("--python", default=sys.executable, help="Python with pyannote.audio installed")
+    parser.add_argument(
+        "--python", default=sys.executable, help="Python with pyannote.audio installed"
+    )
     parser.add_argument("--memory-sample-ms", type=float, default=100.0)
     parser.add_argument(
         "--regular-output",
@@ -102,9 +102,13 @@ def worker(args: argparse.Namespace) -> None:
         channels = handle.getnchannels()
         frames = handle.getnframes()
         pcm = handle.readframes(frames)
-    waveform = torch.frombuffer(bytearray(pcm), dtype=torch.int16).reshape(
-        frames, channels
-    ).transpose(0, 1).to(torch.float32).div_(32768.0)
+    waveform = (
+        torch.frombuffer(bytearray(pcm), dtype=torch.int16)
+        .reshape(frames, channels)
+        .transpose(0, 1)
+        .to(torch.float32)
+        .div_(32768.0)
+    )
     pipeline = Pipeline.from_pretrained(
         MODEL_ID,
         revision=args.model_revision,
@@ -117,9 +121,7 @@ def worker(args: argparse.Namespace) -> None:
         num_speakers=args.num_speakers,
     )
     annotation = (
-        result.speaker_diarization
-        if args.regular_output
-        else result.exclusive_speaker_diarization
+        result.speaker_diarization if args.regular_output else result.exclusive_speaker_diarization
     )
     segments = [
         {
@@ -169,11 +171,21 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     raw_output_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        str(python), str(Path(__file__).resolve()), "--worker",
-        "--audio", str(audio), "--raw-output", str(raw_output_path),
-        "--output", str(output_path), "--num-speakers", str(args.num_speakers),
-        "--device", args.device,
-        "--model-revision", args.model_revision,
+        str(python),
+        str(Path(__file__).resolve()),
+        "--worker",
+        "--audio",
+        str(audio),
+        "--raw-output",
+        str(raw_output_path),
+        "--output",
+        str(output_path),
+        "--num-speakers",
+        str(args.num_speakers),
+        "--device",
+        args.device,
+        "--model-revision",
+        args.model_revision,
     ]
     if args.cache_dir:
         command.extend(["--cache-dir", args.cache_dir])
@@ -206,28 +218,22 @@ def main() -> None:
     segments = raw["segments"]
     clip_duration_s = duration_s(audio)
     finite_bounds = all(
-        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"])
-        for item in segments
+        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"]) for item in segments
     )
     valid_bounds = finite_bounds and all(
-        0 <= item["start_s"] <= item["end_s"] <= clip_duration_s + 0.1
-        for item in segments
+        0 <= item["start_s"] <= item["end_s"] <= clip_duration_s + 0.1 for item in segments
     )
-    nondecreasing = all(
-        left["start_s"] <= right["start_s"]
-        for left, right in zip(segments, segments[1:])
-    )
-    sample_gaps = [
-        right["elapsed_s"] - left["elapsed_s"]
-        for left, right in zip(samples, samples[1:])
-    ]
+    nondecreasing = all(left["start_s"] <= right["start_s"] for left, right in pairwise(segments))
+    sample_gaps = [right["elapsed_s"] - left["elapsed_s"] for left, right in pairwise(samples)]
     normalized_output = {"segments": segments}
     artifact = {
         "schema_version": 1,
         "runner": "direct-pyannote-community-1-profile",
         "input": {
-            "path": str(audio), "bytes": audio.stat().st_size,
-            "sha256": sha256_file(audio), "duration_s": clip_duration_s,
+            "path": str(audio),
+            "bytes": audio.stat().st_size,
+            "sha256": sha256_file(audio),
+            "duration_s": clip_duration_s,
         },
         "model": {
             "model_id": raw["model_id"],
@@ -244,7 +250,8 @@ def main() -> None:
             "command": command,
         },
         "runtime": {
-            "machine": platform.machine(), "platform": platform.platform(),
+            "machine": platform.machine(),
+            "platform": platform.platform(),
             "runner_sha256": sha256_file(Path(__file__).resolve()),
         },
         "timing": {
@@ -267,7 +274,12 @@ def main() -> None:
             "sampler_errors": sample_errors,
             "epistemic_limit": "RSS is process memory, not physical-Mac compatibility proof.",
         },
-        "raw_result": {"path": str(raw_output_path), "sha256": sha256_file(raw_output_path), "console_stdout": stdout, "console_stderr": stderr},
+        "raw_result": {
+            "path": str(raw_output_path),
+            "sha256": sha256_file(raw_output_path),
+            "console_stdout": stdout,
+            "console_stderr": stderr,
+        },
         "stability": {
             "segment_count": len(segments),
             "speaker_labels": sorted({item["speaker"] for item in segments}),
@@ -280,13 +292,17 @@ def main() -> None:
         "normalized_output_sha256": sha256_json(normalized_output),
     }
     output_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "fresh_process_wall_s": wall_s,
-        "fresh_process_rtf": wall_s / clip_duration_s,
-        "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
-        "segment_count": len(segments),
-        "speaker_count": len(artifact["stability"]["speaker_labels"]),
-    }))
+    print(
+        json.dumps(
+            {
+                "fresh_process_wall_s": wall_s,
+                "fresh_process_rtf": wall_s / clip_duration_s,
+                "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
+                "segment_count": len(segments),
+                "speaker_count": len(artifact["stability"]["speaker_labels"]),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

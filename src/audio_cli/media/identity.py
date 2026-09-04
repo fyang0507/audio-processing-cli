@@ -18,9 +18,7 @@ class ProtectedFileIdentity:
     inode: int
 
 
-def file_identity_from_descriptor(
-    descriptor: int, path: Path
-) -> ProtectedFileIdentity | None:
+def file_identity_from_descriptor(descriptor: int, path: Path) -> ProtectedFileIdentity | None:
     state = os.fstat(descriptor)
     if not stat.S_ISREG(state.st_mode):
         return None
@@ -32,9 +30,7 @@ def capture_file_identity(path: Path) -> ProtectedFileIdentity | None:
     try:
         descriptor = os.open(
             path,
-            os.O_RDONLY
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_NONBLOCK", 0),
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0),
         )
     except FileNotFoundError:
         return None
@@ -84,9 +80,9 @@ def entry_matches_file_identity(
         )
     except FileNotFoundError:
         return False
-    return (
-        stat.S_ISREG(state.st_mode)
-        and (state.st_dev, state.st_ino) == (protected.device, protected.inode)
+    return stat.S_ISREG(state.st_mode) and (state.st_dev, state.st_ino) == (
+        protected.device,
+        protected.inode,
     )
 
 

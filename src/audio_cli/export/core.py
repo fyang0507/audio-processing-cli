@@ -82,22 +82,24 @@ def export_documents(
                 merged.inputs, f"merged cue sequence is invalid: {exc}"
             ) from exc
         cues = cue_build.cues
-        warnings = ({
-            "code": "cue_timing_unvalidated",
-            "blocking": False,
-            "detail": (
-                "boundary MAE/P95 is unmeasured for the backend that produced this "
-                "timing, so cue placement is producible but not claimed "
-                "broadcast-acceptable"
-            ),
-        }, *cue_build.warnings)
+        warnings = (
+            {
+                "code": "cue_timing_unvalidated",
+                "blocking": False,
+                "detail": (
+                    "boundary MAE/P95 is unmeasured for the backend that produced this "
+                    "timing, so cue placement is producible but not claimed "
+                    "broadcast-acceptable"
+                ),
+            },
+            *cue_build.warnings,
+        )
         if output_format == "srt":
             content = render_srt(cues)
         else:
             content = render_vtt(cues)
             speaker_labels_rendered = any(
-                cue.speaker is not None
-                and normalize_voice_annotation(cue.speaker) is not None
+                cue.speaker is not None and normalize_voice_annotation(cue.speaker) is not None
                 for cue in cues
             )
     elif output_format == "md":

@@ -16,14 +16,15 @@ import os
 import platform
 import threading
 import time
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 SCRIPT_START = time.perf_counter()
 
-import psutil
-import sherpa_onnx
-import soundfile as sf
+psutil = importlib.import_module("psutil")
+sherpa_onnx = importlib.import_module("sherpa_onnx")
+sf = importlib.import_module("soundfile")
 
 
 def sha256_file(path: Path) -> str:
@@ -35,9 +36,9 @@ def sha256_file(path: Path) -> str:
 
 
 def sha256_json(value: Any) -> str:
-    payload = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -102,10 +103,12 @@ def main() -> None:
     def sample_memory() -> None:
         while not stop_sampler.is_set():
             try:
-                memory_samples.append({
-                    "elapsed_s": time.perf_counter() - SCRIPT_START,
-                    "rss_bytes": process.memory_info().rss,
-                })
+                memory_samples.append(
+                    {
+                        "elapsed_s": time.perf_counter() - SCRIPT_START,
+                        "rss_bytes": process.memory_info().rss,
+                    }
+                )
             except Exception as exc:  # evidence should expose sampler failure
                 sampler_errors.append(f"{type(exc).__name__}: {exc}")
             stop_sampler.wait(sample_interval_s)
@@ -150,18 +153,18 @@ def main() -> None:
     diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
     model_load_s = time.perf_counter() - model_load_start
     if diarizer.sample_rate != sample_rate:
-        raise RuntimeError(
-            f"model expects {diarizer.sample_rate} Hz, input is {sample_rate} Hz"
-        )
+        raise RuntimeError(f"model expects {diarizer.sample_rate} Hz, input is {sample_rate} Hz")
 
     progress = {"processed_chunks": 0, "total_chunks": 0, "callbacks": 0}
 
     def progress_callback(processed_chunks: int, total_chunks: int) -> int:
-        progress.update({
-            "processed_chunks": int(processed_chunks),
-            "total_chunks": int(total_chunks),
-            "callbacks": progress["callbacks"] + 1,
-        })
+        progress.update(
+            {
+                "processed_chunks": int(processed_chunks),
+                "total_chunks": int(total_chunks),
+                "callbacks": progress["callbacks"] + 1,
+            }
+        )
         return 0
 
     diarize_start = time.perf_counter()
@@ -179,29 +182,25 @@ def main() -> None:
     stop_sampler.set()
     sampler.join(timeout=max(1.0, sample_interval_s * 5))
     try:
-        memory_samples.append({
-            "elapsed_s": time.perf_counter() - SCRIPT_START,
-            "rss_bytes": process.memory_info().rss,
-        })
+        memory_samples.append(
+            {
+                "elapsed_s": time.perf_counter() - SCRIPT_START,
+                "rss_bytes": process.memory_info().rss,
+            }
+        )
     except Exception as exc:
         sampler_errors.append(f"{type(exc).__name__}: {exc}")
 
     speaker_labels = sorted({item["speaker"] for item in segments})
     finite_bounds = all(
-        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"])
-        for item in segments
+        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"]) for item in segments
     )
     valid_bounds = finite_bounds and all(
-        0 <= item["start_s"] <= item["end_s"] <= duration_s + 0.05
-        for item in segments
+        0 <= item["start_s"] <= item["end_s"] <= duration_s + 0.05 for item in segments
     )
-    ordered = all(
-        left["start_s"] <= right["start_s"]
-        for left, right in zip(segments, segments[1:])
-    )
+    ordered = all(left["start_s"] <= right["start_s"] for left, right in pairwise(segments))
     sample_gaps = [
-        right["elapsed_s"] - left["elapsed_s"]
-        for left, right in zip(memory_samples, memory_samples[1:])
+        right["elapsed_s"] - left["elapsed_s"] for left, right in pairwise(memory_samples)
     ]
     output = {"segments": segments}
     end_to_end_s = time.perf_counter() - SCRIPT_START
@@ -222,9 +221,7 @@ def main() -> None:
             "embedding_sha256": sha256_file(embedding_path),
         },
         "configuration": {
-            "known_num_speakers": (
-                args.num_speakers if args.num_speakers > 0 else None
-            ),
+            "known_num_speakers": (args.num_speakers if args.num_speakers > 0 else None),
             "cluster_threshold": args.cluster_threshold,
             "min_duration_on_s": args.min_duration_on,
             "min_duration_off_s": args.min_duration_off,
@@ -269,12 +266,8 @@ def main() -> None:
             "peak_rss_bytes": max(
                 (int(item["rss_bytes"]) for item in memory_samples), default=None
             ),
-            "first_rss_bytes": (
-                int(memory_samples[0]["rss_bytes"]) if memory_samples else None
-            ),
-            "last_rss_bytes": (
-                int(memory_samples[-1]["rss_bytes"]) if memory_samples else None
-            ),
+            "first_rss_bytes": (int(memory_samples[0]["rss_bytes"]) if memory_samples else None),
+            "last_rss_bytes": (int(memory_samples[-1]["rss_bytes"]) if memory_samples else None),
             "max_sample_gap_s": max(sample_gaps, default=None),
             "sampler_errors": sampler_errors,
             "epistemic_limit": (
@@ -297,13 +290,17 @@ def main() -> None:
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "diarize_s": diarize_s,
-        "diarize_rtf": diarize_s / duration_s,
-        "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
-        "segment_count": len(segments),
-        "speaker_count": len(speaker_labels),
-    }))
+    print(
+        json.dumps(
+            {
+                "diarize_s": diarize_s,
+                "diarize_rtf": diarize_s / duration_s,
+                "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
+                "segment_count": len(segments),
+                "speaker_count": len(speaker_labels),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

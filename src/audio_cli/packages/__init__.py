@@ -49,18 +49,18 @@ from .service import Provisioner
 from .toolchain import Toolchain
 
 __all__ = [
-    "CheckoutState",
     "ENVIRONMENTS_DIR",
+    "HUB_CACHE_NOTE",
+    "REGISTRY_SCHEMA_VERSION",
+    "UNTOUCHED",
+    "CheckoutState",
     "Environment",
     "Fetcher",
-    "HUB_CACHE_NOTE",
     "ManifestError",
     "Package",
     "Provisioner",
     "ProvisioningError",
-    "REGISTRY_SCHEMA_VERSION",
     "Toolchain",
-    "UNTOUCHED",
     "blank_registry",
     "built_product_candidates",
     "checkout_file_matches",

@@ -49,9 +49,7 @@ def _print_json(payload: object, *, stream=None) -> None:
 
 def _ensure_writable_target(path: Path | None, *, force: bool, label: str) -> None:
     if path is not None and path.exists() and not force:
-        raise PipelineError(
-            f"{label} already exists: {path}; pass --force to replace it"
-        )
+        raise PipelineError(f"{label} already exists: {path}; pass --force to replace it")
 
 
 def _run_inspect(args: argparse.Namespace) -> int:
@@ -90,9 +88,7 @@ def _run_enhance(args: argparse.Namespace) -> int:
         raise PipelineError("--output is not used with --dry-run")
 
     _ensure_writable_target(args.output, force=args.force, label="Output")
-    default_report = (
-        Path(f"{args.output}.report.json") if args.output is not None else None
-    )
+    default_report = Path(f"{args.output}.report.json") if args.output is not None else None
     report_path = args.report or default_report
     _ensure_writable_target(report_path, force=args.force, label="Report")
 
@@ -141,8 +137,10 @@ def _run_packages(args: argparse.Namespace) -> int:
     if command == "pull":
         if args.want is not None and not args.stack:
             raise ProvisioningError(
-                "stack_required", "--want needs --stack: capabilities are resolved per stack",
-                exit_code=2, fix="audio packages pull --stack <stack>",
+                "stack_required",
+                "--want needs --stack: capabilities are resolved per stack",
+                exit_code=2,
+                fix="audio packages pull --stack <stack>",
             )
         if args.want is not None:
             # Refused rather than ignored. Nothing downstream of here reads `--want`: resolving
@@ -153,7 +151,9 @@ def _run_packages(args: argparse.Namespace) -> int:
                 "want_not_implemented",
                 "capabilities cannot narrow a pull yet: resolving them to packages is the "
                 f"planner's job, so --stack {args.stack} provisions every package it can use",
-                exit_code=2, field="--want", provided=args.want,
+                exit_code=2,
+                field="--want",
+                provided=args.want,
                 fix=f"audio packages pull --stack {args.stack}",
             )
         selection = select(args.packages, stack=args.stack)
@@ -172,8 +172,7 @@ def _run_packages(args: argparse.Namespace) -> int:
     if command == "purge":
         _print_json(provisioner.purge(dry_run=args.dry_run))
         return 0
-    raise ProvisioningError("unknown_command", f"unknown packages command {command!r}",
-                            exit_code=2)
+    raise ProvisioningError("unknown_command", f"unknown packages command {command!r}", exit_code=2)
 
 
 def _run_transcribe(args: argparse.Namespace) -> int:
@@ -225,9 +224,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             for package_id, entry in registry.get("packages", {}).items()
             if entry.get("state") == "ready"
         }
-        plan = transcribe_planner.build_plan(
-            request, metadata, provisioned_packages=ready
-        )
+        plan = transcribe_planner.build_plan(request, metadata, provisioned_packages=ready)
         _print_json(serialize_plan(plan))
         return 0
     if command == "run":
@@ -242,9 +239,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         if args.format == "json":
             _print_json(product.payload)
         else:
-            sys.stdout.write(
-                transcribe_orchestrator.render_human(product.payload, args.format)
-            )
+            sys.stdout.write(transcribe_orchestrator.render_human(product.payload, args.format))
         return 0
     raise ValueError(f"unknown transcribe command {command!r}")
 
@@ -286,8 +281,7 @@ def _run_export(args: argparse.Namespace) -> int:
         execution = exc.plan.get("execution", {}) if isinstance(exc.plan, dict) else {}
         selected_range = execution.get("range", {}) if isinstance(execution, dict) else {}
         requested_range = (
-            selected_range.get("requested")
-            if isinstance(selected_range, dict) else None
+            selected_range.get("requested") if isinstance(selected_range, dict) else None
         )
         run_range = None
         if (
@@ -315,14 +309,21 @@ def _run_export(args: argparse.Namespace) -> int:
         if exc.replaceable:
             parts = ["audio", "export"]
             for input_path in args.inputs:
-                parts.extend((
-                    "--input", transcribe_refusals.command_path_argument(input_path),
-                ))
-            parts.extend((
-                "--format", args.format,
-                "-o", transcribe_refusals.command_path_argument(exc.output),
-                "--force",
-            ))
+                parts.extend(
+                    (
+                        "--input",
+                        transcribe_refusals.command_path_argument(input_path),
+                    )
+                )
+            parts.extend(
+                (
+                    "--format",
+                    args.format,
+                    "-o",
+                    transcribe_refusals.command_path_argument(exc.output),
+                    "--force",
+                )
+            )
             fix = shlex.join(parts)
         else:
             fix = (
@@ -340,17 +341,11 @@ def _run_export(args: argparse.Namespace) -> int:
             exit_code=2,
         ) from exc
     except UnsafeOutputError as exc:
-        raise transcribe_refusals.output_is_canonical_input(
-            exc.output, exc.protected
-        ) from exc
+        raise transcribe_refusals.output_is_canonical_input(exc.output, exc.protected) from exc
     except OutputWriteError as exc:
-        raise transcribe_refusals.output_path_invalid(
-            exc.output, exc.output, exc.reason
-        ) from exc
+        raise transcribe_refusals.output_path_invalid(exc.output, exc.output, exc.reason) from exc
     except InvalidResultError as exc:
-        raise transcribe_refusals.export_input_invalid(
-            exc.input_path, exc.reason
-        ) from exc
+        raise transcribe_refusals.export_input_invalid(exc.input_path, exc.reason) from exc
     except IncompatibleResultsError as exc:
         raise transcribe_refusals.export_inputs_incompatible(
             exc.input_paths, exc.reason, fix=exc.fix
@@ -387,9 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         _print_json({"error": exc.as_dict()}, stream=sys.stderr)
         return exc.exit_code
     except ManifestError as exc:
-        _print_json(
-            {"error": {"code": "manifest_invalid", "detail": str(exc)}}, stream=sys.stderr
-        )
+        _print_json({"error": {"code": "manifest_invalid", "detail": str(exc)}}, stream=sys.stderr)
         return 2
     except transcribe_stacks.StackTableError as exc:
         _print_json(

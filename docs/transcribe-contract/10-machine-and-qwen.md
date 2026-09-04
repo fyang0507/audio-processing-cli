@@ -41,7 +41,7 @@ Exits 0 whether or not anything is provisioned:
                    "selected_by": "stack",
                    "deterministic": true,
                    "determinism_tolerance_ms": 0.0,
-                   "determinism_basis": "sampler=make_sampler(temp=0.0), i.e. argmax decode (run_turn_attributed_mlx_asr.py:661); back-to-back calls in one process produced byte-identical text, cross-process repetition untested"
+                   "determinism_basis": "sampler=make_sampler(temp=0.0), i.e. argmax decode (model_tests/benchmark/turn_attributed_mlx_asr/inference.py:133-136); back-to-back calls in one process produced byte-identical text, cross-process repetition untested"
                    },
     "diarizer":   {"backend": "fluidaudio", "version": "0.15.5",
                    "revision": "19600a485baa4998812e4654b70d2bab8f2c9949",

@@ -12,14 +12,25 @@ import re
 import resource
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 __all__ = [
-    "RssReader", "command_version", "ffprobe", "git_metadata",
-    "huggingface_revision", "json_default", "monotonic",
-    "normalized_ru_maxrss", "package_versions", "parse_args",
-    "positive_float", "positive_int", "sanitize_uttid", "sha256",
+    "RssReader",
+    "command_version",
+    "ffprobe",
+    "git_metadata",
+    "huggingface_revision",
+    "json_default",
+    "monotonic",
+    "normalized_ru_maxrss",
+    "package_versions",
+    "parse_args",
+    "positive_float",
+    "positive_int",
+    "sanitize_uttid",
+    "sha256",
 ]
 
 
@@ -47,14 +58,17 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
-        "--firered-root", default=str(default_checkout),
+        "--firered-root",
+        default=str(default_checkout),
         help="FireRedASR2S source checkout (default: %(default)s)",
     )
     parser.add_argument("--audio", required=True, help="Source audio or video")
     parser.add_argument("--output", required=True, help="Result JSON path")
     parser.add_argument("--device", choices=("cpu",), default="cpu")
     parser.add_argument(
-        "--lid", choices=("on", "off"), required=True,
+        "--lid",
+        choices=("on", "off"),
+        required=True,
         help="Load and run FireRedLID for every VAD batch",
     )
     parser.add_argument("--asr-batch-size", type=positive_int, default=1)
@@ -77,18 +91,21 @@ def sha256(path: Path) -> str:
 
 def ffprobe(path: Path) -> dict[str, Any]:
     command = [
-        "ffprobe", "-v", "error", "-show_entries",
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
         "format=duration,size:stream=index,codec_name,sample_rate,channels",
-        "-of", "json", str(path),
+        "-of",
+        "json",
+        str(path),
     ]
     return json.loads(subprocess.check_output(command, text=True))
 
 
 def command_version(command: list[str]) -> str | None:
     try:
-        output = subprocess.check_output(
-            command, text=True, stderr=subprocess.STDOUT
-        )
+        output = subprocess.check_output(command, text=True, stderr=subprocess.STDOUT)
     except (OSError, subprocess.CalledProcessError):
         return None
     return output.splitlines()[0] if output else None
@@ -105,16 +122,17 @@ def package_versions(names: list[str]) -> dict[str, str | None]:
 
 
 def git_metadata(path: Path) -> dict[str, Any]:
-    metadata: dict[str, Any] = {"path": str(path), "commit": None,
-                                "tracked_dirty": None}
+    metadata: dict[str, Any] = {"path": str(path), "commit": None, "tracked_dirty": None}
     try:
         metadata["commit"] = subprocess.check_output(
-            ["git", "-C", str(path), "rev-parse", "HEAD"], text=True,
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
         status = subprocess.check_output(
-            ["git", "-C", str(path), "status", "--porcelain",
-             "--untracked-files=no"], text=True, stderr=subprocess.DEVNULL,
+            ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=no"],
+            text=True,
+            stderr=subprocess.DEVNULL,
         )
         metadata["tracked_dirty"] = bool(status.strip())
     except (OSError, subprocess.CalledProcessError):
@@ -134,17 +152,18 @@ def huggingface_revision(path: Path) -> dict[str, Any]:
     if cache_root is not None:
         for metadata_path in cache_root.rglob("*.metadata"):
             try:
-                first_line = metadata_path.read_text(
-                    encoding="utf-8", errors="replace"
-                ).splitlines()[0].strip()
+                first_line = (
+                    metadata_path.read_text(encoding="utf-8", errors="replace")
+                    .splitlines()[0]
+                    .strip()
+                )
             except (OSError, IndexError):
                 continue
             if re.fullmatch(r"[0-9a-fA-F]{40}", first_line):
                 revisions.add(first_line.lower())
     return {
         "path": str(path),
-        "revision_cache_root": str(cache_root.parent.parent)
-        if cache_root is not None else None,
+        "revision_cache_root": str(cache_root.parent.parent) if cache_root is not None else None,
         "revisions": sorted(revisions),
     }
 
@@ -189,8 +208,11 @@ class RssReader:
                 library = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
                 function = library.proc_pidinfo
                 function.argtypes = [
-                    ctypes.c_int, ctypes.c_int, ctypes.c_uint64,
-                    ctypes.c_void_p, ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_uint64,
+                    ctypes.c_void_p,
+                    ctypes.c_int,
                 ]
                 function.restype = ctypes.c_int
                 self._library = library
@@ -211,9 +233,7 @@ class RssReader:
                 return int(info.resident_size)
         if self.source == "linux_proc_statm":
             try:
-                resident_pages = int(
-                    Path("/proc/self/statm").read_text().split()[1]
-                )
+                resident_pages = int(Path("/proc/self/statm").read_text().split()[1])
                 return resident_pages * os.sysconf("SC_PAGE_SIZE")
             except (OSError, ValueError, IndexError):
                 pass
@@ -229,8 +249,7 @@ def json_default(value: Any) -> Any:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
-def monotonic(items: list[dict[str, Any]], start_key: str,
-              end_key: str) -> bool:
+def monotonic(items: list[dict[str, Any]], start_key: str, end_key: str) -> bool:
     previous_start = float("-inf")
     for item in items:
         start = float(item[start_key])

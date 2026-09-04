@@ -40,9 +40,7 @@ def materialize(
         # is on disk against the manifest pin and downloads again unless it matches, so a
         # match already is the strongest re-materialization available. Forcing the transfer
         # would spend the bytes to arrive at the same file.
-        resolved = fetcher.url_file(
-            package.source["url"], package.source["sha256"], target
-        )
+        resolved = fetcher.url_file(package.source["url"], package.source["sha256"], target)
         _managed, location_issue = managed_url_artifact_path(package, resolved)
         if location_issue is not None:
             raise ProvisioningError(
@@ -50,16 +48,17 @@ def materialize(
                 location_issue,
                 fix=f"audio packages pull --repair {package.id}",
             )
-        return {"path": str(resolved), "bytes": integrity._tree_bytes(resolved),
-                "digest_verified": True}
+        return {
+            "path": str(resolved),
+            "bytes": integrity._tree_bytes(resolved),
+            "digest_verified": True,
+        }
 
     if kind == "huggingface":
         revision = package.source["revision"]
         patterns = package.source.get("allow_patterns")
         if patterns is None:
-            snapshot = fetcher.hf_snapshot(
-                package.source["repo"], revision, force=repair
-            )
+            snapshot = fetcher.hf_snapshot(package.source["repo"], revision, force=repair)
         else:
             snapshot = fetcher.hf_snapshot(
                 package.source["repo"],
@@ -75,7 +74,8 @@ def materialize(
             tuple(patterns or ()),
         )
         result = {
-            "path": str(snapshot), "bytes": snapshot_bytes,
+            "path": str(snapshot),
+            "bytes": snapshot_bytes,
             "revision": revision,
             # Only what this pull fetched is ours to delete later, decided before the
             # download rather than after it — see _pre_existing_revisions.
@@ -109,12 +109,14 @@ def materialize(
             if repo["revision"] not in pre_existing:
                 ours.append(repo["revision"])
         result = {
-            "paths": snapshots, "bytes": total,
+            "paths": snapshots,
+            "bytes": total,
             # Plural, because this package spans four repositories. A single `revision`
             # key would have to pick one of them, and the receipt promises the revisions
             # a pull materialized.
             "revisions": [repo["revision"] for repo in package.source["repos"]],
-            "hub_revisions": ours, "hub_revisions_pre_existing": sorted(pre_existing),
+            "hub_revisions": ours,
+            "hub_revisions_pre_existing": sorted(pre_existing),
         }
         result.update(checkouts._checkout_and_install(toolchain, package))
         return result
@@ -126,9 +128,7 @@ def materialize(
         _delete_managed(checkout)
         checkout.parent.mkdir(parents=True, exist_ok=True)
         toolchain.clone(package.source["repo"], package.source["commit"], checkout)
-        applied, digests = checkouts.materialize_checkout_patch(
-            package, checkout, toolchain
-        )
+        applied, digests = checkouts.materialize_checkout_patch(package, checkout, toolchain)
         try:
             state = toolchain.inspect_checkout(checkout)
         except ValueError as exc:
@@ -138,8 +138,8 @@ def materialize(
                 package=package.id,
                 fix=f"audio packages pull --repair {package.id}",
             ) from exc
-        _expected_patches, expected_names, _expected_digests = (
-            checkouts.checkout_patch_expectation(package)
+        _expected_patches, expected_names, _expected_digests = checkouts.checkout_patch_expectation(
+            package
         )
         if (
             state.head != package.source["commit"]
@@ -175,7 +175,9 @@ def materialize(
                 "package_build_unusable",
                 f"{package.id} built, but its product {product!r} does not run, so nothing "
                 f"in the {package.environment} environment can use it",
-                package=package.id, product=product, built=True,
+                package=package.id,
+                product=product,
+                built=True,
                 fix=f"audio packages pull --repair {package.id}",
             )
         candidates = built_product_candidates(checkout, product)
@@ -184,16 +186,23 @@ def materialize(
                 "package_build_unusable",
                 f"{package.id} built, but expected one contained executable product "
                 f"{product!r} and found {len(candidates)}",
-                package=package.id, product=product, built=True,
+                package=package.id,
+                product=product,
+                built=True,
                 fix=f"audio packages pull --repair {package.id}",
             )
         executable = candidates[0]
         product_path = executable.relative_to(checkout.resolve(strict=True)).as_posix()
-        return {"path": str(checkout), "bytes": integrity._tree_bytes(checkout / ".build"),
-                "revision": package.source["commit"], "built": True,
-                "product_runs": runs, "product_path": product_path,
-                "product_sha256": sha256_file(executable),
-                "patches_applied": applied,
-                "patched_file_digests": digests}
+        return {
+            "path": str(checkout),
+            "bytes": integrity._tree_bytes(checkout / ".build"),
+            "revision": package.source["commit"],
+            "built": True,
+            "product_runs": runs,
+            "product_path": product_path,
+            "product_sha256": sha256_file(executable),
+            "patches_applied": applied,
+            "patched_file_digests": digests,
+        }
 
     raise ManifestError(f"{package.id}: unsupported source type {kind!r}")

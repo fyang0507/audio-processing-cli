@@ -14,8 +14,7 @@ def _plain(text: str) -> str:
     return "".join(
         character.casefold()
         for character in text
-        if not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
 
@@ -60,9 +59,7 @@ def normalize_aligned_words(
         try:
             unit_start = _strict_number(by_id[identifier].get("start", 0.0))
             raw_unit_end = by_id[identifier].get("end")
-            unit_end = (
-                float("inf") if raw_unit_end is None else _strict_number(raw_unit_end)
-            )
+            unit_end = float("inf") if raw_unit_end is None else _strict_number(raw_unit_end)
             if (
                 not math.isfinite(unit_start)
                 or (raw_unit_end is not None and not math.isfinite(unit_end))
@@ -74,9 +71,7 @@ def normalize_aligned_words(
                 if not isinstance(word, Mapping) or not isinstance(word.get("text"), str):
                     raise TypeError(f"aligner returned an invalid word for {identifier!r}")
                 if not _plain(word["text"]):
-                    raise ValueError(
-                        f"aligner returned an empty word token for {identifier!r}"
-                    )
+                    raise ValueError(f"aligner returned an empty word token for {identifier!r}")
                 start = _strict_number(word["start"])
                 end = _strict_number(word["end"])
                 if not math.isfinite(start) or not math.isfinite(end):

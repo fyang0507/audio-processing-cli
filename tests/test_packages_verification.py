@@ -57,19 +57,24 @@ def test_verify_earns_the_word_digest_instead_of_borrowing_it(
     assert entries["silero-vad"] == {"package": "silero-vad", "digest": "ok"}
     # Revision pinned, contents not hashed — and told apart by which key is present.
     assert entries["qwen3-asr-1.7b-8bit"] == {
-        "package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
+        "package": "qwen3-asr-1.7b-8bit",
+        "revision": QWEN_REVISION,
+    }
     assert set(entries["firered-asr2s"]["revisions"]) == set(FIRERED_REVISIONS)
     assert "digest" not in entries["firered-asr2s"]
 
     # And the earned claim is still a measurement: break the bytes and it goes away.
     Path(pkg.load_registry()["packages"]["silero-vad"]["materialized"]["path"]).write_bytes(
-        b"tampered")
+        b"tampered"
+    )
     failure = provisioner.verify()["failed"]
     assert [item["code"] for item in failure] == ["package_integrity_failed"]
 
 
 def test_verify_rejects_a_hash_matching_url_artifact_outside_its_managed_path(
-    provisioner, the_fake_download_satisfies_the_pin, tmp_path,
+    provisioner,
+    the_fake_download_satisfies_the_pin,
+    tmp_path,
 ) -> None:
     provisioner.pull(pkg.select(["silero-vad"]))
     external = tmp_path / "external.onnx"
@@ -88,7 +93,8 @@ def test_verify_rejects_a_hash_matching_url_artifact_outside_its_managed_path(
 
 
 def test_verify_rejects_a_symlinked_models_parent_with_matching_url_bytes(
-    provisioner, the_fake_download_satisfies_the_pin,
+    provisioner,
+    the_fake_download_satisfies_the_pin,
 ) -> None:
     provisioner.pull(pkg.select(["silero-vad"]))
     models = paths.models_dir()
@@ -110,7 +116,10 @@ def test_verify_rejects_a_symlinked_models_parent_with_matching_url_bytes(
     ],
 )
 def test_verify_reports_manifest_revisions_not_tampered_receipt_history(
-    provisioner, identifier: str, receipt_key: str, expected: list[str],
+    provisioner,
+    identifier: str,
+    receipt_key: str,
+    expected: list[str],
 ) -> None:
     provisioner.pull(pkg.select([identifier]))
     document = pkg.load_registry()
@@ -130,18 +139,22 @@ def test_verify_reports_manifest_revisions_not_tampered_receipt_history(
 def test_verify_fails_a_ready_registry_package_missing_from_the_manifest() -> None:
     document = pkg.blank_registry()
     document["packages"]["retired-or-tampered"] = {
-        "state": "ready", "environment": "core", "materialized": {},
+        "state": "ready",
+        "environment": "core",
+        "materialized": {},
     }
     pkg.save_registry(document)
 
     report = pkg.Provisioner(toolchain=FakeToolchain()).verify()
     assert report["verified"] == []
-    assert report["failed"] == [{
-        "package": "retired-or-tampered",
-        "code": "package_unknown",
-        "detail": "ready registry entry is not present in the installed manifest",
-        "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
-    }]
+    assert report["failed"] == [
+        {
+            "package": "retired-or-tampered",
+            "code": "package_unknown",
+            "detail": "ready registry entry is not present in the installed manifest",
+            "fix": f"Inspect {paths.registry_path()} and remove the stale entry",
+        }
+    ]
 
 
 def test_a_stale_digest_claim_in_the_registry_is_not_republished(provisioner) -> None:
@@ -155,8 +168,11 @@ def test_a_stale_digest_claim_in_the_registry_is_not_republished(provisioner) ->
     document["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["digest_verified"] = True
     pkg.save_registry(document)
 
-    entry = next(item for item in provisioner.verify()["verified"]
-                 if item["package"] == "qwen3-asr-1.7b-8bit")
+    entry = next(
+        item
+        for item in provisioner.verify()["verified"]
+        if item["package"] == "qwen3-asr-1.7b-8bit"
+    )
     assert entry == {"package": "qwen3-asr-1.7b-8bit", "revision": QWEN_REVISION}
 
 
@@ -212,9 +228,10 @@ def test_repair_re_downloads_a_hub_snapshot_a_re_pull_would_keep(tmp_path) -> No
     fetcher = FakeFetcher(tmp_path)
     provisioner = pkg.Provisioner(toolchain=FakeToolchain(), fetcher=fetcher)
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
-    weights = Path(
-        pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"]
-    ) / "model.safetensors"
+    weights = (
+        Path(pkg.load_registry()["packages"]["qwen3-asr-1.7b-8bit"]["materialized"]["path"])
+        / "model.safetensors"
+    )
     weights.write_bytes(b"bit rot")
 
     provisioner.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
@@ -234,9 +251,7 @@ def test_repair_replaces_a_checkout_rather_than_patching_what_is_there(provision
     patched.write_text("original\n")
     stray = checkout / "left-behind-by-a-half-finished-pull.txt"
     stray.write_text("x")
-    assert [item["code"] for item in provisioner.verify()["failed"]] == [
-        "package_integrity_failed"
-    ]
+    assert [item["code"] for item in provisioner.verify()["failed"]] == ["package_integrity_failed"]
 
     provisioner.pull(pkg.select(["vibevoice-asr-7b"]), repair=True)
     assert provisioner.verify()["failed"] == []
@@ -245,10 +260,13 @@ def test_repair_replaces_a_checkout_rather_than_patching_what_is_there(provision
 
 @pytest.mark.parametrize("identifier", ["firered-asr2s", "vibevoice-asr-7b"])
 @pytest.mark.parametrize(
-    "mutation", ["missing", "head", "tracked", "untracked", "ignored"],
+    "mutation",
+    ["missing", "head", "tracked", "untracked", "ignored"],
 )
 def test_verify_rejects_every_live_native_checkout_drift(
-    provisioner, identifier: str, mutation: str,
+    provisioner,
+    identifier: str,
+    mutation: str,
 ) -> None:
     provisioner.pull(pkg.select([identifier]))
     document = pkg.load_registry()
@@ -306,14 +324,10 @@ def test_verify_rejects_a_wrong_checkout_receipt_with_an_exact_live_head(
     pkg.save_registry(document)
 
     report = provisioner.verify()
-    failure = [
-        item for item in report["failed"] if item.get("package") == "firered-asr2s"
-    ]
+    failure = [item for item in report["failed"] if item.get("package") == "firered-asr2s"]
     assert [item["code"] for item in failure] == ["package_integrity_failed"]
     assert "recorded checkout commit" in failure[0]["detail"]
-    assert not [
-        item for item in report["verified"] if item["package"] == "firered-asr2s"
-    ]
+    assert not [item for item in report["verified"] if item["package"] == "firered-asr2s"]
 
 
 def test_verify_hashes_live_patch_against_manifest_even_with_a_valid_receipt(
@@ -333,9 +347,7 @@ def test_verify_hashes_live_patch_against_manifest_even_with_a_valid_receipt(
     report = provisioner.verify()
     failure = [item for item in report["failed"] if item.get("package") == identifier]
     assert [item["code"] for item in failure] == ["package_integrity_failed"]
-    assert failure[0]["detail"] == (
-        f"live patched-file hashes changed for {sorted(names)!r}"
-    )
+    assert failure[0]["detail"] == (f"live patched-file hashes changed for {sorted(names)!r}")
     assert not [item for item in report["verified"] if item["package"] == identifier]
 
 
@@ -347,22 +359,71 @@ def test_real_checkout_probe_includes_ordinary_and_ignored_untracked_files(tmp_p
     (checkout / ".gitignore").write_text("*.pyc\n", encoding="utf-8")
     (checkout / "tracked.py").write_text("original\n", encoding="utf-8")
     assert toolchain.run(["git", "add", "."], cwd=checkout).returncode == 0
-    assert toolchain.run([
-        "git", "-c", "user.name=Audio Tests", "-c", "user.email=audio@example.invalid",
-        "commit", "--quiet", "-m", "fixture",
-    ], cwd=checkout).returncode == 0
-    assert toolchain.run([
-        "git", "config", "core.abbrev", "12",
-    ], cwd=checkout).returncode == 0
-    assert toolchain.run([
-        "git", "config", "diff.noprefix", "true",
-    ], cwd=checkout).returncode == 0
-    assert toolchain.run([
-        "git", "config", "diff.interHunkContext", "100",
-    ], cwd=checkout).returncode == 0
-    assert toolchain.run([
-        "git", "config", "diff.suppressBlankEmpty", "true",
-    ], cwd=checkout).returncode == 0
+    assert (
+        toolchain.run(
+            [
+                "git",
+                "-c",
+                "user.name=Audio Tests",
+                "-c",
+                "user.email=audio@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ],
+            cwd=checkout,
+        ).returncode
+        == 0
+    )
+    assert (
+        toolchain.run(
+            [
+                "git",
+                "config",
+                "core.abbrev",
+                "12",
+            ],
+            cwd=checkout,
+        ).returncode
+        == 0
+    )
+    assert (
+        toolchain.run(
+            [
+                "git",
+                "config",
+                "diff.noprefix",
+                "true",
+            ],
+            cwd=checkout,
+        ).returncode
+        == 0
+    )
+    assert (
+        toolchain.run(
+            [
+                "git",
+                "config",
+                "diff.interHunkContext",
+                "100",
+            ],
+            cwd=checkout,
+        ).returncode
+        == 0
+    )
+    assert (
+        toolchain.run(
+            [
+                "git",
+                "config",
+                "diff.suppressBlankEmpty",
+                "true",
+            ],
+            cwd=checkout,
+        ).returncode
+        == 0
+    )
 
     clean = toolchain.inspect_checkout(checkout)
     assert len(clean.head) == 40
@@ -375,74 +436,3 @@ def test_real_checkout_probe_includes_ordinary_and_ignored_untracked_files(tmp_p
     changed = toolchain.inspect_checkout(checkout)
     assert changed.modified == ("tracked.py",)
     assert changed.untracked == ("ignored.pyc", "rogue.py")
-
-
-def test_repair_discards_the_swift_checkout_before_rebuilding(provisioner) -> None:
-    """A rebuild in place trusts the tree whose state is what `--repair` was called about."""
-    provisioner.pull(pkg.select(["fluidaudio"]))
-    checkout = paths.checkout_dir("swift", "fluidaudio")
-    stray = checkout / "half-applied.txt"
-    stray.write_text("x")
-
-    provisioner.pull(pkg.select(["fluidaudio"]), repair=True)
-    assert not stray.exists()
-    product = env.packages()["fluidaudio"].source["product"]
-    assert list(checkout.glob(f".build/**/release/{product}"))
-
-
-@pytest.mark.parametrize("mutation", ["checkout", "product"])
-def test_verify_rejects_a_missing_fluidaudio_checkout_or_product(
-    provisioner, mutation: str,
-) -> None:
-    provisioner.pull(pkg.select(["fluidaudio"]))
-    materialized = pkg.load_registry()["packages"]["fluidaudio"]["materialized"]
-    checkout = Path(materialized["path"])
-    product = env.packages()["fluidaudio"].source["product"]
-    executable = next(checkout.glob(f".build/**/release/{product}"))
-    if mutation == "checkout":
-        shutil.rmtree(checkout)
-    else:
-        executable.unlink()
-
-    report = provisioner.verify()
-    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
-    assert [item["code"] for item in failure] == ["package_integrity_failed"]
-    assert not [item for item in report["verified"] if item["package"] == "fluidaudio"]
-
-
-def test_verify_never_launches_fluidaudio_from_an_external_receipt_path(
-    provisioner, tmp_path,
-) -> None:
-    provisioner.pull(pkg.select(["fluidaudio"]))
-    document = pkg.load_registry()
-    external = tmp_path / "external-fluid"
-    product = external / ".build" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    product.chmod(0o755)
-    document["packages"]["fluidaudio"]["materialized"]["path"] = str(external)
-    pkg.save_registry(document)
-
-    report = provisioner.verify()
-    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
-    assert [item["code"] for item in failure] == ["package_integrity_failed"]
-    assert "not managed path" in failure[0]["detail"]
-
-
-def test_verify_rejects_a_fluidaudio_product_symlink_escape(
-    provisioner, tmp_path,
-) -> None:
-    provisioner.pull(pkg.select(["fluidaudio"]))
-    package = env.packages()["fluidaudio"]
-    checkout = paths.checkout_dir(package.environment, package.id)
-    product = next(checkout.glob(".build/**/release/fluidaudiocli"))
-    external = tmp_path / "external-fluid-product"
-    external.write_bytes(product.read_bytes())
-    external.chmod(0o755)
-    product.unlink()
-    product.symlink_to(external)
-
-    report = provisioner.verify()
-    failure = [item for item in report["failed"] if item.get("package") == "fluidaudio"]
-    assert [item["code"] for item in failure] == ["package_integrity_failed"]
-    assert "expected one executable built product" in failure[0]["detail"]

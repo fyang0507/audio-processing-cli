@@ -77,8 +77,7 @@ def _plain(text: str) -> str:
     return "".join(
         character.casefold()
         for character in text
-        if not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
 
@@ -97,8 +96,7 @@ def _words(
         # accident, especially the retired per-word confidence claim.
         if set(item) != {"start_ms", "end_ms", "text"}:
             raise ValueError(
-                "FireRed result words["
-                f"{index}] must contain exactly start_ms, end_ms, and text"
+                f"FireRed result words[{index}] must contain exactly start_ms, end_ms, and text"
             )
         if not isinstance(item["text"], str):
             raise TypeError(f"FireRed result words[{index}].text must be a string")
@@ -116,25 +114,25 @@ def _words(
         previous_start = start
         previous_end = end
         raw_bounds.append((start, end))
-        result.append({
-            "text": item["text"],
-            "start": _seconds(start),
-            "end": _seconds(end),
-        })
+        result.append(
+            {
+                "text": item["text"],
+                "start": _seconds(start),
+                "end": _seconds(end),
+            }
+        )
     return result, raw_bounds
 
 
-def _vad_regions(raw: Mapping[str, Any]) -> tuple[
-    list[tuple[float, float]], tuple[dict[str, float], ...]
-]:
+def _vad_regions(
+    raw: Mapping[str, Any],
+) -> tuple[list[tuple[float, float]], tuple[dict[str, float], ...]]:
     raw_bounds: list[tuple[float, float]] = []
     normalized: list[dict[str, float]] = []
     previous_end = -1.0
     for index, item in enumerate(_array(raw, "vad_segments_ms")):
         if not isinstance(item, list) or len(item) != 2:
-            raise TypeError(
-                f"FireRed result vad_segments_ms[{index}] must be [start_ms, end_ms]"
-            )
+            raise TypeError(f"FireRed result vad_segments_ms[{index}] must be [start_ms, end_ms]")
         start = _milliseconds(item[0], f"vad_segments_ms[{index}][0]")
         end = _milliseconds(item[1], f"vad_segments_ms[{index}][1]")
         if end <= start:
@@ -147,21 +145,15 @@ def _vad_regions(raw: Mapping[str, Any]) -> tuple[
     return raw_bounds, tuple(normalized)
 
 
-def _sentence_language(
-    sentence: Mapping[str, Any], field: str
-) -> tuple[str, float]:
+def _sentence_language(sentence: Mapping[str, Any], field: str) -> tuple[str, float]:
     language = sentence.get("lang")
     confidence = sentence.get("lang_confidence")
     if not isinstance(language, str) or not language:
         raise ValueError(f"{field}.lang must be a non-empty backend label when LID ran")
-    return language, _probability(
-        confidence, f"{field}.lang_confidence"
-    )
+    return language, _probability(confidence, f"{field}.lang_confidence")
 
 
-def normalize_firered_result(
-    raw: Mapping[str, Any], *, lid_enabled: bool
-) -> FireRedResult:
+def normalize_firered_result(raw: Mapping[str, Any], *, lid_enabled: bool) -> FireRedResult:
     """Normalize sentences, native words, VAD regions, and optional region LID.
 
     Word partitioning is intentionally strict.  The raw FireRed word stream is
@@ -214,12 +206,14 @@ def normalize_firered_result(
             raise ValueError(
                 f"FireRed words do not reproduce {field}.text after punctuation removal"
             )
-        segments.append({
-            "text": text,
-            "start": _seconds(start_ms),
-            "end": _seconds(end_ms),
-            "words": partition,
-        })
+        segments.append(
+            {
+                "text": text,
+                "start": _seconds(start_ms),
+                "end": _seconds(end_ms),
+                "words": partition,
+            }
+        )
         sentence_inputs.append((sentence, start_ms, end_ms))
         sentence_word_ranges.append((first_word, word_cursor))
 
@@ -255,10 +249,13 @@ def normalize_firered_result(
             # unexpectedly ran LID and must not be silently hidden by gating.
             confidence = sentence.get("lang_confidence", 0)
             try:
-                invalid_confidence = _probability(
-                    confidence,
-                    f"FireRed result sentences[{sentence_index}].lang_confidence",
-                ) != 0.0
+                invalid_confidence = (
+                    _probability(
+                        confidence,
+                        f"FireRed result sentences[{sentence_index}].lang_confidence",
+                    )
+                    != 0.0
+                )
             except (TypeError, ValueError):
                 invalid_confidence = True
             if sentence.get("lang") is not None or invalid_confidence:
@@ -273,21 +270,23 @@ def normalize_firered_result(
             zip(raw_vad, vad_regions, strict=True)
         ):
             labels: set[tuple[str, float]] = set()
-            for sentence_index, (sentence, start, end) in enumerate(sentence_inputs):
+            for sentence_index, (sentence, _start, _end) in enumerate(sentence_inputs):
                 if memberships[sentence_index] == region_index:
-                    labels.add(_sentence_language(
-                        sentence, f"FireRed result sentences[{sentence_index}]"
-                    ))
+                    labels.add(
+                        _sentence_language(sentence, f"FireRed result sentences[{sentence_index}]")
+                    )
             if len(labels) != 1:
                 raise ValueError(
                     f"FireRed VAD region {region_index} must carry exactly one LID label"
                 )
             language, confidence = labels.pop()
-            grouped.append({
-                **region,
-                "language": language,
-                "confidence": confidence,
-            })
+            grouped.append(
+                {
+                    **region,
+                    "language": language,
+                    "confidence": confidence,
+                }
+            )
         lid_regions = tuple(grouped)
 
     return FireRedResult(tuple(segments), vad_regions, lid_regions)

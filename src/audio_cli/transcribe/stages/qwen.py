@@ -8,6 +8,7 @@ import resource
 import sys
 import time
 import traceback
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -43,9 +44,10 @@ def main() -> int:
         mx.eval(model.parameters())
         mx.synchronize()
         method = model._generate_chunks_batched
-        order = sorted(range(len(units)), key=lambda i: (
-            round((float(units[i]["end"]) - float(units[i]["start"])) * 16_000), i
-        ))
+        order = sorted(
+            range(len(units)),
+            key=lambda i: (round((float(units[i]["end"]) - float(units[i]["start"])) * 16_000), i),
+        )
         remaining = int(request["max_tokens"])
         batch_size = int(request["batch_size"])
         if batch_size < 1:
@@ -53,7 +55,7 @@ def main() -> int:
         for offset in range(0, len(order), batch_size):
             if remaining <= 0:
                 break
-            indices = order[offset:offset + batch_size]
+            indices = order[offset : offset + batch_size]
             clips = []
             for index in indices:
                 unit = units[index]
@@ -61,8 +63,7 @@ def main() -> int:
                 end = min(len(audio), round(float(unit["end"]) * 16_000))
                 clips.append((audio[start:end], 0.0))
             print(
-                f"qwen stage: processing batch {offset // batch_size + 1} "
-                f"({len(indices)} unit(s))",
+                f"qwen stage: processing batch {offset // batch_size + 1} ({len(indices)} unit(s))",
                 file=sys.stderr,
                 flush=True,
             )
@@ -75,14 +76,15 @@ def main() -> int:
                 batch_size=batch_size,
                 verbose=False,
             )
-            if not all(len(values) == len(indices) for values in (
-                texts, generated, prompts, processed
-            )) or not all(isinstance(value, bool) for value in processed):
+            if not all(
+                len(values) == len(indices) for values in (texts, generated, prompts, processed)
+            ) or not all(isinstance(value, bool) for value in processed):
                 raise TypeError("private batched API returned inconsistent per-unit results")
             for local_index, index in enumerate(indices):
                 unit = units[index]
                 raw_by_index[index] = {
-                    "unit_id": unit["unit_id"], "text": texts[local_index],
+                    "unit_id": unit["unit_id"],
+                    "text": texts[local_index],
                     "processed": processed[local_index],
                     "prompt_tokens": int(prompts[local_index]),
                     "generation_tokens": int(generated[local_index]),
@@ -94,29 +96,34 @@ def main() -> int:
         code = 0
     except Exception as exc:  # noqa: BLE001 - the stage must always write a result envelope
         output["error"] = {
-            "type": type(exc).__name__, "message": str(exc),
+            "type": type(exc).__name__,
+            "message": str(exc),
             "traceback": traceback.format_exc(),
         }
         code = 4 if any(item.get("processed") for item in raw_by_index.values()) else 1
     for index, unit in enumerate(units):
-        output["units"].append(raw_by_index.get(index, {
-            "unit_id": unit["unit_id"], "text": "", "processed": False,
-            "prompt_tokens": 0, "generation_tokens": 0,
-        }))
+        output["units"].append(
+            raw_by_index.get(
+                index,
+                {
+                    "unit_id": unit["unit_id"],
+                    "text": "",
+                    "processed": False,
+                    "prompt_tokens": 0,
+                    "generation_tokens": 0,
+                },
+            )
+        )
     output["metrics"] = {
         "wall_seconds": round(time.perf_counter() - started, 6),
         "peak_rss_bytes": _rss_bytes(),
     }
     if mx is not None:
-        try:
+        with suppress(Exception):  # optional telemetry cannot suppress the result
             output["metrics"]["peak_mps_live_bytes"] = int(mx.get_peak_memory())
-        except Exception:  # noqa: BLE001, S110 - an optional metric cannot suppress the result
-            pass
     if code == 0 and not all(item["processed"] for item in output["units"]):
         code = 4
-    result_path.write_text(
-        json.dumps(output, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    result_path.write_text(json.dumps(output, ensure_ascii=False) + "\n", encoding="utf-8")
     return code
 
 

@@ -150,9 +150,7 @@ def load_adjustments(
     for index, raw in enumerate(raw_items, 1):
         prefix = f"adjustments[{index - 1}]"
         if not isinstance(raw, dict) or set(raw) != {"type", "gain_db", "scope"}:
-            raise AdjustmentError(
-                f"{prefix} must contain exactly type, gain_db, and scope"
-            )
+            raise AdjustmentError(f"{prefix} must contain exactly type, gain_db, and scope")
         if raw["type"] != "gain":
             raise AdjustmentError(f"{prefix}.type must be 'gain'")
         gain_db = _as_number(raw["gain_db"], f"{prefix}.gain_db")
@@ -166,9 +164,7 @@ def load_adjustments(
             )
         scope = raw["scope"]
         if not isinstance(scope, dict) or set(scope) != {"time", "frequency"}:
-            raise AdjustmentError(
-                f"{prefix}.scope must contain exactly time and frequency"
-            )
+            raise AdjustmentError(f"{prefix}.scope must contain exactly time and frequency")
 
         raw_time = scope["time"]
         if raw_time == "all":
@@ -189,9 +185,7 @@ def load_adjustments(
                     },
                 )
         else:
-            raise AdjustmentError(
-                f"{prefix}.scope.time must be 'all' or an object with start/end"
-            )
+            raise AdjustmentError(f"{prefix}.scope.time must be 'all' or an object with start/end")
 
         raw_frequency = scope["frequency"]
         if raw_frequency == "all":
@@ -202,17 +196,11 @@ def load_adjustments(
             "high_hz",
             "shape",
         }:
-            low = _as_number(
-                raw_frequency["low_hz"], f"{prefix}.scope.frequency.low_hz"
-            )
-            high = _as_number(
-                raw_frequency["high_hz"], f"{prefix}.scope.frequency.high_hz"
-            )
+            low = _as_number(raw_frequency["low_hz"], f"{prefix}.scope.frequency.low_hz")
+            high = _as_number(raw_frequency["high_hz"], f"{prefix}.scope.frequency.high_hz")
             shape = raw_frequency["shape"]
             if shape not in {"notch", "band"}:
-                raise AdjustmentError(
-                    f"{prefix}.scope.frequency.shape must be 'notch' or 'band'"
-                )
+                raise AdjustmentError(f"{prefix}.scope.frequency.shape must be 'notch' or 'band'")
             if low < 20 or high <= low or high >= nyquist_hz:
                 raise AdjustmentError(
                     f"{prefix}.scope.frequency must satisfy 20 <= low_hz < high_hz < {nyquist_hz:g}",

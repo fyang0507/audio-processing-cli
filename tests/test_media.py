@@ -53,8 +53,7 @@ def test_a_clip_too_short_to_measure_is_not_reported_as_silent(tmp_path: Path) -
     with pytest.raises(MediaError) as caught:
         normalize(
             tmp_path,
-            {"input_i": float("-inf"), "input_lra": 0.0, "input_tp": -39.26,
-             "input_thresh": -70.0},
+            {"input_i": float("-inf"), "input_lra": 0.0, "input_tp": -39.26, "input_thresh": -70.0},
             duration_s=0.05,
         )
     message = str(caught.value)
@@ -71,8 +70,12 @@ def test_genuine_silence_is_still_reported_as_silence(tmp_path: Path) -> None:
     with pytest.raises(MediaError) as caught:
         normalize(
             tmp_path,
-            {"input_i": float("-inf"), "input_lra": 0.0, "input_tp": float("-inf"),
-             "input_thresh": float("-inf")},
+            {
+                "input_i": float("-inf"),
+                "input_lra": 0.0,
+                "input_tp": float("-inf"),
+                "input_thresh": float("-inf"),
+            },
             duration_s=5.0,
         )
     message = str(caught.value)
@@ -154,9 +157,7 @@ def test_exclusive_temporary_does_not_follow_a_precreated_symlink(
     canonical = tmp_path / "canonical.wav"
     canonical.write_bytes(b"canonical")
     target = tmp_path / "report.json"
-    monkeypatch.setattr(
-        media_publication.uuid, "uuid4", lambda: SimpleNamespace(hex="fixed")
-    )
+    monkeypatch.setattr(media_publication.uuid, "uuid4", lambda: SimpleNamespace(hex="fixed"))
     temporary = tmp_path / f".audio-write-{os.getpid()}-fixed.tmp"
     temporary.symlink_to(canonical)
 
@@ -191,7 +192,8 @@ def test_atomic_writer_closes_descriptor_when_temporary_identity_capture_fails(
 
 
 def test_atomic_writer_cannot_follow_a_parent_swapped_after_open(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     safe = tmp_path / "safe"
     safe.mkdir()
@@ -261,9 +263,7 @@ def test_force_writer_keeps_an_existing_destination_continuously_addressable(
     atomic_write_json(output, {"generation": "next"}, force=True)
 
     assert observations == [True, True]
-    assert json.loads(output.read_text(encoding="utf-8")) == {
-        "generation": "next"
-    }
+    assert json.loads(output.read_text(encoding="utf-8")) == {"generation": "next"}
 
 
 def test_force_writer_rejects_a_substituted_private_temporary_at_exchange(

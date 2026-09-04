@@ -52,19 +52,18 @@ def hypothesis_segments(run: dict[str, Any]) -> list[dict[str, Any]]:
         end = item.get("end_s", item.get("end_time", item.get("endTimeSeconds")))
         if start is None or end is None:
             raise ValueError("speaker-labeled hypothesis segment lacks a time bound")
-        segments.append({
-            "start_s": float(start),
-            "end_s": float(end),
-            "speaker": str(speaker),
-        })
+        segments.append(
+            {
+                "start_s": float(start),
+                "end_s": float(end),
+                "speaker": str(speaker),
+            }
+        )
     return segments
 
 
 def active_speakers(segments: list[dict[str, Any]], time_s: float) -> set[str]:
-    return {
-        item["speaker"] for item in segments
-        if item["start_s"] <= time_s < item["end_s"]
-    }
+    return {item["speaker"] for item in segments if item["start_s"] <= time_s < item["end_s"]}
 
 
 def candidate_mappings(hyp_speakers: list[str], ref_speakers: list[str]):
@@ -78,7 +77,7 @@ def candidate_mappings(hyp_speakers: list[str], ref_speakers: list[str]):
         if assignment in seen:
             continue
         seen.add(assignment)
-        yield dict(zip(hyp_speakers, assignment))
+        yield dict(zip(hyp_speakers, assignment, strict=True))
 
 
 def mapped_hypothesis(speakers: set[str], mapping: dict[str, str | None]) -> set[str]:
@@ -100,11 +99,7 @@ def score_frames(
     collar_s: float,
     include_overlap: bool,
 ) -> dict[str, Any]:
-    boundaries = [
-        boundary
-        for item in references
-        for boundary in (item["start_s"], item["end_s"])
-    ]
+    boundaries = [boundary for item in references for boundary in (item["start_s"], item["end_s"])]
     frames: list[tuple[set[str], set[str]]] = []
     total_frames = math.ceil(duration_s / frame_s)
     for index in range(total_frames):
@@ -141,7 +136,9 @@ def score_frames(
         "missed_speech_s": missed * frame_s,
         "false_alarm_s": false_alarm * frame_s,
         "speaker_confusion_s": confusion * frame_s,
-        "diarization_error_rate": error / reference_speaker_frames if reference_speaker_frames else None,
+        "diarization_error_rate": error / reference_speaker_frames
+        if reference_speaker_frames
+        else None,
     }
 
 
@@ -177,7 +174,8 @@ def score_speaker_change_boundaries(
     recall = matched / len(ref) if ref else None
     f1 = (
         2 * precision * recall / (precision + recall)
-        if precision is not None and recall is not None and precision + recall else None
+        if precision is not None and recall is not None and precision + recall
+        else None
     )
     return {
         "definition": "chronological annotation-order speaker changes",
@@ -230,7 +228,8 @@ def score_single_speaker_utterance_intervals(
         recall = tp / (tp + fn) if tp + fn else None
         f1 = (
             2 * precision * recall / (precision + recall)
-            if precision is not None and recall is not None and precision + recall else None
+            if precision is not None and recall is not None and precision + recall
+            else None
         )
         scores[speaker] = {
             "overlap_s": tp * frame_s,
@@ -241,7 +240,8 @@ def score_single_speaker_utterance_intervals(
             "f1": f1,
         }
     best_speaker = max(
-        scores, key=lambda speaker: scores[speaker]["f1"] or -1,
+        scores,
+        key=lambda speaker: scores[speaker]["f1"] or -1,
         default=None,
     )
     return {
@@ -261,8 +261,11 @@ def main() -> None:
     parser.add_argument("--frame-ms", type=float, default=10.0)
     parser.add_argument("--collar-ms", type=float, default=250.0)
     parser.add_argument(
-        "--speaker-change-tolerance-s", "--turn-tolerance-s",
-        dest="speaker_change_tolerance_s", type=float, default=1.0,
+        "--speaker-change-tolerance-s",
+        "--turn-tolerance-s",
+        dest="speaker_change_tolerance_s",
+        type=float,
+        default=1.0,
         help="Tolerance for annotation-order speaker-change boundary matching",
     )
     args = parser.parse_args()
@@ -300,52 +303,64 @@ def main() -> None:
         "hypothesis_speaker_labeled_interval_count": len(hypotheses),
     }
     if is_partial_reference:
-        result.update({
-            "metric": "partial-reference participant utterance-interval overlap",
-            "epistemic_limit": (
-                "The corpus supplies hand-corrected participant utterance intervals "
-                "only, not independently frame-adjudicated VAD. This oracle mapping "
-                "diagnostic does not score interviewer intervals, full diarization, "
-                "speaker identity, or behavioral-analysis validity."
-            ),
-            "participant_utterance_interval_overlap": score_single_speaker_utterance_intervals(
-                references, hypotheses, duration_s, frame_s
-            ),
-        })
+        result.update(
+            {
+                "metric": "partial-reference participant utterance-interval overlap",
+                "epistemic_limit": (
+                    "The corpus supplies hand-corrected participant utterance intervals "
+                    "only, not independently frame-adjudicated VAD. This oracle mapping "
+                    "diagnostic does not score interviewer intervals, full diarization, "
+                    "speaker identity, or behavioral-analysis validity."
+                ),
+                "participant_utterance_interval_overlap": score_single_speaker_utterance_intervals(
+                    references, hypotheses, duration_s, frame_s
+                ),
+            }
+        )
     else:
-        result.update({
-        "exclusive_no_collar": score_frames(
-            references, hypotheses, duration_s, frame_s, 0.0, False
-        ),
-        "exclusive_with_collar": score_frames(
-            references, hypotheses, duration_s, frame_s, collar_s, False
-        ),
-        "overlap_included_no_collar": score_frames(
-            references, hypotheses, duration_s, frame_s, 0.0, True
-        ),
-        "speaker_change_boundaries": score_speaker_change_boundaries(
-            references, hypotheses, args.speaker_change_tolerance_s
-        ),
-        })
+        result.update(
+            {
+                "exclusive_no_collar": score_frames(
+                    references, hypotheses, duration_s, frame_s, 0.0, False
+                ),
+                "exclusive_with_collar": score_frames(
+                    references, hypotheses, duration_s, frame_s, collar_s, False
+                ),
+                "overlap_included_no_collar": score_frames(
+                    references, hypotheses, duration_s, frame_s, 0.0, True
+                ),
+                "speaker_change_boundaries": score_speaker_change_boundaries(
+                    references, hypotheses, args.speaker_change_tolerance_s
+                ),
+            }
+        )
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     if is_partial_reference:
-        print(json.dumps({
-            "oracle_best_speaker": result["participant_utterance_interval_overlap"][
-                "oracle_best_hypothesis_speaker"
-            ],
-            "oracle_best_f1": result["participant_utterance_interval_overlap"][
-                "oracle_best"
-            ]["f1"],
-        }))
+        print(
+            json.dumps(
+                {
+                    "oracle_best_speaker": result["participant_utterance_interval_overlap"][
+                        "oracle_best_hypothesis_speaker"
+                    ],
+                    "oracle_best_f1": result["participant_utterance_interval_overlap"][
+                        "oracle_best"
+                    ]["f1"],
+                }
+            )
+        )
     else:
-        print(json.dumps({
-            "exclusive_der_250ms": result["exclusive_with_collar"][
-                "diarization_error_rate"
-            ],
-            "speaker_change_boundary_f1": result["speaker_change_boundaries"]["f1"],
-        }))
+        print(
+            json.dumps(
+                {
+                    "exclusive_der_250ms": result["exclusive_with_collar"][
+                        "diarization_error_rate"
+                    ],
+                    "speaker_change_boundary_f1": result["speaker_change_boundaries"]["f1"],
+                }
+            )
+        )
 
 
 if __name__ == "__main__":

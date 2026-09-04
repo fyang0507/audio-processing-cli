@@ -12,15 +12,28 @@ import re
 import resource
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 __all__ = [
-    "RssReader", "array_sha256", "command_version", "detect_family", "ffprobe",
-    "mac_swap_snapshot", "monotonic_segments", "normalize_segments",
-    "normalized_ru_maxrss", "package_versions", "parse_args",
-    "physical_memory_bytes", "positive_float", "positive_int", "sha256",
-    "snapshot_revision", "stable_json_sha256",
+    "RssReader",
+    "array_sha256",
+    "command_version",
+    "detect_family",
+    "ffprobe",
+    "mac_swap_snapshot",
+    "monotonic_segments",
+    "normalize_segments",
+    "normalized_ru_maxrss",
+    "package_versions",
+    "parse_args",
+    "physical_memory_bytes",
+    "positive_float",
+    "positive_int",
+    "sha256",
+    "snapshot_revision",
+    "stable_json_sha256",
 ]
 
 
@@ -46,43 +59,58 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
-        "--model-path", required=True,
+        "--model-path",
+        required=True,
         help="Existing local snapshot directory; Hub IDs are rejected",
     )
     parser.add_argument("--audio", required=True, help="Input audio path")
     parser.add_argument("--output", required=True, help="Evidence JSON path")
     parser.add_argument(
-        "--family", choices=("auto", "qwen3-asr", "whisper"), default="auto",
+        "--family",
+        choices=("auto", "qwen3-asr", "whisper"),
+        default="auto",
     )
     parser.add_argument(
-        "--language", required=True,
+        "--language",
+        required=True,
         help=(
             "Qwen language name (for example Cantonese), 'auto' for Qwen "
             "automatic language identification, or a Whisper code (yue)"
         ),
     )
     parser.add_argument(
-        "--qwen-chunk-seconds", type=positive_float, default=180.0,
+        "--qwen-chunk-seconds",
+        type=positive_float,
+        default=180.0,
         help="Bounded long-form chunk size for Qwen3-ASR (default: %(default)s)",
     )
     parser.add_argument(
-        "--qwen-batch-size", type=positive_int, default=1,
+        "--qwen-batch-size",
+        type=positive_int,
+        default=1,
         help="Maximum parallel Qwen chunks (default: %(default)s)",
     )
     parser.add_argument(
-        "--max-tokens", type=positive_int, default=16384,
+        "--max-tokens",
+        type=positive_int,
+        default=16384,
         help="Global Qwen generation budget (default: %(default)s)",
     )
     parser.add_argument(
-        "--whisper-word-timestamps", action="store_true",
+        "--whisper-word-timestamps",
+        action="store_true",
         help="Request costlier Whisper word timestamps in addition to segments",
     )
     parser.add_argument(
-        "--sample-interval", type=positive_float, default=0.1,
+        "--sample-interval",
+        type=positive_float,
+        default=0.1,
         help="Resource sample interval in seconds (default: %(default)s)",
     )
     parser.add_argument(
-        "--target-rtf", type=positive_float, default=1 / 6,
+        "--target-rtf",
+        type=positive_float,
+        default=1 / 6,
         help="Decision threshold recorded in the artifact (default: 1/6)",
     )
     return parser.parse_args()
@@ -113,20 +141,28 @@ def package_versions(names: list[str]) -> dict[str, str | None]:
 
 def command_version(command: list[str]) -> str | None:
     try:
-        output = subprocess.check_output(
-            command, text=True, stderr=subprocess.STDOUT
-        )
+        output = subprocess.check_output(command, text=True, stderr=subprocess.STDOUT)
     except (OSError, subprocess.CalledProcessError):
         return None
     return output.splitlines()[0] if output else None
 
 
 def ffprobe(path: Path) -> dict[str, Any]:
-    return json.loads(subprocess.check_output([
-        "ffprobe", "-v", "error", "-show_entries",
-        "format=duration,size:stream=index,codec_name,sample_rate,channels",
-        "-of", "json", str(path),
-    ], text=True))
+    return json.loads(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration,size:stream=index,codec_name,sample_rate,channels",
+                "-of",
+                "json",
+                str(path),
+            ],
+            text=True,
+        )
+    )
 
 
 def normalized_ru_maxrss(usage: resource.struct_rusage) -> int:
@@ -165,12 +201,13 @@ class RssReader:
         self._proc_pidinfo: Callable[..., int] | None = None
         if sys.platform == "darwin":
             try:
-                function = ctypes.CDLL(
-                    "/usr/lib/libproc.dylib", use_errno=True
-                ).proc_pidinfo
+                function = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True).proc_pidinfo
                 function.argtypes = [
-                    ctypes.c_int, ctypes.c_int, ctypes.c_uint64,
-                    ctypes.c_void_p, ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_uint64,
+                    ctypes.c_void_p,
+                    ctypes.c_int,
                 ]
                 function.restype = ctypes.c_int
                 self._proc_pidinfo = function
@@ -201,16 +238,12 @@ def mac_swap_snapshot() -> dict[str, int] | None:
     if sys.platform != "darwin":
         return None
     try:
-        raw = subprocess.check_output(
-            ["sysctl", "-n", "vm.swapusage"], text=True
-        )
+        raw = subprocess.check_output(["sysctl", "-n", "vm.swapusage"], text=True)
     except (OSError, subprocess.CalledProcessError):
         return None
 
     def parse(label: str) -> int:
-        match = re.search(
-            rf"\b{label}\s*=\s*([0-9.]+)([KMGT])", raw, re.IGNORECASE
-        )
+        match = re.search(rf"\b{label}\s*=\s*([0-9.]+)([KMGT])", raw, re.IGNORECASE)
         if not match:
             raise ValueError(f"missing {label} in vm.swapusage")
         scale = {"K": 2**10, "M": 2**20, "G": 2**30, "T": 2**40}
@@ -224,17 +257,13 @@ def mac_swap_snapshot() -> dict[str, int] | None:
 
 def physical_memory_bytes() -> int | None:
     try:
-        return int(subprocess.check_output(
-            ["sysctl", "-n", "hw.memsize"], text=True
-        ).strip())
+        return int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
     except (OSError, subprocess.CalledProcessError, ValueError):
         return None
 
 
 def snapshot_revision(model_path: Path) -> str | None:
-    if model_path.parent.name == "snapshots" and re.fullmatch(
-        r"[0-9a-fA-F]{40}", model_path.name
-    ):
+    if model_path.parent.name == "snapshots" and re.fullmatch(r"[0-9a-fA-F]{40}", model_path.name):
         return model_path.name.lower()
     return None
 
@@ -261,11 +290,14 @@ def normalize_segments(
         }
         words = segment.get("words")
         if words:
-            item["words"] = [{
-                "start_s": float(word["start"]),
-                "end_s": float(word["end"]),
-                "text": str(word.get("word", word.get("text", ""))),
-            } for word in words]
+            item["words"] = [
+                {
+                    "start_s": float(word["start"]),
+                    "end_s": float(word["end"]),
+                    "text": str(word.get("word", word.get("text", ""))),
+                }
+                for word in words
+            ]
         normalized.append(item)
     return normalized
 
@@ -282,7 +314,5 @@ def monotonic_segments(segments: list[dict[str, Any]]) -> bool:
 
 
 def stable_json_sha256(value: Any) -> str:
-    encoded = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode()
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

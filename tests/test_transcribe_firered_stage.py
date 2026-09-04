@@ -49,9 +49,7 @@ def test_firered_stage_loads_once_with_exact_aed_config_and_native_range(
     ]
     assert result["result"]["vad_segments_ms"] == [[2000, 3000]]
     assert "wav_path" not in result["result"]
-    assert set(result["metrics"]["stage_wall_seconds"]) == {
-        "vad", "asr", "punctuator"
-    }
+    assert set(result["metrics"]["stage_wall_seconds"]) == {"vad", "asr", "punctuator"}
 
 
 def test_firered_stage_supplied_vad_is_a_real_substitution_and_lid_is_optional(
@@ -76,16 +74,16 @@ def test_firered_stage_supplied_vad_is_a_real_substitution_and_lid_is_optional(
     assert result["complete"] is True
     assert record["load_flags"] == {"vad": False, "lid": True, "punc": True}
     assert any(call[0] == "lid" for call in record["calls"])
-    assert result["regions"] == [{
-        "region_id": "external_1",
-        "start": 2.0,
-        "end": 3.0,
-        "processed": True,
-    }]
+    assert result["regions"] == [
+        {
+            "region_id": "external_1",
+            "start": 2.0,
+            "end": 3.0,
+            "processed": True,
+        }
+    ]
     assert result["result"]["vad_segments_ms"] == [[2000, 3000]]
-    assert set(result["metrics"]["stage_wall_seconds"]) == {
-        "asr", "lid", "punctuator"
-    }
+    assert set(result["metrics"]["stage_wall_seconds"]) == {"asr", "lid", "punctuator"}
 
 
 def test_firered_stage_empty_supplied_vad_does_not_load_native_vad_or_run_asr(
@@ -105,7 +103,9 @@ def test_firered_stage_empty_supplied_vad_does_not_load_native_vad_or_run_asr(
     assert record.get("punc_calls", 0) == 0
     assert result["regions"] == []
     assert result["result"] == {
-        "sentences": [], "words": [], "vad_segments_ms": [],
+        "sentences": [],
+        "words": [],
+        "vad_segments_ms": [],
     }
 
 
@@ -117,21 +117,31 @@ def test_firered_stage_never_claims_partial_without_a_completed_region_payload(
     code, result = _run_stage(
         tmp_path,
         monkeypatch,
-        _stage_request(vad_regions=[{
-            "region_id": "external_0", "start": 0.0, "end": 1.0,
-        }]),
+        _stage_request(
+            vad_regions=[
+                {
+                    "region_id": "external_0",
+                    "start": 0.0,
+                    "end": 1.0,
+                }
+            ]
+        ),
     )
     assert code == 1
     assert result["complete"] is False
     assert result["result"] == {
-        "sentences": [], "words": [], "vad_segments_ms": [],
+        "sentences": [],
+        "words": [],
+        "vad_segments_ms": [],
     }
-    assert result["regions"] == [{
-        "region_id": "external_0",
-        "start": 0.0,
-        "end": 1.0,
-        "processed": False,
-    }]
+    assert result["regions"] == [
+        {
+            "region_id": "external_0",
+            "start": 0.0,
+            "end": 1.0,
+            "processed": False,
+        }
+    ]
     assert result["error"]["message"] == "synthetic FireRed failure"
 
 
@@ -141,8 +151,7 @@ def test_firered_stage_salvages_completed_region_prefix_after_later_batch_failur
     record: dict[str, Any] = {"fail_asr_call": 2}
     _install_fake_firered(monkeypatch, record)
     regions = [
-        {"region_id": f"external_{index}", "start": float(index * 2),
-         "end": float(index * 2 + 1)}
+        {"region_id": f"external_{index}", "start": float(index * 2), "end": float(index * 2 + 1)}
         for index in range(5)
     ]
     code, result = _run_stage(
@@ -158,7 +167,11 @@ def test_firered_stage_salvages_completed_region_prefix_after_later_batch_failur
     assert record["lid_batch_sizes"] == [4]
     assert record["punc_batch_sizes"] == [4]
     assert [item["processed"] for item in result["regions"]] == [
-        True, True, True, True, False,
+        True,
+        True,
+        True,
+        True,
+        False,
     ]
     assert result["result"] == {
         "sentences": [
@@ -181,7 +194,10 @@ def test_firered_stage_salvages_completed_region_prefix_after_later_batch_failur
             for index in range(4)
         ],
         "vad_segments_ms": [
-            [0, 1000], [2000, 3000], [4000, 5000], [6000, 7000],
+            [0, 1000],
+            [2000, 3000],
+            [4000, 5000],
+            [6000, 7000],
         ],
     }
     partial = normalize_firered_result(result["result"], lid_enabled=True)
@@ -192,7 +208,10 @@ def test_firered_stage_salvages_completed_region_prefix_after_later_batch_failur
         {"start": 6.0, "end": 7.0},
     )
     assert [segment["text"] for segment in partial.segments] == [
-        "region0.", "region2000.", "region4000.", "region6000.",
+        "region0.",
+        "region2000.",
+        "region4000.",
+        "region6000.",
     ]
     assert partial.lid_regions is not None
     assert [item["language"] for item in partial.lid_regions] == ["en"] * 4
@@ -223,14 +242,16 @@ def test_firered_stage_treats_later_lid_failure_data_as_partial_failure(
     assert record["lid_batch_sizes"] == [4, 1]
     assert record["punc_batch_sizes"] == [4]
     assert [item["processed"] for item in result["regions"]] == [
-        True, True, True, True, False,
+        True,
+        True,
+        True,
+        True,
+        False,
     ]
     partial = normalize_firered_result(result["result"], lid_enabled=True)
     assert len(partial.segments) == 4
     assert partial.lid_regions is not None
-    assert result["error"]["message"] == (
-        "FireRed LID returned an empty region language label"
-    )
+    assert result["error"]["message"] == ("FireRed LID returned an empty region language label")
 
 
 def test_firered_stage_keeps_one_global_post_filter_punctuation_stream(
@@ -295,17 +316,23 @@ def test_firered_blank_with_lid_salvages_last_publishable_region_prefix(
     assert code == 4
     assert result["complete"] is False
     assert [item["processed"] for item in result["regions"]] == [
-        True, False, False, False, False,
+        True,
+        False,
+        False,
+        False,
+        False,
     ]
     assert result["result"]["vad_segments_ms"] == [[0, 1000]]
     normalized = normalize_firered_result(result["result"], lid_enabled=True)
     assert [segment["text"] for segment in normalized.segments] == ["region0."]
-    assert normalized.lid_regions == ({
-        "start": 0.0,
-        "end": 1.0,
-        "language": "en",
-        "confidence": 0.9,
-    },)
+    assert normalized.lid_regions == (
+        {
+            "start": 0.0,
+            "end": 1.0,
+            "language": "en",
+            "confidence": 0.9,
+        },
+    )
     assert result["error"]["message"] == (
         "FireRed cannot publish region LID for a blank ASR region"
     )

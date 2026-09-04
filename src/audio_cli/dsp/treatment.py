@@ -95,11 +95,7 @@ def apply_source_balance(
             continue
         measured = rms_dbfs(output[start:end])
         difference = measured - speech_reference
-        if (
-            profile.machine_relative_minimum_lu
-            <= difference
-            <= profile.machine_relative_maximum_lu
-        ):
+        if profile.machine_relative_minimum_lu <= difference <= profile.machine_relative_maximum_lu:
             inside_target.append(region.region_id)
             continue
         requested = profile.machine_relative_target_lu - difference
@@ -163,9 +159,7 @@ def apply_fullband_adjustments(
         if not adjustment.is_full_band:
             continue
         end = adjustment.resolved_end(duration)
-        mask = smooth_time_mask(
-            output.shape[0], [(adjustment.start, end)], sample_rate, fade_ms
-        )
+        mask = smooth_time_mask(output.shape[0], [(adjustment.start, end)], sample_rate, fade_ms)
         gained = output * (10.0 ** (adjustment.gain_db / 20.0))
         output = _blend(output, gained, mask)
         item = adjustment.as_dict(duration)

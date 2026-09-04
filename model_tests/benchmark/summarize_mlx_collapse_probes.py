@@ -72,22 +72,29 @@ def main() -> int:
         },
         "forced_aligner": {
             "verdict": "equivalent",
-            "mlx": {"repo": aligner["model"]["repo"], "revision": aligner["model"]["revision"],
-                    "quantization": "8-bit"},
-            "torch": {"repo": aligner["compared_against"]["repo"],
-                      "revision": aligner["compared_against"]["revision"],
-                      "precision": aligner["compared_against"]["precision"]},
+            "mlx": {
+                "repo": aligner["model"]["repo"],
+                "revision": aligner["model"]["revision"],
+                "quantization": "8-bit",
+            },
+            "torch": {
+                "repo": aligner["compared_against"]["repo"],
+                "revision": aligner["compared_against"]["revision"],
+                "precision": aligner["compared_against"]["precision"],
+            },
             "fixture": aligner["input"],
             "segments": aligner_comparison["segments_with_words"],
             "token_sequences_identical": aligner_comparison["token_sequences_identical"],
             "token_sequences_differing": aligner_comparison["token_sequences_differing"],
             "token_count_mismatches": aligner_comparison["token_count_mismatch"],
             "bound_deltas": aligner_comparison["bound_deltas"],
-            "punctuation_invariant_violations":
-                aligner_comparison["punctuation_invariant_violations"],
-            "align_seconds": {"mlx_8bit": aligner["observed"]["total_align_seconds"],
-                              "torch_fp32_cpu":
-                                  aligner["compared_against"]["recorded_total_align_seconds"]},
+            "punctuation_invariant_violations": aligner_comparison[
+                "punctuation_invariant_violations"
+            ],
+            "align_seconds": {
+                "mlx_8bit": aligner["observed"]["total_align_seconds"],
+                "torch_fp32_cpu": aligner["compared_against"]["recorded_total_align_seconds"],
+            },
             "reading": (
                 "Every one of the 246 aligned tokens carries the same text on both paths, all "
                 "17 word-bearing segments match token for token, both non-speech segments stay "
@@ -99,16 +106,24 @@ def main() -> int:
         },
         "vibevoice": {
             "verdict": "not_equivalent",
-            "fixture": {"audio": eight["input"]["audio"], "sha256": eight["input"]["sha256"],
-                        "duration_seconds": eight["input"]["duration_seconds"]},
-            "segment_counts": {"mlx_8bit": eight["comparison"]["mlx_segments"],
-                               "mlx_bf16": bf16["comparison"]["mlx_segments"],
-                               "torch_bf16": eight["comparison"]["torch_segments"]},
+            "fixture": {
+                "audio": eight["input"]["audio"],
+                "sha256": eight["input"]["sha256"],
+                "duration_seconds": eight["input"]["duration_seconds"],
+            },
+            "segment_counts": {
+                "mlx_8bit": eight["comparison"]["mlx_segments"],
+                "mlx_bf16": bf16["comparison"]["mlx_segments"],
+                "torch_bf16": eight["comparison"]["torch_segments"],
+            },
             "mlx_precisions_agree_on_text": texts(eight) == texts(bf16),
-            "segments_with_identical_text_vs_torch":
-                eight["comparison"]["segments_with_identical_text"],
-            "speaker_labels": {"mlx": eight["comparison"]["mlx_speaker_labels"],
-                              "torch": eight["comparison"]["torch_speaker_labels"]},
+            "segments_with_identical_text_vs_torch": eight["comparison"][
+                "segments_with_identical_text"
+            ],
+            "speaker_labels": {
+                "mlx": eight["comparison"]["mlx_speaker_labels"],
+                "torch": eight["comparison"]["torch_speaker_labels"],
+            },
             "coverage": eight["comparison"]["coverage"],
             "generate_seconds": {
                 "mlx_8bit": eight["observed"]["generate_seconds"],
@@ -119,19 +134,27 @@ def main() -> int:
                 "mlx_8bit": eight["observed"]["peak_mlx_memory_bytes"],
                 "mlx_bf16": bf16["observed"]["peak_mlx_memory_bytes"],
                 "torch_bf16_mps_current": torch_run["memory"]["peak_sampled_mps_current_bytes"],
-                "note": ("MLX and PyTorch MPS counters have different scopes. Each figure is "
-                         "comparable to others from the same counter and must not be "
-                         "differenced across them."),
+                "note": (
+                    "MLX and PyTorch MPS counters have different scopes. Each figure is "
+                    "comparable to others from the same counter and must not be "
+                    "differenced across them."
+                ),
             },
             "differences_observed": [
-                ("47 MLX segments against 49 torch segments on identical audio, with full "
-                 "coverage on both sides (last end == duration), so this is different "
-                 "segmentation rather than a truncated decode."),
-                ("Orthography shifts to traditional forms in places: 大樹/係/邊/間 where torch "
-                 "emitted 大树/系/边/间."),
+                (
+                    "47 MLX segments against 49 torch segments on identical audio, with full "
+                    "coverage on both sides (last end == duration), so this is different "
+                    "segmentation rather than a truncated decode."
+                ),
+                (
+                    "Orthography shifts to traditional forms in places: 大樹/係/邊/間 where torch "
+                    "emitted 大树/系/边/间."
+                ),
                 "At least one lexical difference: torch '蓝印车站' against MLX '男人車站'.",
-                ("Non-speech event tags disagree on the same interval: torch '[Silence]' "
-                 "against MLX '[Human Sounds]'."),
+                (
+                    "Non-speech event tags disagree on the same interval: torch '[Silence]' "
+                    "against MLX '[Human Sounds]'."
+                ),
             ],
             "reading": (
                 "8-bit and bf16 MLX produce identical text on all 47 segments, so the "
@@ -164,8 +187,10 @@ def main() -> int:
                 "one stack across two environments, which is worse than not moving it."
             ),
             "third_party_conversions_not_evaluated": [
-                "42ailab/FireRedPunc-ONNX", "aufklarer/FireRedLID-887M-MLX-8bit",
-                "tardigrade-doc/FireRedVAD_onnx", "illitan/FireRedVAD-CoreML",
+                "42ailab/FireRedPunc-ONNX",
+                "aufklarer/FireRedLID-887M-MLX-8bit",
+                "tardigrade-doc/FireRedVAD_onnx",
+                "illitan/FireRedVAD-CoreML",
             ],
             "note": (
                 "An ONNX FireRedPunc would run in `core`, which already carries onnxruntime "
@@ -179,8 +204,12 @@ def main() -> int:
                 "Read from the provisioned mlx environment, for the record rather than as a "
                 "plan. Nothing below is measured here."
             ),
-            "stt_models_relevant": ["qwen3_asr", "qwen3_forced_aligner", "fireredasr2",
-                                    "vibevoice_asr"],
+            "stt_models_relevant": [
+                "qwen3_asr",
+                "qwen3_forced_aligner",
+                "fireredasr2",
+                "vibevoice_asr",
+            ],
             "vad_models": ["silero_vad", "fsmn", "smart_turn", "sortformer"],
             "lid_models": ["ecapa_tdnn", "wav2vec2"],
             "worth_knowing": (
@@ -190,8 +219,9 @@ def main() -> int:
                 "comparison rerun, and none of it is done."
             ),
         },
-        "raw_artifacts": [digest(path) for path in
-                          (ALIGNER, VIBEVOICE_8BIT, VIBEVOICE_BF16, TORCH_VIBEVOICE)],
+        "raw_artifacts": [
+            digest(path) for path in (ALIGNER, VIBEVOICE_8BIT, VIBEVOICE_BF16, TORCH_VIBEVOICE)
+        ],
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

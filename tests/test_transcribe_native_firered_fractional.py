@@ -48,25 +48,31 @@ def test_firered_fractional_public_scope_is_loadable_and_exportable(
                 {
                     "complete": True,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 0,
-                            "end_ms": 1000,
-                            "text": "Whole unit.",
-                            "lang": None,
-                            "lang_confidence": 0,
-                        }],
-                        "words": [{
-                            "start_ms": 100,
-                            "end_ms": 900,
-                            "text": "whole unit",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 0,
+                                "end_ms": 1000,
+                                "text": "Whole unit.",
+                                "lang": None,
+                                "lang_confidence": 0,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 100,
+                                "end_ms": 900,
+                                "text": "whole unit",
+                            }
+                        ],
                         "vad_segments_ms": [[0, 1000]],
                     },
-                    "regions": [{
-                        "region_id": "vad_0",
-                        **selected[0],
-                        "processed": True,
-                    }],
+                    "regions": [
+                        {
+                            "region_id": "vad_0",
+                            **selected[0],
+                            "processed": True,
+                        }
+                    ],
                 },
                 1.0,
             )
@@ -82,9 +88,7 @@ def test_firered_fractional_public_scope_is_loadable_and_exportable(
         InputMetadata(str(source), 2.0, "wav", 48_000, 1),
         registry={
             "environments": {"torch-firered": {"state": "ready"}},
-            "packages": {
-                "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")
-            },
+            "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
         },
         transport=Transport(),
         vad_detector=Detector(),
@@ -133,18 +137,22 @@ def test_firered_fractional_partial_resume_uses_public_ownership_once(
                 {
                     "complete": False,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 100,
-                            "end_ms": 900,
-                            "text": "First.",
-                            "lang": None,
-                            "lang_confidence": 0,
-                        }],
-                        "words": [{
-                            "start_ms": 100,
-                            "end_ms": 900,
-                            "text": "first",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 100,
+                                "end_ms": 900,
+                                "text": "First.",
+                                "lang": None,
+                                "lang_confidence": 0,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 100,
+                                "end_ms": 900,
+                                "text": "first",
+                            }
+                        ],
                         "vad_segments_ms": [[0, 1000]],
                     },
                     "regions": [
@@ -166,25 +174,31 @@ def test_firered_fractional_partial_resume_uses_public_ownership_once(
                 {
                     "complete": True,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 1100,
-                            "end_ms": 1900,
-                            "text": "Second.",
-                            "lang": None,
-                            "lang_confidence": 0,
-                        }],
-                        "words": [{
-                            "start_ms": 1100,
-                            "end_ms": 1900,
-                            "text": "second",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 1100,
+                                "end_ms": 1900,
+                                "text": "Second.",
+                                "lang": None,
+                                "lang_confidence": 0,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 1100,
+                                "end_ms": 1900,
+                                "text": "second",
+                            }
+                        ],
                         "vad_segments_ms": [[1000, 2000]],
                     },
-                    "regions": [{
-                        "region_id": "vad_0",
-                        **selected[1],
-                        "processed": True,
-                    }],
+                    "regions": [
+                        {
+                            "region_id": "vad_0",
+                            **selected[1],
+                            "processed": True,
+                        }
+                    ],
                 },
                 1.0,
             )
@@ -198,9 +212,7 @@ def test_firered_fractional_partial_resume_uses_public_ownership_once(
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 1)
     registry = {
         "environments": {"torch-firered": {"state": "ready"}},
-        "packages": {
-            "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")
-        },
+        "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
     }
     requested = tmp_path / "first.json"
     with pytest.raises(refusals.Refusal) as caught:
@@ -238,9 +250,7 @@ def test_firered_rejects_same_length_vad_bound_mutation_without_replacing_output
     _runtime(tmp_path, monkeypatch, "torch-firered")
     source = tmp_path / "ledger-mutation.wav"
     source.write_bytes(b"source")
-    request = resolve_request(
-        stack_id="firered", input_path=source, wants="segment_timestamps,vad"
-    )
+    request = resolve_request(stack_id="firered", input_path=source, wants="segment_timestamps,vad")
     metadata = InputMetadata(str(source), 2.0, "wav", 48_000, 1)
 
     class Transport:
@@ -259,37 +269,41 @@ def test_firered_rejects_same_length_vad_bound_mutation_without_replacing_output
                 {
                     "complete": True,
                     "result": {
-                        "sentences": [{
-                            "start_ms": 300,
-                            "end_ms": 900,
-                            "text": "Done.",
-                            "lang": None,
-                            "lang_confidence": 0,
-                        }],
-                        "words": [{
-                            "start_ms": 300,
-                            "end_ms": 900,
-                            "text": "done",
-                        }],
+                        "sentences": [
+                            {
+                                "start_ms": 300,
+                                "end_ms": 900,
+                                "text": "Done.",
+                                "lang": None,
+                                "lang_confidence": 0,
+                            }
+                        ],
+                        "words": [
+                            {
+                                "start_ms": 300,
+                                "end_ms": 900,
+                                "text": "done",
+                            }
+                        ],
                         # Same cardinality as the processed ledger, but a mutated
                         # start bound that the former length-only check accepted.
                         "vad_segments_ms": [[250, 1000]],
                     },
-                    "regions": [{
-                        "region_id": "vad_0",
-                        "start": 0.2,
-                        "end": 1.0,
-                        "processed": True,
-                    }],
+                    "regions": [
+                        {
+                            "region_id": "vad_0",
+                            "start": 0.2,
+                            "end": 1.0,
+                            "processed": True,
+                        }
+                    ],
                 },
                 1.0,
             )
 
     registry = {
         "environments": {"torch-firered": {"state": "ready"}},
-        "packages": {
-            "firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")
-        },
+        "packages": {"firered-asr2s": _ready_multi_package(tmp_path, "firered-asr2s")},
     }
     output = tmp_path / "existing.json"
     original = b"preexisting output must survive"

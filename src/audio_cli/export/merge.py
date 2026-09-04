@@ -90,11 +90,7 @@ def merge_documents(documents: Sequence[LoadedResult]) -> MergedTranscript:
         if (identity := document.file_identity) is not None
     ]
     same_captured_file = len(captured_identities) != len(set(captured_identities))
-    if (
-        len(set(resolved_paths)) != len(resolved_paths)
-        or same_file
-        or same_captured_file
-    ):
+    if len(set(resolved_paths)) != len(resolved_paths) or same_file or same_captured_file:
         raise IncompatibleResultsError(paths, "the same input document was supplied twice")
 
     reference = docs[0]
@@ -120,10 +116,7 @@ def merge_documents(documents: Sequence[LoadedResult]) -> MergedTranscript:
         for document_index, document in enumerate(docs):
             if document.payload["source"] != reference.payload["source"]:
                 raise ValueError("source identity, duration, or timebase differs")
-            if (
-                document.payload["provenance"]["stack"]
-                != reference.payload["provenance"]["stack"]
-            ):
+            if document.payload["provenance"]["stack"] != reference.payload["provenance"]["stack"]:
                 raise ValueError("provenance.stack differs")
             if document.requested_capabilities != reference.requested_capabilities:
                 raise ValueError("requested capability sets differ")

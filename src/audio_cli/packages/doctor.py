@@ -7,6 +7,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from .. import paths
@@ -32,10 +33,12 @@ def doctor(toolchain: Toolchain | None = None) -> dict:
     root = paths.root()
     usage = shutil.disk_usage(root if root.exists() else Path.home())
     return {
-        "tool": {"version": __version__, "path": sys.argv[0],
-                 "python": platform.python_version()},
-        "platform": {"system": platform.system(), "release": platform.release(),
-                     "machine": platform.machine()},
+        "tool": {"version": __version__, "path": sys.argv[0], "python": platform.python_version()},
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+        },
         "memory": _memory(),
         "disk": {"total_bytes": usage.total, "free_bytes": usage.free},
         "tools": tools,
@@ -48,13 +51,15 @@ def doctor(toolchain: Toolchain | None = None) -> dict:
                 "python": environment.python,
                 "requires_tool": list(environment.requires_tool),
                 "blocked_by_missing_tool": [
-                    tool for tool in environment.requires_tool
+                    tool
+                    for tool in environment.requires_tool
                     if not tools[tool]["present"]
                     and not _environment_has_built_runtime(name, document)
                 ],
                 "provisional": environment.provisional,
             }
-            for name, environment in environments().items() if environment.provisioned
+            for name, environment in environments().items()
+            if environment.provisioned
         },
         "packages": {
             identifier: document["packages"].get(identifier, {}).get("state", "absent")
@@ -70,10 +75,8 @@ def doctor(toolchain: Toolchain | None = None) -> dict:
 def _memory() -> dict:
     """Total and available memory, or nulls where the platform does not report them."""
     total = available = None
-    try:
+    with suppress(ValueError, OSError, AttributeError):
         total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    except (ValueError, OSError, AttributeError):
-        pass
     if sys.platform == "darwin":
         try:
             result = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10)
@@ -89,6 +92,9 @@ def _memory() -> dict:
             available = (free + inactive) * page
         except (OSError, ValueError, subprocess.SubprocessError):
             pass
-    return {"total_bytes": total, "available_bytes": available,
-            "note": "Host-wide counters; not process-attributable and not summable with "
-                    "per-stage peaks."}
+    return {
+        "total_bytes": total,
+        "available_bytes": available,
+        "note": "Host-wide counters; not process-attributable and not summable with "
+        "per-stage peaks.",
+    }

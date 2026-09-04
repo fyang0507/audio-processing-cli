@@ -12,9 +12,7 @@ from vibevoice_test_support import (
 )
 
 
-def test_vibevoice_stage_uses_one_seeded_offline_whole_media_call(
-    tmp_path, monkeypatch
-) -> None:
+def test_vibevoice_stage_uses_one_seeded_offline_whole_media_call(tmp_path, monkeypatch) -> None:
     segments = [{"start_time": 0, "end_time": 1, "speaker_id": 0, "text": "Hi"}]
     state = _install_fake_vibevoice(
         monkeypatch,
@@ -50,16 +48,12 @@ def test_vibevoice_stage_uses_one_seeded_offline_whole_media_call(
     assert generate["input_ids"] is not None
     assert state["processor_call"]["audio"] == [request["audio"]]
     assert state["mps_sample_calls"] >= 3
-    assert not any(
-        thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate()
-    )
+    assert not any(thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate())
     for name in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         assert __import__("os").environ[name] == "1"
 
 
-def test_vibevoice_stage_sampler_start_failure_is_nonfatal(
-    tmp_path, monkeypatch
-) -> None:
+def test_vibevoice_stage_sampler_start_failure_is_nonfatal(tmp_path, monkeypatch) -> None:
     segments = [{"start_time": 0, "end_time": 1, "speaker_id": 0, "text": "Hi"}]
     state = _install_fake_vibevoice(
         monkeypatch,
@@ -93,14 +87,10 @@ def test_vibevoice_stage_sampler_start_failure_is_nonfatal(
     assert output["metrics"]["peak_mps_live_bytes"] == 30
     assert state["generate_calls"] == 1
     assert state["sampler_join_calls"] == 0
-    assert not any(
-        thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate()
-    )
+    assert not any(thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate())
 
 
-def test_vibevoice_stage_sampler_join_failure_is_nonfatal(
-    tmp_path, monkeypatch
-) -> None:
+def test_vibevoice_stage_sampler_join_failure_is_nonfatal(tmp_path, monkeypatch) -> None:
     segments = [{"start_time": 0, "end_time": 1, "speaker_id": 0, "text": "Hi"}]
     state = _install_fake_vibevoice(
         monkeypatch,
@@ -132,9 +122,7 @@ def test_vibevoice_stage_sampler_join_failure_is_nonfatal(
     assert output["metrics"]["peak_mps_live_bytes"] == 30
     assert state["generate_calls"] == 1
     assert state["sampler_join_calls"] == 1
-    assert not any(
-        thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate()
-    )
+    assert not any(thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate())
 
 
 def test_vibevoice_stage_unexpected_sampler_stop_failure_keeps_result_envelope(
@@ -208,14 +196,10 @@ def test_vibevoice_model_load_failure_has_no_partial_result(tmp_path, monkeypatc
     assert "hit_max_new_tokens" not in output
     assert output["metrics"]["peak_mps_live_bytes"] == 30
     assert state["generate_calls"] == 0
-    assert not any(
-        thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate()
-    )
+    assert not any(thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate())
 
 
-def test_vibevoice_stage_omits_mps_peak_when_mps_is_unavailable(
-    tmp_path, monkeypatch
-) -> None:
+def test_vibevoice_stage_omits_mps_peak_when_mps_is_unavailable(tmp_path, monkeypatch) -> None:
     state = _install_fake_vibevoice(
         monkeypatch,
         raw_text="",
@@ -232,9 +216,7 @@ def test_vibevoice_stage_omits_mps_peak_when_mps_is_unavailable(
     assert output["error"]["type"] == "RuntimeError"
     assert "peak_mps_live_bytes" not in output["metrics"]
     assert state["mps_sample_calls"] == 0
-    assert not any(
-        thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate()
-    )
+    assert not any(thread.name == "vibevoice-mps-high-water" for thread in threading.enumerate())
 
 
 def test_vibevoice_stage_is_environment_owned_and_imports_no_core_package() -> None:

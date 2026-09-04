@@ -31,10 +31,7 @@ def _compress(
     padded = np.pad(audio, ((0, pad), (0, 0)))
     levels = 20.0 * np.log10(
         np.sqrt(
-            np.mean(
-                np.square(padded.reshape(count, frame, audio.shape[1])), axis=(1, 2)
-            )
-            + EPSILON
+            np.mean(np.square(padded.reshape(count, frame, audio.shape[1])), axis=(1, 2)) + EPSILON
         )
     )
     over = np.maximum(levels - threshold_dbfs, 0.0)
@@ -74,19 +71,13 @@ def apply_voice_enhancement(
         profile.region_fade_ms,
         transition_placement=profile.speech_transition_placement,
     )
-    b, a = _peaking_coefficients(
-        profile.voice_presence_gain_db, 3000.0, 0.9, sample_rate
-    )
+    b, a = _peaking_coefficients(profile.voice_presence_gain_db, 3000.0, 0.9, sample_rate)
     tonal = signal.lfilter(b, a, audio, axis=0).astype(np.float32)
-    speech_mask = _hard_region_mask(
-        audio.shape[0], analysis.speech_regions, sample_rate
-    )
+    speech_mask = _hard_region_mask(audio.shape[0], analysis.speech_regions, sample_rate)
     measured_before = rms_dbfs(tonal[speech_mask])
     desired_gain = profile.voice_target_rms_dbfs - measured_before
     gain_db = float(
-        np.clip(
-            desired_gain, -profile.voice_max_attenuation_db, profile.voice_max_gain_db
-        )
+        np.clip(desired_gain, -profile.voice_max_attenuation_db, profile.voice_max_gain_db)
     )
     leveled = tonal * (10.0 ** (gain_db / 20.0))
     compressed, maximum_reduction = _compress(
@@ -123,9 +114,7 @@ def apply_voice_enhancement(
                 "maximum_gain_reduction_db": round(maximum_reduction, 3),
             },
         ],
-        "affected_regions": [
-            f"speech_{index:03d}" for index in range(1, len(intervals) + 1)
-        ],
+        "affected_regions": [f"speech_{index:03d}" for index in range(1, len(intervals) + 1)],
         "resolved_transition": resolved_transition,
     }
 

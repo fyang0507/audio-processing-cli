@@ -38,8 +38,11 @@ def remove(fetcher: Fetcher, package_ids: list[str]) -> dict:
     for identifier in package_ids:
         if identifier not in document["packages"]:
             raise ProvisioningError(
-                "package_not_provisioned", f"{identifier} is not in the registry",
-                exit_code=2, package=identifier, fix="audio packages list",
+                "package_not_provisioned",
+                f"{identifier} is not in the registry",
+                exit_code=2,
+                package=identifier,
+                fix="audio packages list",
             )
         if identifier not in targets:
             targets.append(identifier)
@@ -53,9 +56,7 @@ def remove(fetcher: Fetcher, package_ids: list[str]) -> dict:
     for identifier in targets:
         materialized = document["packages"][identifier].get("materialized", {})
         materialized = materialized if isinstance(materialized, dict) else {}
-        owned, kept_revisions = _teardown_revisions(
-            package_catalog.get(identifier), materialized
-        )
+        owned, kept_revisions = _teardown_revisions(package_catalog.get(identifier), materialized)
         hub_revisions.extend(owned)
         retained.extend(kept_revisions)
         for location in _managed_package_locations(package_catalog.get(identifier)):
@@ -88,13 +89,14 @@ def remove(fetcher: Fetcher, package_ids: list[str]) -> dict:
         )
     if dropped:
         report["environments_removed_reason"] = (
-            f"no other provisioned package targets {', '.join(dropped)}")
+            f"no other provisioned package targets {', '.join(dropped)}"
+        )
     if kept:
         report["environments_kept_reason"] = "; ".join(
-            f"{', '.join(sorted(users))} still "
-            f"{'needs' if len(users) == 1 else 'need'} {name}"
+            f"{', '.join(sorted(users))} still {'needs' if len(users) == 1 else 'need'} {name}"
             for name, users in sorted(_users_by_environment(document).items())
-            if name in kept)
+            if name in kept
+        )
     return report
 
 
@@ -120,7 +122,8 @@ def purge(fetcher: Fetcher, *, dry_run: bool) -> dict:
     package_ids = sorted(document["packages"])
     environment_names = sorted(document["environments"])
     known, unsized = _selection_bytes(
-        [package_catalog[i] for i in package_ids if i in package_catalog], document)
+        [package_catalog[i] for i in package_ids if i in package_catalog], document
+    )
 
     if dry_run:
         deletable, keeping = [], []
@@ -133,9 +136,12 @@ def purge(fetcher: Fetcher, *, dry_run: bool) -> dict:
             deletable.extend(owned)
             keeping.extend(retained_revisions)
         return {
-            "would_remove": {"packages": package_ids, "environments": environment_names,
-                             "root": str(paths.root()),
-                             "hub_revisions": sorted(set(deletable))},
+            "would_remove": {
+                "packages": package_ids,
+                "environments": environment_names,
+                "root": str(paths.root()),
+                "hub_revisions": sorted(set(deletable)),
+            },
             "would_keep": {"hub_revisions": sorted(set(keeping))},
             "hub_cache_note": HUB_CACHE_NOTE,
             "reclaimable_known_bytes": known,
@@ -159,9 +165,7 @@ def purge(fetcher: Fetcher, *, dry_run: bool) -> dict:
     for identifier in package_ids:
         materialized = document["packages"][identifier].get("materialized", {})
         materialized = materialized if isinstance(materialized, dict) else {}
-        owned, kept_revisions = _teardown_revisions(
-            package_catalog.get(identifier), materialized
-        )
+        owned, kept_revisions = _teardown_revisions(package_catalog.get(identifier), materialized)
         hub_revisions.extend(owned)
         retained.extend(kept_revisions)
         for location in _managed_package_locations(package_catalog.get(identifier)):

@@ -21,7 +21,7 @@ from transcribe_orchestrator_test_support import (
     provisioned_runtime_root as provisioned_runtime_root,
 )
 
-from audio_cli.transcribe import _orchestrator_runtime as orchestrator_runtime
+from audio_cli.transcribe.execution import runtime as orchestrator_runtime
 
 
 def test_preflight_never_launches_fluidaudio_from_external_receipt_path(
@@ -30,7 +30,9 @@ def test_preflight_never_launches_fluidaudio_from_external_receipt_path(
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 16_000, 1)
     document = full_registry(tmp_path)
@@ -48,13 +50,14 @@ def test_preflight_never_launches_fluidaudio_from_external_receipt_path(
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.payload["code"] == "package_integrity_failed"
-    assert "built_checkout_path" in {
-        item["check"] for item in raised.value.payload["failed"]
-    }
+    assert "built_checkout_path" in {item["check"] for item in raised.value.payload["failed"]}
     assert not marker.exists()
 
 
@@ -62,7 +65,9 @@ def test_preflight_rejects_fluidaudio_product_symlink_escape(tmp_path) -> None:
     source = tmp_path / "source.wav"
     source.write_bytes(b"source")
     resolved = resolve_request(
-        stack_id="qwen-0.6b", input_path=source, wants=("diarization",),
+        stack_id="qwen-0.6b",
+        input_path=source,
+        wants=("diarization",),
     )
     metadata = InputMetadata(str(source), 2.0, "wav", 16_000, 1)
     document = full_registry(tmp_path)
@@ -81,13 +86,14 @@ def test_preflight_rejects_fluidaudio_product_symlink_escape(tmp_path) -> None:
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.payload["code"] == "package_integrity_failed"
-    assert "built_product_executable" in {
-        item["check"] for item in raised.value.payload["failed"]
-    }
+    assert "built_product_executable" in {item["check"] for item in raised.value.payload["failed"]}
     assert not marker.exists()
 
 
@@ -108,13 +114,14 @@ def test_preflight_rejects_same_revision_basename_outside_hub_cache_index(
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.payload["code"] == "package_integrity_failed"
-    assert "hub_snapshot_integrity" in {
-        item["check"] for item in raised.value.payload["failed"]
-    }
+    assert "hub_snapshot_integrity" in {item["check"] for item in raised.value.payload["failed"]}
 
 
 def test_preflight_uses_manifest_pin_not_mutable_hub_receipt_revision(
@@ -122,9 +129,7 @@ def test_preflight_uses_manifest_pin_not_mutable_hub_receipt_revision(
 ) -> None:
     resolved, metadata, _ = request(tmp_path)
     document = registry(tmp_path)
-    document["packages"]["qwen3-asr-0.6b-8bit"]["materialized"][
-        "revision"
-    ] = "tampered-history"
+    document["packages"]["qwen3-asr-0.6b-8bit"]["materialized"]["revision"] = "tampered-history"
     plan = build_plan(
         resolved,
         metadata,
@@ -137,9 +142,7 @@ def test_preflight_uses_manifest_pin_not_mutable_hub_receipt_revision(
         python_runtime_probe=lambda _path: True,
     )
 
-    assert selected["qwen3-asr-0.6b-8bit"] is document["packages"][
-        "qwen3-asr-0.6b-8bit"
-    ]
+    assert selected["qwen3-asr-0.6b-8bit"] is document["packages"]["qwen3-asr-0.6b-8bit"]
 
 
 def test_preflight_rejects_a_hub_file_target_outside_its_repository_cache(
@@ -168,8 +171,7 @@ def test_preflight_rejects_a_hub_file_target_outside_its_repository_cache(
 
     assert raised.value.payload["code"] == "package_integrity_failed"
     hub_failure = next(
-        item for item in raised.value.payload["failed"]
-        if item["check"] == "hub_snapshot_integrity"
+        item for item in raised.value.payload["failed"] if item["check"] == "hub_snapshot_integrity"
     )
     assert "outside its repository cache" in " ".join(hub_failure["actual"])
 
@@ -177,9 +179,7 @@ def test_preflight_rejects_a_hub_file_target_outside_its_repository_cache(
 def test_preflight_live_probes_managed_python_before_decode(tmp_path) -> None:
     resolved, metadata, _ = request(tmp_path)
     document = registry(tmp_path)
-    interpreter = (
-        tmp_path / "runtime" / "envs" / "mlx" / "bin" / "python"
-    )
+    interpreter = tmp_path / "runtime" / "envs" / "mlx" / "bin" / "python"
     interpreter.write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
     interpreter.chmod(0o755)
 
@@ -189,16 +189,21 @@ def test_preflight_live_probes_managed_python_before_decode(tmp_path) -> None:
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
     assert raised.value.exit_code == 3
     assert raised.value.payload["code"] == "package_integrity_failed"
-    assert raised.value.payload["failed"] == [{
-        "package": "qwen3-asr-0.6b-8bit",
-        "check": "environment_mlx_python_runs",
-        "expected": True,
-        "actual": False,
-    }]
+    assert raised.value.payload["failed"] == [
+        {
+            "package": "qwen3-asr-0.6b-8bit",
+            "check": "environment_mlx_python_runs",
+            "expected": True,
+            "actual": False,
+        }
+    ]
 
 
 def test_preflight_refuses_a_symlinked_environment_root_before_decode(
@@ -217,16 +222,21 @@ def test_preflight_refuses_a_symlinked_environment_root_before_decode(
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.exit_code == 3
-    assert raised.value.payload["failed"] == [{
-        "package": "qwen3-asr-0.6b-8bit",
-        "check": "environment_mlx_managed_root",
-        "expected": str(managed),
-        "actual": f"managed environment path is a symlink: {managed}",
-    }]
+    assert raised.value.payload["failed"] == [
+        {
+            "package": "qwen3-asr-0.6b-8bit",
+            "check": "environment_mlx_managed_root",
+            "expected": str(managed),
+            "actual": f"managed environment path is a symlink: {managed}",
+        }
+    ]
 
 
 def test_preflight_refuses_a_symlinked_provisioning_root_before_decode(
@@ -245,16 +255,21 @@ def test_preflight_refuses_a_symlinked_provisioning_root_before_decode(
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.exit_code == 3
-    assert raised.value.payload["failed"] == [{
-        "package": "qwen3-asr-0.6b-8bit",
-        "check": "environment_mlx_managed_root",
-        "expected": str(audio_paths.env_dir("mlx")),
-        "actual": f"provisioning root is a symlink: {root}",
-    }]
+    assert raised.value.payload["failed"] == [
+        {
+            "package": "qwen3-asr-0.6b-8bit",
+            "check": "environment_mlx_managed_root",
+            "expected": str(audio_paths.env_dir("mlx")),
+            "actual": f"provisioning root is a symlink: {root}",
+        }
+    ]
 
 
 def test_preflight_refuses_an_in_root_symlinked_environments_parent_before_decode(
@@ -273,16 +288,21 @@ def test_preflight_refuses_an_in_root_symlinked_environments_parent_before_decod
 
     with pytest.raises(refusals.Refusal) as raised:
         orchestrator.run(
-            resolved, metadata, registry=document, transport=NoDecode(),
+            resolved,
+            metadata,
+            registry=document,
+            transport=NoDecode(),
         )
 
     assert raised.value.exit_code == 3
-    assert raised.value.payload["failed"] == [{
-        "package": "qwen3-asr-0.6b-8bit",
-        "check": "environment_mlx_managed_root",
-        "expected": str(audio_paths.env_dir("mlx")),
-        "actual": f"managed environment parent is a symlink: {envs}",
-    }]
+    assert raised.value.payload["failed"] == [
+        {
+            "package": "qwen3-asr-0.6b-8bit",
+            "check": "environment_mlx_managed_root",
+            "expected": str(audio_paths.env_dir("mlx")),
+            "actual": f"managed environment parent is a symlink: {envs}",
+        }
+    ]
 
 
 def test_python_stage_rechecks_environment_after_decode_before_runner_launch(
@@ -323,7 +343,8 @@ def test_python_stage_rechecks_environment_after_decode_before_runner_launch(
 
 
 def test_preflight_does_not_probe_below_a_redirected_environments_parent(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     resolved = resolve_request(
         stack_id="qwen-0.6b",

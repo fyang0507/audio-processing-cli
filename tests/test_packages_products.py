@@ -23,7 +23,8 @@ from package_test_support import (
 
 
 def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     """The narrower half of the same defect, and the reason each entry is saved as it goes.
 
@@ -32,6 +33,7 @@ def test_a_teardown_that_dies_leaves_no_package_reading_as_ready(
     named still `ready`, nothing behind any of them. This is the only way to reach that window
     now that unknown names are refused up front, so it is worth an injected failure.
     """
+
     class HostileCache(FakeFetcher):
         def delete_hub_revisions(self, revisions: list[str]) -> tuple[list[str], int]:
             raise OSError("the shared cache went away mid-teardown")
@@ -67,11 +69,13 @@ def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_p
     exactly like a clean run. §1.3 publishes `matches_expected: true`, so something has to be able
     to produce it. Found while scanning for the vacuous-flag shape; it is the same family.
     """
-    expected = {guard["kind"]: guard
-                for guard in env.environments()["mlx"].guards}["source_hash"]["sha256"]
+    expected = {guard["kind"]: guard for guard in env.environments()["mlx"].guards}["source_hash"][
+        "sha256"
+    ]
 
-    answering = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash=expected),
-                                fetcher=FakeFetcher(tmp_path))
+    answering = pkg.Provisioner(
+        toolchain=FakeToolchain(private_api_hash=expected), fetcher=FakeFetcher(tmp_path)
+    )
     answering.pull(pkg.select(["qwen3-asr-1.7b-8bit"]))
     report = answering.verify()
     assert report["mlx_audio_private_api_source_hash"] == expected
@@ -81,8 +85,9 @@ def test_verify_compares_the_private_api_hash_when_the_environment_answers(tmp_p
 
     # And it is a comparison rather than an echo: a source file that moved fails it, with both
     # values published so a reader can see why.
-    moved = pkg.Provisioner(toolchain=FakeToolchain(private_api_hash="0" * 64),
-                            fetcher=FakeFetcher(tmp_path))
+    moved = pkg.Provisioner(
+        toolchain=FakeToolchain(private_api_hash="0" * 64), fetcher=FakeFetcher(tmp_path)
+    )
     report = moved.verify()
     assert report["mlx_audio_private_api_source_hash"] == "0" * 64
     assert report["mlx_audio_private_api_matches_expected"] is False
@@ -151,8 +156,11 @@ def test_every_built_package_pins_the_product_it_has_to_launch() -> None:
     named 'fluidaudio'" on a perfectly good build and could never return True. Pinning the name
     beside the commit makes it reviewable when the commit moves.
     """
-    built = {identifier: package for identifier, package in env.packages().items()
-             if package.source["type"] == "git+build"}
+    built = {
+        identifier: package
+        for identifier, package in env.packages().items()
+        if package.source["type"] == "git+build"
+    }
     assert built, "no git+build package, so this invariant has nothing to hold"
     for identifier, package in built.items():
         assert package.source.get("product"), (
@@ -180,6 +188,7 @@ def test_a_build_whose_product_cannot_run_is_not_a_provisioned_package(tmp_path)
     `pull` returned exit 0 with an empty `warnings`, `verify` reported `failed: []`, and the
     environment read `ok`, while the one thing the package exists for was impossible.
     """
+
     class Broken(FakeToolchain):
         def swift_product_runs(self, checkout: Path, product: str) -> bool:
             return False
@@ -197,6 +206,7 @@ def test_a_build_whose_product_cannot_run_is_not_a_provisioned_package(tmp_path)
 
 def test_verify_fails_when_the_live_product_does_not_run_despite_a_true_receipt(tmp_path) -> None:
     """The registry's product_runs bit is history; the current executable is the check."""
+
     class StopsRunning(FakeToolchain):
         def built_product_runs(self, executable: Path) -> bool:
             return False

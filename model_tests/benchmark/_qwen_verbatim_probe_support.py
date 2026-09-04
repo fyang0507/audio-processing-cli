@@ -16,13 +16,31 @@ from pathlib import Path
 from typing import Any
 
 __all__ = [
-    "EXPECTED_QWEN3_ASR_SOURCE_SHA256", "FILLER_TOKENS", "FIXTURES",
-    "LATIN_REPEAT_RE", "MAX_TOKENS", "MODELS", "REPO_ROOT",
-    "REQUIRED_BATCHED_API_PARAMS", "RUN_PLAN", "RssReader", "SAMPLE_RATE",
-    "SYSTEM_PROMPTS", "TEMPERATURE", "array_sha256", "build_fixture_info",
-    "build_host_info", "count_fillers", "ffprobe", "find_repetitions",
-    "hf_snapshot_path", "package_versions", "peak_rss_bytes", "sha256_bytes",
-    "sha256_file", "sysctl",
+    "EXPECTED_QWEN3_ASR_SOURCE_SHA256",
+    "FILLER_TOKENS",
+    "FIXTURES",
+    "LATIN_REPEAT_RE",
+    "MAX_TOKENS",
+    "MODELS",
+    "REPO_ROOT",
+    "REQUIRED_BATCHED_API_PARAMS",
+    "RUN_PLAN",
+    "SAMPLE_RATE",
+    "SYSTEM_PROMPTS",
+    "TEMPERATURE",
+    "RssReader",
+    "array_sha256",
+    "build_fixture_info",
+    "build_host_info",
+    "count_fillers",
+    "ffprobe",
+    "find_repetitions",
+    "hf_snapshot_path",
+    "package_versions",
+    "peak_rss_bytes",
+    "sha256_bytes",
+    "sha256_file",
+    "sysctl",
 ]
 
 
@@ -44,16 +62,26 @@ EXPECTED_QWEN3_ASR_SOURCE_SHA256 = (
 )
 
 REQUIRED_BATCHED_API_PARAMS = {
-    "chunks", "max_tokens", "sampler", "language", "system_prompt",
-    "batch_size", "verbose",
+    "chunks",
+    "max_tokens",
+    "sampler",
+    "language",
+    "system_prompt",
+    "batch_size",
+    "verbose",
 }
 
 
 def hf_snapshot_path(org_repo: str, revision: str) -> Path:
     org, name = org_repo.split("/", 1)
     return (
-        Path.home() / ".cache" / "huggingface" / "hub"
-        / f"models--{org}--{name}" / "snapshots" / revision
+        Path.home()
+        / ".cache"
+        / "huggingface"
+        / "hub"
+        / f"models--{org}--{name}"
+        / "snapshots"
+        / revision
     )
 
 
@@ -158,11 +186,21 @@ def package_versions(names: list[str]) -> dict[str, str | None]:
 
 def ffprobe(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(subprocess.check_output([
-            "ffprobe", "-v", "error", "-show_entries",
-            "format=duration,size:stream=index,codec_name,sample_rate,channels",
-            "-of", "json", str(path),
-        ], text=True))
+        return json.loads(
+            subprocess.check_output(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration,size:stream=index,codec_name,sample_rate,channels",
+                    "-of",
+                    "json",
+                    str(path),
+                ],
+                text=True,
+            )
+        )
     except Exception as exc:  # pragma: no cover - diagnostic only
         return {"error": f"{type(exc).__name__}: {exc}"}
 
@@ -199,12 +237,13 @@ class RssReader:
         self._proc_pidinfo = None
         if sys.platform == "darwin":
             try:
-                function = ctypes.CDLL(
-                    "/usr/lib/libproc.dylib", use_errno=True
-                ).proc_pidinfo
+                function = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True).proc_pidinfo
                 function.argtypes = [
-                    ctypes.c_int, ctypes.c_int, ctypes.c_uint64,
-                    ctypes.c_void_p, ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_int,
+                    ctypes.c_uint64,
+                    ctypes.c_void_p,
+                    ctypes.c_int,
                 ]
                 function.restype = ctypes.c_int
                 self._proc_pidinfo = function
@@ -239,9 +278,7 @@ def count_fillers(text: str) -> dict[str, int]:
     return counts
 
 
-LATIN_REPEAT_RE = re.compile(
-    r"\b([a-zA-Z']+)\b([\s,.’‘-]{1,3})\1\b", flags=re.IGNORECASE
-)
+LATIN_REPEAT_RE = re.compile(r"\b([a-zA-Z']+)\b([\s,.’‘-]{1,3})\1\b", flags=re.IGNORECASE)
 
 
 def find_repetitions(text: str) -> list[str]:

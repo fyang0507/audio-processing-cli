@@ -58,11 +58,7 @@ def publish_output(
             target_lra=profile.target_lra_lu,
             target_true_peak=profile.target_true_peak_dbtp,
         )
-        true_peak_limit = (
-            profile.target_true_peak_dbtp
-            if stage not in skipped_stages
-            else -0.1
-        )
+        true_peak_limit = profile.target_true_peak_dbtp if stage not in skipped_stages else -0.1
         codec_peak_correction_db = 0.0
         codec_safe_wav = temp_dir / "codec-safe.wav"
         for _ in range(2):
@@ -75,9 +71,7 @@ def publish_output(
             correction = true_peak_limit - after_program["input_tp"] - 0.1
             codec_peak_correction_db += correction
             safe_audio, safe_sample_rate = decode_audio(final_wav)
-            safe_audio = safe_audio * (
-                10.0 ** (codec_peak_correction_db / 20.0)
-            )
+            safe_audio = safe_audio * (10.0 ** (codec_peak_correction_db / 20.0))
             write_float_wav(codec_safe_wav, safe_audio, safe_sample_rate)
             encode_output(
                 source,
@@ -94,13 +88,9 @@ def publish_output(
                 target_true_peak=profile.target_true_peak_dbtp,
             )
         if program_operation is not None:
-            program_operation["codec_peak_correction_db"] = round(
-                codec_peak_correction_db, 6
-            )
+            program_operation["codec_peak_correction_db"] = round(codec_peak_correction_db, 6)
         after_audio, after_sample_rate = decode_audio(encoded_temp)
-        after_regional = regional_measurements(
-            after_audio, after_sample_rate, analysis
-        )
+        after_regional = regional_measurements(after_audio, after_sample_rate, analysis)
         if source_stage_report["status"] == "applied":
             source_operations = source_stage_report.get("operations", [])
             assert isinstance(source_operations, list)
@@ -131,12 +121,8 @@ def publish_output(
                 item = source_operation_by_region.get(region_id, {})
                 resolved_gain = float(item.get("resolved_gain_db", 0.0))
                 bounded = (
-                    abs(resolved_gain - profile.machine_max_boost_db)
-                    <= 0.05
-                    or abs(
-                        resolved_gain + profile.machine_max_attenuation_db
-                    )
-                    <= 0.05
+                    abs(resolved_gain - profile.machine_max_boost_db) <= 0.05
+                    or abs(resolved_gain + profile.machine_max_attenuation_db) <= 0.05
                 )
                 status = (
                     "inside_target"
@@ -154,9 +140,7 @@ def publish_output(
                         "status": status,
                     }
                 )
-            source_stage_report["final_region_evaluations"] = (
-                final_region_evaluations
-            )
+            source_stage_report["final_region_evaluations"] = final_region_evaluations
             if unbounded_failures:
                 raise PipelineError(
                     "Source-balance verification failed for unbounded regions: "
@@ -164,8 +148,7 @@ def publish_output(
                 )
         output_info = media_summary(encoded_temp, after_probe)
         duration_delta_ms = 1000.0 * (
-            float(output_info["duration_seconds"])
-            - float(source_info["duration_seconds"])
+            float(output_info["duration_seconds"]) - float(source_info["duration_seconds"])
         )
         timeline_ok = abs(duration_delta_ms) <= 50.0
         loudness_ok = (

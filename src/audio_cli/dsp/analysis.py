@@ -40,9 +40,7 @@ def analyze_signal(
             correlation = None
         else:
             correlation = float(np.corrcoef(audio[:, 0], audio[:, 1])[0, 1])
-    subbass_ratio, hum_excess, dc_offset = _spectral_environment_metrics(
-        speech, sample_rate
-    )
+    subbass_ratio, hum_excess, dc_offset = _spectral_environment_metrics(speech, sample_rate)
 
     observations: list[dict[str, object]] = [
         {
@@ -118,8 +116,7 @@ def evaluate_profile(
             "observed_lufs": program_loudness.get("input_i"),
             "status": (
                 "inside_target"
-                if abs(program_loudness.get("input_i", -240.0) - profile.target_lufs)
-                <= 0.5
+                if abs(program_loudness.get("input_i", -240.0) - profile.target_lufs) <= 0.5
                 else "outside_target"
             ),
         },

@@ -40,10 +40,7 @@ def normalize_loudness(
     pre_loudness_wav = temp_dir / "pre-loudness.wav"
     final_wav = temp_dir / "final.wav"
     write_float_wav(pre_loudness_wav, current, sample_rate)
-    render_true_peak_target = (
-        profile.target_true_peak_dbtp
-        - profile.codec_true_peak_headroom_db
-    )
+    render_true_peak_target = profile.target_true_peak_dbtp - profile.codec_true_peak_headroom_db
     pre_program = measure_loudness(
         pre_loudness_wav,
         target_lufs=profile.target_lufs,
@@ -92,19 +89,15 @@ def normalize_loudness(
                             "component": "loudness-range",
                             "status": (
                                 "no_op"
-                                if pre_program["input_lra"]
-                                <= profile.target_lra_lu
+                                if pre_program["input_lra"] <= profile.target_lra_lu
                                 else "abstained"
                             ),
                             "reason": (
                                 "inside_target"
-                                if pre_program["input_lra"]
-                                <= profile.target_lra_lu
+                                if pre_program["input_lra"] <= profile.target_lra_lu
                                 else "dynamic_lra_control_would_change_relative_region_balance"
                             ),
-                            "measured_lra_lu": round(
-                                pre_program["input_lra"], 3
-                            ),
+                            "measured_lra_lu": round(pre_program["input_lra"], 3),
                             "target_maximum_lra_lu": profile.target_lra_lu,
                         }
                     ],
@@ -142,9 +135,7 @@ def normalize_loudness(
         target_true_peak=profile.target_true_peak_dbtp,
     )
     simulated_audio, simulated_sample_rate = decode_audio(final_wav)
-    simulated_regional = regional_measurements(
-        simulated_audio, simulated_sample_rate, analysis
-    )
+    simulated_regional = regional_measurements(simulated_audio, simulated_sample_rate, analysis)
     source_verification_passes: list[dict[str, object]] = []
     if (
         source_stage_report["status"] == "applied"
@@ -195,9 +186,7 @@ def normalize_loudness(
                     operations.append(item)
                     operation_by_region[region_id] = item
                 previous_gain = float(item.get("resolved_gain_db", 0.0))
-                desired_delta = (
-                    profile.machine_relative_target_lu - difference
-                )
+                desired_delta = profile.machine_relative_target_lu - difference
                 resolved_total = float(
                     np.clip(
                         previous_gain + desired_delta,
@@ -240,8 +229,8 @@ def normalize_loudness(
                 sample_rate=sample_rate,
             )
             program_operation["resolution"] = normalization_resolution
-            program_operation["measured_input_after_source_compensation"] = (
-                _round_loudness(pre_program)
+            program_operation["measured_input_after_source_compensation"] = _round_loudness(
+                pre_program
             )
             simulated_program = measure_loudness(
                 final_wav,
@@ -257,20 +246,13 @@ def normalize_loudness(
                 {
                     "pass": verification_pass,
                     "corrections_db": {
-                        key: round(value, 3)
-                        for key, value in sorted(corrections.items())
+                        key: round(value, 3) for key, value in sorted(corrections.items())
                     },
                     "resulting_regions": simulated_regional["machine_regions"],
                 }
             )
-        source_stage_report["downstream_verification_passes"] = (
-            source_verification_passes
-        )
-    simulated_peak_limit = (
-        -0.1
-        if stage in skipped_stages
-        else profile.target_true_peak_dbtp
-    )
+        source_stage_report["downstream_verification_passes"] = source_verification_passes
+    simulated_peak_limit = -0.1 if stage in skipped_stages else profile.target_true_peak_dbtp
     if simulated_program["input_tp"] > simulated_peak_limit:
         raise PipelineError(
             "Predicted true-peak verification failed: "

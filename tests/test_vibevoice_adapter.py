@@ -43,11 +43,14 @@ def test_vibevoice_excerpts_name_the_exact_local_artifact(fixture_name: str) -> 
 
 def test_vibevoice_adapter_omits_na_speaker_and_preserves_the_event() -> None:
     fixture = _fixture("vibevoice_multispeaker_excerpt.json")
-    result = normalize_vibevoice_result({
-        "segments": fixture["segments"],
-        "raw_text": json.dumps(fixture["segments"]),
-        "hit_max_new_tokens": False,
-    }, clip_duration_seconds=60.0)
+    result = normalize_vibevoice_result(
+        {
+            "segments": fixture["segments"],
+            "raw_text": json.dumps(fixture["segments"]),
+            "hit_max_new_tokens": False,
+        },
+        clip_duration_seconds=60.0,
+    )
 
     assert result.hit_max_new_tokens is False
     assert result.covered_through_seconds is None
@@ -63,61 +66,68 @@ def test_vibevoice_adapter_omits_na_speaker_and_preserves_the_event() -> None:
 
 
 def test_vibevoice_adapter_rejects_speaker_attribution_on_event_tag() -> None:
-    segments = [{
-        "start_time": 0.0,
-        "end_time": 1.0,
-        "speaker_id": 0,
-        "text": "[Music]",
-    }]
+    segments = [
+        {
+            "start_time": 0.0,
+            "end_time": 1.0,
+            "speaker_id": 0,
+            "text": "[Music]",
+        }
+    ]
     with pytest.raises(ValueError, match="event segment 0 must not carry a speaker"):
-        normalize_vibevoice_result({
-            "segments": segments,
-            "raw_text": json.dumps(segments),
-            "hit_max_new_tokens": False,
-        }, clip_duration_seconds=1.0)
+        normalize_vibevoice_result(
+            {
+                "segments": segments,
+                "raw_text": json.dumps(segments),
+                "hit_max_new_tokens": False,
+            },
+            clip_duration_seconds=1.0,
+        )
 
 
 def test_vibevoice_adapter_accepts_the_stage_fenced_json_envelope() -> None:
-    raw = (
-        'assistant\n```json\n'
-        '[{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}]\n```'
+    raw = 'assistant\n```json\n[{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}]\n```'
+    result = normalize_vibevoice_result(
+        {
+            "segments": [
+                {
+                    "start_time": 0,
+                    "end_time": 1,
+                    "speaker_id": 0,
+                    "text": "Hi",
+                }
+            ],
+            "raw_text": raw,
+            "hit_max_new_tokens": False,
+        },
+        clip_duration_seconds=1.0,
     )
-    result = normalize_vibevoice_result({
-        "segments": [{
-            "start_time": 0,
-            "end_time": 1,
-            "speaker_id": 0,
-            "text": "Hi",
-        }],
-        "raw_text": raw,
-        "hit_max_new_tokens": False,
-    }, clip_duration_seconds=1.0)
 
-    assert result.segments == ({
-        "text": "Hi",
-        "start": 0.0,
-        "end": 1.0,
-        "alignable": True,
-        "speaker": "0",
-    },)
+    assert result.segments == (
+        {
+            "text": "Hi",
+            "start": 0.0,
+            "end": 1.0,
+            "alignable": True,
+            "speaker": "0",
+        },
+    )
 
 
 @pytest.mark.parametrize("fenced", [False, True])
 def test_vibevoice_stage_preserves_fence_tokens_inside_transcript_content(
     fenced: bool,
 ) -> None:
-    items = [{
-        "Start": 0,
-        "End": 1,
-        "Speaker": 0,
-        "Content": "say ```json and ``` literally",
-    }]
+    items = [
+        {
+            "Start": 0,
+            "End": 1,
+            "Speaker": 0,
+            "Content": "say ```json and ``` literally",
+        }
+    ]
     encoded = json.dumps(items)
-    raw = (
-        f"assistant\n```json\n{encoded}\n```"
-        if fenced
-        else f"assistant\n{encoded}"
-    )
+    raw = f"assistant\n```json\n{encoded}\n```" if fenced else f"assistant\n{encoded}"
 
     assert vibevoice_stage._complete_json_array(raw) == items
 
@@ -127,28 +137,33 @@ def test_vibevoice_adapter_preserves_fence_tokens_inside_transcript_content(
     fenced: bool,
 ) -> None:
     text = "say ```json and ``` literally"
-    encoded = json.dumps([{
-        "Start": 0,
-        "End": 1,
-        "Speaker": 0,
-        "Content": text,
-    }])
-    raw = (
-        f"assistant\n```json\n{encoded}\n```"
-        if fenced
-        else f"assistant\n{encoded}"
+    encoded = json.dumps(
+        [
+            {
+                "Start": 0,
+                "End": 1,
+                "Speaker": 0,
+                "Content": text,
+            }
+        ]
     )
+    raw = f"assistant\n```json\n{encoded}\n```" if fenced else f"assistant\n{encoded}"
 
-    result = normalize_vibevoice_result({
-        "segments": [{
-            "start_time": 0,
-            "end_time": 1,
-            "speaker_id": 0,
-            "text": text,
-        }],
-        "raw_text": raw,
-        "hit_max_new_tokens": False,
-    }, clip_duration_seconds=1.0)
+    result = normalize_vibevoice_result(
+        {
+            "segments": [
+                {
+                    "start_time": 0,
+                    "end_time": 1,
+                    "speaker_id": 0,
+                    "text": text,
+                }
+            ],
+            "raw_text": raw,
+            "hit_max_new_tokens": False,
+        },
+        clip_duration_seconds=1.0,
+    )
 
     assert result.segments[0]["text"] == text
 
@@ -163,11 +178,7 @@ def test_vibevoice_adapter_preserves_fence_tokens_inside_transcript_content(
 def test_vibevoice_stage_rejects_content_after_complete_fenced_json(
     trailing: str,
 ) -> None:
-    raw = (
-        'assistant\n```json\n'
-        '[{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}]\n```\n'
-        f"{trailing}"
-    )
+    raw = f'assistant\n```json\n[{{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}}]\n```\n{trailing}'
 
     with pytest.raises(ValueError, match="continues after its JSON code block"):
         vibevoice_stage._complete_json_array(raw)
@@ -183,30 +194,28 @@ def test_vibevoice_stage_rejects_content_after_complete_fenced_json(
 def test_vibevoice_adapter_rejects_content_after_complete_fenced_json(
     trailing: str,
 ) -> None:
-    raw = (
-        'assistant\n```json\n'
-        '[{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}]\n```\n'
-        f"{trailing}"
-    )
+    raw = f'assistant\n```json\n[{{"Start":0,"End":1,"Speaker":0,"Content":"Hi"}}]\n```\n{trailing}'
 
     with pytest.raises(ValueError, match="complete JSON array"):
-        normalize_vibevoice_result({
-            "segments": [{
-                "start_time": 0,
-                "end_time": 1,
-                "speaker_id": 0,
-                "text": "Hi",
-            }],
-            "raw_text": raw,
-            "hit_max_new_tokens": False,
-        }, clip_duration_seconds=2.0)
+        normalize_vibevoice_result(
+            {
+                "segments": [
+                    {
+                        "start_time": 0,
+                        "end_time": 1,
+                        "speaker_id": 0,
+                        "text": "Hi",
+                    }
+                ],
+                "raw_text": raw,
+                "hit_max_new_tokens": False,
+            },
+            clip_duration_seconds=2.0,
+        )
 
 
 def test_vibevoice_stage_rejects_duplicate_generated_segment_keys() -> None:
-    raw = (
-        '[{"Start":0,"Start":5,"End":6,"Speaker":0,'
-        '"Content":"Ambiguous"}]'
-    )
+    raw = '[{"Start":0,"Start":5,"End":6,"Speaker":0,"Content":"Ambiguous"}]'
 
     with pytest.raises(ValueError, match="repeats key 'Start'"):
         vibevoice_stage._complete_json_array(raw)
@@ -216,17 +225,16 @@ def test_vibevoice_stage_rejects_duplicate_generated_segment_keys() -> None:
 def test_vibevoice_adapter_rejects_duplicate_generated_segment_keys(
     hit_max_new_tokens: bool,
 ) -> None:
-    raw = (
-        '[{"Start":0,"Start":5,"End":6,"Speaker":0,'
-        '"Content":"Ambiguous"}]'
-    )
+    raw = '[{"Start":0,"Start":5,"End":6,"Speaker":0,"Content":"Ambiguous"}]'
     payload = {
-        "segments": [{
-            "start_time": 5,
-            "end_time": 6,
-            "speaker_id": 0,
-            "text": "Ambiguous",
-        }],
+        "segments": [
+            {
+                "start_time": 5,
+                "end_time": 6,
+                "speaker_id": 0,
+                "text": "Ambiguous",
+            }
+        ],
         "raw_text": raw,
         "hit_max_new_tokens": hit_max_new_tokens,
     }
@@ -237,24 +245,29 @@ def test_vibevoice_adapter_rejects_duplicate_generated_segment_keys(
 
 def test_vibevoice_adapter_salvages_a_capped_fenced_prefix() -> None:
     raw = (
-        'assistant\n```json\n'
+        "assistant\n```json\n"
         '[{"Start":0,"End":1,"Speaker":0,"Content":"Complete"},'
         '{"Start":1,"End":2,"Speaker":1,"Content":"cut'
     )
 
-    result = normalize_vibevoice_result({
-        "segments": [],
-        "raw_text": raw,
-        "hit_max_new_tokens": True,
-    }, clip_duration_seconds=3.0)
+    result = normalize_vibevoice_result(
+        {
+            "segments": [],
+            "raw_text": raw,
+            "hit_max_new_tokens": True,
+        },
+        clip_duration_seconds=3.0,
+    )
 
-    assert result.segments == ({
-        "text": "Complete",
-        "start": 0.0,
-        "end": 1.0,
-        "alignable": True,
-        "speaker": "0",
-    },)
+    assert result.segments == (
+        {
+            "text": "Complete",
+            "start": 0.0,
+            "end": 1.0,
+            "alignable": True,
+            "speaker": "0",
+        },
+    )
     assert result.covered_through_seconds == 1.0
 
 
@@ -263,24 +276,29 @@ def test_vibevoice_adapter_salvages_a_cap_inside_the_closing_fence(
     partial_close: str,
 ) -> None:
     raw = (
-        'assistant\n```json\n'
+        "assistant\n```json\n"
         '[{"Start":0,"End":1,"Speaker":0,"Content":"Complete"}]\n'
         f"{partial_close}"
     )
 
-    result = normalize_vibevoice_result({
-        "segments": [],
-        "raw_text": raw,
-        "hit_max_new_tokens": True,
-    }, clip_duration_seconds=2.0)
+    result = normalize_vibevoice_result(
+        {
+            "segments": [],
+            "raw_text": raw,
+            "hit_max_new_tokens": True,
+        },
+        clip_duration_seconds=2.0,
+    )
 
-    assert result.segments == ({
-        "text": "Complete",
-        "start": 0.0,
-        "end": 1.0,
-        "alignable": True,
-        "speaker": "0",
-    },)
+    assert result.segments == (
+        {
+            "text": "Complete",
+            "start": 0.0,
+            "end": 1.0,
+            "alignable": True,
+            "speaker": "0",
+        },
+    )
     assert result.covered_through_seconds == 1.0
 
 
@@ -289,14 +307,17 @@ def test_vibevoice_adapter_rejects_nonprefix_capped_closing_fence_text(
     invalid_close: str,
 ) -> None:
     raw = (
-        'assistant\n```json\n'
+        "assistant\n```json\n"
         '[{"Start":0,"End":1,"Speaker":0,"Content":"Complete"}]\n'
         f"{invalid_close}"
     )
 
     with pytest.raises(ValueError, match="continues after its JSON array"):
-        normalize_vibevoice_result({
-            "segments": [],
-            "raw_text": raw,
-            "hit_max_new_tokens": True,
-        }, clip_duration_seconds=2.0)
+        normalize_vibevoice_result(
+            {
+                "segments": [],
+                "raw_text": raw,
+                "hit_max_new_tokens": True,
+            },
+            clip_duration_seconds=2.0,
+        )

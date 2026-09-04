@@ -22,7 +22,7 @@ from transcribe_native_test_support import (
     trusted_checkout_probe as trusted_checkout_probe,
 )
 
-from audio_cli.transcribe import _native_vibevoice as vibevoice_execution
+from audio_cli.transcribe.native import vibevoice as vibevoice_execution
 
 
 def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
@@ -35,10 +35,7 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
     request = resolve_request(
         stack_id="vibevoice",
         input_path=source,
-        wants=(
-            "verbatim,diarization,segment_timestamps,word_timestamps,"
-            "overlapped_speech"
-        ),
+        wants=("verbatim,diarization,segment_timestamps,word_timestamps,overlapped_speech"),
     )
     metadata = InputMetadata(str(source), 10.0, "wav", 48_000, 2)
 
@@ -52,12 +49,8 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
             return StageOutcome("decode", "ffmpeg", {}, 0.1)
 
         def vibevoice(self, **kwargs):
-            assert kwargs["model"].name == (
-                "d0c9efdb8d614685062c04425d91e01b6f37d944"
-            )
-            assert kwargs["tokenizer"].name == (
-                "d149729398750b98c0af14eb82c78cfe92750796"
-            )
+            assert kwargs["model"].name == ("d0c9efdb8d614685062c04425d91e01b6f37d944")
+            assert kwargs["tokenizer"].name == ("d149729398750b98c0af14eb82c78cfe92750796")
             assert kwargs["config"] == {
                 "device": "mps",
                 "dtype": "bfloat16",
@@ -70,12 +63,9 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
                 "vibevoice-asr-7b",
                 _complete_vibe_payload(
                     [
-                        {"start_time": 0.0, "end_time": 2.0, "speaker_id": 0,
-                         "text": "Hello."},
-                        {"start_time": 2.0, "end_time": 3.0,
-                         "text": "[Environmental Sounds]"},
-                        {"start_time": 3.0, "end_time": 5.0, "speaker_id": 0,
-                         "text": "Again."},
+                        {"start_time": 0.0, "end_time": 2.0, "speaker_id": 0, "text": "Hello."},
+                        {"start_time": 2.0, "end_time": 3.0, "text": "[Environmental Sounds]"},
+                        {"start_time": 3.0, "end_time": 5.0, "speaker_id": 0, "text": "Again."},
                     ],
                     generated_tokens=20,
                     eos_observed=True,
@@ -85,31 +75,42 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
             )
 
         def align(self, *, segments, **kwargs):
-            assert kwargs["model"].name == (
-                "0e1a68e91d815300c7c9754b2a7639378b23db15"
-            )
+            assert kwargs["model"].name == ("0e1a68e91d815300c7c9754b2a7639378b23db15")
             assert [item["unit_id"] for item in segments] == ["native_0", "native_1"]
             return StageOutcome(
                 "aligner",
                 "qwen3-forcedaligner",
-                {"segments": [
-                    {"unit_id": "native_0", "words": [
-                        {"text": "Hello", "start": 0.2, "end": 1.8},
-                    ]},
-                    {"unit_id": "native_1", "words": [
-                        {"text": "Again", "start": 3.2, "end": 4.8},
-                    ]},
-                ]},
+                {
+                    "segments": [
+                        {
+                            "unit_id": "native_0",
+                            "words": [
+                                {"text": "Hello", "start": 0.2, "end": 1.8},
+                            ],
+                        },
+                        {
+                            "unit_id": "native_1",
+                            "words": [
+                                {"text": "Again", "start": 3.2, "end": 4.8},
+                            ],
+                        },
+                    ]
+                },
                 1.0,
             )
 
         def diarize(self, **_kwargs):
-            return StageOutcome("diarizer", "fluidaudio", {"segments": [
-                {"startTimeSeconds": 0.0, "endTimeSeconds": 2.0,
-                 "speakerId": "S0"},
-                {"startTimeSeconds": 1.0, "endTimeSeconds": 1.5,
-                 "speakerId": "S1"},
-            ]}, 0.2)
+            return StageOutcome(
+                "diarizer",
+                "fluidaudio",
+                {
+                    "segments": [
+                        {"startTimeSeconds": 0.0, "endTimeSeconds": 2.0, "speakerId": "S0"},
+                        {"startTimeSeconds": 1.0, "endTimeSeconds": 1.5, "speakerId": "S1"},
+                    ]
+                },
+                0.2,
+            )
 
     registry = {
         "environments": {
@@ -119,18 +120,14 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
         },
         "packages": {
             "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b"),
-            "qwen3-forcedaligner": _ready_single_package(
-                tmp_path, "qwen3-forcedaligner"
-            ),
+            "qwen3-forcedaligner": _ready_single_package(tmp_path, "qwen3-forcedaligner"),
             "fluidaudio": _ready_fluidaudio(tmp_path),
             "speaker-diarization-coreml": _ready_single_package(
                 tmp_path, "speaker-diarization-coreml"
             ),
         },
     }
-    payload = orchestrator.run(
-        request, metadata, registry=registry, transport=Transport()
-    ).payload
+    payload = orchestrator.run(request, metadata, registry=registry, transport=Transport()).payload
     assert payload["segments"][1] == {
         "segment_id": "seg_1",
         "text": "[Environmental Sounds]",
@@ -139,19 +136,27 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
     }
     assert "speaker" not in payload["segments"][0]
     assert payload["segments"][2]["speaker"] == "0"
-    assert payload["overlapped_speech"] == [{
-        "overlap_id": "overlap_0", "start": 1.0, "end": 1.5,
-    }]
+    assert payload["overlapped_speech"] == [
+        {
+            "overlap_id": "overlap_0",
+            "start": 1.0,
+            "end": 1.5,
+        }
+    ]
     assert payload["turns"] == [
         {"turn_id": "turn_0", "speaker": "0", "start": 0.0, "end": 2.0},
         {"turn_id": "turn_1", "speaker": "0", "start": 3.0, "end": 5.0},
     ]
     assert payload["provenance"]["outcomes"]["word_timestamps"] == "produced"
     assert payload["provenance"]["observed"]["segments_without_words"] == 1
-    assert payload["abstentions"] == [{
-        "abstention_id": "ab_0", "reason": "overlap",
-        "start": 1.0, "end": 1.5,
-    }]
+    assert payload["abstentions"] == [
+        {
+            "abstention_id": "ab_0",
+            "reason": "overlap",
+            "start": 1.0,
+            "end": 1.5,
+        }
+    ]
     assert "N/A" not in json.dumps(payload)
 
 
@@ -163,12 +168,14 @@ def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(
             "requires a speaker label",
         ),
         (
-            [{
-                "start_time": 0.0,
-                "end_time": 1.0,
-                "speaker_id": 0,
-                "text": "[Music]",
-            }],
+            [
+                {
+                    "start_time": 0.0,
+                    "end_time": 1.0,
+                    "speaker_id": 0,
+                    "text": "[Music]",
+                }
+            ],
             "must not carry a speaker",
         ),
     ],
@@ -212,9 +219,7 @@ def test_vibevoice_native_diarization_rejects_uncoupled_segment_labels(
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    )
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b")
                 },
             },
             transport=Transport(),
@@ -253,14 +258,16 @@ def test_native_publication_preserves_source_renamed_to_forced_output_after_deco
             return StageOutcome(
                 "asr",
                 "vibevoice-asr-7b",
-                _complete_vibe_payload([
-                    {
-                        "start_time": 0.0,
-                        "end_time": 1.0,
-                        "speaker_id": 0,
-                        "text": "Hello.",
-                    }
-                ]),
+                _complete_vibe_payload(
+                    [
+                        {
+                            "start_time": 0.0,
+                            "end_time": 1.0,
+                            "speaker_id": 0,
+                            "text": "Hello.",
+                        }
+                    ]
+                ),
                 1.0,
             )
 
@@ -271,9 +278,7 @@ def test_native_publication_preserves_source_renamed_to_forced_output_after_deco
             registry={
                 "environments": {"torch-vibevoice": {"state": "ready"}},
                 "packages": {
-                    "vibevoice-asr-7b": _ready_multi_package(
-                        tmp_path, "vibevoice-asr-7b"
-                    )
+                    "vibevoice-asr-7b": _ready_multi_package(tmp_path, "vibevoice-asr-7b")
                 },
             },
             transport=Transport(),
@@ -287,15 +292,19 @@ def test_native_publication_preserves_source_renamed_to_forced_output_after_deco
 
 
 def test_vibevoice_native_turns_preserve_the_recorded_same_speaker_gap() -> None:
-    fixture = json.loads((
-        Path(__file__).parents[1]
-        / "tests/fixtures/vibevoice_multispeaker_excerpt.json"
-    ).read_text(encoding="utf-8"))
-    normalized = normalize_vibevoice_result({
-        "segments": fixture["segments"],
-        "raw_text": json.dumps(fixture["segments"]),
-        "hit_max_new_tokens": False,
-    }, clip_duration_seconds=60.0)
+    fixture = json.loads(
+        (
+            Path(__file__).parents[1] / "tests/fixtures/vibevoice_multispeaker_excerpt.json"
+        ).read_text(encoding="utf-8")
+    )
+    normalized = normalize_vibevoice_result(
+        {
+            "segments": fixture["segments"],
+            "raw_text": json.dumps(fixture["segments"]),
+            "hit_max_new_tokens": False,
+        },
+        clip_duration_seconds=60.0,
+    )
 
     turns = vibevoice_execution._native_turns(normalized.segments)
     assert turns[:2] == [

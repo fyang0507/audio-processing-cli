@@ -40,8 +40,10 @@ def test_swift_stage_runs_built_product_offline_without_speaker_prior(tmp_path) 
         model=model,
         audio=tmp_path / "canonical.wav",
         config={
-            "threshold": 0.6, "step_ratio": 0.1,
-            "min_segment_duration": 0.0, "batch_size": 32,
+            "threshold": 0.6,
+            "step_ratio": 0.1,
+            "min_segment_duration": 0.0,
+            "batch_size": 32,
         },
         overlap=True,
         directory=tmp_path,
@@ -173,6 +175,4 @@ def test_swift_stage_rechecks_product_digest_after_preflight(tmp_path) -> None:
     product.chmod(0o755)
 
     with pytest.raises(StageFailure, match="sha256"):
-        StageTransport._swift_product(
-            checkout, "fluidaudiocli", relative, digest
-        )
+        StageTransport._swift_product(checkout, "fluidaudiocli", relative, digest)

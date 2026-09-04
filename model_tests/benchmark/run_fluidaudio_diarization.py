@@ -15,6 +15,7 @@ import math
 import platform
 import subprocess
 import time
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -28,9 +29,9 @@ def sha256_file(path: Path) -> str:
 
 
 def sha256_json(value: Any) -> str:
-    payload = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -69,11 +70,13 @@ def model_inventory(model_dir: Path | None) -> dict[str, Any] | None:
         raise FileNotFoundError(model_dir)
     files = []
     for path in sorted(item for item in model_dir.rglob("*") if item.is_file()):
-        files.append({
-            "path": str(path.relative_to(model_dir)),
-            "bytes": path.stat().st_size,
-            "sha256": sha256_file(path),
-        })
+        files.append(
+            {
+                "path": str(path.relative_to(model_dir)),
+                "bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+        )
     return {
         "path": str(model_dir),
         "file_count": len(files),
@@ -151,10 +154,12 @@ def main() -> None:
         try:
             rss = process_rss_bytes(process.pid)
             if rss is not None:
-                samples.append({
-                    "elapsed_s": time.perf_counter() - wall_start,
-                    "rss_bytes": rss,
-                })
+                samples.append(
+                    {
+                        "elapsed_s": time.perf_counter() - wall_start,
+                        "rss_bytes": rss,
+                    }
+                )
         except Exception as exc:
             sample_errors.append(f"{type(exc).__name__}: {exc}")
         time.sleep(interval_s)
@@ -178,21 +183,13 @@ def main() -> None:
     ]
     duration_s = float(raw["durationSeconds"])
     finite_bounds = all(
-        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"])
-        for item in segments
+        math.isfinite(item["start_s"]) and math.isfinite(item["end_s"]) for item in segments
     )
     valid_bounds = finite_bounds and all(
-        0 <= item["start_s"] <= item["end_s"] <= duration_s + 0.1
-        for item in segments
+        0 <= item["start_s"] <= item["end_s"] <= duration_s + 0.1 for item in segments
     )
-    nondecreasing = all(
-        left["start_s"] <= right["start_s"]
-        for left, right in zip(segments, segments[1:])
-    )
-    sample_gaps = [
-        right["elapsed_s"] - left["elapsed_s"]
-        for left, right in zip(samples, samples[1:])
-    ]
+    nondecreasing = all(left["start_s"] <= right["start_s"] for left, right in pairwise(segments))
+    sample_gaps = [right["elapsed_s"] - left["elapsed_s"] for left, right in pairwise(samples)]
     normalized_output = {"segments": segments}
     artifact = {
         "schema_version": 1,
@@ -241,9 +238,7 @@ def main() -> None:
             "metric": "target CLI process RSS sampled via ps",
             "sample_interval_ms": args.memory_sample_ms,
             "sample_count": len(samples),
-            "peak_rss_bytes": max(
-                (int(item["rss_bytes"]) for item in samples), default=None
-            ),
+            "peak_rss_bytes": max((int(item["rss_bytes"]) for item in samples), default=None),
             "first_rss_bytes": int(samples[0]["rss_bytes"]) if samples else None,
             "last_rss_bytes": int(samples[-1]["rss_bytes"]) if samples else None,
             "max_sample_gap_s": max(sample_gaps, default=None),
@@ -272,13 +267,17 @@ def main() -> None:
         "normalized_output_sha256": sha256_json(normalized_output),
     }
     output_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "fresh_process_wall_s": wall_s,
-        "fresh_process_rtf": wall_s / duration_s,
-        "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
-        "segment_count": len(segments),
-        "speaker_count": len(artifact["stability"]["speaker_labels"]),
-    }))
+    print(
+        json.dumps(
+            {
+                "fresh_process_wall_s": wall_s,
+                "fresh_process_rtf": wall_s / duration_s,
+                "peak_rss_bytes": artifact["memory"]["peak_rss_bytes"],
+                "segment_count": len(segments),
+                "speaker_count": len(artifact["stability"]["speaker_labels"]),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -87,13 +87,15 @@ def align_all(model, audio, sample_rate: int, segments: list[dict]) -> tuple[lis
         start_s, end_s = segment["Start"], segment["End"]
 
         if speaker == "N/A" or not text.strip():
-            output.append({"speaker": speaker, "start": start_s, "end": end_s,
-                           "text": text, "words": None})
+            output.append(
+                {"speaker": speaker, "start": start_s, "end": end_s, "text": text, "words": None}
+            )
             continue
 
         language = "Chinese" if CJK_RE.search(text) else "English"
-        clip = np.asarray(audio[int(start_s * sample_rate):int(end_s * sample_rate)],
-                          dtype=np.float32)
+        clip = np.asarray(
+            audio[int(start_s * sample_rate) : int(end_s * sample_rate)], dtype=np.float32
+        )
 
         started = time.time()
         try:
@@ -101,9 +103,11 @@ def align_all(model, audio, sample_rate: int, segments: list[dict]) -> tuple[lis
             elapsed = time.time() - started
             total += elapsed
             words = [
-                {"text": item.text,
-                 "start": round(item.start_time + start_s, 3),
-                 "end": round(item.end_time + start_s, 3)}
+                {
+                    "text": item.text,
+                    "start": round(item.start_time + start_s, 3),
+                    "end": round(item.end_time + start_s, 3),
+                }
                 for item in result
             ]
             error = None
@@ -111,8 +115,14 @@ def align_all(model, audio, sample_rate: int, segments: list[dict]) -> tuple[lis
             elapsed = time.time() - started
             words, error = None, f"{type(exc).__name__}: {exc}"
 
-        entry = {"speaker": speaker, "start": start_s, "end": end_s, "text": text,
-                 "words": words, "align_seconds": round(elapsed, 3)}
+        entry = {
+            "speaker": speaker,
+            "start": start_s,
+            "end": end_s,
+            "text": text,
+            "words": words,
+            "align_seconds": round(elapsed, 3),
+        }
         if error:
             entry["error"] = error
         output.append(entry)
@@ -138,7 +148,7 @@ def compare(mlx_segments: list[dict], torch_segments: list[dict]) -> dict:
     deltas_end: list[float] = []
     failures: list[dict] = []
 
-    for index, (mine, theirs) in enumerate(zip(mlx_segments, torch_segments)):
+    for index, (mine, theirs) in enumerate(zip(mlx_segments, torch_segments, strict=False)):
         mine_words = mine.get("words") or []
         their_words = theirs.get("words") or []
         entry: dict = {
@@ -165,10 +175,16 @@ def compare(mlx_segments: list[dict], torch_segments: list[dict]) -> dict:
         if len(mine_words) != len(their_words):
             comparison["token_count_mismatch"] += 1
         else:
-            segment_start = [abs(a["start"] - b["start"]) for a, b in zip(mine_words, their_words)
-                             if isinstance(b.get("start"), (int, float))]
-            segment_end = [abs(a["end"] - b["end"]) for a, b in zip(mine_words, their_words)
-                           if isinstance(b.get("end"), (int, float))]
+            segment_start = [
+                abs(a["start"] - b["start"])
+                for a, b in zip(mine_words, their_words, strict=True)
+                if isinstance(b.get("start"), (int, float))
+            ]
+            segment_end = [
+                abs(a["end"] - b["end"])
+                for a, b in zip(mine_words, their_words, strict=True)
+                if isinstance(b.get("end"), (int, float))
+            ]
             deltas_start.extend(segment_start)
             deltas_end.extend(segment_end)
             if segment_start:
@@ -185,7 +201,7 @@ def compare(mlx_segments: list[dict], torch_segments: list[dict]) -> dict:
         if not values:
             return {"count": 0}
         ordered = sorted(values)
-        index = min(len(ordered) - 1, int(round(0.95 * (len(ordered) - 1))))
+        index = min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))
         return {
             "count": len(ordered),
             "mean_s": round(sum(ordered) / len(ordered), 4),
@@ -206,7 +222,8 @@ def compare(mlx_segments: list[dict], torch_segments: list[dict]) -> dict:
     }
     comparison["mlx_failures"] = failures
     comparison["punctuation_invariant_violations"] = [
-        entry["index"] for entry in comparison["per_segment"]
+        entry["index"]
+        for entry in comparison["per_segment"]
         if entry.get("punctuation_invariant_holds") is False
     ]
     return comparison
@@ -223,8 +240,7 @@ def main() -> int:
     from mlx_audio.audio_io import read as audio_read
     from mlx_audio.stt import load as stt_load
 
-    snapshot = snapshot_download(ALIGNER_REPO, revision=ALIGNER_REVISION,
-                                 local_files_only=True)
+    snapshot = snapshot_download(ALIGNER_REPO, revision=ALIGNER_REVISION, local_files_only=True)
     print(f"aligner snapshot: {snapshot}")
 
     load_started = time.time()
@@ -258,8 +274,14 @@ def main() -> int:
             "platform": f"{platform.system()} {platform.release()} {platform.machine()}",
             "packages": {
                 name: metadata.version(name)
-                for name in ("mlx", "mlx-audio", "mlx-lm", "transformers", "huggingface-hub",
-                             "numpy")
+                for name in (
+                    "mlx",
+                    "mlx-audio",
+                    "mlx-lm",
+                    "transformers",
+                    "huggingface-hub",
+                    "numpy",
+                )
             },
             "torch_installed": False,
         },
@@ -300,8 +322,10 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
     summary = document["comparison"]
-    print(f"\ntoken sequences identical: {summary['token_sequences_identical']}"
-          f"/{len(summary['per_segment'])}")
+    print(
+        f"\ntoken sequences identical: {summary['token_sequences_identical']}"
+        f"/{len(summary['per_segment'])}"
+    )
     print(f"bound deltas (start): {summary['bound_deltas']['start']}")
     print(f"wrote {args.output}")
     return 0

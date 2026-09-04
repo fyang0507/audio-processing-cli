@@ -75,8 +75,7 @@ def _plain(text: str) -> str:
     return "".join(
         character.casefold()
         for character in text
-        if not character.isspace()
-        and not unicodedata.category(character).startswith("P")
+        if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
 
@@ -154,9 +153,7 @@ def _raw_array_prefix(text: str) -> list[Mapping[str, Any]]:
                 raise ValueError("VibeVoice generated JSON code block has no array")
             return []
         if text[content_start:start].strip():
-            raise ValueError(
-                "VibeVoice generated JSON code block has content before its array"
-            )
+            raise ValueError("VibeVoice generated JSON code block has content before its array")
     if start < 0:
         return []
     if not fenced:
@@ -166,19 +163,17 @@ def _raw_array_prefix(text: str) -> list[Mapping[str, Any]]:
     found: list[Mapping[str, Any]] = []
 
     def finish_closed_array() -> list[Mapping[str, Any]]:
-        suffix = text[cursor + 1:].lstrip()
+        suffix = text[cursor + 1 :].lstrip()
         if fenced and suffix in {"`", "``"}:
             # A capped generation may end inside the closing fence after the
             # transcript array itself has closed.  Only exact byte prefixes of
             # that wrapper are salvageable; they cannot contain transcript data.
             return found
         if fenced and suffix.startswith("```"):
-            suffix = suffix[len("```"):]
+            suffix = suffix[len("```") :]
         suffix = suffix.strip()
         if suffix:
-            raise ValueError(
-                "VibeVoice generated text continues after its JSON array"
-            )
+            raise ValueError("VibeVoice generated text continues after its JSON array")
         return found
 
     while True:
@@ -204,9 +199,7 @@ def _raw_array_prefix(text: str) -> list[Mapping[str, Any]]:
         if text[cursor] == "]":
             return finish_closed_array()
         if text[cursor] != ",":
-            raise ValueError(
-                "VibeVoice generated JSON is malformed after its complete prefix"
-            )
+            raise ValueError("VibeVoice generated JSON is malformed after its complete prefix")
         cursor += 1
 
 
@@ -223,9 +216,7 @@ def _complete_raw_array(text: str) -> list[object]:
         if array_start < 0:
             raise ValueError("VibeVoice generated JSON code block has no array")
         if text[content_start:array_start].strip():
-            raise ValueError(
-                "VibeVoice generated JSON code block has content before its array"
-            )
+            raise ValueError("VibeVoice generated JSON code block has content before its array")
     else:
         if array_start < 0:
             raise ValueError("VibeVoice generated text has no JSON array")
@@ -235,10 +226,8 @@ def _complete_raw_array(text: str) -> list[object]:
     if fenced:
         if not suffix.startswith("```"):
             raise ValueError("VibeVoice generated JSON code block is incomplete")
-        if suffix[len("```"):].strip():
-            raise ValueError(
-                "VibeVoice generated text continues after its JSON code block"
-            )
+        if suffix[len("```") :].strip():
+            raise ValueError("VibeVoice generated text continues after its JSON code block")
     elif suffix:
         raise ValueError("VibeVoice generated text continues after its JSON array")
     if not isinstance(value, list):
@@ -263,12 +252,13 @@ def _normalize_segment(
         start_value = _one_alias(item, ("Start", "Start time"), "start")
         end_value = _one_alias(item, ("End", "End time"), "end")
         text = item["Content"]
-        speaker = _one_alias(item, ("Speaker", "Speaker ID"), "speaker") \
-            if {"Speaker", "Speaker ID"} & keys else _MISSING
-    else:
-        raise ValueError(
-            f"VibeVoice segment {index} has unsupported keys {sorted(keys)}"
+        speaker = (
+            _one_alias(item, ("Speaker", "Speaker ID"), "speaker")
+            if {"Speaker", "Speaker ID"} & keys
+            else _MISSING
         )
+    else:
+        raise ValueError(f"VibeVoice segment {index} has unsupported keys {sorted(keys)}")
 
     start = _number(start_value, f"VibeVoice segment {index} start")
     end = _number(end_value, f"VibeVoice segment {index} end")
@@ -300,9 +290,7 @@ def _normalize_segment(
     }
     label = _speaker(speaker)
     if not alignable and label is not None:
-        raise ValueError(
-            f"VibeVoice non-speech event segment {index} must not carry a speaker"
-        )
+        raise ValueError(f"VibeVoice non-speech event segment {index} must not carry a speaker")
     if label is not None:
         normalized["speaker"] = label
     return normalized
@@ -375,9 +363,7 @@ def normalize_vibevoice_result(
         try:
             generated_values = _complete_raw_array(raw_text)
         except (TypeError, ValueError, json.JSONDecodeError, RecursionError) as exc:
-            raise ValueError(
-                "VibeVoice complete raw_text is not a complete JSON array"
-            ) from exc
+            raise ValueError("VibeVoice complete raw_text is not a complete JSON array") from exc
         cleaned_values = payload.get("segments")
         if not isinstance(cleaned_values, list):
             raise TypeError("VibeVoice stage result segments must be an array")
@@ -395,13 +381,7 @@ def normalize_vibevoice_result(
             clip_duration_seconds=clip_duration,
         )
         if cleaned_segments != segments:
-            raise ValueError(
-                "VibeVoice post-process result differs from generated JSON"
-            )
+            raise ValueError("VibeVoice post-process result differs from generated JSON")
 
-    watermark = (
-        float(segments[-1]["end"])
-        if hit_max_new_tokens and segments
-        else None
-    )
+    watermark = float(segments[-1]["end"]) if hit_max_new_tokens and segments else None
     return VibeVoiceResult(segments, hit_max_new_tokens, watermark)

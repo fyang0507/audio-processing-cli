@@ -29,10 +29,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
         ast.dump(body, annotate_fields=True, include_attributes=False).encode()
     ).hexdigest()
     assert digest == "525cffa63a7f1148d4568f56ef84e5f321ffbdf7890ffd30db6428fc2f3f60db"
-    upstream_path = (
-        ROOT
-        / "model_tests/firered/FireRedASR2S/fireredasr2s/fireredasr2system.py"
-    )
+    upstream_path = ROOT / "model_tests/firered/FireRedASR2S/fireredasr2s/fireredasr2system.py"
     if upstream_path.is_file():
         upstream_source = upstream_path.read_text(encoding="utf-8")
         assert hashlib.sha256(upstream_source.encode()).hexdigest() == (
@@ -58,9 +55,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
     wav = np.zeros(14 * 16_000, dtype=np.int16)
     sample_rate = 16_000
     blank_start = None if lid_enabled else 2000
-    native_regions = [
-        (float(index * 2), float(index * 2 + 1)) for index in range(7)
-    ]
+    native_regions = [(float(index * 2), float(index * 2 + 1)) for index in range(7)]
     record: dict[str, Any] = {}
 
     def bounds(uttid: str) -> tuple[int, int]:
@@ -83,16 +78,16 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
                 start_ms, end_ms = bounds(uttid)
                 text = "" if start_ms == blank_start else f"region{start_ms}"
                 record.setdefault("asr_text", {})[uttid] = text
-                results.append({
-                    "uttid": uttid,
-                    "text": text,
-                    "confidence": 0.9,
-                    "timestamp": (
-                        []
-                        if not text
-                        else [(text, 0.001, (end_ms - start_ms) / 1000 - 0.001)]
-                    ),
-                })
+                results.append(
+                    {
+                        "uttid": uttid,
+                        "text": text,
+                        "confidence": 0.9,
+                        "timestamp": (
+                            [] if not text else [(text, 0.001, (end_ms - start_ms) / 1000 - 0.001)]
+                        ),
+                    }
+                )
             return results
 
     class Lid:
@@ -101,10 +96,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
         ) -> list[dict[str, Any]]:
             assert len(uttids) == len(batch_wav)
             record.setdefault("lid_batch_sizes", []).append(len(uttids))
-            return [
-                {"uttid": uttid, "lang": "en", "confidence": 0.9}
-                for uttid in uttids
-            ]
+            return [{"uttid": uttid, "lang": "en", "confidence": 0.9} for uttid in uttids]
 
     class Punc:
         def process_with_timestamp(
@@ -118,19 +110,21 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
             for uttid in uttids:
                 start_ms, end_ms = bounds(uttid)
                 text = record["asr_text"][uttid]
-                results.append({
-                    "uttid": uttid,
-                    "punc_sentences": [{
-                        "start_s": 0.0,
-                        "end_s": (end_ms - start_ms) / 1000,
-                        # Recasing is source-backed punctuator behavior and
-                        # survives in raw output while the punctuation floor's
-                        # casefolded comparison still reproduces the ASR word.
-                        "punc_text": (
-                            text.upper() if call == 1 else text.lower()
-                        ) + ".",
-                    }],
-                })
+                results.append(
+                    {
+                        "uttid": uttid,
+                        "punc_sentences": [
+                            {
+                                "start_s": 0.0,
+                                "end_s": (end_ms - start_ms) / 1000,
+                                # Recasing is source-backed punctuator behavior and
+                                # survives in raw output while the punctuation floor's
+                                # casefolded comparison still reproduces the ASR word.
+                                "punc_text": (text.upper() if call == 1 else text.lower()) + ".",
+                            }
+                        ],
+                    }
+                )
             return results
 
     config = types.SimpleNamespace(
@@ -151,9 +145,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
     namespace = {
         "logger": types.SimpleNamespace(info=lambda *_args: None),
         "re": re,
-        "sf": types.SimpleNamespace(
-            read=lambda *_args, **_kwargs: (wav, sample_rate)
-        ),
+        "sf": types.SimpleNamespace(read=lambda *_args, **_kwargs: (wav, sample_rate)),
     }
     exec(_PINNED_FIRERED_PROCESS, namespace)
     pinned_process = types.MethodType(namespace["process"], system)
@@ -190,9 +182,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
 
     def public_subset(result: dict[str, Any]) -> dict[str, Any]:
         # The stage boundary is JSON, which canonicalizes upstream's tuple VAD bounds.
-        subset = {
-            name: result[name] for name in ("sentences", "words", "vad_segments_ms")
-        }
+        subset = {name: result[name] for name in ("sentences", "words", "vad_segments_ms")}
         return json.loads(json.dumps(subset))
 
     assert public_subset(mirrored) == public_subset(upstream)
@@ -210,11 +200,7 @@ def test_firered_phase_mirror_matches_pinned_upstream_process(
         else ((0, 4000), (6000, 8000, 10000), (12000,))
     )
     reset_batching_texts = [
-        (
-            f"region{start_ms}".upper()
-            if call == 1
-            else f"region{start_ms}".lower()
-        ) + "."
+        (f"region{start_ms}".upper() if call == 1 else f"region{start_ms}".lower()) + "."
         for call, starts in enumerate(starts_by_asr_batch, 1)
         for start_ms in starts
     ]
