@@ -1,5 +1,7 @@
 import numpy as np
 
+import audio_cli.dsp as dsp
+from audio_cli.adjustments import GainAdjustment
 from audio_cli.dsp import (
     analyze_signal,
     apply_channel_balance,
@@ -9,8 +11,14 @@ from audio_cli.dsp import (
     resolve_speech_treatment_intervals,
     smooth_time_mask,
 )
-from audio_cli.profiles import PROFILES
+from audio_cli.profiles import PROFILES, Profile
 from audio_cli.vad import SpeechRegion
+
+
+def test_dsp_facade_preserves_established_domain_types() -> None:
+    assert dsp.GainAdjustment is GainAdjustment
+    assert dsp.Profile is Profile
+    assert dsp.SpeechRegion is SpeechRegion
 
 
 def _sine(

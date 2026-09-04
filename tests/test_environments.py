@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 import pytest
+from spec_document_loader import read_spec_document
 
 from audio_cli import environments as env
 
@@ -119,7 +120,8 @@ def test_the_private_api_guard_is_declared_where_it_is_checkable() -> None:
 def test_spec_documents_only_name_environments_that_exist(path: Path) -> None:
     """The defect this catches: `"environment": "torch"` outliving the environment named torch."""
     known = set(env.environments())
-    for index, body in enumerate(re.findall(r"```json\n(.*?)```", path.read_text(), re.S),
+    for index, body in enumerate(re.findall(
+            r"```json\n(.*?)```", read_spec_document(path), re.S),
                                  start=1):
         document = json.loads(body)
         for name in _environment_values(document):
@@ -154,7 +156,8 @@ def _environment_values(node) -> list[str]:
 @pytest.mark.parametrize("path", SPEC_DOCS, ids=lambda p: p.name)
 def test_spec_documents_only_name_packages_that_exist(path: Path) -> None:
     known = set(env.packages())
-    for index, body in enumerate(re.findall(r"```json\n(.*?)```", path.read_text(), re.S),
+    for index, body in enumerate(re.findall(
+            r"```json\n(.*?)```", read_spec_document(path), re.S),
                                  start=1):
         document = json.loads(body)
         for name in _package_values(document):
@@ -289,7 +292,7 @@ def test_manifest_byte_counts_are_not_the_illustrative_ones_the_specs_used() -> 
 def test_spec_documents_do_not_quote_retired_package_byte_counts() -> None:
     retired = {2463307541, 18253611008, 9878424576, 1932735283, 84279296}
     for path in SPEC_DOCS:
-        body = path.read_text()
+        body = read_spec_document(path)
         for byte_count in retired:
             assert str(byte_count) not in body, (
                 f"{path.name} still quotes retired illustrative byte count {byte_count}"

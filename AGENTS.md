@@ -65,6 +65,11 @@ Model weights and their runtimes are provisioned **only** by `audio packages pul
 hand-download weights, hand-create a virtual environment, or edit a lock file to make an install
 succeed — the pins are what make the recorded measurements mean anything.
 
+Keep every tracked, authored file below 500 physical lines by splitting at responsibility
+boundaries. `tests/test_file_size_budget.py` enforces the limit and owns the narrow exception
+list for generated locks and indivisible recorded fixtures; do not add an exception merely to
+avoid decomposing maintained code, tests, or prose.
+
 ## Habits learned the hard way
 
 - **Do not add structure nobody dispatches on.** A capability report here shed four nested

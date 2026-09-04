@@ -22,6 +22,7 @@ import unicodedata
 from pathlib import Path
 
 import pytest
+from spec_document_loader import read_spec_document
 
 REPO = Path(__file__).resolve().parents[1]
 CONTRACT = REPO / "TRANSCRIBE_CONTRACT.md"
@@ -96,7 +97,7 @@ QWEN_LANGUAGES = (
 
 
 def json_blocks(path: Path) -> list[tuple[int, object]]:
-    bodies = re.findall(r"```json\n(.*?)```", path.read_text(), re.S)
+    bodies = re.findall(r"```json\n(.*?)```", read_spec_document(path), re.S)
     out = []
     for index, body in enumerate(bodies, start=1):
         out.append((index, json.loads(body)))
@@ -189,7 +190,10 @@ def test_capability_errors_publish_the_whole_menu(path: Path) -> None:
 
 def test_every_declared_error_code_is_shown_with_a_fix() -> None:
     """An error code documented but never rendered is a code nobody has had to design."""
-    declared = set(re.findall(r"\| `([a-z_]+)` \| [0-4] \|", CONTRACT.read_text()))
+    declared = set(re.findall(
+        r"\| `([a-z_]+)` \| [0-4] \|",
+        read_spec_document(CONTRACT),
+    ))
     assert len(declared) >= 12, "the error-code table lost rows"
     shown = {}
     for path in SPEC_DOCS:
@@ -404,7 +408,7 @@ def test_want_arguments_in_examples_use_real_capability_names() -> None:
     """A stale name in a shell example is as misleading as one in a payload."""
     intentionally_invalid = {"word_timing"}  # the capability_unknown demonstration
     for path in SPEC_DOCS:
-        for line in path.read_text().splitlines():
+        for line in read_spec_document(path).splitlines():
             match = re.search(r"--want ([a-z_][a-z_,]*)", line)
             if not match:
                 continue  # `--want <capabilities>` placeholders carry no names to check
@@ -416,14 +420,14 @@ def test_want_arguments_in_examples_use_real_capability_names() -> None:
 
 def test_vocabulary_publishes_the_namespace_the_examples_use() -> None:
     """The naming contract and the worked examples must not drift apart."""
-    text = VOCABULARY.read_text()
+    text = read_spec_document(VOCABULARY)
     for name in CAPABILITY_NAMES:
         assert f"`{name}`" in text, f"VOCABULARY.md does not define {name!r}"
 
 
 def test_vibevoice_cap_projection_is_scoped_and_labelled_in_both_specs() -> None:
     for path in SPEC_DOCS:
-        text = " ".join(path.read_text().split())
+        text = " ".join(read_spec_document(path).split())
         assert "11,345 generated tokens over 1,800 seconds" in text
         assert "declared 16,384-token cap" in text
         assert "about 43 minutes of comparable audio" in text

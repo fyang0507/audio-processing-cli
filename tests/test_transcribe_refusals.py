@@ -8,16 +8,17 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from spec_document_loader import read_spec_document
 
+from audio_cli import cli
 from audio_cli.transcribe import refusals, stacks
 from audio_cli.transcribe.planner import resolve_request
-from audio_cli import cli
 
 HAPPY_PATH = Path(__file__).resolve().parents[1] / "TRANSCRIBE_HAPPY_PATH.md"
 
 
 def documented_errors() -> dict[str, dict]:
-    blocks = re.findall(r"```json\n(.*?)```", HAPPY_PATH.read_text(), re.S)
+    blocks = re.findall(r"```json\n(.*?)```", read_spec_document(HAPPY_PATH), re.S)
     return {
         value["code"]: value
         for block in blocks
