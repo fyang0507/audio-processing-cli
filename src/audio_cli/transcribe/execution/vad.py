@@ -12,7 +12,7 @@ import numpy as np
 
 from audio_cli.vad import SileroOnnxVad
 
-from ..adapters import normalize_vad_regions
+from ..adapters.silero import normalize_vad_regions
 from . import runtime
 
 

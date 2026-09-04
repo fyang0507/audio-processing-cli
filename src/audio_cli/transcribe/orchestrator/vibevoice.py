@@ -1,4 +1,4 @@
-"""Execute the native VibeVoice stack over the canonical source timeline."""
+"""Execute the VibeVoice stack over the canonical source timeline."""
 
 from __future__ import annotations
 
@@ -10,11 +10,8 @@ from typing import Any
 from audio_cli.media import capture_file_identity, temporary_directory
 from audio_cli.packages import load_registry
 
-from ..adapters import (
-    normalize_aligned_words,
-    normalize_vibevoice_alignment,
-    normalize_vibevoice_result,
-)
+from ..adapters.aligner import normalize_aligned_words
+from ..adapters.vibevoice import normalize_vibevoice_alignment, normalize_vibevoice_result
 from ..catalog import InputMetadata
 from ..execution.preflight import preflight
 from ..execution.publication import (

@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 TRANSCRIBE = Path(__file__).resolve().parents[1] / "src" / "audio_cli" / "transcribe"
-FACADES = {"native", "orchestrator", "planner", "refusals", "result", "transport"}
+FACADES = {"adapters", "orchestrator", "planner", "refusals", "result", "transport"}
 
 
 def _module_name(path: Path) -> str:
@@ -73,7 +73,11 @@ def test_absolute_root_imports_resolve_to_facades(tmp_path: Path) -> None:
     source = tmp_path / "implementation.py"
     source.write_text("from audio_cli.transcribe import planner\n", encoding="utf-8")
 
-    assert _local_imports(source, "native.common", {"native.common", "planner"}) == {"planner"}
+    assert _local_imports(
+        source,
+        "orchestrator.common",
+        {"orchestrator.common", "planner"},
+    ) == {"planner"}
 
 
 def _transcribe_graph() -> dict[str, set[str]]:

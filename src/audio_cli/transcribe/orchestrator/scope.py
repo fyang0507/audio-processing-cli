@@ -1,4 +1,4 @@
-"""Canonical range and ownership helpers shared by native transcription stacks."""
+"""Canonical range and ownership helpers shared by provider orchestration."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-"""Pure transcription planning and normalized result primitives.
+"""Transcription planning, execution, and normalized result primitives.
 
-The commands in this phase stop after metadata probing and plan serialization. Backends and
-execution land later; every adapter will target the durable normalization boundary here.
+Provider-specific orchestration composes isolated model stages through the shared transport and
+publishes every backend through the durable normalization boundary exposed here.
 """
 
 from .result import (

@@ -131,13 +131,14 @@ src/audio_cli/transcribe/
   stacks.json         the capability half of the stack table: 4 stacks x 9 capabilities
   stacks.py           reader; resolution -> availability, satisfaction, refusal code
   catalog.py          the `capabilities` report
-  planner.py          pure: (stack, input_meta, wants, pins, language) -> Plan | Refusal
+  planner/            request resolution and pure plan construction
   plan.py             Plan and its serialization: roles, execution, capabilities, packages
-  result.py           the normalized schema and the one serializer
+  result/             normalized types, validation, and the one serializer
   sample.py           a placeholder result through that same serializer
-  refusals.py         one builder per error code, fields fixed by the contract's table
-  orchestrator.py     stage order, observed accounting, abstention ledger, coverage, resume
-  transport.py        per-stage execution: environment interpreter, product, or in-process
+  refusals/           one builder per error family, fields fixed by the contract's table
+  orchestrator/       dispatcher plus Qwen, FireRed, and VibeVoice provider workflows
+  execution/          shared preflight, runtime, VAD, publication, coverage, and resume services
+  transport/          per-stage execution: environment interpreter, product, or in-process
   adapters/           decode, silero, diarizer, qwen, firered, vibevoice, aligner
   stages/             standalone scripts that run inside provisioned environments
 src/audio_cli/export/
@@ -286,7 +287,7 @@ with the edits in place; `packages_for("firered", {...four backends...})` return
 
 ### Phase A — the schema, the serializer, and the sample
 
-`result.py` and `sample.py`. One serializer, no second rendering path. Placeholder timing and
+`result/` and `sample.py`. One serializer, no second rendering path. Placeholder timing and
 text are `null`, never `0.0`; enum fields show one legal member.
 
 *Acceptance.* A key exists iff its capability was requested, asserted over the derivation
@@ -297,7 +298,7 @@ constructing both.
 
 ### Phase B — the table, the planner, and every refusal
 
-`stacks.json`, `stacks.py`, `planner.py`, `refusals.py`, `catalog.py`, `plan.py`, and the two
+`stacks.json`, `stacks.py`, `planner/`, `refusals/`, `catalog.py`, `plan.py`, and the two
 commands. Pure functions over the table and a metadata probe: no media decoding beyond
 `probe_media`, no provisioning, no network.
 
@@ -318,9 +319,10 @@ the `mlx` environment exists, and the test skips when it does not. A plan carrie
 
 ### Phase C — transport, orchestration, and the Qwen stacks (issue #21; implemented)
 
-`transport.py`, `orchestrator.py`, the `decode`, `silero`, `diarizer`, `qwen`, and `aligner`
-adapters, their stage scripts, and `audio transcribe run` for `qwen-1.7b` and `qwen-0.6b`. Five
-of seven roles, and the two exit codes that only `run` can return.
+`transport/`, `execution/`, `orchestrator/qwen.py`, the `decode`, `silero`, `diarizer`,
+`qwen`, and `aligner` adapters, their stage scripts, and `audio transcribe run` for
+`qwen-1.7b` and `qwen-0.6b`. Five of seven roles, and the two exit codes that only `run` can
+return.
 
 The ASR uses `_generate_chunks_batched` for both the diarized and the fixed-chunk case: one
 declared `api_path`, and it is the only path that reports per-unit completion, without which

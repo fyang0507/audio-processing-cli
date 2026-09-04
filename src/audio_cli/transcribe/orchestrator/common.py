@@ -1,4 +1,4 @@
-"""Shared result, diarization, and publication helpers for native stacks."""
+"""Shared result, diarization, and publication helpers for provider orchestration."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 from audio_cli.environments import packages as package_catalog
 
-from ..adapters import reconcile_turns
+from ..adapters.diarizer import reconcile_turns
 from ..catalog import InputMetadata, result_source
 from ..execution.publication import _outcomes, _publish_result, _record_metrics
 from ..execution.runtime import _core_plan

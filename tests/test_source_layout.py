@@ -11,7 +11,6 @@ SUBSYSTEMS = ("dsp", "media", "packages", "pipeline")
 FLAT_SUBSYSTEM_PREFIXES = ("_package_", "dsp_", "media_", "pipeline_")
 TRANSCRIBE_ROOT = PACKAGE_ROOT / "transcribe"
 TRANSCRIBE_FACADES = {
-    "native": ["run_native"],
     "orchestrator": [
         "RunProduct",
         "RunRange",
@@ -137,6 +136,16 @@ def test_transcribe_execution_families_use_packages_not_private_root_modules() -
         f"root modules: {private_root_modules}"
     )
     assert (TRANSCRIBE_ROOT / "stages" / "_firered_protocol.py").is_file()
+
+
+def test_provider_orchestration_has_one_package_owner() -> None:
+    orchestrator = TRANSCRIBE_ROOT / "orchestrator"
+    for implementation in ("qwen.py", "firered.py", "vibevoice.py", "common.py", "scope.py"):
+        assert (orchestrator / implementation).is_file()
+    retired_owner = TRANSCRIBE_ROOT / "native"
+    assert not (TRANSCRIBE_ROOT / "native.py").exists()
+    assert not (retired_owner / "__init__.py").exists()
+    assert not list(retired_owner.rglob("*.py"))
 
 
 def test_transcribe_public_execution_imports_stay_stable() -> None:

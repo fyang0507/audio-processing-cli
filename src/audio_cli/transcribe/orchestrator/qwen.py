@@ -14,12 +14,9 @@ from audio_cli.media import capture_file_identity, temporary_directory
 from audio_cli.packages import load_registry
 from audio_cli.vad import VadError
 
-from ..adapters import (
-    normalize_aligned_words,
-    normalize_qwen_segments,
-    reconcile_turns,
-    sentence_segments,
-)
+from ..adapters.aligner import normalize_aligned_words
+from ..adapters.diarizer import reconcile_turns
+from ..adapters.qwen import normalize_qwen_segments, sentence_segments
 from ..catalog import InputMetadata, result_source
 from ..execution.preflight import preflight
 from ..execution.publication import (

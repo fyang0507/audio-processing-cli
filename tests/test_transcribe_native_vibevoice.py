@@ -22,7 +22,7 @@ from transcribe_native_test_support import (
     trusted_checkout_probe as trusted_checkout_probe,
 )
 
-from audio_cli.transcribe.native import vibevoice as vibevoice_execution
+from audio_cli.transcribe.orchestrator import vibevoice as vibevoice_execution
 
 
 def test_vibevoice_native_events_keep_bounds_but_not_speaker_or_words(

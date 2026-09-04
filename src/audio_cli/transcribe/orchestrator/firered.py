@@ -1,4 +1,4 @@
-"""Execute the native FireRed stack over the canonical source timeline."""
+"""Execute the FireRed stack over the canonical source timeline."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 from audio_cli.media import capture_file_identity, temporary_directory
 from audio_cli.packages import load_registry
 
-from ..adapters import normalize_firered_result
+from ..adapters.firered import normalize_firered_result
 from ..catalog import InputMetadata
 from ..execution.preflight import preflight
 from ..execution.publication import (

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from audio_cli import cli
-from audio_cli.transcribe.native import firered as native_firered
+from audio_cli.transcribe.orchestrator import firered as firered_execution
 from audio_cli.transcribe.orchestrator import qwen as orchestrator_qwen
 
 
@@ -249,7 +249,7 @@ def test_firered_run_reaches_preflight_but_not_transport_when_unprovisioned(
 ) -> None:
     monkeypatch.setattr(cli, "probe_media", lambda path: probe())
     monkeypatch.setattr(
-        native_firered,
+        firered_execution,
         "load_registry",
         lambda: {
             "packages": {},
@@ -261,7 +261,7 @@ def test_firered_run_reaches_preflight_but_not_transport_when_unprovisioned(
         def __init__(self, *args, **kwargs):
             raise AssertionError("exit 3 reached native model transport")
 
-    monkeypatch.setattr(native_firered, "StageTransport", ForbiddenTransport)
+    monkeypatch.setattr(firered_execution, "StageTransport", ForbiddenTransport)
     assert (
         cli.main(
             [
