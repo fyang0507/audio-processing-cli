@@ -20,6 +20,7 @@ from ..media import (
     cleanup_temporary_file,
     file_identity_from_descriptor,
     publish_temporary_file,
+    resolve_path_identity,
 )
 from .cues import Cue
 from .errors import OutputExistsError, OutputWriteError, UnsafeOutputError
@@ -29,30 +30,27 @@ def _clock(total_ms: int, separator: str) -> str:
     hours, remainder = divmod(total_ms, 3_600_000)
     minutes, remainder = divmod(remainder, 60_000)
     seconds, milliseconds = divmod(remainder, 1_000)
-    return (
-        f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        f"{separator}{milliseconds:03d}"
-    )
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}{separator}{milliseconds:03d}"
 
 
 def render_srt(cues: Sequence[Cue]) -> str:
     lines: list[str] = []
     for index, cue in enumerate(cues, start=1):
-        lines.extend((
-            str(index),
-            f"{_clock(cue.start_ms, ',')} --> {_clock(cue.end_ms, ',')}",
-            cue.text,
-            "",
-        ))
+        lines.extend(
+            (
+                str(index),
+                f"{_clock(cue.start_ms, ',')} --> {_clock(cue.end_ms, ',')}",
+                cue.text,
+                "",
+            )
+        )
     return "\n".join(lines)
 
 
 def normalize_voice_annotation(speaker: str) -> str | None:
     """Return a single-line WebVTT voice annotation, or none for no usable label."""
     printable = "".join(
-        character
-        for character in speaker
-        if character.isprintable() or character.isspace()
+        character for character in speaker if character.isprintable() or character.isspace()
     )
     voice = " ".join(printable.split())
     # A WebVTT voice annotation is cue text, not an HTML attribute.  WebVTT's
@@ -77,19 +75,20 @@ def render_vtt(cues: Sequence[Cue]) -> str:
             annotation = normalize_voice_annotation(cue.speaker)
             if annotation is not None:
                 text = f"<v {annotation}>{text}"
-        lines.extend((
-            str(index),
-            f"{_clock(cue.start_ms, '.')} --> {_clock(cue.end_ms, '.')}",
-            text,
-            "",
-        ))
+        lines.extend(
+            (
+                str(index),
+                f"{_clock(cue.start_ms, '.')} --> {_clock(cue.end_ms, '.')}",
+                text,
+                "",
+            )
+        )
     return "\n".join(lines)
 
 
 def render_text(segments: Sequence[Mapping[str, Any]]) -> str:
     lines = [
-        (f"[{segment['speaker']}] " if "speaker" in segment else "")
-        + str(segment["text"])
+        (f"[{segment['speaker']}] " if "speaker" in segment else "") + str(segment["text"])
         for segment in segments
     ]
     return "\n".join(lines) + ("\n" if lines else "")
@@ -118,7 +117,7 @@ def _resolved(path: Path) -> Path:
         # The CLI opens input and output paths literally.  Preserve that identity
         # here as well: a leading ``~name`` is a valid literal directory name and
         # must not become a late account lookup during the protected-path check.
-        return path.resolve(strict=False)
+        return resolve_path_identity(path)
     except (OSError, RuntimeError, ValueError) as exc:
         raise OutputWriteError(path, str(exc)) from exc
 
@@ -158,8 +157,7 @@ def write_text_atomic(
                 f"protected path {protected_path} cannot be opened safely: {exc}",
             ) from exc
         if captured is not None and all(
-            (captured.device, captured.inode) != (known.device, known.inode)
-            for known in identities
+            (captured.device, captured.inode) != (known.device, known.inode) for known in identities
         ):
             identities.append(captured)
         try:
@@ -201,9 +199,7 @@ def write_text_atomic(
             # A legal destination may already consume the filesystem's entire NAME_MAX.
             # Keep the sibling temporary name independent of it so atomic publication does
             # not reject an output the filesystem itself accepts.
-            temporary_name = (
-                f".audio-export-{os.getpid()}-{uuid.uuid4().hex}.tmp"
-            )
+            temporary_name = f".audio-export-{os.getpid()}-{uuid.uuid4().hex}.tmp"
             assert_resolved_directory_binding(parent_descriptor, output.parent)
             for protected in protected_paths:
                 if _same_file(output, Path(protected)):
@@ -213,8 +209,7 @@ def write_text_atomic(
             try:
                 descriptor = os.open(
                     temporary_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL
-                    | getattr(os, "O_NOFOLLOW", 0),
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
                     0o666,
                     dir_fd=parent_descriptor,
                 )
@@ -228,18 +223,13 @@ def write_text_atomic(
                         os.close(descriptor)
                 if temporary_identity is None:
                     raise OSError(
-                        f"writer temporary is not a regular file: "
-                        f"{output.parent / temporary_name}"
+                        f"writer temporary is not a regular file: {output.parent / temporary_name}"
                     )
-                with os.fdopen(
-                    descriptor, "w", encoding="utf-8", newline="\n"
-                ) as handle:
+                with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
                     handle.write(text)
                     handle.flush()
                     os.fsync(handle.fileno())
-                assert_resolved_directory_binding(
-                    parent_descriptor, output.parent
-                )
+                assert_resolved_directory_binding(parent_descriptor, output.parent)
                 try:
                     publish_temporary_file(
                         parent_descriptor,
@@ -257,9 +247,7 @@ def write_text_atomic(
                 created = False
             finally:
                 if created and temporary_identity is not None:
-                    cleanup_temporary_file(
-                        parent_descriptor, temporary_name, temporary_identity
-                    )
+                    cleanup_temporary_file(parent_descriptor, temporary_name, temporary_identity)
     except (OutputExistsError, UnsafeOutputError):
         raise
     except (OSError, RuntimeError, ValueError) as exc:

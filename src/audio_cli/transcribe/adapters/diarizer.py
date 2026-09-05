@@ -63,9 +63,7 @@ def _raw_segments(payload: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
     top_level = "segments" in payload
     nested_level = isinstance(nested, Mapping) and "segments" in nested
     if top_level == nested_level:
-        raise ValueError(
-            "FluidAudio result must carry segments at exactly one accepted location"
-        )
+        raise ValueError("FluidAudio result must carry segments at exactly one accepted location")
     values = payload["segments"] if top_level else nested["segments"]
     if not isinstance(values, list):
         raise TypeError("FluidAudio result lacks a segments array")
@@ -99,14 +97,10 @@ def _speaker_label(value: Any) -> str:
     return str(value)
 
 
-def _one_alias(
-    item: Mapping[str, Any], aliases: tuple[str, str], field: str
-) -> Any:
+def _one_alias(item: Mapping[str, Any], aliases: tuple[str, str], field: str) -> Any:
     present = [name for name in aliases if name in item]
     if len(present) != 1:
-        raise ValueError(
-            f"FluidAudio segment must carry exactly one {field} field"
-        )
+        raise ValueError(f"FluidAudio segment must carry exactly one {field} field")
     return item[present[0]]
 
 
@@ -150,18 +144,19 @@ def _spans(kept: list[dict[str, Any]], filtered: list[dict[str, Any]], total: in
             fragment_active += delta
         if right <= left:
             continue
-        speakers = tuple(sorted(
-            speaker for speaker, count in active.items() if count > 0
-        ))
+        speakers = tuple(sorted(speaker for speaker, count in active.items() if count > 0))
         span = _Span(
             left,
             right,
             speakers,
             fragment_active > 0 and not speakers,
         )
-        if result and result[-1].end == span.start \
-                and result[-1].speakers == span.speakers \
-                and result[-1].fragment == span.fragment:
+        if (
+            result
+            and result[-1].end == span.start
+            and result[-1].speakers == span.speakers
+            and result[-1].fragment == span.fragment
+        ):
             previous = result[-1]
             result[-1] = _Span(previous.start, span.end, span.speakers, span.fragment)
         else:
@@ -206,30 +201,42 @@ def reconcile_turns(payload: Mapping[str, Any], *, duration_seconds: float) -> D
     normalized = [_normalize(item, total) for item in _raw_segments(payload)]
     kept = [item for item in normalized if item["end"] - item["start"] >= RAW_FRAGMENT_MIN_SAMPLES]
     filtered = [
-        item for item in normalized
-        if item["end"] - item["start"] < RAW_FRAGMENT_MIN_SAMPLES
+        item for item in normalized if item["end"] - item["start"] < RAW_FRAGMENT_MIN_SAMPLES
     ]
     spans = _spans(kept, filtered, total)
     turns = _turns(spans)
     accepted = [item for item in turns if item.end - item.start >= TURN_MIN_SAMPLES]
     short = [item for item in turns if item.end - item.start < TURN_MIN_SAMPLES]
 
-    units = tuple({
-        "unit_id": f"turn_{index}",
-        "speaker": turn.speaker,
-        "start": _seconds(turn.start),
-        "end": _seconds(turn.end),
-    } for index, turn in enumerate(accepted))
-    public_turns = tuple({
-        "turn_id": item["unit_id"], "speaker": item["speaker"],
-        "start": item["start"], "end": item["end"],
-    } for item in units)
-    overlaps = tuple({"start": _seconds(span.start), "end": _seconds(span.end)}
-                     for span in spans if span.kind == "overlap")
-    raw = tuple({"start": _seconds(span.start), "end": _seconds(span.end)}
-                for span in spans if span.kind == "raw_fragment")
-    shorts = tuple({"start": _seconds(turn.start), "end": _seconds(turn.end)}
-                   for turn in short)
+    units = tuple(
+        {
+            "unit_id": f"turn_{index}",
+            "speaker": turn.speaker,
+            "start": _seconds(turn.start),
+            "end": _seconds(turn.end),
+        }
+        for index, turn in enumerate(accepted)
+    )
+    public_turns = tuple(
+        {
+            "turn_id": item["unit_id"],
+            "speaker": item["speaker"],
+            "start": item["start"],
+            "end": item["end"],
+        }
+        for item in units
+    )
+    overlaps = tuple(
+        {"start": _seconds(span.start), "end": _seconds(span.end)}
+        for span in spans
+        if span.kind == "overlap"
+    )
+    raw = tuple(
+        {"start": _seconds(span.start), "end": _seconds(span.end)}
+        for span in spans
+        if span.kind == "raw_fragment"
+    )
+    shorts = tuple({"start": _seconds(turn.start), "end": _seconds(turn.end)} for turn in short)
 
     # The runner's partition invariant: accepted windows cannot overlap. The other span kinds
     # arise from the same atomic timeline, so a violation here indicates adapter drift.

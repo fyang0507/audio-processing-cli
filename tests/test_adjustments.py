@@ -152,9 +152,7 @@ def test_adjustments_report_invalid_frequency_scope(tmp_path, frequency_scope) -
 def test_adjustments_reject_non_finite_scope_values(tmp_path, field, value) -> None:
     time_scope = {"start": value, "end": 2.0} if field == "time" else "all"
     frequency_scope = (
-        {"low_hz": 55, "high_hz": value, "shape": "notch"}
-        if field == "frequency"
-        else "all"
+        {"low_hz": 55, "high_hz": value, "shape": "notch"} if field == "frequency" else "all"
     )
     path = tmp_path / "adjustments.json"
     path.write_text(

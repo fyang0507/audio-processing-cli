@@ -28,8 +28,13 @@ def split_sentences(text: str) -> list[str]:
     while index < len(text):
         character = text[index]
         boundary = character in _SENTENCE_END or character == "\n"
-        if character == "." and index > 0 and index + 1 < len(text) \
-                and text[index - 1].isdigit() and text[index + 1].isdigit():
+        if (
+            character == "."
+            and index > 0
+            and index + 1 < len(text)
+            and text[index - 1].isdigit()
+            and text[index + 1].isdigit()
+        ):
             boundary = False
         if not boundary:
             index += 1
@@ -64,7 +69,8 @@ def split_sentences(text: str) -> list[str]:
 
 def _plain(text: str) -> str:
     return "".join(
-        character.casefold() for character in text
+        character.casefold()
+        for character in text
         if not character.isspace() and not unicodedata.category(character).startswith("P")
     )
 
@@ -157,9 +163,7 @@ def normalize_qwen_segments(
         unit = by_id[identifier]
         processed = item.get("processed")
         if not isinstance(processed, bool):
-            raise TypeError(
-                f"Qwen stage unit {identifier!r} processed must be a boolean"
-            )
+            raise TypeError(f"Qwen stage unit {identifier!r} processed must be a boolean")
         if not processed:
             unfinished.append(dict(unit))
             continue

@@ -5,9 +5,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
 import numpy as np
 import onnxruntime as ort
@@ -21,6 +19,8 @@ from .media import (
     sha256_regular_file_at,
 )
 from .paths import models_dir, root
+from .vad_contract import SpeechRegion
+from .vad_contract import VadDetector as VadDetector
 
 MODEL_VERSION = "silero-vad-6.2.1"
 MODEL_URL = (
@@ -33,38 +33,6 @@ MODEL_FILENAME = f"{MODEL_VERSION}.onnx"
 
 class VadError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class SpeechRegion:
-    start: float
-    end: float
-    mean_probability: float
-    peak_probability: float
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "start": round(self.start, 6),
-            "end": round(self.end, 6),
-            "mean_probability": round(self.mean_probability, 6),
-            "peak_probability": round(self.peak_probability, 6),
-        }
-
-
-class VadDetector(Protocol):
-    model_version: str
-
-    def detect(
-        self,
-        samples: np.ndarray,
-        sample_rate: int,
-        *,
-        threshold: float,
-        exit_threshold: float,
-        min_speech_ms: int,
-        min_silence_ms: int,
-        speech_pad_ms: int,
-    ) -> list[SpeechRegion]: ...
 
 
 def _cache_root() -> Path:
@@ -103,22 +71,20 @@ def resolve_model_path(explicit: Path | None = None) -> Path:
             create=True,
         ) as parent_descriptor:
             try:
-                existing = sha256_regular_file_at(
-                    parent_descriptor, target.name
-                )
+                existing = sha256_regular_file_at(parent_descriptor, target.name)
             except OSError:
                 existing = None
             if existing == MODEL_SHA256:
                 return target
-            partial_name = (
-                f".audio-vad-download-{os.getpid()}-{uuid.uuid4().hex}.part"
-            )
+            partial_name = f".audio-vad-download-{os.getpid()}-{uuid.uuid4().hex}.part"
             created = False
             temporary_identity = None
             try:
                 descriptor = os.open(
                     partial_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                    os.O_WRONLY
+                    | os.O_CREAT
+                    | os.O_EXCL
                     | getattr(os, "O_NOFOLLOW", 0)
                     | getattr(os, "O_CLOEXEC", 0),
                     0o666,
@@ -169,9 +135,7 @@ def resolve_model_path(explicit: Path | None = None) -> Path:
                 created = False
             finally:
                 if created and temporary_identity is not None:
-                    cleanup_temporary_file(
-                        parent_descriptor, partial_name, temporary_identity
-                    )
+                    cleanup_temporary_file(parent_descriptor, partial_name, temporary_identity)
     except (OSError, urllib.error.URLError) as exc:
         raise VadError(
             "Could not download the pinned Silero VAD model. Connect once to populate the cache, "
@@ -196,19 +160,13 @@ class SileroOnnxVad:
                 providers=["CPUExecutionProvider"],
                 sess_options=options,
             )
-        except (
-            Exception
-        ) as exc:  # onnxruntime exposes several provider-specific exceptions
-            raise VadError(
-                f"Could not load Silero VAD model {resolved}: {exc}"
-            ) from exc
+        except Exception as exc:  # onnxruntime exposes several provider-specific exceptions
+            raise VadError(f"Could not load Silero VAD model {resolved}: {exc}") from exc
         self.model_path = resolved
 
     def probabilities(self, samples: np.ndarray, sample_rate: int) -> np.ndarray:
         if sample_rate != 16_000:
-            raise VadError(
-                f"Silero VAD requires 16000 Hz input, received {sample_rate}"
-            )
+            raise VadError(f"Silero VAD requires 16000 Hz input, received {sample_rate}")
         mono = np.asarray(samples, dtype=np.float32).reshape(-1)
         state = np.zeros((2, 1, 128), dtype=np.float32)
         context = np.zeros((1, self.context_samples), dtype=np.float32)
@@ -217,9 +175,7 @@ class SileroOnnxVad:
             chunk = mono[offset : offset + self.frame_samples]
             if chunk.size < self.frame_samples:
                 chunk = np.pad(chunk, (0, self.frame_samples - chunk.size))
-            model_input = np.concatenate((context, chunk[None, :]), axis=1).astype(
-                np.float32
-            )
+            model_input = np.concatenate((context, chunk[None, :]), axis=1).astype(np.float32)
             output, state = self.session.run(
                 None,
                 {
@@ -310,12 +266,8 @@ class SileroOnnxVad:
                 SpeechRegion(
                     start=start / sample_rate,
                     end=end / sample_rate,
-                    mean_probability=float(np.mean(region_probs))
-                    if region_probs.size
-                    else 0.0,
-                    peak_probability=float(np.max(region_probs))
-                    if region_probs.size
-                    else 0.0,
+                    mean_probability=float(np.mean(region_probs)) if region_probs.size else 0.0,
+                    peak_probability=float(np.max(region_probs)) if region_probs.size else 0.0,
                 )
             )
         return regions

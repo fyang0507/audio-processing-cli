@@ -412,7 +412,7 @@ figures assume. So:
   `<root>/envs/<env>/bin/python <stage script> <request> <result>`, where the stage script is a
   file inside the installed wheel, passed by absolute path. FireRed is one deliberate exception:
   its single `torch-firered` stage script loads VAD, optional LID, ASR, and punctuator models
-  co-resident, matching `model_tests/benchmark/run_firered.py:395-426` and the recorded artifacts.
+  co-resident, matching `model_tests/benchmark/run_firered.py:181-223` and the recorded artifacts.
   Splitting those roles would be a new implementation with no supporting measurement.
 - `audio_cli` is *not* installed into provisioned environments: it would drag onnxruntime and a
   conflicting numpy into each one.

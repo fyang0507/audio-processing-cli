@@ -10,12 +10,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 ITEM_RE = re.compile(r"(?ms)^    item \[(\d+)\]:\n(.*?)(?=^    item \[|\Z)")
 INTERVAL_RE = re.compile(
-    r'(?ms)^        intervals \[\d+\]:\n'
-    r'            xmin = ([0-9.eE+-]+) *\n'
-    r'            xmax = ([0-9.eE+-]+) *\n'
+    r"(?ms)^        intervals \[\d+\]:\n"
+    r"            xmin = ([0-9.eE+-]+) *\n"
+    r"            xmax = ([0-9.eE+-]+) *\n"
     r'            text = "(.*?)" *$'
 )
 
@@ -37,11 +36,13 @@ def parse_tiers(path: Path) -> dict[str, list[dict[str, Any]]]:
             continue
         intervals = []
         for start, end, value in INTERVAL_RE.findall(body):
-            intervals.append({
-                "start_s": float(start),
-                "end_s": float(end),
-                "text": value.replace('""', '"'),
-            })
+            intervals.append(
+                {
+                    "start_s": float(start),
+                    "end_s": float(end),
+                    "text": value.replace('""', '"'),
+                }
+            )
         tiers[name_match.group(1)] = intervals
     return tiers
 
@@ -51,8 +52,9 @@ def main() -> None:
     parser.add_argument("--textgrid", required=True)
     parser.add_argument("--audio", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--start", type=float, required=True,
-                        help="Start in original recording seconds")
+    parser.add_argument(
+        "--start", type=float, required=True, help="Start in original recording seconds"
+    )
     parser.add_argument("--duration", type=float, required=True)
     parser.add_argument("--source-url", required=True)
     args = parser.parse_args()
@@ -66,14 +68,15 @@ def main() -> None:
     for item in tiers["utterance"]:
         if not item["text"] or item["end_s"] <= args.start or item["start_s"] >= end:
             continue
-        utterances.append({
-            "start_s": max(item["start_s"], args.start) - args.start,
-            "end_s": min(item["end_s"], end) - args.start,
-            "speaker": "participant",
-            "text": item["text"],
-        })
-    tasks = [item for item in tiers["task"]
-             if item["end_s"] > args.start and item["start_s"] < end]
+        utterances.append(
+            {
+                "start_s": max(item["start_s"], args.start) - args.start,
+                "end_s": min(item["end_s"], end) - args.start,
+                "speaker": "participant",
+                "text": item["text"],
+            }
+        )
+    tasks = [item for item in tiers["task"] if item["end_s"] > args.start and item["start_s"] < end]
     manifest = {
         "schema_version": 1,
         "corpus": "SpiCE: Speech in Cantonese and English",
@@ -97,11 +100,15 @@ def main() -> None:
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "output": str(output),
-        "utterances": len(utterances),
-        "reference_characters": len(manifest["reference_text"]),
-    }))
+    print(
+        json.dumps(
+            {
+                "output": str(output),
+                "utterances": len(utterances),
+                "reference_characters": len(manifest["reference_text"]),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

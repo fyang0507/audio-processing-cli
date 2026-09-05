@@ -4,9 +4,10 @@ import numpy as np
 import pytest
 from scipy.io import wavfile
 
-import audio_cli.pipeline as pipeline_module
 from audio_cli.media import is_enhanced_media, probe_media
 from audio_cli.pipeline import EnhancementPipeline, PipelineError
+from audio_cli.pipeline import preparation as pipeline_preparation
+from audio_cli.pipeline import runner as pipeline_runner
 from audio_cli.profiles import PROFILES, STAGE_ORDER
 from audio_cli.vad import SpeechRegion
 
@@ -47,10 +48,7 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     )
     after_lufs = report["measurements"]["after"]["program"]["input_i"]
     assert abs(after_lufs - PROFILES["product-demo"].target_lufs) <= 0.6
-    assert (
-        report["resolved_operations_sha256"]
-        == dry_run_report["resolved_operations_sha256"]
-    )
+    assert report["resolved_operations_sha256"] == dry_run_report["resolved_operations_sha256"]
 
 
 def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
@@ -63,34 +61,26 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     isolated_machine = (time >= 0.3) & (time < 0.8)
     adjacent_machine = (time >= 1.2) & (time < 1.5)
     speech = (time >= 1.5) & (time < 3.5)
-    audio[isolated_machine] = (0.10 * np.sin(2 * np.pi * 900 * time[isolated_machine]))[
-        :, None
-    ]
-    audio[adjacent_machine] = (
-        0.10 * np.sin(2 * np.pi * 1100 * time[adjacent_machine])
-    )[:, None]
+    audio[isolated_machine] = (0.10 * np.sin(2 * np.pi * 900 * time[isolated_machine]))[:, None]
+    audio[adjacent_machine] = (0.10 * np.sin(2 * np.pi * 1100 * time[adjacent_machine]))[:, None]
     audio[speech] = (0.006 * np.sin(2 * np.pi * 180 * time[speech]))[:, None]
     source = tmp_path / "mixed-regions.wav"
     output = tmp_path / "mixed-regions-enhanced.wav"
     wavfile.write(source, sample_rate, audio)
 
     correction_calls: list[set[str]] = []
-    apply_corrections = pipeline_module.apply_machine_region_corrections
+    apply_corrections = pipeline_runner.apply_machine_region_corrections
 
     def record_corrections(samples, rate, analysis, corrections_db, fade_ms):
         correction_calls.append(set(corrections_db))
         return apply_corrections(samples, rate, analysis, corrections_db, fade_ms)
 
-    monkeypatch.setattr(
-        pipeline_module, "apply_machine_region_corrections", record_corrections
-    )
+    monkeypatch.setattr(pipeline_runner, "apply_machine_region_corrections", record_corrections)
     report = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad()).run(
         source, output=output, dry_run=False
     )
 
-    source_stage = next(
-        stage for stage in report["stages"] if stage["name"] == "source-balance"
-    )
+    source_stage = next(stage for stage in report["stages"] if stage["name"] == "source-balance")
     abstained = set(source_stage["abstained_regions"])
     operated = {operation["region_id"] for operation in source_stage["operations"]}
 
@@ -101,12 +91,9 @@ def test_pipeline_never_corrects_a_machine_region_that_overlaps_speech(
     assert abstained.isdisjoint(operated)
     assert all(abstained.isdisjoint(call) for call in correction_calls)
     final_evaluations = {
-        item["region_id"]: item["status"]
-        for item in source_stage["final_region_evaluations"]
+        item["region_id"]: item["status"] for item in source_stage["final_region_evaluations"]
     }
-    assert all(
-        final_evaluations[region_id] == "abstained_overlap" for region_id in abstained
-    )
+    assert all(final_evaluations[region_id] == "abstained_overlap" for region_id in abstained)
 
 
 def test_an_enhanced_render_is_refused_as_input_unless_it_is_allowed(tmp_path) -> None:
@@ -155,7 +142,7 @@ def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
     the guarantee that speech effects are fully engaged at the last detected sample.
     """
     audio = np.zeros((samples_48k, 1), dtype=np.float32)
-    vad = pipeline_module._vad_audio(audio, 48_000)
+    vad = pipeline_preparation._vad_audio(audio, 48_000)
 
     assert vad.size / 16_000 <= samples_48k / 48_000 + 1e-12, (
         f"{samples_48k} samples at 48 kHz became {vad.size} at 16 kHz, which is "
@@ -166,13 +153,13 @@ def test_the_vad_timeline_never_runs_past_the_source(samples_48k: int) -> None:
 def test_a_source_already_at_16k_is_passed_through_whole() -> None:
     """The truncation must not eat a sample when no resampling happens."""
     audio = np.zeros((16_000, 1), dtype=np.float32)
-    assert pipeline_module._vad_audio(audio, 16_000).size == 16_000
+    assert pipeline_preparation._vad_audio(audio, 16_000).size == 16_000
 
 
 def test_the_vad_timeline_loses_at_most_one_sample() -> None:
     """Truncating is the safe direction, but it must not become a habit of discarding tail."""
     samples_48k = 1332160
     audio = np.zeros((samples_48k, 1), dtype=np.float32)
-    vad = pipeline_module._vad_audio(audio, 48_000)
+    vad = pipeline_preparation._vad_audio(audio, 48_000)
     exact = samples_48k * 16_000 / 48_000
     assert exact - vad.size < 1.0, f"dropped {exact - vad.size:.3f} samples of tail"

@@ -94,6 +94,16 @@ transcription stacks, and deterministic transcript export. Issue #21 is merged; 
   and unlink, because that process can already unlink canonical user files directly and POSIX has
   no portable conditional-unlink primitive. Qwen and FireRed
   recover per-unit prefixes; VibeVoice recovers only complete decoded prefixes.
+  Provider orchestration has one code owner under `src/audio_cli/transcribe/orchestrator/`:
+  its dispatcher delegates directly to the Qwen, FireRed, or VibeVoice workflow. The previously
+  importable `audio_cli.transcribe.native.run_native` path remains as a thin, frozen compatibility
+  shim for FireRed and VibeVoice; new callers use `audio_cli.transcribe.orchestrator.run`. Here,
+  “native” remains a capability or model-output property rather than a package boundary.
+  The pre-release export-only builders formerly re-exported from
+  `audio_cli.transcribe.refusals` remain as direct compatibility aliases, while their owner and
+  preferred public import path is `audio_cli.export`. Shared refusal primitives retain one
+  implementation under `audio_cli.command`, and the command-line payloads and exit codes are
+  unchanged.
   `packages verify` also gates every ready package on a `ready` environment registry entry: a
   missing or non-ready entry keeps the environment verdict `absent`, emits
   `environment_not_ready`, and skips all checkout and runtime probes below that root.
@@ -117,7 +127,8 @@ transcription stacks, and deterministic transcript export. Issue #21 is merged; 
 - [TRANSCRIBE_IMPLEMENTATION_PLAN.md](TRANSCRIBE_IMPLEMENTATION_PLAN.md) records the completed phase
   boundaries. [TRANSCRIBE_DESIGN_HANDOFF.md](TRANSCRIBE_DESIGN_HANDOFF.md) is the historical design
   record and still explains the risks and rejected alternatives.
-- `tests/test_spec_docs.py` holds the spec documents' invariants and runs in the normal suite.
+- The `tests/test_spec_docs*.py` suite holds the spec documents' invariants and runs in the
+  normal suite.
 
 ## Current candidate: issues #22–#24
 

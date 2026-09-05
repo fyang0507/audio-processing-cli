@@ -62,9 +62,7 @@ class TimingRequiredError(ExportError):
         self.wants = tuple(wants)
         self.plan = dict(plan)
         self.word_timing_outcome = word_timing_outcome
-        super().__init__(
-            f"{self.input_path} has no produced word timing for subtitle export"
-        )
+        super().__init__(f"{self.input_path} has no produced word timing for subtitle export")
 
 
 class OutputExistsError(ExportError):
@@ -82,9 +80,7 @@ class UnsafeOutputError(ExportError):
     def __init__(self, output: Path, protected: Path) -> None:
         self.output = Path(output)
         self.protected = Path(protected)
-        super().__init__(
-            f"output {self.output} resolves to protected input {self.protected}"
-        )
+        super().__init__(f"output {self.output} resolves to protected input {self.protected}")
 
 
 class OutputWriteError(ExportError):

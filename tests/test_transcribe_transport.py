@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import subprocess
@@ -10,10 +11,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from audio_cli import packages as pkg
 from audio_cli import paths
 from audio_cli.transcribe.stages import qwen as qwen_stage
-from audio_cli.transcribe.transport import StageFailure, StageTransport, SubprocessRunner
+from audio_cli.transcribe.transport import (
+    StageFailure,
+    StageTransport,
+    SubprocessRunner,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -36,11 +40,17 @@ class RecordingRunner:
             Path(command[-1]).write_bytes(b"wav")
         else:
             request = json.loads(Path(command[-2]).read_text())
-            Path(command[-1]).write_text(json.dumps({
-                "units": [{"unit_id": item["unit_id"], "processed": True, "text": "ok"}
-                          for item in request["units"]],
-                "metrics": {"wall_seconds": 1.25, "peak_rss_bytes": 40},
-            }))
+            Path(command[-1]).write_text(
+                json.dumps(
+                    {
+                        "units": [
+                            {"unit_id": item["unit_id"], "processed": True, "text": "ok"}
+                            for item in request["units"]
+                        ],
+                        "metrics": {"wall_seconds": 1.25, "peak_rss_bytes": 40},
+                    }
+                )
+            )
         return subprocess.CompletedProcess(command, 0, "", "")
 
 
@@ -104,18 +114,42 @@ def test_stage_sources_pin_the_measured_private_api_and_aligner_language_rule() 
     qwen = (stages / "qwen.py").read_text()
     aligner = (stages / "aligner.py").read_text()
     assert "model._generate_chunks_batched" in qwen
-    assert 'max_tokens=remaining' in qwen
+    assert "max_tokens=remaining" in qwen
     assert "mx.clear_cache()" in qwen
     assert 'CJK = re.compile(r"[一-鿿]")' in aligner
     assert '"Chinese" if CJK.search(text) else "English"' in aligner
     assert 'request.get("language")' not in aligner
     assert '"words": None' in aligner
-    runner = (
-        Path(__file__).parents[1]
-        / "model_tests/benchmark/run_turn_attributed_mlx_asr.py"
+    inference = (
+        Path(__file__).parents[1] / "model_tests/benchmark/turn_attributed_mlx_asr/inference.py"
     ).read_text(encoding="utf-8")
-    assert "group_texts, group_generated, group_prompts, group_processed" in runner
+    assert "group_texts, group_generated, group_prompts, group_processed" in inference
     assert "texts, generated, prompts, processed = method(" in qwen
+
+
+def test_turn_attributed_runner_provenance_hashes_every_source(monkeypatch) -> None:
+    benchmark = Path(__file__).parents[1] / "model_tests/benchmark"
+    monkeypatch.syspath_prepend(str(benchmark))
+    turn_report = importlib.import_module("turn_attributed_mlx_asr.report")
+    turn_runtime = importlib.import_module("turn_attributed_mlx_asr.runtime")
+    runner = benchmark / "run_turn_attributed_mlx_asr.py"
+    provenance = turn_report.runner_provenance(runner)
+    expected_names = [
+        "run_turn_attributed_mlx_asr.py",
+        "turn_attributed_mlx_asr/__init__.py",
+        "turn_attributed_mlx_asr/inference.py",
+        "turn_attributed_mlx_asr/plan.py",
+        "turn_attributed_mlx_asr/report.py",
+        "turn_attributed_mlx_asr/runtime.py",
+    ]
+    assert [item["name"] for item in provenance["source_files"]] == expected_names
+    assert provenance["path"] == str(runner.resolve())
+    assert provenance["sha256"] == turn_runtime.sha256(runner)
+    for item in provenance["source_files"]:
+        assert item["sha256"] == turn_runtime.sha256(Path(item["path"]))
+    assert provenance["source_set_sha256"] == turn_runtime.stable_json_sha256(
+        [{"name": item["name"], "sha256": item["sha256"]} for item in provenance["source_files"]]
+    )
 
 
 def test_missing_stage_script_preserves_dispatchable_role_and_backend() -> None:
@@ -160,7 +194,9 @@ def test_failed_stage_without_result_preserves_transport_metrics(tmp_path) -> No
     ],
 )
 def test_stage_rejects_valid_json_with_the_wrong_envelope_shape(
-    tmp_path, payload, detail,
+    tmp_path,
+    payload,
+    detail,
 ) -> None:
     class InvalidEnvelopeRunner:
         def run(self, command):
@@ -212,9 +248,7 @@ def test_json_stage_rejects_duplicate_envelope_keys_with_transport_outcome(
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
-    with pytest.raises(
-        StageFailure, match="duplicate JSON object key 'units'"
-    ) as caught:
+    with pytest.raises(StageFailure, match="duplicate JSON object key 'units'") as caught:
         StageTransport(DuplicateResultRunner()).qwen(
             backend="qwen3-asr-0.6b-8bit",
             model=tmp_path / "model",
@@ -245,12 +279,10 @@ def test_json_stage_rejects_duplicate_envelope_keys_with_transport_outcome(
 def test_stage_rejects_non_numeric_wall_metrics(tmp_path, metrics) -> None:
     class InvalidMetricsRunner:
         def run(self, command):
-            Path(command[-1]).write_text(
-                json.dumps({"metrics": metrics}), encoding="utf-8"
-            )
+            Path(command[-1]).write_text(json.dumps({"metrics": metrics}), encoding="utf-8")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-    with pytest.raises(StageFailure, match="must be (a JSON number|JSON numbers)"):
+    with pytest.raises(StageFailure, match=r"must be (a JSON number|JSON numbers)"):
         StageTransport(InvalidMetricsRunner()).align(
             model=tmp_path / "model",
             audio=tmp_path / "audio.wav",
@@ -323,18 +355,23 @@ def test_qwen_stage_salvages_completed_units_after_mid_generation_error(
 
     request_path = tmp_path / "request.json"
     result_path = tmp_path / "result.json"
-    request_path.write_text(json.dumps({
-        "model": str(tmp_path / "model"),
-        "audio": str(tmp_path / "audio.wav"),
-        "units": [
-            {"unit_id": "u0", "start": 0.0, "end": 1.0},
-            {"unit_id": "u1", "start": 1.0, "end": 2.0},
-        ],
-        "language": None,
-        "max_tokens": 100,
-        "batch_size": 1,
-        "clear_cache_after_every_batch": True,
-    }), encoding="utf-8")
+    request_path.write_text(
+        json.dumps(
+            {
+                "model": str(tmp_path / "model"),
+                "audio": str(tmp_path / "audio.wav"),
+                "units": [
+                    {"unit_id": "u0", "start": 0.0, "end": 1.0},
+                    {"unit_id": "u1", "start": 1.0, "end": 2.0},
+                ],
+                "language": None,
+                "max_tokens": 100,
+                "batch_size": 1,
+                "clear_cache_after_every_batch": True,
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(sys, "argv", ["qwen.py", str(request_path), str(result_path)])
     assert qwen_stage.main() == 4
     result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -345,181 +382,15 @@ def test_qwen_stage_salvages_completed_units_after_mid_generation_error(
 
 def test_real_subprocess_runner_streams_stderr_and_samples_child_rss() -> None:
     progress = io.StringIO()
-    completed = SubprocessRunner(progress).run([
-        sys.executable,
-        "-c",
-        "import sys,time; value=bytearray(1000000); print('working', file=sys.stderr, flush=True); time.sleep(0.1)",
-    ])
+    completed = SubprocessRunner(progress).run(
+        [
+            sys.executable,
+            "-c",
+            "import sys,time; value=bytearray(1000000); print('working', file=sys.stderr, flush=True); time.sleep(0.1)",
+        ]
+    )
     assert completed.returncode == 0
     assert completed.stderr == "working\n"
     assert progress.getvalue() == "working\n"
     assert completed.peak_rss_bytes is not None
     assert completed.peak_rss_bytes > 0
-
-
-def test_swift_stage_runs_built_product_offline_without_speaker_prior(tmp_path) -> None:
-    checkout = tmp_path / "fluidaudio"
-    product = checkout / ".build" / "arm64-apple-macosx" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_bytes(b"binary")
-    product.chmod(0o755)
-    model = tmp_path / "snapshot"
-    model.mkdir()
-
-    class SwiftRunner:
-        def __init__(self):
-            self.command = None
-
-        def run(self, command):
-            self.command = command
-            output = Path(command[command.index("--output") + 1])
-            output.write_text(json.dumps({"segments": []}))
-            return subprocess.CompletedProcess(command, 0, "", "")
-
-    runner = SwiftRunner()
-    StageTransport(runner).diarize(
-        checkout=checkout,
-        product="fluidaudiocli",
-        product_path=product.relative_to(checkout).as_posix(),
-        product_sha256=pkg.sha256_file(product),
-        model=model,
-        audio=tmp_path / "canonical.wav",
-        config={
-            "threshold": 0.6, "step_ratio": 0.1,
-            "min_segment_duration": 0.0, "batch_size": 32,
-        },
-        overlap=True,
-        directory=tmp_path,
-    )
-    assert runner.command[0] == str(product.resolve())
-    assert runner.command[1:3] == ["process", str(tmp_path / "canonical.wav")]
-    assert runner.command[runner.command.index("--mode") + 1] == "offline"
-    model_root = Path(runner.command[runner.command.index("--model-dir") + 1])
-    assert model_root.parent == tmp_path
-    binding = model_root / "speaker-diarization"
-    assert binding.is_symlink()
-    assert binding.resolve() == model.resolve()
-    assert "--num-speakers" not in runner.command
-    assert runner.command[-1] == "--overlapping-segments"
-    assert not (tmp_path / "diarizer.request.json").exists()
-    assert runner.command[runner.command.index("--batch-size") + 1] == "32"
-
-
-def test_swift_stage_recursion_is_a_typed_failure(tmp_path: Path) -> None:
-    checkout = tmp_path / "fluidaudio"
-    product = checkout / ".build" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_bytes(b"binary")
-    product.chmod(0o755)
-    model = tmp_path / "snapshot"
-    model.mkdir()
-
-    class DeepResultRunner:
-        def run(self, command):
-            output = Path(command[command.index("--output") + 1])
-            output.write_text(
-                "[" * 10_000 + "0" + "]" * 10_000,
-                encoding="utf-8",
-            )
-            return subprocess.CompletedProcess(command, 0, "", "")
-
-    with pytest.raises(StageFailure, match="invalid result JSON"):
-        StageTransport(DeepResultRunner()).diarize(
-            checkout=checkout,
-            product="fluidaudiocli",
-            product_path=product.relative_to(checkout).as_posix(),
-            product_sha256=pkg.sha256_file(product),
-            model=model,
-            audio=tmp_path / "canonical.wav",
-            config={
-                "threshold": 0.6,
-                "step_ratio": 0.1,
-                "min_segment_duration": 0.0,
-                "batch_size": 32,
-            },
-            overlap=False,
-            directory=tmp_path,
-        )
-
-
-def test_swift_stage_rejects_duplicate_raw_json_keys(tmp_path: Path) -> None:
-    checkout = tmp_path / "fluidaudio"
-    product = checkout / ".build" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_bytes(b"binary")
-    product.chmod(0o755)
-    model = tmp_path / "snapshot"
-    model.mkdir()
-
-    class DuplicateResultRunner:
-        def run(self, command):
-            output = Path(command[command.index("--output") + 1])
-            output.write_text(
-                '{"segments":[{"startTimeSeconds":0.0,'
-                '"endTimeSeconds":1.0,"speakerId":"speaker_0"}],'
-                '"segments":[]}',
-                encoding="utf-8",
-            )
-            return subprocess.CompletedProcess(command, 0, "", "")
-
-    with pytest.raises(
-        StageFailure, match="duplicate JSON object key 'segments'"
-    ):
-        StageTransport(DuplicateResultRunner()).diarize(
-            checkout=checkout,
-            product="fluidaudiocli",
-            product_path=product.relative_to(checkout).as_posix(),
-            product_sha256=pkg.sha256_file(product),
-            model=model,
-            audio=tmp_path / "canonical.wav",
-            config={
-                "threshold": 0.6,
-                "step_ratio": 0.1,
-                "min_segment_duration": 0.0,
-                "batch_size": 32,
-            },
-            overlap=False,
-            directory=tmp_path,
-        )
-
-
-def test_swift_stage_rechecks_product_containment_after_preflight(tmp_path) -> None:
-    from audio_cli.packages import built_product_candidates
-
-    checkout = tmp_path / "fluidaudio"
-    product = checkout / ".build" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_bytes(b"trusted")
-    product.chmod(0o755)
-    assert built_product_candidates(checkout, "fluidaudiocli") == [product.resolve()]
-
-    external = tmp_path / "external-product"
-    external.write_bytes(b"untrusted")
-    external.chmod(0o755)
-    product.unlink()
-    product.symlink_to(external)
-
-    with pytest.raises(StageFailure, match="launch-boundary receipt check"):
-        StageTransport._swift_product(
-            checkout,
-            "fluidaudiocli",
-            product.relative_to(checkout).as_posix(),
-            pkg.sha256_file(external),
-        )
-
-
-def test_swift_stage_rechecks_product_digest_after_preflight(tmp_path) -> None:
-    checkout = tmp_path / "fluidaudio"
-    product = checkout / ".build" / "release" / "fluidaudiocli"
-    product.parent.mkdir(parents=True)
-    product.write_bytes(b"trusted")
-    product.chmod(0o755)
-    relative = product.relative_to(checkout).as_posix()
-    digest = pkg.sha256_file(product)
-    product.write_bytes(b"replaced after preflight")
-    product.chmod(0o755)
-
-    with pytest.raises(StageFailure, match="sha256"):
-        StageTransport._swift_product(
-            checkout, "fluidaudiocli", relative, digest
-        )

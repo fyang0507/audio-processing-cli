@@ -43,7 +43,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Every constraint below is transcribed from a file or an installed distribution on this
@@ -143,9 +143,24 @@ NON_PYTHON = {
 }
 
 PINS_OF_INTEREST = (
-    "torch", "torchaudio", "transformers", "huggingface-hub", "tokenizers", "numpy",
-    "mlx", "mlx-audio", "mlx-lm", "accelerate", "diffusers", "qwen-asr", "scipy",
-    "librosa", "sentencepiece", "kaldi-native-fbank", "numba", "llvmlite",
+    "torch",
+    "torchaudio",
+    "transformers",
+    "huggingface-hub",
+    "tokenizers",
+    "numpy",
+    "mlx",
+    "mlx-audio",
+    "mlx-lm",
+    "accelerate",
+    "diffusers",
+    "qwen-asr",
+    "scipy",
+    "librosa",
+    "sentencepiece",
+    "kaldi-native-fbank",
+    "numba",
+    "llvmlite",
 )
 
 
@@ -168,9 +183,19 @@ def compile_group(group: tuple[str, ...], python_version: str, raw_dir: Path) ->
         source.write_text(body)
         target = Path(tmp) / "requirements.txt"
         proc = subprocess.run(
-            ["uv", "pip", "compile", str(source), "-o", str(target),
-             "--python-version", python_version, "--no-header"],
-            capture_output=True, text=True,
+            [
+                "uv",
+                "pip",
+                "compile",
+                str(source),
+                "-o",
+                str(target),
+                "--python-version",
+                python_version,
+                "--no-header",
+            ],
+            capture_output=True,
+            text=True,
         )
         resolved_text = target.read_text() if target.exists() else ""
 
@@ -191,8 +216,7 @@ def compile_group(group: tuple[str, ...], python_version: str, raw_dir: Path) ->
             if match and match.group(1).lower() in PINS_OF_INTEREST:
                 pins[match.group(1).lower()] = match.group(2)
         record["resolved_package_count"] = sum(
-            1 for line in resolved_text.splitlines()
-            if re.match(r"^[A-Za-z0-9._-]+==", line)
+            1 for line in resolved_text.splitlines() if re.match(r"^[A-Za-z0-9._-]+==", line)
         )
         record["key_pins"] = dict(sorted(pins.items()))
         record["resolved_set"] = {
@@ -206,8 +230,9 @@ def compile_group(group: tuple[str, ...], python_version: str, raw_dir: Path) ->
     return record
 
 
-def minimal_partitions(compatible: set[frozenset[str]],
-                       packages: list[str]) -> list[list[list[str]]]:
+def minimal_partitions(
+    compatible: set[frozenset[str]], packages: list[str]
+) -> list[list[list[str]]]:
     """Every smallest grouping in which each group resolves.
 
     Returns all of them, not one: minimal is weaker than unique, and a layout built on a
@@ -236,18 +261,19 @@ def _partitions(items: list[str], groups: int):
         return
     first, rest = items[0], items[1:]
     for smaller in _partitions(rest, groups - 1):
-        yield [[first]] + smaller
+        yield [[first], *smaller]
     for same in _partitions(rest, groups):
         for index in range(len(same)):
-            yield same[:index] + [[first] + same[index]] + same[index + 1:]
+            yield [*same[:index], [first, *same[index]], *same[index + 1 :]]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--raw-dir", required=True, type=Path)
-    parser.add_argument("--python-version", default="3.12",
-                        help="interpreter the matrix is resolved against")
+    parser.add_argument(
+        "--python-version", default="3.12", help="interpreter the matrix is resolved against"
+    )
     args = parser.parse_args()
 
     if shutil.which("uv") is None:
@@ -282,8 +308,9 @@ def main() -> int:
     # the claim "this is a transformers problem" is only worth making if no conflict is about
     # anything else, and that is checkable.
     failures = [record for record in matrix if not record["resolves"]]
-    mentioning = [record for record in failures
-                  if "transformers" in record.get("resolver_message", "")]
+    mentioning = [
+        record for record in failures if "transformers" in record.get("resolver_message", "")
+    ]
     singleton_transformers = {
         record["packages"][0]: record["key_pins"].get("transformers")
         for record in matrix
@@ -297,7 +324,7 @@ def main() -> int:
             "What is the smallest set of provisioned Python environments the transcription "
             "packages can be grouped into, given their declared dependencies?"
         ),
-        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "runner": "model_tests/benchmark/run_env_partition_probe.py",
         "requirements_sha256": hashlib.sha256(inputs).hexdigest(),
         "resolver": {
@@ -321,8 +348,8 @@ def main() -> int:
             "note": (
                 "Every conflicting group's resolver message names transformers. No conflict "
                 "here is about torch, numpy, or a platform wheel."
-                if len(mentioning) == len(failures) else
-                "At least one conflict is not about transformers; read the matrix before "
+                if len(mentioning) == len(failures)
+                else "At least one conflict is not about transformers; read the matrix before "
                 "describing the split as a transformers problem."
             ),
         },
@@ -336,9 +363,11 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
     print(f"\nminimal partition: {partitions[0]}", file=sys.stderr)
-    print(f"unique: {len(partitions) == 1}"
-          + (f" (alternatives: {partitions[1:]})" if len(partitions) > 1 else ""),
-          file=sys.stderr)
+    print(
+        f"unique: {len(partitions) == 1}"
+        + (f" (alternatives: {partitions[1:]})" if len(partitions) > 1 else ""),
+        file=sys.stderr,
+    )
     print(f"wrote {args.output}", file=sys.stderr)
     return 0
 

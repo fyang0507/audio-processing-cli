@@ -12,30 +12,48 @@ from audio_cli.transcribe import stacks
 
 EXPECTED = {
     "qwen-1.7b": {
-        "languages": "native", "verbatim": "native", "diarization": "add_on",
-        "overlapped_speech": "add_on", "vad": "add_on",
+        "languages": "native",
+        "verbatim": "native",
+        "diarization": "add_on",
+        "overlapped_speech": "add_on",
+        "vad": "add_on",
         "word_timestamps": "add_on",
         "segment_timestamps": "unsatisfiable_on_stack",
-        "lid": "unsatisfiable_on_stack", "token_lid": "unsupported",
+        "lid": "unsatisfiable_on_stack",
+        "token_lid": "unsupported",
     },
     "qwen-0.6b": {
-        "languages": "native", "verbatim": "native", "diarization": "add_on",
-        "overlapped_speech": "add_on", "vad": "add_on",
+        "languages": "native",
+        "verbatim": "native",
+        "diarization": "add_on",
+        "overlapped_speech": "add_on",
+        "vad": "add_on",
         "word_timestamps": "add_on",
         "segment_timestamps": "unsatisfiable_on_stack",
-        "lid": "unsatisfiable_on_stack", "token_lid": "unsupported",
+        "lid": "unsatisfiable_on_stack",
+        "token_lid": "unsupported",
     },
     "vibevoice": {
-        "languages": "native", "verbatim": "native", "diarization": "native",
-        "overlapped_speech": "add_on", "vad": "add_on",
-        "word_timestamps": "add_on", "segment_timestamps": "native",
-        "lid": "unsatisfiable_on_stack", "token_lid": "unsupported",
+        "languages": "native",
+        "verbatim": "native",
+        "diarization": "native",
+        "overlapped_speech": "add_on",
+        "vad": "add_on",
+        "word_timestamps": "add_on",
+        "segment_timestamps": "native",
+        "lid": "unsatisfiable_on_stack",
+        "token_lid": "unsupported",
     },
     "firered": {
-        "languages": "native", "verbatim": "native", "diarization": "add_on",
-        "overlapped_speech": "add_on", "vad": "native_stage",
-        "word_timestamps": "native", "segment_timestamps": "native",
-        "lid": "native_stage", "token_lid": "unsupported",
+        "languages": "native",
+        "verbatim": "native",
+        "diarization": "add_on",
+        "overlapped_speech": "add_on",
+        "vad": "native_stage",
+        "word_timestamps": "native",
+        "segment_timestamps": "native",
+        "lid": "native_stage",
+        "token_lid": "unsupported",
     },
 }
 
@@ -50,6 +68,15 @@ def test_stack_table_is_complete_and_cross_checked_with_the_manifest() -> None:
             assert cell["evidence_source"].startswith("model_tests/")
 
 
+def test_installed_stack_validation_keeps_safe_repository_citations(monkeypatch) -> None:
+    monkeypatch.setattr(stacks, "_source_checkout_root", lambda: None)
+
+    assert stacks.validate() == []
+    assert stacks._evidence_source_problem("../untracked.json") == (
+        "evidence_source '../untracked.json' is not a safe repository evidence path"
+    )
+
+
 @pytest.mark.parametrize(
     ("stack_id", "capability", "resolution"),
     [
@@ -58,9 +85,7 @@ def test_stack_table_is_complete_and_cross_checked_with_the_manifest() -> None:
         for capability, resolution in capabilities.items()
     ],
 )
-def test_every_derivation_cell_is_data(
-    stack_id: str, capability: str, resolution: str
-) -> None:
+def test_every_derivation_cell_is_data(stack_id: str, capability: str, resolution: str) -> None:
     assert stacks.get_stack(stack_id).capabilities[capability]["resolution"] == resolution
 
 

@@ -21,7 +21,6 @@ from array import array
 from pathlib import Path
 from typing import Any
 
-
 PCM16_SCALE = 32768.0
 DB_FLOOR = -120.0
 
@@ -66,9 +65,7 @@ def percentile(values: list[float], fraction: float) -> float | None:
     return ordered[index]
 
 
-def active_reference_speakers(
-    segments: list[dict[str, Any]], time_s: float
-) -> set[str]:
+def active_reference_speakers(segments: list[dict[str, Any]], time_s: float) -> set[str]:
     return {
         str(item["speaker"])
         for item in segments
@@ -88,11 +85,13 @@ def merge_frame_labels(
                 open_starts[label] = index
             elif label not in labels and label in open_starts:
                 start_index = open_starts.pop(label)
-                segments.append({
-                    "start_s": round(start_index * frame_s, 6),
-                    "end_s": round(min(duration_s, index * frame_s), 6),
-                    "speaker": label,
-                })
+                segments.append(
+                    {
+                        "start_s": round(start_index * frame_s, 6),
+                        "end_s": round(min(duration_s, index * frame_s), 6),
+                        "speaker": label,
+                    }
+                )
     return sorted(segments, key=lambda item: (item["start_s"], item["end_s"], item["speaker"]))
 
 
@@ -158,11 +157,13 @@ def main() -> int:
             cross += left * right
         left_dbfs = dbfs(left_sq, frame_samples)
         right_dbfs = dbfs(right_sq, frame_samples)
-        frames.append({
-            "left_dbfs": left_dbfs,
-            "right_dbfs": right_dbfs,
-            "left_minus_right_db": left_dbfs - right_dbfs,
-        })
+        frames.append(
+            {
+                "left_dbfs": left_dbfs,
+                "right_dbfs": right_dbfs,
+                "left_minus_right_db": left_dbfs - right_dbfs,
+            }
+        )
         total_left_sq += left_sq
         total_right_sq += right_sq
         total_cross += cross
@@ -170,16 +171,12 @@ def main() -> int:
     frame_s = args.frame_ms / 1000
     reference_segments = reference["segments"]
     reference_speakers = sorted({str(item["speaker"]) for item in reference_segments})
-    exclusive_differences: dict[str, list[float]] = {
-        speaker: [] for speaker in reference_speakers
-    }
+    exclusive_differences: dict[str, list[float]] = {speaker: [] for speaker in reference_speakers}
     for index, frame in enumerate(frames):
         midpoint_s = (index + 0.5) * frame_s
         active = active_reference_speakers(reference_segments, midpoint_s)
         if len(active) == 1:
-            exclusive_differences[next(iter(active))].append(
-                frame["left_minus_right_db"]
-            )
+            exclusive_differences[next(iter(active))].append(frame["left_minus_right_db"])
 
     oracle_dominance = {}
     for speaker, values in exclusive_differences.items():
@@ -197,8 +194,10 @@ def main() -> int:
                 sum(value < 0 for value in values) / len(values) if values else None
             ),
             "oracle_dominant_channel": (
-                "channel_left" if median is not None and median > 0
-                else "channel_right" if median is not None and median < 0
+                "channel_left"
+                if median is not None and median > 0
+                else "channel_right"
+                if median is not None and median < 0
                 else None
             ),
         }
@@ -252,19 +251,23 @@ def main() -> int:
         }
         run_path.write_text(json.dumps(run, ensure_ascii=False, indent=2) + "\n")
         label_durations = {
-            label: round(sum(
-                item["end_s"] - item["start_s"]
-                for item in segments if item["speaker"] == label
-            ), 6)
+            label: round(
+                sum(
+                    item["end_s"] - item["start_s"] for item in segments if item["speaker"] == label
+                ),
+                6,
+            )
             for label in ("channel_left", "channel_right")
         }
-        threshold_runs.append({
-            "dominance_db": dominance_db,
-            "run_path": str(run_path),
-            "run_sha256": sha256(run_path),
-            "segment_count": len(segments),
-            "label_durations_s": label_durations,
-        })
+        threshold_runs.append(
+            {
+                "dominance_db": dominance_db,
+                "run_path": str(run_path),
+                "run_sha256": sha256(run_path),
+                "segment_count": len(segments),
+                "label_durations_s": label_durations,
+            }
+        )
 
     denominator = frame_count * frame_samples
     result = {
@@ -302,7 +305,8 @@ def main() -> int:
             "right_rms_dbfs": dbfs(total_right_sq, denominator),
             "uncentered_channel_correlation": (
                 total_cross / math.sqrt(total_left_sq * total_right_sq)
-                if total_left_sq and total_right_sq else None
+                if total_left_sq and total_right_sq
+                else None
             ),
         },
         "oracle_speaker_exclusive_channel_dominance": oracle_dominance,
@@ -310,11 +314,16 @@ def main() -> int:
     }
     summary_path = output_dir / "channel_energy_summary.json"
     summary_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
-    print(json.dumps({
-        "summary": str(summary_path),
-        "oracle_dominance": oracle_dominance,
-        "threshold_runs": threshold_runs,
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "summary": str(summary_path),
+                "oracle_dominance": oracle_dominance,
+                "threshold_runs": threshold_runs,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

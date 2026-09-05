@@ -1,5 +1,7 @@
 import numpy as np
 
+import audio_cli.dsp as dsp
+from audio_cli.adjustments import GainAdjustment
 from audio_cli.dsp import (
     analyze_signal,
     apply_channel_balance,
@@ -9,13 +11,17 @@ from audio_cli.dsp import (
     resolve_speech_treatment_intervals,
     smooth_time_mask,
 )
-from audio_cli.profiles import PROFILES
+from audio_cli.profiles import PROFILES, Profile
 from audio_cli.vad import SpeechRegion
 
 
-def _sine(
-    sample_rate: int, duration: float, frequency: float, amplitude: float
-) -> np.ndarray:
+def test_dsp_facade_preserves_established_domain_types() -> None:
+    assert dsp.GainAdjustment is GainAdjustment
+    assert dsp.Profile is Profile
+    assert dsp.SpeechRegion is SpeechRegion
+
+
+def _sine(sample_rate: int, duration: float, frequency: float, amplitude: float) -> np.ndarray:
     time = np.arange(round(sample_rate * duration)) / sample_rate
     return (amplitude * np.sin(2 * np.pi * frequency * time)).astype(np.float32)
 
@@ -27,7 +33,7 @@ def test_time_mask_uses_smooth_boundaries_and_unions_overlaps() -> None:
     assert mask[300] == 1.0
     assert mask[470] == 1.0
     assert mask[799] == 0.0
-    assert np.all((0.0 <= mask) & (mask <= 1.0))
+    assert np.all((mask >= 0.0) & (mask <= 1.0))
 
 
 def test_time_mask_can_place_transitions_outside_active_region() -> None:
@@ -43,7 +49,7 @@ def test_time_mask_can_place_transitions_outside_active_region() -> None:
     assert np.all(mask[200:600] == 1.0)
     assert 0.0 < mask[620] < 1.0
     assert mask[640] == 0.0
-    assert np.all((0.0 <= mask) & (mask <= 1.0))
+    assert np.all((mask >= 0.0) & (mask <= 1.0))
 
 
 def test_speech_treatment_expands_late_vad_seed_to_preceding_voice_activity() -> None:
@@ -93,30 +99,21 @@ def test_voice_and_machine_balance_close_the_declared_gap() -> None:
     machine = _sine(sample_rate, 1.0, 1000.0, 0.12)
     speech_signal = _sine(sample_rate, 2.4, 220.0, 0.004)
     audio[round(0.5 * sample_rate) : round(1.5 * sample_rate), :] = machine[:, None]
-    audio[round(2.0 * sample_rate) : round(4.4 * sample_rate), :] = speech_signal[
-        :, None
-    ]
+    audio[round(2.0 * sample_rate) : round(4.4 * sample_rate), :] = speech_signal[:, None]
     speech = [SpeechRegion(2.0, 4.4, 0.9, 1.0)]
     profile = PROFILES["product-demo"]
     analysis = analyze_signal(audio, sample_rate, speech, profile)
     assert analysis.machine_regions
     initial = regional_measurements(audio, sample_rate, analysis)
-    enhanced, voice_stage = apply_voice_enhancement(
-        audio, sample_rate, profile, analysis
-    )
-    balanced, source_stage = apply_source_balance(
-        enhanced, sample_rate, profile, analysis
-    )
+    enhanced, voice_stage = apply_voice_enhancement(audio, sample_rate, profile, analysis)
+    balanced, source_stage = apply_source_balance(enhanced, sample_rate, profile, analysis)
     final = regional_measurements(balanced, sample_rate, analysis)
     assert voice_stage["status"] == "applied"
     assert (
-        voice_stage["resolved_transition"]["placement"]
-        == "silence_anchored_outside_voice_activity"
+        voice_stage["resolved_transition"]["placement"] == "silence_anchored_outside_voice_activity"
     )
     assert voice_stage["resolved_transition"]["fade_in_ms"] == 40
-    assert (
-        voice_stage["resolved_transition"]["minimum_mix_inside_treatment_region"] == 1
-    )
+    assert voice_stage["resolved_transition"]["minimum_mix_inside_treatment_region"] == 1
     assert source_stage["status"] == "applied"
     assert initial["machine_regions"][0]["difference_from_speech_db"] > 20
     difference = final["machine_regions"][0]["difference_from_speech_db"]

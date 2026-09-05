@@ -22,8 +22,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pre-commit==4.6.2",
   "pytest>=8.3",
   "pytest-cov>=6.0",
+  "ruff==0.16.6",
 ]
 
 [project.scripts]
@@ -35,6 +37,12 @@ packages = ["src/audio_cli"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/.agents/skills/audio-cli",
+  "/.pre-commit-config.yaml",
+  "/*.md",
+  "/docs",
+  "/model_tests/*.md",
+  "/model_tests/benchmark",
+  "/model_tests/findings",
   "/src",
   "/tests",
   "/LICENSE",
@@ -48,4 +56,28 @@ addopts = "-q"
 testpaths = ["tests"]
 markers = [
   "live: exercises downloaded models and real media",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+external = ["ANN", "BLE", "PLC"]
+select = [
+  "B",
+  "C4",
+  "E4",
+  "E7",
+  "E9",
+  "F",
+  "I",
+  "PIE",
+  "RUF",
+  "SIM",
+  "UP",
+]
+ignore = [
+  # Chinese punctuation and smart quotes are data in multilingual fixtures.
+  "RUF001",
 ]

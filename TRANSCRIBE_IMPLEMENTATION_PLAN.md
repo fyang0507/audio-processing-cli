@@ -20,8 +20,9 @@ without it.
 Nine findings, worst first. Each changed a design decision or corrects a shipped document.
 
 **1. FireRed's four models are co-resident, so `residency: one_model_stage_at_a_time` is false
-on the only stack with four stages.** `run_firered.py:395-426` loads VAD, LID, ASR, and Punc,
-assembles them onto one system object (`:435`), and then calls `system.process` once (`:463`).
+on the only stack with four stages.** `model_tests/benchmark/run_firered.py:181-223` loads VAD,
+LID, ASR, and Punc and assembles them onto one system object, then `:243-248` calls
+`system.process` once.
 Measured on the same 139.284 s clip: **9.16 GiB** peak RSS with LID off, **12.26 GiB** with LID
 on — the LID checkpoint adds to the peak rather than replacing another stage's, which is what
 co-residency looks like. The 30-minute channel peaks at 9.12 GiB with LID off, so the peak is
@@ -34,8 +35,9 @@ LID-on figure, because it was built as a maximum of isolated per-stage peaks. Ar
 
 **2. Qwen's `language English<asr_text>` scaffold tracks the `language` argument, not the API
 path.** The specs attribute it to the private batched path. Measured across three runners:
-public `generate()` with no language strips it (`run_mlx_asr.py:427-430`); the batched path with
-`language=None` **leaks it** (`run_qwen_verbatim_probe.py:545,553-558`, all three runs); the
+public `generate()` with no language strips it
+(`model_tests/benchmark/run_mlx_asr.py:167-177`); the batched path with `language=None`
+**leaks it** (`model_tests/benchmark/run_qwen_verbatim_probe.py:319-336`, all three runs); the
 batched path with `language="Cantonese"` does not, in **0 of 195 segments**
 (`run_turn_attributed_mlx_asr.py`, artifact
 `mlx_qwen3_asr_1.7b_8bit_fluidaudio_turns_spice30m_mix_batch1_clearcache.json`). So the strip is
@@ -45,7 +47,8 @@ configuration that never leaks. `mlx-audio` exposes `extract_language`
 
 **3. The aligner's recorded `language` rule is not the ASR hint, and the pinned source does not
 support the previously claimed Cantonese trap.** The recorded pipeline derives `Chinese` or
-`English` from a CJK regex (`run_mlx_forced_aligner_probe.py:55,94`) instead of passing the ASR
+`English` from a CJK regex
+(`model_tests/benchmark/run_mlx_forced_aligner_probe.py:53-55,85-102`) instead of passing the ASR
 hint through. The pinned implementation branches only for `japanese` and `korean`; every other
 value, including `chinese`, `cantonese`, and `english`, uses `tokenize_space_lang`, whose own
 CJK splitter emits ideographs individually (`qwen3_forced_aligner.py:129-145,236-247`). The
@@ -98,7 +101,8 @@ belongs beside the rest of it.
 
 **9. The plans under-declare the configuration the measurements came from.** FireRed's AED runs
 `beam_size=3, nbest=1, decode_max_len=0, softmax_smoothing=1.25, aed_length_penalty=0.6,
-eos_penalty=1.0` (`run_firered.py:360-370`), none of it in any document. Qwen's
+eos_penalty=1.0` (`model_tests/benchmark/run_firered.py:152-162`), none of it in any document.
+Qwen's
 `max_tokens=16384` **is the exit-4 trigger** and appears in no plan. VibeVoice's
 `max_new_tokens` likewise. The diarizer's `batch_size=32` and `--overlapping-segments` are
 missing, and its offline mode has eleven further parameters the recorded runs left at the
@@ -127,13 +131,14 @@ src/audio_cli/transcribe/
   stacks.json         the capability half of the stack table: 4 stacks x 9 capabilities
   stacks.py           reader; resolution -> availability, satisfaction, refusal code
   catalog.py          the `capabilities` report
-  planner.py          pure: (stack, input_meta, wants, pins, language) -> Plan | Refusal
+  planner/            request resolution and pure plan construction
   plan.py             Plan and its serialization: roles, execution, capabilities, packages
-  result.py           the normalized schema and the one serializer
+  result/             normalized types, validation, and the one serializer
   sample.py           a placeholder result through that same serializer
-  refusals.py         one builder per error code, fields fixed by the contract's table
-  orchestrator.py     stage order, observed accounting, abstention ledger, coverage, resume
-  transport.py        per-stage execution: environment interpreter, product, or in-process
+  refusals/           one builder per error family, fields fixed by the contract's table
+  orchestrator/       dispatcher plus Qwen, FireRed, and VibeVoice provider workflows
+  execution/          shared preflight, runtime, VAD, publication, coverage, and resume services
+  transport/          per-stage execution: environment interpreter, product, or in-process
   adapters/           decode, silero, diarizer, qwen, firered, vibevoice, aligner
   stages/             standalone scripts that run inside provisioned environments
 src/audio_cli/export/
@@ -152,7 +157,7 @@ owners.
 **Transport.** One fresh subprocess per stage, chosen per environment, request JSON in and
 result JSON out, exit code as the signal, progress on stderr —
 [ENVIRONMENTS.md](ENVIRONMENTS.md) settles this and the recorded end-to-end measurement is what
-it describes (`run_interview_pipeline.py:175`, "strictly sequential fresh subprocesses").
+the sequential launch block implements (`model_tests/benchmark/run_interview_pipeline.py:146-156`).
 
 | Environment | How a stage runs | Residency |
 | --- | --- | --- |
@@ -207,7 +212,7 @@ readability; the key-set test compares against a real run, never against the eli
 `total_wall_seconds` is defined as the **sum of the stage walls**, so the arithmetic stays
 checkable; a caller timing the command externally sees more, because interpreter startup and
 artifact writes are outside every stage — the same distinction
-`run_interview_pipeline.py:201-206` draws.
+`model_tests/benchmark/run_interview_pipeline.py:208-217` draws.
 
 `abstentions[].reason` is a four-member enum. Three come from the recorded diarizer runner:
 `overlap` (more than one speaker active), `short_turn` (an accepted turn below the 500 ms
@@ -222,7 +227,7 @@ declined, the work was not reached.
 not run, `covered_intervals` their complement, `covered_fraction` covered duration over source
 duration, and `covered_through_seconds` the start of the first missing interval. That last
 number is genuinely early when duration-bucketed ordering leaves the longest turns unprocessed
-(`run_turn_attributed_mlx_asr.py:636`), which is why the explicit interval lists are carried
+(`model_tests/benchmark/turn_attributed_mlx_asr/inference.py:113-130`), which is why the explicit interval lists are carried
 beside the watermark rather than instead of it.
 
 ## The stack table
@@ -276,13 +281,13 @@ The documents are the acceptance criterion for everything after this, and three 
 them, so the corrections in [Document changes](#document-changes) land first. No `src/` change
 except the manifest's backend map (finding 8) and its test.
 
-*Acceptance.* `tests/test_spec_docs.py` and `tests/test_environments.py` stay green with the
-edits in place; `packages_for("firered", {...four backends...})` returns `[firered-asr2s]` and
-still raises on a backend that does not fill its role.
+*Acceptance.* The `tests/test_spec_docs*.py` suite and `tests/test_environments.py` stay green
+with the edits in place; `packages_for("firered", {...four backends...})` returns
+`[firered-asr2s]` and still raises on a backend that does not fill its role.
 
 ### Phase A — the schema, the serializer, and the sample
 
-`result.py` and `sample.py`. One serializer, no second rendering path. Placeholder timing and
+`result/` and `sample.py`. One serializer, no second rendering path. Placeholder timing and
 text are `null`, never `0.0`; enum fields show one legal member.
 
 *Acceptance.* A key exists iff its capability was requested, asserted over the derivation
@@ -293,7 +298,7 @@ constructing both.
 
 ### Phase B — the table, the planner, and every refusal
 
-`stacks.json`, `stacks.py`, `planner.py`, `refusals.py`, `catalog.py`, `plan.py`, and the two
+`stacks.json`, `stacks.py`, `planner/`, `refusals/`, `catalog.py`, `plan.py`, and the two
 commands. Pure functions over the table and a metadata probe: no media decoding beyond
 `probe_media`, no provisioning, no network.
 
@@ -314,9 +319,10 @@ the `mlx` environment exists, and the test skips when it does not. A plan carrie
 
 ### Phase C — transport, orchestration, and the Qwen stacks (issue #21; implemented)
 
-`transport.py`, `orchestrator.py`, the `decode`, `silero`, `diarizer`, `qwen`, and `aligner`
-adapters, their stage scripts, and `audio transcribe run` for `qwen-1.7b` and `qwen-0.6b`. Five
-of seven roles, and the two exit codes that only `run` can return.
+`transport/`, `execution/`, `orchestrator/qwen.py`, the `decode`, `silero`, `diarizer`,
+`qwen`, and `aligner` adapters, their stage scripts, and `audio transcribe run` for
+`qwen-1.7b` and `qwen-0.6b`. Five of seven roles, and the two exit codes that only `run` can
+return.
 
 The ASR uses `_generate_chunks_batched` for both the diarized and the fixed-chunk case: one
 declared `api_path`, and it is the only path that reports per-unit completion, without which
@@ -400,7 +406,7 @@ Additions — names and rows this plan needs that no document yet carries:
   `alignment_unavailable`, with the cause of each.
 - The three turn-threshold **values** VOCABULARY names without publishing: `raw_fragment_min_ms`
   250, `accepted_turn_min_ms` 500, `same_label_merge_max_ms` 300
-  (`run_turn_attributed_mlx_asr.py:78-84`).
+  (`model_tests/benchmark/turn_attributed_mlx_asr/runtime.py:76-90`).
 - `failure_recovery.partial_results`: `prefix_only` added, `none` retired.
 - `complete` in a result document, always present.
 - One error code, `option_value_unsupported` (exit 2; `field`, `provided`, `allowed`,
@@ -417,8 +423,8 @@ Additions — names and rows this plan needs that no document yet carries:
 
 Three kinds, and the repository has been bitten by the absence of each.
 
-**Documents against each other** — `test_spec_docs.py`, unchanged in kind, extended to the new
-names.
+**Documents against each other** — the `test_spec_docs*.py` suite, unchanged in kind, extended
+to the new names.
 
 **Real output against the documents** — `test_shipped_commands_match_the_document.py`'s
 `shape()` comparison, extended to `capabilities`, `plan`, and `run`. This is the comparison that
