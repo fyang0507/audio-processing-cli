@@ -31,6 +31,23 @@ def ratio_db(before, after):
 
 
 def main():
+    observed = subprocess.check_output(
+        [
+            "git",
+            "status",
+            "--porcelain",
+            "--",
+            "src",
+            "tests/test_dsp_denoise.py",
+            str(Path(__file__).relative_to(ROOT)),
+        ],
+        cwd=ROOT,
+        text=True,
+    )
+    if observed.strip():
+        raise RuntimeError(
+            "Commit the implementation and fixture before recording benchmark evidence"
+        )
     sys.path.insert(0, str(ROOT / "tests"))
     from test_dsp_denoise import speech_fixture
 
@@ -100,6 +117,7 @@ def main():
                 "implementation_commit": subprocess.check_output(
                     ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
                 ).strip(),
+                "implementation_clean": True,
                 "fixture": "tests/test_dsp_denoise.py:speech_fixture(48000)",
                 "fixture_seed": 33,
                 "sample_rate_hz": RATE,
