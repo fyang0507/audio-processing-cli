@@ -36,7 +36,7 @@ packages = ["src/audio_cli"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/.agents/skills/audio-cli",
+  "/skills/audio-cli",
   "/.pre-commit-config.yaml",
   "/*.md",
   "/docs",

@@ -38,7 +38,7 @@ HAPPY_PATH = REPO / "docs" / "TRANSCRIBE_HAPPY_PATH.md"
 VOCABULARY = REPO / "docs" / "VOCABULARY.md"
 SPEC_DOCS = (CONTRACT, HAPPY_PATH)
 AGENT_GUIDANCE = REPO / "AGENTS.md"
-AUDIO_SKILL = REPO / ".agents" / "skills" / "audio-cli"
+AUDIO_SKILL = REPO / "skills" / "audio-cli"
 SHIPPED_SKILL_GUIDANCE = (
     AUDIO_SKILL / "SKILL.md",
     AUDIO_SKILL / "references" / "model-packages.md",

@@ -7,3 +7,4 @@
 - [Model decisions](model-tests/DECISION_REPORT.md), [findings](model-tests/FINDINGS.md), and [experiments](model-tests/EXPERIMENT_RESULTS.md): research documentation; claims about measured output still require runner or artifact evidence.
 - [Benchmark guide](model-tests/benchmark/README.md): reproducible research workflows. Runners, manifests, tracked results, and ignored raw runs remain under `model_tests/`.
 - [Test layout](testing.md): ownership and local artifact conventions.
+- [Audio CLI skill](../skills/audio-cli/SKILL.md): CLI user guidance developed and shipped with the source distribution, outside development-agent auto-discovery.

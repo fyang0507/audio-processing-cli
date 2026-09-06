@@ -18,7 +18,7 @@ This implements [Issue #4 — Profile-driven automatic audio enhancement](https:
 
 ## Install
 
-This section covers operator setup. Audio-processing agents use the installed `audio` command and report setup blockers through its [readiness guidance](.agents/skills/audio-cli/references/readiness.md).
+This section covers operator setup. Audio-processing agents use the installed `audio` command and report setup blockers through its [readiness guidance](skills/audio-cli/references/readiness.md).
 
 Requirements:
 
@@ -256,7 +256,7 @@ uv run --extra dev pre-commit install
 uv run --extra dev pre-commit run --all-files
 ```
 
-One agent skill travels with the CLI in the source distribution. [`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix, provision transcription models, check command readiness — and holds only what `--help` cannot say, which is the judgment, the report semantics, and the limits worth admitting to a user.
+One agent skill is developed and shipped with the CLI under `skills/audio-cli/` in the source distribution. [`audio-cli`](skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix, provision transcription models, check command readiness — and holds only what `--help` cannot say, which is the judgment, the report semantics, and the limits worth admitting to a user. This layout keeps CLI user guidance outside development-agent auto-discovery; building the package does not install the skill into another workspace.
 
 ## Repository layout
 
