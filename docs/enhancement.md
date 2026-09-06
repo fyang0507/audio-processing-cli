@@ -94,3 +94,5 @@ Dynamic loudness-range control is deliberately not applied: excessive LRA remain
 Both renders passed the recorded peak checks; their requested-goal acceptance was `PARTIAL_FAIL`. Perceptual quality was unscored, and the video case has no exact sync proof. Successful rendering and synthetic attenuation do not establish that these recordings were broadband-denoised or that arbitrary recordings will improve.
 
 See [duration and alignment evidence](timing-evidence.md) for the public duration bases, stream-origin fields, explicit alignment abstentions, and content-bearing regression scope.
+
+The program-loudness stage's `loudness-range` component labels its input measurement `measured_at: before_initial_program_loudness`. That value precedes initial normalization and any later regional correction passes. The final `unresolved` LRA row and `measurements.after.program_actual` describe the encoded output; their numbers can differ. Older reports omit the component's stage label, so retain the distinction when interpreting those saved reports.
