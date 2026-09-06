@@ -28,6 +28,7 @@ def test_result_source_resolves_relative_media_only_for_durable_output(
     assert result_source(metadata, 1.999) == {
         "path": str(tmp_path / "source.wav"),
         "duration_seconds": 1.999,
+        "duration_basis": "canonical_decoded_pcm",
         "timebase": "seconds",
     }
 
@@ -59,6 +60,8 @@ def test_capabilities_cli_reads_only_the_metadata_probe(monkeypatch, capsys) -> 
     assert emitted["input"] == {
         "path": "sample.wav",
         "duration_seconds": 361.0,
+        "duration_basis": "probed_audio_stream",
+        "timing": {"basis": "probed_timestamps", "container": {"duration_seconds": 361.0}},
         "container": "wav",
         "sample_rate_hz": 48000,
         "channels": 2,

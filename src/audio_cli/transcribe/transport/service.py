@@ -38,8 +38,19 @@ class StageTransport:
         self.runner = runner or SubprocessRunner(self.progress)
 
     def _notice(self, message: str) -> None:
-        self.progress.write(message + "\n")
+        self.progress.write(message.replace("transcribe: ", "transcribe: host: ", 1) + "\n")
         self.progress.flush()
+
+    def _diagnostics(self, completed) -> None:
+        if completed.stderr and not (
+            getattr(completed, "stderr_preserved", False)
+            or getattr(completed, "stderr_streamed", False)
+        ):
+            self._notice("transcribe: backend/transport stderr follows")
+            self.progress.write(completed.stderr)
+            if not completed.stderr.endswith("\n"):
+                self.progress.write("\n")
+            self.progress.flush()
 
     def decode(self, source: Path, target: Path) -> StageOutcome:
         self._notice("transcribe: decode started")
@@ -103,10 +114,7 @@ class StageTransport:
         started = time.perf_counter()
         completed = self.runner.run(command)
         transport_wall = time.perf_counter() - started
-        if completed.stderr and not getattr(completed, "stderr_streamed", False):
-            self.progress.write(completed.stderr)
-            if not completed.stderr.endswith("\n"):
-                self.progress.write("\n")
+        self._diagnostics(completed)
         sampled_peak = getattr(completed, "peak_rss_bytes", None)
         transport_outcome = StageOutcome(
             role,
@@ -417,10 +425,7 @@ class StageTransport:
         started = time.perf_counter()
         completed = self.runner.run(command)
         wall = time.perf_counter() - started
-        if completed.stderr and not getattr(completed, "stderr_streamed", False):
-            self.progress.write(completed.stderr)
-            if not completed.stderr.endswith("\n"):
-                self.progress.write("\n")
+        self._diagnostics(completed)
         if completed.returncode != 0 or not raw_path.is_file():
             detail = completed.stderr.strip() or f"FluidAudio exited {completed.returncode}"
             raise StageFailure("diarizer", "fluidaudio", detail[-4000:])

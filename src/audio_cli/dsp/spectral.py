@@ -25,28 +25,10 @@ def _notch(
     return signal.lfilter(b, a, audio, axis=0).astype(np.float32)
 
 
-def apply_environment_cleanup(
-    audio: np.ndarray,
-    sample_rate: int,
-    profile: Profile,
-    analysis: SignalAnalysis,
-) -> tuple[np.ndarray, dict[str, object]]:
-    if not analysis.speech_regions:
-        return audio, {
-            "status": "abstained",
-            "reason": "no_speech_detected",
-            "operations": [],
-        }
-    intervals, resolved_transition = resolve_speech_treatment_intervals(
-        audio, sample_rate, profile, analysis
-    )
-    mask = smooth_time_mask(
-        audio.shape[0],
-        intervals,
-        sample_rate,
-        profile.region_fade_ms,
-        transition_placement=profile.speech_transition_placement,
-    )
+def prepare_environment_filters(
+    audio: np.ndarray, sample_rate: int, profile: Profile, analysis: SignalAnalysis
+) -> tuple[np.ndarray, list[dict[str, object]]]:
+    """Prepare continuous high-pass/hum filtering; callers own treatment scope."""
     processed = audio.astype(np.float64)
     operations: list[dict[str, object]] = []
     if (
@@ -74,11 +56,51 @@ def apply_environment_cleanup(
                 "affected_scope": "speech_regions",
             }
         )
+    return np.asarray(processed, dtype=np.float32), operations
+
+
+def apply_environment_cleanup(
+    audio: np.ndarray,
+    sample_rate: int,
+    profile: Profile,
+    analysis: SignalAnalysis,
+) -> tuple[np.ndarray, dict[str, object]]:
+    if not analysis.speech_regions:
+        return audio, {
+            "status": "abstained",
+            "reason": "no_speech_detected",
+            "operations": [],
+        }
+    intervals, resolved_transition = resolve_speech_treatment_intervals(
+        audio, sample_rate, profile, analysis
+    )
+    mask = smooth_time_mask(
+        audio.shape[0],
+        intervals,
+        sample_rate,
+        profile.region_fade_ms,
+        transition_placement=profile.speech_transition_placement,
+    )
+    processed, operations = prepare_environment_filters(audio, sample_rate, profile, analysis)
     processed, broadband, broadband_operation = apply_broadband_denoise(
         np.asarray(processed, dtype=np.float32), sample_rate, profile, analysis, intervals
     )
     if broadband_operation is not None:
         operations.append(broadband_operation)
+    return finish_environment_cleanup(
+        audio, processed, mask, operations, broadband, resolved_transition
+    )
+
+
+def finish_environment_cleanup(
+    audio: np.ndarray,
+    processed: np.ndarray,
+    mask: np.ndarray,
+    operations: list[dict[str, object]],
+    broadband: dict[str, object],
+    resolved_transition: dict[str, object],
+) -> tuple[np.ndarray, dict[str, object]]:
+    """Blend only the resolved speech scope and represent each component decision."""
     output = _blend(audio, np.asarray(processed, dtype=np.float32), mask) if operations else audio
     if operations:
         status, reason = "applied", "eligible_environmental_cleanup_resolved"

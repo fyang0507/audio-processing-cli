@@ -288,3 +288,7 @@ its text, omits `words`, and makes the run-level `word_timestamps` outcome `abst
 non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must
 survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the
 tool did not reach them rather than declining to assert.
+
+## Media duration evidence
+
+`duration_basis` identifies the measurement behind a duration: `probed_audio_stream` is primary-audio metadata, `probed_container` is the container fallback, `decoded_pcm` is inspection/enhancement sample-count duration, and `canonical_decoded_pcm` is transcription canonical mono 16 kHz PCM16 duration. Decoded timelines begin at the first decoded sample. `timeline_preserved` is the rendered enhancement decoded-duration gate only, qualified by `timeline_verification`; it is not content alignment or A/V sync. See [duration and alignment evidence](../timing-evidence.md) for exact scope, tolerance, and absence semantics.

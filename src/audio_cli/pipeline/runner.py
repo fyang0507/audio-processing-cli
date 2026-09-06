@@ -9,6 +9,7 @@ from ..dsp import apply_machine_region_corrections
 from ..media import atomic_write_json, temporary_directory
 from ..profiles import STAGE_ORDER, Profile
 from ..vad_contract import VadDetector
+from .denoise import DenoiserModel
 from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import prepare_run
@@ -25,11 +26,13 @@ class EnhancementPipeline:
         skipped_stages: set[str] | None = None,
         adjustments: list[GainAdjustment] | None = None,
         detector: VadDetector | None = None,
+        denoiser_model: DenoiserModel | None = None,
     ) -> None:
         self.profile = profile
         self.skipped_stages = skipped_stages or set()
         self.adjustments = adjustments or []
         self.detector = detector
+        self.denoiser_model = denoiser_model
 
     def run(
         self,
@@ -52,6 +55,7 @@ class EnhancementPipeline:
             self.skipped_stages,
             self.adjustments,
             prepared,
+            self.denoiser_model,
         )
         with temporary_directory() as temp_dir:
             loudness = normalize_loudness(

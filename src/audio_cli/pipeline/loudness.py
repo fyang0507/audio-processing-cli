@@ -98,6 +98,7 @@ def normalize_loudness(
                                 else "dynamic_lra_control_would_change_relative_region_balance"
                             ),
                             "measured_lra_lu": round(pre_program["input_lra"], 3),
+                            "measured_at": "before_initial_program_loudness",
                             "target_maximum_lra_lu": profile.target_lra_lu,
                         }
                     ],

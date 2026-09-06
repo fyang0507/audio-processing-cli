@@ -84,6 +84,8 @@ audio enhance demo.mp4 \
 
 The durable report is written beside the output as `demo-enhanced.mp4.report.json`. JSON is also emitted on stdout for agents.
 
+Use `audio report summary demo-enhanced.mp4.report.json` to locate recorded component outcomes, unresolved scopes, and measurement blocks without processing the media again. It prints a concise JSON projection with pointers into the original report and preserves abstentions; see [CLI feedback and report navigation](docs/cli-feedback.md).
+
 For a speech-oriented transcription proxy:
 
 ```bash
@@ -161,12 +163,14 @@ Invalid time or frequency scopes fail before rendering with exit status 2 and a 
 
 A successful render verifies:
 
-- the output duration remains within 50 ms of the original audio timeline;
+- the encoded output decoded-audio duration remains within 50 ms (inclusive) of the original decoded-audio duration;
 - integrated loudness reaches the selected profile within 0.6 LU;
 - encoded true peak stays at or below the declared target (the render reserves 1 dB of codec headroom before lossy encoding);
 - every eligible stage has an explicit terminal status;
 - the before/after speech and machine-region measurements reuse the same stable region IDs;
 - the source hash, profile version, resolved operations, output hash, and runtime versions are recorded.
+
+`timeline_verification` declares the duration-only scope and tolerance, and explicitly abstains on content alignment and A/V sync. Dry runs omit `timeline_preserved`. Read [duration and alignment evidence](docs/timing-evidence.md) for probed versus decoded duration bases, original/output stream timing, codec padding limits, and the content-bearing CLI regression fixtures.
 
 Render success verifies the mandatory output gates; it does not imply every component achieved its preferred target. Read `unresolved` for abstained denoise components, bounded regional corrections, and loudness-range limits left unresolved to preserve balance. Use `measurements.after.program_actual` for the encoded render's measured LUFS, LRA, and true peak. The legacy `program` object retains raw FFmpeg diagnostics; its `output_*` fields describe a hypothetical additional normalization, not the saved render.
 
@@ -198,6 +202,7 @@ Six behaviours to know before dispatching on the payloads:
 The stack is an explicit quality choice. Inspect its capabilities, resolve the packages and stages for one request, provision what the plan names, then run:
 
 ```bash
+audio transcribe stacks
 audio transcribe capabilities --input meeting.m4a --stack qwen-1.7b
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps

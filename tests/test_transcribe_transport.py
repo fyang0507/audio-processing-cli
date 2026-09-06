@@ -380,7 +380,7 @@ def test_qwen_stage_salvages_completed_units_after_mid_generation_error(
     assert result["error"]["message"] == "boom after first unit"
 
 
-def test_real_subprocess_runner_streams_stderr_and_samples_child_rss() -> None:
+def test_real_subprocess_runner_retains_stderr_and_samples_child_rss() -> None:
     progress = io.StringIO()
     completed = SubprocessRunner(progress).run(
         [
@@ -391,6 +391,8 @@ def test_real_subprocess_runner_streams_stderr_and_samples_child_rss() -> None:
     )
     assert completed.returncode == 0
     assert completed.stderr == "working\n"
-    assert progress.getvalue() == "working\n"
+    assert "working\n" not in progress.getvalue()
+    assert "raw backend stderr:" in progress.getvalue()
+    assert (completed.diagnostics_directory / "stderr.log").read_bytes() == b"working\n"
     assert completed.peak_rss_bytes is not None
     assert completed.peak_rss_bytes > 0

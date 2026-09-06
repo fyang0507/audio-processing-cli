@@ -13,6 +13,7 @@ from ..profiles import STAGE_ORDER, Profile
 from ..vad import MODEL_SHA256, MODEL_URL
 from .models import LoudnessRun, PreparedRun, StageRun
 from .outcomes import REGION_BASIS, actual_program, unresolved_outcomes
+from .timing import timeline_verification
 
 
 def _round_loudness(data: dict[str, float]) -> dict[str, float | None]:
@@ -154,7 +155,7 @@ def build_report(
             "predicted_true_peak_dbtp": round(loudness.simulated_program["input_tp"], 3),
             "limit_true_peak_dbtp": loudness.simulated_peak_limit,
         },
-        "timeline_preserved": True,
+        "timeline_verification": timeline_verification(),
         "dry_run": prepared.dry_run,
         "rendered": False,
     }

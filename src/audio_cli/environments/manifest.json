@@ -5,7 +5,8 @@
     "partition": "model_tests/benchmark/results/2026-08-17-environment-partition.json",
     "collapse_probes": "model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json",
     "sizes_and_licenses": "Hugging Face model API, read 2026-08-17 at the revision each package pins. bytes is the sum of the revision's file sizes; license_declared is the model card's own field.",
-    "revisions": "Recovered from the recorded runs: .cache/huggingface/download/*.metadata under each local model directory, and the hub snapshot directories for the MLX checkpoints."
+    "revisions": "Recovered from the recorded runs: .cache/huggingface/download/*.metadata under each local model directory, and the hub snapshot directories for the MLX checkpoints.",
+    "rnnoise_voice": "https://api.github.com/repos/GregorR/rnnoise-models/git/trees/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d?recursive=1; upstream Git tree metadata inspected 2026-09-05, no model download: bd.rnnn size 299693 and Git blob SHA-1 0173a18664f5905dbdc4543d3528741fb32cd69f."
   },
   "license_policy": "license_declared is what the model card says at the pinned revision. license_reviewed stays false until someone reads the terms; a declared license is evidence that one exists, not a redistribution clearance. `audio packages list` reports both.",
   "environments": {
@@ -13,7 +14,7 @@
       "provisioned": false,
       "python": null,
       "lock": null,
-      "reason": "The tool's own environment: numpy, scipy, onnxruntime. Nothing to provision, and the only place small hash-pinned artifacts auto-fetch."
+      "reason": "The tool's own environment: numpy, scipy, onnxruntime and host FFmpeg. No separate runtime to provision. Only silero-vad may auto-fetch; rnnoise-voice requires explicit pull."
     },
     "mlx": {
       "provisioned": true,
@@ -84,6 +85,27 @@
     "fluidaudio": {"package": "fluidaudio", "role": "diarizer"}
   },
   "packages": {
+    "rnnoise-voice": {
+      "environment": "core",
+      "kind": "weights",
+      "roles": [],
+      "stacks": [],
+      "bytes": 299693,
+      "license_declared": "not subject to copyright (publisher declaration)",
+      "license_reviewed": false,
+      "license_source": "https://github.com/GregorR/rnnoise-models/blob/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d/README.md",
+      "source": {
+        "type": "git-blob",
+        "repo": "GregorR/rnnoise-models",
+        "revision": "3eee541a283fd3b8f81b85b1748e3b9ccbefa04d",
+        "path": "beguiling-drafter-2018-08-30/bd.rnnn",
+        "url": "https://raw.githubusercontent.com/GregorR/rnnoise-models/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d/beguiling-drafter-2018-08-30/bd.rnnn",
+        "filename": "rnnoise-voice-bd-2018-08-30.rnnn",
+        "git_blob_sha1": "0173a18664f5905dbdc4543d3528741fb32cd69f"
+      },
+      "auto_fetch": false,
+      "note": "Optional enhancement-only rnnoise-nu v1 model for host FFmpeg arnndn. No transcription role or stack. Publisher intent is voice in recording noise; quality on user recordings is unmeasured. Git SHA-1 checks content identity against trusted manifest metadata over HTTPS; no upstream SHA-256 is claimed."
+    },
     "silero-vad": {
       "environment": "core",
       "kind": "weights",

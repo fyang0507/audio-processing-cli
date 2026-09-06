@@ -18,6 +18,95 @@ Three use cases, one per recommended stack row in
 | [2](30-video-editing.md#2-video-editing--product-demo) | Video editing | `vibevoice` | Verbatim segments with word timing + VTT |
 | [3](40-dialect-recording.md#3-dialect-field-recording) | Dialect field recording | `firered` | Audited transcript with native word timing + region LID |
 
+## Discover declared stacks
+
+```bash
+audio transcribe stacks
+```
+
+```json
+{
+  "stacks": [
+    {
+      "characterization": "fast transcript, no native timing or speakers; the interview default",
+      "id": "qwen-1.7b",
+      "impossible": [
+        "segment_timestamps",
+        "lid",
+        "token_lid"
+      ],
+      "native": [
+        "languages",
+        "verbatim"
+      ],
+      "requires_add_on": [
+        "diarization",
+        "overlapped_speech",
+        "vad",
+        "word_timestamps"
+      ]
+    },
+    {
+      "characterization": "same shape, smaller and faster, measurably worse text",
+      "id": "qwen-0.6b",
+      "impossible": [
+        "segment_timestamps",
+        "lid",
+        "token_lid"
+      ],
+      "native": [
+        "languages",
+        "verbatim"
+      ],
+      "requires_add_on": [
+        "diarization",
+        "overlapped_speech",
+        "vad",
+        "word_timestamps"
+      ]
+    },
+    {
+      "characterization": "native speakers and segment bounds, highest memory, prefix-only recovery after generation truncation",
+      "id": "vibevoice",
+      "impossible": [
+        "lid",
+        "token_lid"
+      ],
+      "native": [
+        "languages",
+        "verbatim",
+        "diarization",
+        "segment_timestamps"
+      ],
+      "requires_add_on": [
+        "overlapped_speech",
+        "vad",
+        "word_timestamps"
+      ]
+    },
+    {
+      "characterization": "native word timing, speech regions and region language; no speakers",
+      "id": "firered",
+      "impossible": [
+        "token_lid"
+      ],
+      "native": [
+        "languages",
+        "verbatim",
+        "vad",
+        "word_timestamps",
+        "segment_timestamps",
+        "lid"
+      ],
+      "requires_add_on": [
+        "diarization",
+        "overlapped_speech"
+      ]
+    }
+  ]
+}
+```
+
 ## How to read the output blocks
 
 Every value below is one of three things, and they are never mixed:
@@ -128,7 +217,7 @@ audio doctor
   "packages": {
     "firered-asr2s": "absent", "fluidaudio": "absent",
     "qwen3-asr-0.6b-8bit": "absent", "qwen3-asr-1.7b-8bit": "absent",
-    "qwen3-forcedaligner": "absent", "silero-vad": "absent",
+    "qwen3-forcedaligner": "absent", "rnnoise-voice": "absent", "silero-vad": "absent",
     "speaker-diarization-coreml": "absent", "vibevoice-asr-7b": "absent"
   },
   "note": "Swift is required to build or repair FluidAudio; a ready built product runs directly without Swift. Missing provisioning tools are reported rather than fatal."

@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+from .artifacts import git_blob_source_problems
+
 HERE = Path(__file__).resolve().parent
 MANIFEST = HERE / "manifest.json"
 
@@ -227,6 +229,13 @@ def validate() -> list[str]:
     known_packages = packages()
     checkout_distributions: dict[tuple[str, str], str] = {}
     for package in known_packages.values():
+        if package.source.get("type") == "git-blob":
+            problems.extend(
+                f"{package.id}: {problem}"
+                for problem in git_blob_source_problems(
+                    package.source, package.bytes, auto_fetch=package.auto_fetch
+                )
+            )
         if package.environment not in known_environments:
             problems.append(f"{package.id}: unknown environment {package.environment!r}")
         for role in package.roles:

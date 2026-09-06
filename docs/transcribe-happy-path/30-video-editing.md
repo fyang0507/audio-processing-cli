@@ -76,7 +76,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
     "complete": true,
-    "source": {"path": "demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
+    "source": {"path": "demo.mp4", "duration_seconds": 112.4, "timebase": "seconds", "duration_basis": "probed_audio_stream"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null,
        "start": null, "end": null,
@@ -110,7 +110,7 @@ Exit 0. `demo.transcript.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "/Users/you/recordings/demo.mp4", "duration_seconds": 112.4, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/demo.mp4", "duration_seconds": 112.4, "timebase": "seconds", "duration_basis": "canonical_decoded_pcm"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "0", "start": 0.0, "end": 4.52,
      "text": "So, um, this is the new editor. You can, like, drag a clip here.",

@@ -1,0 +1,65 @@
+{
+  "date": "2026-09-06",
+  "topic": "Public noise-reference diagnostics on the two original enhancement fixtures",
+  "base_commit": "9568ea0e42cd492144ab52466e20362b0ad63208",
+  "implementation_state": "Committed diagnostics implementation; source and implementation hashes were checked before and after each CLI run.",
+  "cases": [
+    {
+      "input": "/Users/fredy/Documents/fred-projects/audio-processing-cli/demo-video-audio-to-improve.mp4",
+      "profile": "product-demo@5",
+      "exit_code": 0,
+      "source_sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "raw_command": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/demo-noise-scopes-committed.command.json",
+      "raw_report": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/demo-noise-scopes-committed.stdout.json",
+      "component_status": "abstained",
+      "component_reason": "noise_reference_is_nonstationary",
+      "candidate_scopes": 21,
+      "eligible_scopes": 0,
+      "rejection_counts": {
+        "noise_reference_is_nonstationary": 17,
+        "noise_reference_is_tonal": 3,
+        "noise_reference_too_short": 1
+      },
+      "pooled_reference_level_spread_db": 28.064,
+      "implementation_sha256": {
+        "src/audio_cli/dsp/denoise/__init__.py": "20bad272ef80bd8bf81e6ded99b69377df384e405c661693c22470af6e36f010",
+        "src/audio_cli/dsp/denoise/estimation.py": "f64b4614fa1cc0b13e83f1998b74f584b7dad8c5b0b8943e77f5f6860c4cbb5b",
+        "src/audio_cli/dsp/denoise/filtering.py": "8e47092b8bc49b641fed637320403eac9ff836564ad2b631bad0abc7727a69ab",
+        "src/audio_cli/dsp/denoise/processor.py": "1332f730196ea5b735eeb87a71e2a47a55a9a88e16345d2c41180de7953165fc",
+        "src/audio_cli/dsp/denoise/reference.py": "031793e04bd2b9b27780e7635dce332c04c1dd8ca514d59cf8e9a35af7e6c76f",
+        "src/audio_cli/dsp/denoise/selection.py": "526d20edcebed48607c77b4a44be0d509b3b62848f21c378807713f07d565e5b",
+        "src/audio_cli/dsp/spectral.py": "c73182540bbf956d735257f39f6db192186ef6652916ebc13e89800a9d59a621"
+      },
+      "source_unchanged": true
+    },
+    {
+      "input": "/Users/fredy/Documents/fred-projects/audio-processing-cli/autio-test-sample.m4a",
+      "profile": "product-demo@5",
+      "exit_code": 0,
+      "source_sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "raw_command": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/mixed-noise-scopes-committed.command.json",
+      "raw_report": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/mixed-noise-scopes-committed.stdout.json",
+      "component_status": "abstained",
+      "component_reason": "noise_reference_is_nonstationary",
+      "candidate_scopes": 8,
+      "eligible_scopes": 0,
+      "rejection_counts": {
+        "noise_reference_is_nonstationary": 6,
+        "noise_reference_too_short": 2
+      },
+      "pooled_reference_level_spread_db": 9.574,
+      "implementation_sha256": {
+        "src/audio_cli/dsp/denoise/__init__.py": "20bad272ef80bd8bf81e6ded99b69377df384e405c661693c22470af6e36f010",
+        "src/audio_cli/dsp/denoise/estimation.py": "f64b4614fa1cc0b13e83f1998b74f584b7dad8c5b0b8943e77f5f6860c4cbb5b",
+        "src/audio_cli/dsp/denoise/filtering.py": "8e47092b8bc49b641fed637320403eac9ff836564ad2b631bad0abc7727a69ab",
+        "src/audio_cli/dsp/denoise/processor.py": "1332f730196ea5b735eeb87a71e2a47a55a9a88e16345d2c41180de7953165fc",
+        "src/audio_cli/dsp/denoise/reference.py": "031793e04bd2b9b27780e7635dce332c04c1dd8ca514d59cf8e9a35af7e6c76f",
+        "src/audio_cli/dsp/denoise/selection.py": "526d20edcebed48607c77b4a44be0d509b3b62848f21c378807713f07d565e5b",
+        "src/audio_cli/dsp/spectral.py": "c73182540bbf956d735257f39f6db192186ef6652916ebc13e89800a9d59a621"
+      },
+      "source_unchanged": true
+    }
+  ],
+  "scope": "CLI dry runs on originals. These are rejected reference measurements, not noise-reduction or perceptual-quality results. No fallback audio tool was used.",
+  "implementation_commit": "11230cfbb259bd2987efb9e22470f615a7d8b20e"
+}

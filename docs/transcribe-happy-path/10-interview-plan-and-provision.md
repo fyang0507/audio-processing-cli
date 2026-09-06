@@ -16,7 +16,8 @@ audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a
   "environment": "mlx",
   "roles": "asr only",
   "input": {"path": "meeting.m4a", "duration_seconds": 1794.2, "container": "m4a",
-            "sample_rate_hz": 44100, "channels": 2},
+            "sample_rate_hz": 44100, "channels": 2, "duration_basis": "probed_audio_stream",
+            "timing": {"basis": "probed_timestamps", "audio": [{"stream_index": 0, "duration_seconds": 1794.2}]}},
   "processing": {
     "unit": "fixed_chunk",
     "unit_count": 10,
@@ -136,7 +137,7 @@ audio transcribe plan --input meeting.m4a \
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
     "complete": true,
-    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
+    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds", "duration_basis": "probed_audio_stream"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null,
        "words": [{"word_id": "w_0", "text": null, "start": null, "end": null}]}
@@ -280,7 +281,7 @@ A registry contradiction fails closed instead. In a minimal root where `fluidaud
 
 A missing environment entry has the same verdict and code, with `absent` in `detail`. The environment gate runs before package verification: no dependent package appears in `verified`, and `verify` does not inspect its source checkout or launch its interpreter or built product. The typed failure makes the command exit 3.
 
-Which key an entry carries *is* the claim, and the two are not the same claim. `digest: "ok"` means the bytes on disk were hashed and match the manifest's pin. `revision` means that revision is pinned and its snapshot is present — the pin is recorded and checkable, the contents were not hashed, and there is nothing to hash them against. The absent key is the honest report; a `digest_verified: false` beside a `revision` would confess a check that was never designed rather than state the one that was. A four-repository package reports `revisions` for the same reason the receipt does: no one of them is *the* revision.
+Which key an entry carries *is* the claim. `digest: "ok"` means URL artifact bytes were hashed with SHA-256 and match the manifest's pin. A Hub entry's `revision` means that revision is pinned and its snapshot identity checked; its contents were not hashed against an upstream digest. A four-repository package reports `revisions` because no one is *the* revision. Separately, an explicitly provisioned enhancement-only `rnnoise-voice` entry carries `revision`, `git_blob_sha1`, and `bytes` after actual Git blob hashing and size verification; it is not selected by this transcription stack. The absence of `digest` and `digest_verified` in those Git-identity reports preserves the distinction. See [RNNoise provisioning](../packages/rnnoise.md).
 
 Revision-pinned does not mean path-only. For each Hub package, `verify` and the run preflight also require the Hub cache index to bind each repository and revision to the recorded snapshot path, every manifest-filtered `allow_patterns` match, and the same total tree bytes recorded by pull. Those checks catch redirected or missing tokenizer files and size drift without pretending to be a cryptographic digest. Source-backed native packages add a live Git check before decode: HEAD, the exact tracked file set derived from the installed patch, every manifest-owned post-patch SHA256, matching receipt hashes, and zero ordinary **or ignored** untracked files. An unpatched checkout must have empty patch history, an empty hash map, and no tracked changes. An ignored `.pyc` or extension can still be imported, so Git's default decision to hide it is not a provenance exemption. A legacy receipt's `checkout_commit` may be the manifest's short `commit` alias or its full `resolved_commit`; new pulls record the full value and the live HEAD must always equal that full resolved commit. Selected managed Python interpreters are launched before decode. A selected native source checkout must also be installed under its exact manifest-pinned distribution name as a direct `file://` reference to that checkout; an interpreter that launches after sync but no longer imports the checkout is not ready. FluidAudio additionally requires exactly one contained, non-symlink executable product under its exact managed checkout. Its live SHA256 must match the pull receipt before it is launched; an executable bit or old receipt boolean is not liveness. The pinned source patch makes offline mode require `--model-dir` and disables ModelHub downloads, so run binds the product to the exact managed `speaker-diarization-coreml` directory rather than an implicit user cache.
 

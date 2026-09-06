@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from audio_cli.command import transcribe_plan_command
+from audio_cli.media import probed_duration, stream_timing
 
 from . import stacks
 
@@ -19,6 +20,8 @@ class InputMetadata:
     container: str
     sample_rate_hz: int
     channels: int
+    duration_basis: str | None = None
+    timing: dict[str, object] | None = None
 
     @property
     def source(self) -> dict[str, Any]:
@@ -26,6 +29,7 @@ class InputMetadata:
             "path": self.path,
             "duration_seconds": self.duration_seconds,
             "timebase": "seconds",
+            **({"duration_basis": self.duration_basis} if self.duration_basis is not None else {}),
         }
 
     @property
@@ -36,6 +40,8 @@ class InputMetadata:
             "container": self.container,
             "sample_rate_hz": self.sample_rate_hz,
             "channels": self.channels,
+            **({"duration_basis": self.duration_basis} if self.duration_basis is not None else {}),
+            **({"timing": self.timing} if self.timing is not None else {}),
         }
 
 
@@ -47,7 +53,8 @@ def input_metadata(path: Path, probe: dict[str, object]) -> InputMetadata:
     format_info = probe.get("format", {})
     if not isinstance(format_info, dict):
         raise ValueError("media probe format must be an object")
-    raw_duration = stream.get("duration", format_info.get("duration"))
+    duration_info = probed_duration(probe)
+    raw_duration = duration_info.get("duration_seconds")
     try:
         duration = round(float(raw_duration), 6)
         sample_rate = int(stream.get("sample_rate", 0))
@@ -64,6 +71,8 @@ def input_metadata(path: Path, probe: dict[str, object]) -> InputMetadata:
         container=suffix or fallback,
         sample_rate_hz=sample_rate,
         channels=channels,
+        duration_basis=str(duration_info["duration_basis"]),
+        timing=stream_timing(probe),
     )
 
 
@@ -88,6 +97,7 @@ def result_source(
         source_identity if source_identity is not None else Path(metadata.path).resolve()
     )
     source["duration_seconds"] = duration_seconds
+    source["duration_basis"] = "canonical_decoded_pcm"
     return source
 
 

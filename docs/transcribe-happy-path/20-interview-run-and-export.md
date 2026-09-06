@@ -15,7 +15,7 @@ Exit 0. `meeting.timed.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "/Users/you/recordings/meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds", "duration_basis": "canonical_decoded_pcm"},
   "segments": [
     {"segment_id": "seg_0", "speaker": "S1",
      "text": "好，我們今天想聊一下你的工作。",

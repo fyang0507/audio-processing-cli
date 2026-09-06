@@ -114,7 +114,7 @@ def path_report() -> dict:
         "models": {
             "path": str(paths.models_dir()),
             "exists": paths.models_dir().exists(),
-            "holds": "hash-pinned single-file artifacts only, currently silero-vad",
+            "holds": "pinned single-file artifacts only: silero-vad and rnnoise-voice",
         },
         "environments": {
             name: {
@@ -135,7 +135,7 @@ def path_report() -> dict:
                         )
                     }
                     if identifier in package_catalog
-                    and package_catalog[identifier].source["type"] == "url"
+                    and package_catalog[identifier].source["type"] in {"url", "git-blob"}
                     else _path_location_fields(entry)
                 ),
             }

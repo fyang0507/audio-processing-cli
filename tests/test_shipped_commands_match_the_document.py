@@ -175,7 +175,15 @@ def test_the_comparison_can_fail() -> None:
 
 
 def test_transcribe_capabilities_emits_the_shape_happy_path_publishes() -> None:
-    metadata = InputMetadata("meeting.m4a", 1794.2, "m4a", 44100, 2)
+    metadata = InputMetadata(
+        "meeting.m4a",
+        1794.2,
+        "m4a",
+        44100,
+        2,
+        "probed_audio_stream",
+        {"basis": "probed_timestamps", "audio": [{"stream_index": 0, "duration_seconds": 1794.2}]},
+    )
     actual = build_catalog(get_stack("qwen-1.7b"), metadata)
     documented = documented_block(
         "audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a"
@@ -247,7 +255,9 @@ def test_transcribe_plan_emits_the_shape_happy_path_publishes(
     language: str | None,
     provisioned: tuple[str, ...],
 ) -> None:
-    metadata = InputMetadata(input_name, duration, container, sample_rate, channels)
+    metadata = InputMetadata(
+        input_name, duration, container, sample_rate, channels, "probed_audio_stream"
+    )
     request = resolve_request(
         stack_id=stack,
         input_path=Path(input_name),

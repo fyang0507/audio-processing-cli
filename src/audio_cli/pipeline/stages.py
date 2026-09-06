@@ -12,6 +12,7 @@ from ..dsp import (
     apply_voice_enhancement,
 )
 from ..profiles import Profile
+from .denoise import DenoiserModel, apply_model_cleanup
 from .models import PreparedRun, StageRun
 
 
@@ -48,6 +49,7 @@ def process_stages(
     skipped_stages: set[str],
     adjustments: list[GainAdjustment],
     prepared: PreparedRun,
+    model: DenoiserModel | None = None,
 ) -> StageRun:
     """Apply every pre-loudness stage in the declared processing order."""
     current = prepared.audio
@@ -71,7 +73,10 @@ def process_stages(
     elif not profile.stage_enabled(stage):
         stages.append(_disabled_stage(stage, profile))
     else:
-        current, result = apply_environment_cleanup(current, sample_rate, profile, analysis)
+        if model is None:
+            current, result = apply_environment_cleanup(current, sample_rate, profile, analysis)
+        else:
+            current, result = apply_model_cleanup(current, sample_rate, profile, analysis, model)
         stages.append(_stage_result(stage, profile, result))
 
     current, frequency_adjustments = apply_frequency_adjustments(

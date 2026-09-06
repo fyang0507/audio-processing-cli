@@ -201,6 +201,7 @@ def test_vibevoice_complete_range_restores_canonical_source_timeline(
         "path": str(source.resolve()),
         "duration_seconds": 10.0,
         "timebase": "seconds",
+        "duration_basis": "canonical_decoded_pcm",
     }
     assert payload["provenance"]["plan"]["execution"]["range"] == {
         "requested": [3.0, 7.0],

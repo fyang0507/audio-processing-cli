@@ -65,7 +65,11 @@ Every recorded interview figure was produced with `--language Cantonese`, so exp
 
 The accepted `--language` values are case-insensitive but are echoed with this exact spelling: `Chinese`, `English`, `Cantonese`, `Arabic`, `German`, `French`, `Spanish`, `Portuguese`, `Indonesian`, `Italian`, `Korean`, `Russian`, `Thai`, `Vietnamese`, `Japanese`, `Turkish`, `Hindi`, `Malay`, `Dutch`, `Swedish`, `Danish`, `Finnish`, `Polish`, `Czech`, `Filipino`, `Persian`, `Greek`, `Romanian`, `Hungarian`, and `Macedonian`. Those 30 names are the `support_languages` arrays in the pinned [`Qwen3-ASR-1.7B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit/blob/a8379a2e2f9e313c9292cdf1af4055ab56d50d55/config.json) and [`Qwen3-ASR-0.6B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/blob/89e96d92ba34aca20b3e29fb10cc284097d1219f/config.json), not a vocabulary invented by this CLI. FireRed accepts no language input; its `lid` output is the 115 labels after the five special tokens in the pinned [`FireRedLID` dictionary](https://huggingface.co/FireRedTeam/FireRedLID/blob/1bb4d285c8456429385d9c0810300df4297bc11b/dict.txt).
 
-## Two questions, two commands
+## Discovery and input-specific requests
+
+`audio transcribe stacks` prints the declared stack ids, their existing characterization, and the `native`, `requires_add_on`, and `impossible` capability groups as JSON. It requires no input, metadata probe, registry read, model, or provisioning. These are declared interface facts, not installed readiness or new accuracy measurements. Every transcription `--stack` help points to this command; request commands retain the same semantic missing-stack refusal. The complete discovery output and progress/log behavior are documented in [CLI feedback](../cli-feedback.md).
+
+### Two input-specific questions, two commands
 
 Nothing sequences these. An earlier draft called them "step one" and "step two" and made both forms of `plan`, distinguished by whether `--want` was present — which meant `plan` answered two different questions depending on an absent argument, and implied an order the tool never enforced. An agent that already knows what it needs should go straight to a plan; an agent that does not needs somewhere to look. Those are different questions, so they are different commands, and neither is a gate on the other.
 
@@ -93,7 +97,8 @@ The catalog uses its own axis, `availability`, because nothing has been requeste
   "environment": "torch-firered",
   "roles": "vad, asr and punctuator always; lid as well when lid is requested",
   "input": {"path": "field.wav", "duration_seconds": 27.8, "container": "wav",
-            "sample_rate_hz": 48000, "channels": 1},
+            "sample_rate_hz": 48000, "channels": 1, "duration_basis": "probed_audio_stream",
+            "timing": {"basis": "probed_timestamps", "audio": [{"stream_index": 0, "duration_seconds": 27.8}]}},
   "processing": {
     "unit": "vad_region",
     "unit_count": null,
@@ -174,6 +179,6 @@ The binding test is that the sample's key set equals a real run's key set, and t
 
 ### Duration bases
 
-Capability and plan estimates read primary audio-stream duration, falling back to container duration ([catalog input metadata](../../src/audio_cli/transcribe/catalog.py)). A completed transcript's `source.duration_seconds` comes from the canonical 16 kHz decoded PCM frame count ([canonical PCM duration](../../src/audio_cli/media/pcm.py)), and its times stay on that source basis. Inspection additionally reports container/stream metadata, including an available audio start offset. Codec padding and stream offsets can therefore make those durations differ slightly. Do not add an offset to every transcript bound or diagnose missing speech from the difference alone; inspect actual coverage and canonical decode evidence first. Enhanced ASR/VAD is a separate observation and never replaces the original-source transcript.
+Capability and plan estimates use the media-owned probed duration with `duration_basis: probed_audio_stream` or `probed_container`; capability `input.timing` also exposes available stream origins. Runs instead label `source.duration_basis: canonical_decoded_pcm` and use the canonical mono 16 kHz PCM16 frame count. Zero is the first decoded sample, not a container timestamp. [Duration and alignment evidence](../timing-evidence.md) defines these fields, omission rules, and why duration or start differences cannot establish clipping, missing words, or a justified timestamp shift. Legacy v1 sources without a basis remain readable without a fabricated basis.
 
 Request validation remedies correct the offending fields in prose and tell the caller to repeat its original command with every other argument preserved. They never change `run` to `plan`, drop range/output/format/language options, or silently choose a full-media run. This keeps fixed refusal payloads independent of execution-only options. Concrete provisioning and output retry commands remain runnable when their builders have the full context.

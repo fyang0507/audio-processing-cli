@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import urllib.error
 import urllib.request
@@ -16,7 +15,9 @@ from ..media import (
     bound_directory,
     cleanup_temporary_file,
     file_identity_from_descriptor,
+    hash_regular_file_descriptor,
     publish_temporary_file,
+    regular_file_digests_at,
     sha256_regular_file_at,
 )
 from .models import ProvisioningError
@@ -87,6 +88,23 @@ class Fetcher:
         return deletable, freed
 
     def url_file(self, url: str, sha256: str, target: Path) -> Path:
+        return self._single_file(url, sha256, target)
+
+    def git_blob_file(self, url: str, blob_sha1: str, size: int, target: Path) -> Path:
+        """Fetch an immutable HTTPS artifact pinned by Git identity and byte count."""
+        if not url.startswith("https://"):
+            raise ProvisioningError("download_failed", "Git blob artifacts require HTTPS")
+        return self._single_file(url, blob_sha1, target, git_blob=True, size=size)
+
+    def _single_file(
+        self,
+        url: str,
+        expected: str,
+        target: Path,
+        *,
+        git_blob: bool = False,
+        size: int | None = None,
+    ) -> Path:
         """Hash and publish through one no-follow descriptor bound to the managed parent."""
         try:
             with bound_directory(
@@ -95,12 +113,22 @@ class Fetcher:
                 create=True,
             ) as parent_descriptor:
                 try:
-                    existing = sha256_regular_file_at(parent_descriptor, target.name)
+                    if git_blob:
+                        found = regular_file_digests_at(
+                            parent_descriptor, target.name, git_blob=True
+                        )
+                        existing = (
+                            found.git_blob_sha1
+                            if found is not None and found.bytes == size
+                            else None
+                        )
+                    else:
+                        existing = sha256_regular_file_at(parent_descriptor, target.name)
                 except OSError:
                     # An unreadable cache entry cannot earn the fast path. Replacement is
                     # descriptor-relative, so retrying the download does not follow it.
                     existing = None
-                if existing == sha256:
+                if existing == expected:
                     return target
                 partial_name = f".audio-download-{os.getpid()}-{uuid.uuid4().hex}.part"
                 created = False
@@ -108,7 +136,7 @@ class Fetcher:
                 try:
                     descriptor = os.open(
                         partial_name,
-                        os.O_WRONLY
+                        os.O_RDWR
                         | os.O_CREAT
                         | os.O_EXCL
                         | getattr(os, "O_NOFOLLOW", 0)
@@ -132,21 +160,33 @@ class Fetcher:
                     request = urllib.request.Request(
                         url, headers={"User-Agent": "audio-processing-cli/0.1"}
                     )
-                    with os.fdopen(descriptor, "wb") as output:
+                    with os.fdopen(descriptor, "w+b") as output:
                         response = urllib.request.urlopen(request, timeout=60)
                         with response:
-                            digest = hashlib.sha256()
+                            if git_blob and not response.geturl().startswith("https://"):
+                                raise ProvisioningError(
+                                    "download_failed", "Git blob response must use HTTPS"
+                                )
+                            count = 0
                             while chunk := response.read(1024 * 1024):
+                                count += len(chunk)
+                                if size is not None and count > size:
+                                    raise ProvisioningError(
+                                        "package_integrity_failed",
+                                        f"{target.name} exceeds declared byte count {size}",
+                                    )
                                 output.write(chunk)
-                                digest.update(chunk)
                             output.flush()
                             os.fsync(output.fileno())
-                    actual = digest.hexdigest()
-                    if actual != sha256:
+                            found = hash_regular_file_descriptor(output.fileno(), git_blob=git_blob)
+                            actual = found.git_blob_sha1 if git_blob else found.sha256
+                            actual_size = found.bytes
+                    if actual != expected or (size is not None and actual_size != size):
                         raise ProvisioningError(
                             "package_integrity_failed",
-                            f"{target.name} checksum mismatch: expected {sha256}, got {actual}",
-                            expected=sha256,
+                            f"{target.name} {'Git blob identity/size' if git_blob else 'checksum'} "
+                            f"mismatch: expected {expected}, got {actual} ({actual_size} bytes)",
+                            expected=expected,
                             actual=actual,
                         )
                     assert_directory_binding(parent_descriptor, target.parent)

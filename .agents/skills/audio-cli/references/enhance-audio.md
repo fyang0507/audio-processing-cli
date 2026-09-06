@@ -19,13 +19,19 @@ Automatic balancing can miss quiet intended music or machine audio below its det
 
 Gain and EQ affect overlapping speech and music together. Do not promise separate control without separate sources. Broadband suppression is likewise bounded cleanup, not source separation; its own reported operation and evaluation determine whether it ran. A high-pass or hum filter alone is not evidence that broadband noise was suppressed.
 
+Choose the broadband method before processing and inspect the selected invocation's live help. The stationary method needs usable reference evidence; the optional RNNoise method needs an explicitly provisioned model. Use [model-packages.md](model-packages.md) for that lifecycle. An abstention does not authorize switching methods when the task forbids fallback. Model-guided processing can still alter wanted sounds within speech. Its reported mask bound is not guaranteed delivered noise reduction or preserved intelligibility, and `applied` does not certify either.
+
 ## Read parent and child outcomes
+
+Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes, including nested evidence, and does not certify overall success.
 
 Stages can be `applied`, `no_op`, `skipped`, `abstained`, or `failed`. `applied` means some work ran, not that every goal was met. Read `stages[].component_evaluations[]` for child statuses and reasons: `environment-denoise` can apply a filter while `broadband-denoise` abstains. Quote the actual child outcome and resolved parameters rather than inferring them from the parent.
 
 For source balancing, also read `stages[].final_region_evaluations[]` when present. `bounded_outside_target` means the safe gain bound was reached without attaining that region's numeric target; `abstained_overlap` preserves a region that could not be adjusted independently. The top-level `unresolved[]` collects explicit component abstentions and unmet measured regional or loudness-range targets. Read its scope, status, reason, and `measured_at` when supplied: `predicted_pre_encode` is a prediction and `encoded_output` is the delivered-file check. An empty list does not establish perceptual quality or rule out undetected problems.
 
 Report these remaining limits even after a successful render. Do not enlarge gains or add a second pass simply to make every row green. An approved listening result remains useful evidence.
+
+When a component supplies `noise_reference_scopes`, read each scope's eligibility or rejection reason with the component's final decision. Locally eligible references can still fail pooled checks; rejected scopes explain abstention without authorizing a fallback tool, model, or stronger correction.
 
 ## Measure the file that was delivered
 
@@ -41,7 +47,13 @@ Quote `measurements.after.program_actual.integrated_loudness_lufs`, `.true_peak_
 
 Older reports lack `program_actual`. In their `measurements.after.program` block, `input_i` is the delivered file's integrated loudness in LUFS, `input_tp` its true peak in dBTP, and `input_lra` its loudness range in LU. The names come from measuring that file as input to the analyzer. Raw `output_i`, `output_tp`, and related values describe normalization diagnostics, not the file that was delivered; the legacy fields retain that meaning. Never turn an absent or null measurement into zero.
 
-Check `rendered`, `timeline_preserved`, `measurements.after.duration_delta_ms`, and `final_peak_validation` along with the actual after measurements. A dry run has only predictions: `predicted_pass` is not post-encode validation. The CLI enforces its active publication checks; report the actual target/limit and any skipped stage rather than imposing every profile preference as an unconditional acceptance gate. Successful publication does not certify every child target or prove that someone prefers the sound.
+Check `rendered`, `timeline_verification`, an available `timeline_preserved`, `measurements.after.duration_delta_ms`, and `final_peak_validation` along with the actual after measurements. A dry run has only predictions: `predicted_pass` is not post-encode validation. The CLI enforces its active publication checks; report the actual target/limit and any skipped stage rather than imposing every profile preference as an unconditional acceptance gate. Successful publication does not certify every child target or prove that someone prefers the sound.
+
+## Duration is not alignment evidence
+
+Read `duration_basis` before comparing durations. The outer `source`/`output` durations are probed audio-stream or container metadata; their `decoded_audio` objects describe actual decoded samples. `timeline_verification.scope: decoded_audio_duration_only` and its tolerance qualify `timeline_preserved`: a pass checks decoded length only. Dry runs report `not_run` and omit the boolean. Older reports without this scope checked probed duration only and could mark a dry run true.
+
+For video, compare available `source.timing` and `output.timing` audio/video starts and `primary_audio_start_minus_video_start_seconds`. These describe metadata origins. Read the explicit `content_alignment` and `av_sync` abstentions even when durations or starts match. A changed start, codec delay, or padding does not by itself prove clipping or a content shift; never claim exact sync, add an inferred offset to transcript bounds, or shift timestamps to repair an assumed defect. Report the available evidence and unresolved alignment instead.
 
 ## Fixed regions and fresh detection answer different questions
 

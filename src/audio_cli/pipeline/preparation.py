@@ -12,6 +12,7 @@ from .. import __version__
 from ..dsp import analyze_signal, evaluate_profile, regional_measurements
 from ..media import (
     decode_audio,
+    decoded_audio_timing,
     ffmpeg_version,
     is_enhanced_media,
     measure_loudness,
@@ -105,7 +106,10 @@ def inspect_source(
                 "source": MODEL_URL,
             },
         },
-        "source": media_summary(source, probe),
+        "source": {
+            **media_summary(source, probe),
+            "decoded_audio": decoded_audio_timing(len(audio), sample_rate),
+        },
         "observations": observations,
         "regions": _region_manifest(analysis),
         "region_basis": {**REGION_BASIS, "detection": "inspected_source"},
@@ -147,6 +151,7 @@ def prepare_run(
     source_info = media_summary(source, probe)
     resolved_detector = detector or SileroOnnxVad()
     audio, sample_rate = decode_audio(source)
+    source_info["decoded_audio"] = decoded_audio_timing(len(audio), sample_rate)
     speech_regions = _detect_speech(audio, sample_rate, profile, resolved_detector)
     analysis = analyze_signal(audio, sample_rate, speech_regions, profile)
     before_program = measure_loudness(

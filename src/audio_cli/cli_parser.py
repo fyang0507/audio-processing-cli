@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
             "evaluated otherwise."
         ),
     )
+    enhance_parser.add_argument(
+        "--denoiser",
+        choices=("stationary", "rnnoise"),
+        default="stationary",
+        help="Broadband method: stationary reference (default) or explicitly provisioned rnnoise-voice model; never falls back.",
+    )
     enhance_parser.add_argument("--adjustments", type=Path)
     enhance_parser.add_argument(
         "--dry-run",
@@ -70,6 +76,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report tool, toolchain, platform, and provisioning state.",
     )
 
+    report_parser = subparsers.add_parser("report", help="Navigate saved enhancement reports.")
+    report_commands = report_parser.add_subparsers(dest="report_command", required=True)
+    summary_parser = report_commands.add_parser(
+        "summary",
+        help="Project existing outcomes and measurement locations as JSON; no audio work.",
+        description=(
+            "Read a saved enhancement report and emit concise JSON with report_pointer "
+            "locations (JSON Pointers). Applied stages and an empty unresolved list do not "
+            "certify every goal or perceptual quality. Missing outcomes stay absent."
+        ),
+    )
+    summary_parser.add_argument("input", type=Path, help="Saved enhancement report JSON.")
+
     packages_parser = subparsers.add_parser(
         "packages",
         help="Provision, verify, and remove model packages and their environments.",
@@ -84,7 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Download weights, create environments, apply patches, build products.",
     )
     pull_parser.add_argument("packages", nargs="*", help="Package ids; or use --stack.")
-    pull_parser.add_argument("--stack", help="Provision what this stack can use.")
+    pull_parser.add_argument(
+        "--stack", help="Provision what this stack can use; ids: audio transcribe stacks."
+    )
     pull_parser.add_argument(
         "--want",
         help="Unsupported here; use transcribe plan --want and pull its missing package ids.",
@@ -121,15 +142,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     transcribe_parser = subparsers.add_parser(
         "transcribe",
-        help="Inspect transcription capabilities and resolve an execution plan.",
+        help="Discover stacks, inspect capabilities, plan, and transcribe.",
     )
     transcribe_commands = transcribe_parser.add_subparsers(dest="transcribe_command", required=True)
+    transcribe_commands.add_parser(
+        "stacks", help="List declared stack ids and decision cues without media or provisioning."
+    )
     capabilities_parser = transcribe_commands.add_parser(
         "capabilities",
         help="Report what one stack can do with one input.",
         usage="%(prog)s --stack STACK --input INPUT [-h]",
     )
-    capabilities_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    stack_help = "Required: explicit transcription stack; ids: audio transcribe stacks."
+    capabilities_parser.add_argument("--stack", help=stack_help)
     capabilities_parser.add_argument("--input", type=Path, help="Required: original media path.")
 
     plan_parser = transcribe_commands.add_parser(
@@ -137,7 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resolve requested capabilities to roles and packages.",
         usage="%(prog)s --stack STACK --input INPUT [options]",
     )
-    plan_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    plan_parser.add_argument("--stack", help=stack_help)
     plan_parser.add_argument("--input", type=Path, help="Required: original media path.")
     plan_parser.add_argument("--want", help="Comma-separated capability names.")
     plan_parser.add_argument("--language")
@@ -149,8 +174,14 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="Execute one resolved transcription request.",
         usage="%(prog)s --stack STACK --input INPUT [options]",
+        description=(
+            "Host stage and elapsed-time progress goes to stderr. Raw backend stdout/stderr "
+            "is retained in temporary log files at the announced paths, including on failure. "
+            "Backend warnings are diagnostics, not recognition-quality verdicts. Copy logs "
+            "with your evidence before operating-system temporary-file cleanup."
+        ),
     )
-    run_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    run_parser.add_argument("--stack", help=stack_help)
     run_parser.add_argument("--input", type=Path, help="Required: original media path.")
     run_parser.add_argument("--want", help="Comma-separated capability names.")
     run_parser.add_argument("--language")

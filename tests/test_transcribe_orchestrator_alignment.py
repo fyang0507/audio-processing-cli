@@ -325,6 +325,7 @@ def test_canonical_wav_header_owns_duration_and_fixed_unit_bounds(tmp_path) -> N
         "path": str(resolved.input_path),
         "duration_seconds": 2.0,
         "timebase": "seconds",
+        "duration_basis": "canonical_decoded_pcm",
     }
     assert transport.units == [{"unit_id": "unit_0", "start": 0.0, "end": 2.0}]
 

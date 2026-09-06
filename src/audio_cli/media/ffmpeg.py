@@ -15,6 +15,7 @@ from scipy.io import wavfile
 
 from .errors import MediaError
 from .files import hash_file
+from .timing import probed_duration, stream_timing
 
 ENHANCED_MARKER = "audio-processing-cli enhanced"
 
@@ -80,13 +81,13 @@ def media_summary(path: Path, probe: dict[str, object]) -> dict[str, object]:
     assert isinstance(stream, dict)
     fmt = probe.get("format", {})
     assert isinstance(fmt, dict)
-    duration_raw = stream.get("duration", fmt.get("duration", 0.0))
     tags = fmt.get("tags", {}) or {}
-    return {
+    timing = stream_timing(probe)
+    result = {
         "path": str(path.resolve()),
         "sha256": hash_file(path),
-        "duration_seconds": round(float(duration_raw), 6),
-        "audio_start_seconds": round(float(stream.get("start_time", 0.0) or 0.0), 6),
+        **probed_duration(probe),
+        "timing": timing,
         "sample_rate_hz": int(stream.get("sample_rate", 0) or 0),
         "channels": int(stream.get("channels", 0) or 0),
         "channel_layout": stream.get("channel_layout"),
@@ -95,6 +96,10 @@ def media_summary(path: Path, probe: dict[str, object]) -> dict[str, object]:
         "format_name": fmt.get("format_name"),
         "tags": tags,
     }
+    audio = timing.get("audio", [])
+    if audio and "start_seconds" in audio[0]:
+        result["audio_start_seconds"] = audio[0]["start_seconds"]
+    return result
 
 
 def is_enhanced_media(probe: dict[str, object]) -> bool:

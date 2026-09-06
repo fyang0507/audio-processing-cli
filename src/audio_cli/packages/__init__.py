@@ -13,6 +13,7 @@ from ..environments import (
     Package,
     environments,
 )
+from .artifacts import verified_artifact
 from .catalog import packages
 from .checkouts import (
     checkout_file_matches,
@@ -87,4 +88,5 @@ __all__ = [
     "select",
     "sha256_file",
     "validated_built_product",
+    "verified_artifact",
 ]

@@ -8,7 +8,7 @@ Canonical identifies the unedited result and its source. It does not guarantee t
 
 ## Choose, plan, and run
 
-Choose the stack and the output needed, not every capability. Use `capabilities` when the choice is unclear and `plan` when it is known. Read the live catalog's quality limits in their fixture and configuration context; neither package size nor a declared capability establishes accuracy on new media. Native versus derived capabilities affect the extra packages and work the plan requires.
+Choose the stack and the output needed, not every capability. Use `stacks` to discover the declared choices, `capabilities` to evaluate one for the original input, and `plan` to resolve the request. Read the live catalog's quality limits in their fixture and configuration context; neither package size nor a declared capability establishes accuracy on new media. Native versus derived capabilities affect the extra packages and work the plan requires.
 
 The catalog's `next` is a concrete floors-only plan command, not a recommendation that its minimal output satisfies the user. Add the capabilities the task needs before planning. Request real `word_timestamps` for subtitles; optional speaker labels remain anonymous unless separate evidence establishes a person's identity or role.
 
@@ -18,7 +18,9 @@ If stack or input is missing, supply the actual missing value and repeat the int
 
 ## Read what was produced
 
-Published bounds refer to the original source timeline. Processing-container extents are not speech or word timings. Keep absent keys absent, and read the abstention ledger even on success. A requested capability may have outcome `abstained` while useful text or other timed spans survive; report its reason and affected scope rather than calling the entire result complete in that sense. An empty overlap ledger does not prove no overlap when the selected plan did not detect it.
+Follow host progress separately from raw backend diagnostics. Elapsed time reports that a child is running, not a completion percentage. Preserve the announced logs with the run evidence; warnings alone establish neither failure nor recognition quality. Use the command's exit status, result coverage, and semantic refusal to decide what action is needed.
+
+Published bounds refer to the original source decoded-audio timeline. Plans label their probed duration basis; runs label `source.duration_basis: canonical_decoded_pcm`, whose zero is the first decoded sample. Container duration, stream starts, and the enhancement decoder at a different sample rate can disagree without establishing lost words or an offset. Do not add a probed start to word or segment times, and do not certify subtitle-to-video sync from duration equality. Processing-container extents are not speech or word timings. Keep absent keys absent, and read the abstention ledger even on success. A requested capability may have outcome `abstained` while useful text or other timed spans survive; report its reason and affected scope rather than calling the entire result complete in that sense. An empty overlap ledger does not prove no overlap when the selected plan did not detect it.
 
 A bracketed non-speech event can deliberately have no aligned words. Ordinary speech with an `alignment_unavailable` abstention retains its available text; do not fabricate word bounds from its segment extent. A speaker label withheld over ambiguous overlap stays absent.
 
