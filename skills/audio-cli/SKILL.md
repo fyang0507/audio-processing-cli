@@ -20,6 +20,7 @@ If the command is missing, cannot start, or lacks a required operation, follow [
 | The request | Read before running it |
 | --- | --- |
 | Diagnose, enhance, or prepare an audio/video recording | [references/enhance-audio.md](references/enhance-audio.md) |
+| Read or compare saved inspection/enhancement reports | [references/enhance-audio.md](references/enhance-audio.md) |
 | Correct a particular region or measured frequency | [references/targeted-fixes.md](references/targeted-fixes.md) |
 | Transcribe original media or export a saved result | [references/transcribe.md](references/transcribe.md) |
 | Prepare packages, check readiness, or reclaim managed disk | [references/model-packages.md](references/model-packages.md) |

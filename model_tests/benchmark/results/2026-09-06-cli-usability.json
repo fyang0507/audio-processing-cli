@@ -1,0 +1,81 @@
+{
+  "date": "2026-09-06",
+  "scope": "CLI usability issues #46 and #48 plus shipped skill relocation",
+  "implementation_commit": "4ec5879",
+  "raw_artifacts": "tests/artifacts/usability/",
+  "status": "pass",
+  "validation": {
+    "pytest": {"passed": 1463, "skipped": 24, "artifact": "integrated/pytest.txt"},
+    "pre_commit": {"status": "pass", "artifact": "integrated/pre-commit.txt"},
+    "independent_review": {
+      "command_export_progress_logging": "CONVERGED after fixing range scope and retry option retention",
+      "reports_and_calibration": "CONVERGED"
+    },
+    "fresh_agent": {"status": "pass", "tasks": 3, "cli_invocations": 12, "artifact": "fresh-agent/acceptance-report.md"}
+  },
+  "checks": [
+    {
+      "name": "canonical offline export and legacy alias",
+      "fixture": "test-sample-multispeaker.m4a saved firered canonical JSON",
+      "configuration": "Markdown default; TXT with recorded provenance in fresh-agent check",
+      "status": "pass",
+      "evidence": "Default Markdown matches baseline bytes and legacy alias; new command executes offline."
+    },
+    {
+      "name": "compact plan",
+      "fixture": "autio-test-sample.m4a",
+      "configuration": "firered floors, transcribe plan --compact",
+      "status": "pass",
+      "evidence": "Matches the default plan with only sample_output omitted; provisioning and decision fields retained."
+    },
+    {
+      "name": "native receipt, range and durable logs",
+      "fixture": "autio-test-sample.m4a",
+      "configuration": "firered, --range 0:12, --receipt, --output, --log-dir",
+      "status": "pass",
+      "requested_range": [0, 12],
+      "selected_unit_scope": [0.98, 11.85],
+      "segments": 4,
+      "evidence": "Native existing-output refusal and its generated --force retry preserved receipt, recorded range and log destination; retry exited 0. Partial exit 4 and unchanged saved result bytes are separately covered with controlled stages."
+    },
+    {
+      "name": "enhancement progress and calibration metadata",
+      "fixture": "demo-video-audio-to-improve.mp4",
+      "source_sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "configuration": "product-demo, rnnoise, dry-run from original media",
+      "status": "pass",
+      "evidence": "Every pre-existing processing value and measurement matches baseline. The only changed existing field is resolved_operations_sha256 because its operation payload includes new calibration evidence. Progress stayed on stderr.",
+      "calibration": {"target_attained": false, "limiting_reasons": ["peak_headroom"]},
+      "predicted_program_actual": {"integrated_loudness_lufs": -16.02, "loudness_range_lu": 16.9, "true_peak_dbtp": -2.5},
+      "artifact": "integrated/processing-parity.json"
+    },
+    {
+      "name": "offline report details and comparison",
+      "fixture": "accepted demo canonical.report.json and delivered.inspection.json from e2e-remaining-2026-09-06",
+      "status": "pass",
+      "evidence": "Default summary bytes unchanged. Optional details include actual metrics and 20 recorded limit entries. Comparison links original fixed scopes and delivered fresh detection by recorded output identity and time overlap, retaining separate speech references."
+    },
+    {
+      "name": "retained Torch VibeVoice metadata",
+      "status": "pass",
+      "evidence": "Live doctor reports provisional false; no dependency pins, locks, model settings or runtime implementation changed."
+    },
+    {
+      "name": "shipped skill layout",
+      "status": "pass",
+      "evidence": "All eight skill files ship under skills/audio-cli; source distribution has no .agents entries or development-discovery compatibility link."
+    }
+  ],
+  "fresh_agent_feedback": {
+    "good": ["Clear canonical export and compatibility alias", "Readable provenance", "Compact plan omits repeated sample output", "Report pointers and separate comparison scopes"],
+    "follow_up_suggestions": ["Further compress detailed report views and shared evidence", "Make original, intermediate and delivered evidence phases easier to scan", "Echo request input and stack in compact plans"],
+    "addressed_during_acceptance": "Added a direct saved-report route to the skill entry point."
+  },
+  "limits": [
+    "This is command and evidence-workflow verification, not a new transcription-accuracy or perceptual-quality benchmark.",
+    "The native FireRed check covers a selected 12-second request, not the complete source.",
+    "The RNNoise parity check is a dry run; controlled pipeline tests also check unchanged report/rendered WAV bytes with progress enabled.",
+    "Twenty-four optional/live tests were skipped; their cases are not claimed as passed.",
+    "Detailed report projections retain recorded evidence and remain verbose; fresh-agent suggestions are nonblocking usability feedback."
+  ]
+}
