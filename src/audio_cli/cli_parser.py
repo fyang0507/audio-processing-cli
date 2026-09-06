@@ -35,7 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enhance_parser.add_argument("input", type=Path, nargs="?")
     enhance_parser.add_argument("--profile", choices=sorted(PROFILES), required=True)
-    enhance_parser.add_argument("-o", "--output", type=Path)
+    enhance_parser.add_argument(
+        "-o", "--output", type=Path, help="Write enhanced media; incompatible with --dry-run."
+    )
     enhance_parser.add_argument(
         "--skip",
         help=(
@@ -44,7 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     enhance_parser.add_argument("--adjustments", type=Path)
-    enhance_parser.add_argument("--dry-run", action="store_true")
+    enhance_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Evaluate without rendering; incompatible with --output.",
+    )
     enhance_parser.add_argument("--list-stages", action="store_true")
     enhance_parser.add_argument("--report", type=Path)
     enhance_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")

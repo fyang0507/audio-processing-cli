@@ -93,7 +93,10 @@ between an unbounded Qwen segment and the processing-unit interval in its absten
 mixed result containing that shape refuses SRT/VTT instead of using an unrelated row to justify
 dropping text. The ledger and capability outcome retain the incomplete-timing evidence.
 
-`md` and `txt` are for people. `jsonl` is one segment object per line, ordered by
+`md` and `txt` are for people. Markdown starts with `# Transcript` and places a blank
+line between segments; TXT separates them with a single newline. Both preserve
+each segment's text, including embedded newlines, and supplied speaker labels.
+`jsonl` is one segment object per line, ordered by
 start time — the same segment objects the JSON result carries, without the envelope
 or the provenance — so a consumer can stream or `grep` a long transcript without
 parsing the whole document. It has no timing requirement, and because it drops the

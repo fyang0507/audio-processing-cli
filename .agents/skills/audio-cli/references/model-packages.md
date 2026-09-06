@@ -35,9 +35,10 @@ Multi-gigabyte pulls can outlast a command timeout. Keep the running process and
 progress is on stderr and the completed receipt is on stdout. Silence alone is not evidence of
 a hang. An interrupted pull can resume; do not kill an active one just to start over.
 
-Read `pulled_known_bytes` as what this pull added and `skipped` as packages it left provisioned.
-Inspect successful receipts too: a stack pull can exit 0 with `warnings[].blocking: true` for
-packages it could not prepare. Naming such a package explicitly can instead fail at exit 3.
+`pulled_known_bytes` totals known sizes of owned artifacts materialized by this pull, including
+repairs; `skipped` packages contribute nothing. Read `pulled_known_bytes_note` for its accounting
+scope. Inspect successful receipts too: a stack pull can exit 0 with `warnings[].blocking: true`
+for packages it could not prepare. Naming such a package explicitly can instead fail at exit 3.
 
 `packages verify` emits its check report on **stdout**, including at exit **3**. Read `failed[]`
 and each failure's `package` or `packages` and `environment`, alongside `verified[]` and
@@ -71,8 +72,10 @@ clearance; preserve `license_reviewed` and any `license_unreviewed` warning.
 
 Trust the root and package `location` / `locations` returned by `path`. Hub weights can live in a
 cache shared with other tools outside the managed root, so directory size does not establish
-package completeness. `pulled_known_bytes` is per pull, `list`'s `total_known_bytes` is cumulative,
-and teardown's `reclaimed_bytes` is measured after deletion; these are different quantities.
+package completeness. `pulled_known_bytes` uses manifest-declared sizes for owned revisions and
+recorded local artifact sizes, excluding pre-existing shared revisions, skipped packages, and
+environment bytes. It is not network bytes or incremental disk usage. `list`'s `total_known_bytes`
+is cumulative, and teardown's `reclaimed_bytes` is measured after deletion.
 
 Use `remove` for named packages and `purge` for everything this root provisioned, only when that
 reclamation is requested. Removing one unknown package refuses the whole named selection. Runtime

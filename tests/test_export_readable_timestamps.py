@@ -46,14 +46,17 @@ def test_recorded_vibevoice_segments_keep_text_speakers_events_and_native_bounds
     original_bytes = path.read_bytes()
     default = export_documents([path], output_format)
     timed = export_documents([path], output_format, timestamps=True)
-    lines = timed.content.removeprefix("# Transcript\n\n").splitlines()
+    separator = "\n\n" if output_format == "md" else "\n"
+    lines = timed.content.removeprefix("# Transcript\n\n").removesuffix("\n").split(separator)
     expected_prefixes = [
         "[00:00:16.830 --> 00:00:32.050] ",
         "[00:00:33.640 --> 00:00:37.840] ",
         "[00:00:37.840 --> 00:00:40.280] ",
         "[00:00:40.280 --> 00:00:52.840] ",
     ]
-    canonical_lines = default.content.removeprefix("# Transcript\n\n").splitlines()
+    canonical_lines = (
+        default.content.removeprefix("# Transcript\n\n").removesuffix("\n").split(separator)
+    )
     assert lines == [
         prefix + text for prefix, text in zip(expected_prefixes, canonical_lines, strict=True)
     ]

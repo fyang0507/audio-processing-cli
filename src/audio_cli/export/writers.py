@@ -87,7 +87,7 @@ def render_vtt(cues: Sequence[Cue]) -> str:
     return "\n".join(lines)
 
 
-def render_text(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = False) -> str:
+def _render_segments(segments: Sequence[Mapping[str, Any]], *, timestamps: bool) -> list[str]:
     lines = []
     for index, segment in enumerate(segments):
         prefix = ""
@@ -99,11 +99,17 @@ def render_text(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = Fal
             prefix = f"[{start} --> {end}] "
         speaker = f"[{segment['speaker']}] " if "speaker" in segment else ""
         lines.append(prefix + speaker + str(segment["text"]))
+    return lines
+
+
+def render_text(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = False) -> str:
+    lines = _render_segments(segments, timestamps=timestamps)
     return "\n".join(lines) + ("\n" if lines else "")
 
 
 def render_markdown(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = False) -> str:
-    return "# Transcript\n\n" + render_text(segments, timestamps=timestamps)
+    paragraphs = _render_segments(segments, timestamps=timestamps)
+    return "# Transcript\n\n" + "\n\n".join(paragraphs) + ("\n" if paragraphs else "")
 
 
 def render_jsonl(segments: Sequence[Mapping[str, Any]]) -> str:
