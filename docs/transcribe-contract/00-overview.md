@@ -200,11 +200,14 @@ Request validation remedies correct the offending fields in prose and tell the c
   },
   "stack": "qwen-0.6b",
   "complete": true,
-  "counts": {"segments": 3, "abstentions": 0}
+  "counts": {"segments": 3, "abstentions": 0},
+  "outcomes": {}
 }
 ```
 
 `output` is the actual published path. `source`, `stack`, and `complete` copy saved facts. Counts always include `segments` and `abstentions`; `words` counts supplied word objects only when a word stream is present, and `turns`, `vad_regions`, `lid_regions`, and `overlapped_speech` appear only when their saved collections exist. Missing collections and source metadata stay absent. Counts do not measure recognition accuracy or missing spoken words; `complete` describes processing completion, and the saved abstention ledger and capability outcomes remain the evidence for capability limitations.
+
+`outcomes` copies the saved `provenance.outcomes` map without inferring anything from counts or completion. Each recorded requested capability remains `produced` or `abstained`; unrequested capabilities stay absent. A recorded empty floors-only map stays `{}`, and an absent map is not fabricated. For example, `"outcomes": {"diarization": "produced", "word_timestamps": "abstained"}` can accompany `complete: true` and a positive word count: the request finished, but some required word timing was withheld. Read the saved canonical abstentions for the affected scopes before attempting timing-dependent exports. The same projection applies to partial receipts.
 
 An incomplete run still exits 4 and prints the `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt. Runnable output-replacement and range-resume fixes retain the invocation's `--receipt` and `--log-dir` options; prose remedies and package commands are unchanged.
 

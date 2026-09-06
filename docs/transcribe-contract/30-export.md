@@ -82,6 +82,8 @@ There is one narrow nonempty wordless exception. If `word_timestamps` is recorde
 audio transcribe export --input meeting.timed.json --format md --provenance --timestamps -o meeting.md
 ```
 
+Before a timing-dependent export, inspect the run receipt's `outcomes` or the saved `provenance.outcomes` and abstentions. Processing `complete: true` and a positive word count do not establish complete timing delivery. A recorded `word_timestamps: abstained` means some timing was withheld; the canonical result identifies its scope, and the selected exporter validates its own timing requirements. The readable provenance header remains a source/completion projection; it does not replace these capability checks.
+
 `--provenance` does not imply `--timestamps`; provenance can accompany untimed text. With SRT, VTT, or JSONL it refuses before reading inputs or overwriting a destination, including with `--force`. For example, JSONL with `--provenance` produces exit 2 and this stderr:
 
 ```json

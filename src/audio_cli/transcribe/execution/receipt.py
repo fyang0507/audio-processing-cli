@@ -30,6 +30,8 @@ def build_receipt(payload: Mapping[str, Any], path: str | Path) -> dict[str, Any
         "complete": payload["complete"],
         "counts": counts,
     }
+    if "outcomes" in payload["provenance"]:
+        receipt["outcomes"] = dict(payload["provenance"]["outcomes"])
     if "coverage" in payload:
         receipt["coverage"] = dict(payload["coverage"])
     execution = payload["provenance"].get("plan", {}).get("execution", {})
