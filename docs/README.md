@@ -7,4 +7,5 @@
 - [Model decisions](model-tests/DECISION_REPORT.md), [findings](model-tests/FINDINGS.md), and [experiments](model-tests/EXPERIMENT_RESULTS.md): research documentation; claims about measured output still require runner or artifact evidence.
 - [Benchmark guide](model-tests/benchmark/README.md): reproducible research workflows. Runners, manifests, tracked results, and ignored raw runs remain under `model_tests/`.
 - [Test layout](testing.md): ownership and local artifact conventions. [Agent acceptance](agent-acceptance.md): the final development gate, fresh operator contexts, media matrix, evidence and pass/fail criteria.
+- [Open-issue stack acceptance, 6 September 2026](model-tests/2026-09-06-open-issues-acceptance.md): scoped feature verdicts, original-source artifacts and the unresolved Qwen timing-delivery failure.
 - [Audio CLI skill](../skills/audio-cli/SKILL.md): CLI user guidance developed and shipped with the source distribution, outside development-agent auto-discovery.
