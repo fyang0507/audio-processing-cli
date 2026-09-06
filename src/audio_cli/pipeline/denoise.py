@@ -81,6 +81,23 @@ def apply_model_cleanup(
         return finish_environment_cleanup(audio, filtered, mask, operations, component, transition)
     denoised = render_rnnoise(calibrated, sample_rate, model.path, model.sha256) / guide_gain
     processed, component, operation = apply_guided_denoise(filtered, denoised, sample_rate, profile)
+    if operation is not None:
+        # The estimator examines the continuous recording, but only the speech
+        # treatment is delivered. Ignore overlap-add rounding outside a real change.
+        active = mask > 0
+        scoped_delta = (processed[active].astype(np.float64) - filtered[active]) * mask[
+            active, None
+        ]
+        change_energy = float(np.sum(scoped_delta**2))
+        reference_energy = float(np.sum(filtered[active].astype(np.float64) ** 2))
+        if change_energy <= reference_energy * 1e-12:
+            processed = filtered
+            operation = None
+            component.update(status="no_op", reason="no_model_change_in_speech_treatment")
+        else:
+            operation["maximum_candidate_spectral_reduction_db"] = operation.pop(
+                "maximum_spectral_reduction_db"
+            )
     evidence = {
         "guide": "ffmpeg-arnndn",
         "guide_calibration": calibration,

@@ -10,7 +10,7 @@ The profile currently limits this shared mask to 6 dB attenuation per spectral b
 
 The [media mechanism](../src/audio_cli/media/denoise.py) copies bytes matching the freshly verified local SHA256 into a private directory, avoiding FFmpeg filter-path quoting ambiguity. It pads to a whole 480-sample frame plus one additional frame, runs the filter continuously, discards the first 480 samples of synthesis delay, and retains exactly the input sample count. Incorrect output length, nonfinite samples, or a failed filter refuses before publication. These checks concern this filter's decoded sample grid; they do not prove final codec alignment or audiovisual sync.
 
-The report names the algorithm, verified model identity, mask bounds, compensation, channel-state scope, and affected speech intervals. An `applied` component means inference resolved an applied mask. Its `noise_reduction` and `speech_preservation` fields remain explicitly unmeasured without suitable evidence. A final peak or duration pass does not establish perceptual improvement.
+The report names the algorithm, verified model identity, mask bounds, compensation, and channel-state scope. The recorded `maximum_candidate_spectral_reduction_db` is the maximum proposed across the continuous recording before the speech blend; it is not measured delivered noise reduction. If the model candidate changes only samples outside treatment, the component reports `no_op` and emits no denoising operation. An `applied` component means inference resolved an applied mask. Its `noise_reduction` and `speech_preservation` fields remain explicitly unmeasured without suitable evidence. A final peak or duration pass does not establish perceptual improvement.
 
 ## Source evidence
 

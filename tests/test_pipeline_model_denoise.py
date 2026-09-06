@@ -55,7 +55,7 @@ def test_continuous_inference_with_no_stationary_reference_requirement(channels,
     operation = report["operations"][-1]
     assert operation["channel_link"] == "maximum_guide_to_input_magnitude_ratio"
     assert operation["noise_reduction"]["status"] == "abstained"
-    assert operation["maximum_spectral_reduction_db"] <= 6
+    assert operation["maximum_candidate_spectral_reduction_db"] <= 6
 
 
 def test_no_speech_does_not_run_model(monkeypatch):
@@ -78,3 +78,27 @@ def test_model_failure_propagates_without_stationary_fallback(monkeypatch):
     monkeypatch.setattr("audio_cli.pipeline.denoise.render_rnnoise", fail)
     with pytest.raises(MediaError, match="model failed"):
         apply_model_cleanup(audio, RATE, PROFILE, analysis, MODEL)
+
+
+def test_candidate_changes_outside_speech_are_not_reported_as_applied(monkeypatch):
+    audio = np.random.default_rng(67).normal(0, 0.02, (RATE * 5, 1)).astype(np.float32)
+    analysis = analyze_signal(audio, RATE, [SpeechRegion(2, 3, 0.9, 1)], PROFILE)
+    monkeypatch.setattr(
+        "audio_cli.pipeline.denoise.resolve_speech_treatment_intervals", lambda *a: ([(2, 3)], {})
+    )
+    monkeypatch.setattr(
+        "audio_cli.pipeline.denoise.prepare_environment_filters", lambda *a: (a[0], [])
+    )
+
+    def outside_only(samples, *args):
+        guide = samples.copy()
+        guide[:RATE] *= 0.01
+        guide[4 * RATE :] *= 0.01
+        return guide
+
+    monkeypatch.setattr("audio_cli.pipeline.denoise.render_rnnoise", outside_only)
+    output, report = apply_model_cleanup(audio, RATE, PROFILE, analysis, MODEL)
+    np.testing.assert_array_equal(output, audio)
+    assert report["operations"] == []
+    assert report["component_evaluations"][0]["status"] == "no_op"
+    assert report["component_evaluations"][0]["reason"] == "no_model_change_in_speech_treatment"

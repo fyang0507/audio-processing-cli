@@ -81,7 +81,8 @@ def test_actual_asymmetric_channels_match_their_mono_runs(model):
 def test_calibrated_guide_preserves_synthetic_voice_while_reducing_changing_noise(scale, model):
     from test_dsp_denoise import speech_fixture
 
-    from audio_cli.dsp import apply_guided_denoise, calibrate_guide_input
+    from audio_cli.dsp import analyze_signal
+    from audio_cli.pipeline.denoise import DenoiserModel, apply_model_cleanup
     from audio_cli.profiles import PROFILES
     from audio_cli.vad_contract import SpeechRegion
 
@@ -89,18 +90,16 @@ def test_calibrated_guide_preserves_synthetic_voice_while_reducing_changing_nois
     time = np.arange(len(clean)) / 48000
     clean = (clean * scale).astype(np.float32)
     mixed = clean + (noise * scale * (0.2 + 2.8 * time[:, None] / 4)).astype(np.float32)
-    calibrated, gain, _details = calibrate_guide_input(
+    profile = PROFILES["product-demo"]
+    analysis = analyze_signal(mixed, 48000, [SpeechRegion(1, 3, 0.9, 1)], profile)
+    output, report = apply_model_cleanup(
         mixed,
         48000,
-        [SpeechRegion(1, 3, 0.9, 1)],
-        target_rms_dbfs=-24,
-        peak_limit_dbfs=-3,
-        maximum_gain_db=40,
+        profile,
+        analysis,
+        DenoiserModel(model[0], model[1], {"package": "rnnoise-voice"}),
     )
-    guide = render_rnnoise(calibrated, 48000, *model) / gain
-    output, component, _operation = apply_guided_denoise(
-        mixed, guide, 48000, PROFILES["product-demo"]
-    )
+    component = report["component_evaluations"][0]
     speech = slice(50400, 141600)
     pause = slice(86400, 96000)
     voiced = slice(55200, 76800)
