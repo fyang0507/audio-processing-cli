@@ -1,0 +1,404 @@
+{
+  "recorded_local_date": "2026-09-05",
+  "generated_at": "2026-09-06T01:03:35.476085+00:00",
+  "topic": "E2E follow-up implementation and fresh CLI-only acceptance",
+  "media_test_commit": "5c49102538d1c50308f0f28c035d4296fb1425ef",
+  "post_acceptance_polish": {
+    "commit": "2f5d3d3a355637173b99f907a55c666f30e32a31",
+    "scope": [
+      "Markdown segment separation",
+      "skill known-byte semantics",
+      "dry-run/output help compatibility"
+    ],
+    "review": "CONVERGED; reviewed and integrated commit trees identical",
+    "fresh_export_test": {
+      "status": "PASS",
+      "exports": 6,
+      "help_compatibility": "PASS",
+      "receipt_interpretation": "PASS",
+      "canonical_hashes_unchanged": true,
+      "report": "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/polish-validation/exports/report.md",
+      "limit": "tester did not independently verify commit/module identity; parent separately verified both; initial skill-read logging gap disclosed"
+    }
+  },
+  "overall_user_goal_acceptance": "PARTIAL_FAIL",
+  "scope": "confirmed defects and bounded broadband denoising; filler deletion deferred by user in issue39",
+  "raw_run_directory": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207",
+  "inputs": [
+    {
+      "fixture": "test-sample-multispeaker.m4a",
+      "sha256_before": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+      "sha256_after": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+      "unchanged": true
+    },
+    {
+      "fixture": "demo-video-audio-to-improve.mp4",
+      "sha256_before": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "sha256_after": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "unchanged": true
+    },
+    {
+      "fixture": "autio-test-sample.m4a",
+      "sha256_before": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "sha256_after": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "unchanged": true
+    }
+  ],
+  "cases": [
+    {
+      "case": 1,
+      "fixture": "test-sample-multispeaker.m4a",
+      "cli_delivery": "PASS",
+      "transcriptions": [
+        {
+          "canonical": {
+            "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/firered.canonical.json",
+            "sha256": "559583293f4e22235503bb0437a13627504c73a4851b290494be9b09fca515e4"
+          },
+          "stack": "firered",
+          "requested_capabilities": [
+            "verbatim",
+            "word_timestamps",
+            "segment_timestamps"
+          ],
+          "asr_config": {
+            "aed_length_penalty": 0.6,
+            "batch_size": 4,
+            "beam_size": 3,
+            "decode_max_len": 0,
+            "device": "cpu",
+            "dtype": "float32",
+            "eos_penalty": 1.0,
+            "nbest": 1,
+            "return_timestamp": true,
+            "softmax_smoothing": 1.25
+          },
+          "complete": true,
+          "source_duration_seconds": 139.284,
+          "segments": 62,
+          "word_entries": 246,
+          "speaker_labels": [],
+          "abstentions": [],
+          "outcomes": {
+            "segment_timestamps": "produced",
+            "verbatim": "produced",
+            "word_timestamps": "produced"
+          },
+          "observed_total_wall_seconds": 97.545154,
+          "recognition_accuracy": "unscored; original-source canonical output supplied for user judgment"
+        },
+        {
+          "canonical": {
+            "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/vibevoice.canonical.json",
+            "sha256": "e2f0b20f80fdf5140d750cf5269e014ca58b9f4d5e7c41a807dd8f4e9fc84d31"
+          },
+          "stack": "vibevoice",
+          "requested_capabilities": [
+            "verbatim",
+            "diarization",
+            "segment_timestamps"
+          ],
+          "asr_config": {
+            "attention": "sdpa",
+            "device": "mps",
+            "dtype": "bfloat16",
+            "max_new_tokens": 16384,
+            "seed": 1234
+          },
+          "complete": true,
+          "source_duration_seconds": 139.284,
+          "segments": 20,
+          "word_entries": 0,
+          "speaker_labels": [
+            "0",
+            "1"
+          ],
+          "abstentions": [],
+          "outcomes": {
+            "diarization": "produced",
+            "segment_timestamps": "produced",
+            "verbatim": "produced"
+          },
+          "observed_total_wall_seconds": 57.581234,
+          "recognition_accuracy": "unscored; original-source canonical output supplied for user judgment"
+        }
+      ],
+      "repair": "one prescribed audio packages pull --repair firered-asr2s; verify passed before and after inference",
+      "report": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/report.md"
+    },
+    {
+      "case": 2,
+      "fixture": "demo-video-audio-to-improve.mp4",
+      "cli_delivery": "PASS",
+      "requested_goal_acceptance": "PARTIAL_FAIL",
+      "enhancement": {
+        "report": {
+          "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/02-demo-enhancement/demo-enhanced.report.json",
+          "sha256": "8bf98a6db5147a3d85cfe3a3cbe79b8b182fcaf7d610da9b6b4bd955ac4d3b8e"
+        },
+        "media": {
+          "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/02-demo-enhancement/demo-enhanced.mp4",
+          "sha256": "9703a9c13507c1d8c9661111afbf618ca9c60573c6c87ae4932e344daf68aad5"
+        },
+        "profile": {
+          "name": "product-demo",
+          "version": "5"
+        },
+        "rendered": true,
+        "before_program_actual": {
+          "integrated_loudness_lufs": -37.22,
+          "loudness_range_lu": 28.2,
+          "true_peak_dbtp": -19.02
+        },
+        "after_program_actual": {
+          "integrated_loudness_lufs": -16.43,
+          "loudness_range_lu": 17.5,
+          "true_peak_dbtp": -1.77
+        },
+        "final_peak_validation": {
+          "limit_true_peak_dbtp": -1.5,
+          "measured_true_peak_dbtp": -1.77,
+          "status": "pass"
+        },
+        "duration_delta_ms": -0.333,
+        "timeline_preserved_cli_claim": true,
+        "source_audio_start_seconds": 0.006,
+        "output_audio_start_seconds": 0.0,
+        "stage_statuses": {
+          "channel-balance": "no_op",
+          "environment-denoise": "abstained",
+          "voice-enhance": "applied",
+          "source-balance": "applied",
+          "program-loudness": "applied"
+        },
+        "unresolved": [
+          {
+            "component": "broadband-denoise",
+            "reason": "noise_reference_is_nonstationary",
+            "stage": "environment-denoise",
+            "status": "abstained"
+          },
+          {
+            "component": "speech-leveling",
+            "measured_at": "after_voice_enhance",
+            "measured_rms_dbfs": -34.457,
+            "reason": "voice_correction_bound_reached",
+            "stage": "voice-enhance",
+            "status": "bounded_outside_target",
+            "target_rms_dbfs": -30.0
+          },
+          {
+            "component": "loudness-range",
+            "measured_at": "encoded_output",
+            "measured_lra_lu": 17.5,
+            "reason": "dynamic_lra_control_would_change_relative_region_balance",
+            "stage": "program-loudness",
+            "status": "abstained",
+            "target_maximum_lra_lu": 11.0
+          },
+          {
+            "difference_from_speech_db": -4.751,
+            "measured_at": "encoded_output",
+            "reason": "correction_bound_reached",
+            "region_id": "machine_audio_001",
+            "stage": "source-balance",
+            "status": "bounded_outside_target",
+            "target_difference_db": {
+              "maximum": -2.0,
+              "minimum": -4.0
+            }
+          }
+        ],
+        "perceptual_quality": "unscored; actual rendered media supplied"
+      },
+      "blockers": [
+        "broadband suppression: noise_reference_is_nonstationary",
+        "exact A/V sync unverified from exposed CLI evidence; no demonstrated sync defect"
+      ],
+      "fixed_original_regions_inside_target": {
+        "count": 8,
+        "total": 9
+      },
+      "same_enhanced_media_sha256_as_prior_run": true,
+      "report": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/02-demo-enhancement/report.md"
+    },
+    {
+      "case": 3,
+      "fixture": "autio-test-sample.m4a",
+      "cli_delivery": "PASS",
+      "requested_goal_acceptance": "PARTIAL_FAIL",
+      "transcription": {
+        "canonical": {
+          "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/03-mixed-language/canonical-transcript.json",
+          "sha256": "691d11175a691b76473de5c55c66a106ef5a57a707cc0ca8daad692b8e8955ab"
+        },
+        "stack": "qwen-1.7b",
+        "requested_capabilities": [
+          "verbatim",
+          "languages"
+        ],
+        "asr_config": {
+          "api_path": "_generate_chunks_batched",
+          "batch_size": 1,
+          "clear_mlx_cache_after_every_batch": true,
+          "language": null,
+          "max_tokens": 16384
+        },
+        "complete": true,
+        "source_duration_seconds": 27.753312,
+        "segments": 4,
+        "word_entries": 0,
+        "speaker_labels": [],
+        "abstentions": [],
+        "outcomes": {
+          "languages": "produced",
+          "verbatim": "produced"
+        },
+        "observed_total_wall_seconds": 2.497031,
+        "recognition_accuracy": "unscored; original-source canonical output supplied for user judgment"
+      },
+      "enhancement": {
+        "report": {
+          "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/03-mixed-language/enhance-report.json",
+          "sha256": "b3a42b82b05998ec2ae512347e50824f6b84312b582fa690ffa3cb4c1d1bcdf8"
+        },
+        "media": {
+          "path": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/03-mixed-language/enhanced-original.m4a",
+          "sha256": "c5bc932488b7a39a0e5133e058612d302e0818ed4f7760d1d19cad7b68a480b6"
+        },
+        "profile": {
+          "name": "product-demo",
+          "version": "5"
+        },
+        "rendered": true,
+        "before_program_actual": {
+          "integrated_loudness_lufs": -37.32,
+          "loudness_range_lu": 4.0,
+          "true_peak_dbtp": -17.7
+        },
+        "after_program_actual": {
+          "integrated_loudness_lufs": -16.19,
+          "loudness_range_lu": 3.4,
+          "true_peak_dbtp": -2.32
+        },
+        "final_peak_validation": {
+          "limit_true_peak_dbtp": -1.5,
+          "measured_true_peak_dbtp": -2.32,
+          "status": "pass"
+        },
+        "duration_delta_ms": -44.333,
+        "timeline_preserved_cli_claim": true,
+        "source_audio_start_seconds": 0.044,
+        "output_audio_start_seconds": 0.0,
+        "stage_statuses": {
+          "channel-balance": "no_op",
+          "environment-denoise": "applied",
+          "voice-enhance": "applied",
+          "source-balance": "no_op",
+          "program-loudness": "applied"
+        },
+        "unresolved": [
+          {
+            "component": "broadband-denoise",
+            "reason": "noise_reference_is_nonstationary",
+            "stage": "environment-denoise",
+            "status": "abstained"
+          }
+        ],
+        "perceptual_quality": "unscored; actual rendered media supplied"
+      },
+      "blockers": [
+        "broadband suppression: noise_reference_is_nonstationary",
+        "fresh classification around 9.16-9.34s leaves intended balance unresolved; not evidence of an original-region regression"
+      ],
+      "report": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/03-mixed-language/report.md"
+    }
+  ],
+  "verification": {
+    "full_suite_before_polish": {
+      "passed": 1136,
+      "skipped": 7,
+      "skip_reason": "optional untracked historical model fixtures absent"
+    },
+    "all_files_precommit_before_polish": "PASS",
+    "independent_implementation_reviews": {
+      "packages": "CONVERGED round3; earlier round2 verdict withdrawn",
+      "dsp": "CONVERGED round2",
+      "cli_export_skill": "CONVERGED round2"
+    },
+    "final_package_verify": {
+      "exit": 0,
+      "environments": {
+        "mlx": "ok",
+        "swift": "ok",
+        "torch-firered": "ok",
+        "torch-vibevoice": "ok"
+      },
+      "failed": [],
+      "stdout": "model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/parent-checks/packages-verify.stdout"
+    },
+    "evidence_audit": "CONVERGED for media cases and current aggregate; recorded limitations retained",
+    "final_full_suite": {
+      "passed": 1137,
+      "skipped": 7,
+      "seconds": 56.24
+    },
+    "final_all_files_precommit": "PASS"
+  },
+  "test_method": {
+    "fresh_testers": 3,
+    "guidance": "copied audio-cli skill and live CLI help/output only",
+    "audio_operations": "audio CLI only; no alternatives or fallback",
+    "major_model_operations": "sequential",
+    "original_source_transcription_before_enhancement": true,
+    "all_cli_commands_recorded": true,
+    "strict_every_command_recording": "FAIL: initial skill reads for cases1/2 and preliminary pwd for case3 lack complete original metadata; disclosed harness gaps",
+    "raw_stdout_stderr_preserved": true
+  },
+  "agent_feedback": {
+    "helped": [
+      "checkout identity",
+      "native capability planning",
+      "one effective prescribed repair",
+      "original-first workflow",
+      "command-specific failure channels",
+      "native timestamps and absence semantics",
+      "program_actual and unresolved components",
+      "fixed source regions distinguished from fresh detection"
+    ],
+    "remaining": [
+      "normal stack discovery",
+      "useful long-run progress and warning context",
+      "noise-reference diagnostics and broader coverage",
+      "public duration and A/V sync evidence",
+      "concise goal outcome navigation"
+    ],
+    "polish_defects_fixed": [
+      "Markdown paragraph separation",
+      "skill known-byte wording",
+      "dry-run/output help incompatibility"
+    ]
+  },
+  "issues": {
+    "implemented_scope": [
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38
+    ],
+    "integration": 40,
+    "filler_editing_future": 39,
+    "remaining_noise": 41,
+    "remaining_timing_evidence": 42,
+    "remaining_agent_ux": 43
+  },
+  "limits": [
+    "Model completion is not recognition accuracy or filler recall.",
+    "Enhancement can change later ASR/VAD; original remains canonical.",
+    "Controlled stationary-denoise fixture attenuation does not establish denoising on these recordings.",
+    "No human listening, visual evaluation or exact sync proof is claimed."
+  ]
+}
