@@ -99,6 +99,7 @@ COMMAND_PRIMITIVES = {
     "output_path_invalid",
     "transcribe_plan_command",
     "transcribe_run_command",
+    "with_transcribe_run_options",
 }
 DOCUMENT_FRAGMENT_LAYOUT = {
     "TRANSCRIBE_CONTRACT_": (

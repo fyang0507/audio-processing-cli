@@ -32,4 +32,7 @@ def build_receipt(payload: Mapping[str, Any], path: str | Path) -> dict[str, Any
     }
     if "coverage" in payload:
         receipt["coverage"] = dict(payload["coverage"])
+    execution = payload["provenance"].get("plan", {}).get("execution", {})
+    if "range" in execution:
+        receipt["range"] = dict(execution["range"])
     return receipt

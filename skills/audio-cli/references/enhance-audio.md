@@ -23,7 +23,7 @@ Choose the broadband method before processing and inspect the selected invocatio
 
 ## Read parent and child outcomes
 
-Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes, including nested evidence, and does not certify overall success.
+Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Request its optional measurement and evidence-limit views when a compact account of delivered metrics and nested abstentions is useful. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes and does not certify overall success.
 
 Stages can be `applied`, `no_op`, `skipped`, `abstained`, or `failed`. `applied` means some work ran, not that every goal was met. Read `stages[].component_evaluations[]` for child statuses and reasons: `environment-denoise` can apply a filter while `broadband-denoise` abstains. Quote the actual child outcome and resolved parameters rather than inferring them from the parent.
 
@@ -58,6 +58,8 @@ For video, compare available `source.timing` and `output.timing` audio/video sta
 ## Fixed regions and fresh detection answer different questions
 
 `region_basis` identifies the source timeline, original detection, fixed source regions, and report-local IDs. Before/after regional measurements reuse those original scopes and IDs to show how the same intervals changed. A fresh `inspect` of the enhanced output runs detection again and may split, merge, or reclassify intervals; its region IDs are local to that new analysis. Compare source-timeline intervals, not equal-looking IDs across reports.
+
+Use `audio report compare` for saved reports with compatible identity and timeline evidence. It keeps each report's intervals, measurements, and speech reference separate, including ambiguous overlaps. A refusal for missing identity or timeline evidence is not permission to guess a link. A matching digest and decoded duration still do not establish content alignment or A/V sync.
 
 ASR wording and VAD or program classification can change after enhancement. That alone is expected, not evidence of corruption or a reason for speculative re-editing. Keep the canonical original transcript, report substantive listening findings and measured limits, and do not require classification invariance. Enhancement preserves time; it does not remove fillers or other words.
 

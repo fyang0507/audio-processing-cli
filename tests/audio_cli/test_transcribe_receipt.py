@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -65,7 +66,16 @@ def test_receipt_preserves_saved_bytes_and_partial_exit(tmp_path, monkeypatch, c
     receipt = json.loads(captured.out)
     assert saved.read_bytes() == original
     assert resolved.input_path.read_bytes() == b"source"
-    assert captured.err == default.err
+    if partial:
+        refusal = json.loads(captured.err)
+        default_refusal = json.loads(default.err)
+        assert {k: v for k, v in refusal.items() if k != "fix"} == {
+            k: v for k, v in default_refusal.items() if k != "fix"
+        }
+        retry = cli._parser().parse_args(shlex.split(refusal["fix"])[1:])
+        assert retry.receipt is True
+    else:
+        assert captured.err == default.err
     assert receipt == {
         "output": str(saved),
         "source": payload["source"],
@@ -116,6 +126,7 @@ def test_receipt_preserves_absent_and_empty_collections():
     receipt = build_receipt(payload, "result.json")
     assert receipt["counts"] == {"segments": 1, "abstentions": 0}
     assert "duration_basis" not in receipt["source"]
+    assert "range" not in receipt
     payload["turns"] = []
     payload["segments"].append({"words": [{"text": "A"}, {"text": "B"}]})
     assert build_receipt(payload, "result.json")["counts"] == {
@@ -198,3 +209,100 @@ def test_failure_never_reports_an_unpublished_receipt(tmp_path, monkeypatch, cap
         "backend_failed" if failure == "backend" else "output_path_invalid"
     )
     assert not output.exists()
+
+
+def test_receipt_carries_recorded_range_without_inventing_coverage():
+    scope = {"requested": [0, 12], "selected_unit_scope": [0.98, 11.85]}
+    payload = {
+        "source": {"path": "original.wav", "duration_seconds": 27.75},
+        "provenance": {"stack": "firered", "plan": {"execution": {"range": scope}}},
+        "complete": True,
+        "segments": [],
+        "abstentions": [],
+    }
+    receipt = build_receipt(payload, "range.json")
+    assert receipt["range"] == scope
+    assert receipt["complete"] is True
+    assert "coverage" not in receipt
+
+
+def test_existing_output_retry_preserves_invocation_options(tmp_path, monkeypatch, capsys):
+    resolved, _, _ = request(tmp_path)
+    output = tmp_path / "existing.json"
+    output.write_text("preserve")
+    logs = tmp_path / "logs with $ and spaces"
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("output refusal must precede media and log creation")
+
+    monkeypatch.setattr(cli, "probe_media", forbidden)
+    assert (
+        cli.main(
+            [
+                "transcribe",
+                "run",
+                "--stack",
+                "qwen-0.6b",
+                "--input",
+                str(resolved.input_path),
+                "-o",
+                str(output),
+                "--receipt",
+                "--log-dir",
+                str(logs),
+                "--range",
+                "0:12",
+            ]
+        )
+        == 2
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    refusal = json.loads(captured.err)
+    assert refusal["code"] == "output_exists"
+    retry = cli._parser().parse_args(shlex.split(refusal["fix"])[1:])
+    assert retry.receipt and retry.force
+    assert retry.log_dir == logs
+    assert retry.run_range == "0:12"
+    assert retry.output == output
+    assert output.read_text() == "preserve"
+    assert not logs.exists()
+
+
+def test_partial_resume_preserves_log_destination(tmp_path, monkeypatch, capsys):
+    resolved, _, _ = request(tmp_path)
+    entries = registry(tmp_path)
+    output = tmp_path / "result.json"
+    logs = tmp_path / "logs with spaces"
+    run = cli.transcribe_orchestrator.run
+    monkeypatch.setattr(cli, "probe_media", lambda path: probe(361.0))
+
+    def controlled_run(*args, **kwargs):
+        kwargs["transport"] = FakeTransport(partial=True)
+        return run(*args, **kwargs, registry=entries)
+
+    monkeypatch.setattr(cli.transcribe_orchestrator, "run", controlled_run)
+    assert (
+        cli.main(
+            [
+                "transcribe",
+                "run",
+                "--stack",
+                "qwen-0.6b",
+                "--input",
+                str(resolved.input_path),
+                "-o",
+                str(output),
+                "--receipt",
+                "--log-dir",
+                str(logs),
+            ]
+        )
+        == 4
+    )
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["complete"] is False
+    retry = cli._parser().parse_args(shlex.split(json.loads(captured.err)["fix"])[1:])
+    assert retry.receipt is True
+    assert retry.log_dir == logs
+    assert retry.output == tmp_path / "result.rest.json"

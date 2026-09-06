@@ -14,6 +14,7 @@ from .rendering import (
     packages_pull_command,
     transcribe_plan_command,
     transcribe_run_command,
+    with_transcribe_run_options,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "packages_pull_command",
     "transcribe_plan_command",
     "transcribe_run_command",
+    "with_transcribe_run_options",
 ]

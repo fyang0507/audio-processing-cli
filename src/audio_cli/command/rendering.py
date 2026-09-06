@@ -125,3 +125,28 @@ def transcribe_run_command(
     if force:
         parts.append("--force")
     return shlex.join(parts)
+
+
+def with_transcribe_run_options(
+    command: str, *, receipt: bool = False, log_dir: Path | None = None
+) -> str:
+    """Retain invocation-only output choices on a rendered runnable retry.
+
+    Prose remedies and provisioning commands remain byte-for-byte unchanged.
+    These choices belong to command presentation, not the saved model plan.
+    """
+    if not receipt and log_dir is None:
+        return command
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return command
+    if parts[:3] != ["audio", "transcribe", "run"]:
+        return command
+    if receipt and "--receipt" not in parts:
+        parts.append("--receipt")
+    if log_dir is not None and not any(
+        item == "--log-dir" or item.startswith("--log-dir=") for item in parts
+    ):
+        parts.extend(("--log-dir", command_path_argument(log_dir)))
+    return shlex.join(parts)

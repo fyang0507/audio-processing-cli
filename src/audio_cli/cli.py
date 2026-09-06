@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .adjustments import AdjustmentError, load_adjustments
 from .cli_parser import build_parser
-from .command import ProgressReporter, Refusal
+from .command import ProgressReporter, Refusal, with_transcribe_run_options
 from .environments import ManifestError
 from .media import MediaError, media_summary, probe_media
 from .packages import (
@@ -405,6 +405,12 @@ def main(argv: list[str] | None = None) -> int:
             return _run_export(args)
         parser.error(f"Unknown command: {args.command}")
     except Refusal as exc:
+        if args.command == "transcribe" and args.transcribe_command == "run":
+            exc.payload["fix"] = with_transcribe_run_options(
+                exc.payload["fix"],
+                receipt=args.receipt,
+                log_dir=args.log_dir,
+            )
         _print_json(exc.payload, stream=sys.stderr)
         return exc.exit_code
     except ProvisioningError as exc:

@@ -206,7 +206,9 @@ Request validation remedies correct the offending fields in prose and tell the c
 
 `output` is the actual published path. `source`, `stack`, and `complete` copy saved facts. Counts always include `segments` and `abstentions`; `words` counts supplied word objects only when a word stream is present, and `turns`, `vad_regions`, `lid_regions`, and `overlapped_speech` appear only when their saved collections exist. Missing collections and source metadata stay absent. Counts do not measure recognition accuracy or missing spoken words; `complete` describes processing completion, and the saved abstention ledger and capability outcomes remain the evidence for capability limitations.
 
-An incomplete run still exits 4 and prints the unchanged `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt.
+An incomplete run still exits 4 and prints the `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt. Runnable output-replacement and range-resume fixes retain the invocation's `--receipt` and `--log-dir` options; prose remedies and package commands are unchanged.
+
+When the saved result records `provenance.plan.execution.range`, the receipt copies it as `range`, preserving `requested` and `selected_unit_scope` when supplied. `complete: true` then means the selected request completed, not that the whole original file was transcribed. Absent range and coverage remain absent.
 
 Invalid receipt combinations refuse at exit 2 before request resolution, media probing, or model work. `--receipt` without `--output` in default JSON format produces:
 
