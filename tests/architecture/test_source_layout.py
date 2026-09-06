@@ -87,6 +87,7 @@ EXPORT_COMPATIBILITY_REFUSALS = {
     "timing_required_for_format",
 }
 COMMAND_PRIMITIVES = {
+    "ProgressReporter",
     "Refusal",
     "build_refusal",
     "command_path_argument",

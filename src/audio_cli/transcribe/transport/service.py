@@ -33,9 +33,22 @@ def _reject_duplicate_json_keys(
 class StageTransport:
     """Launch each non-core stage exactly once, never keeping a model resident."""
 
-    def __init__(self, runner: ProcessRunner | None = None, *, progress=None) -> None:
+    def __init__(
+        self,
+        runner: ProcessRunner | None = None,
+        *,
+        progress=None,
+        log_root: Path | None = None,
+    ) -> None:
+        if runner is not None and log_root is not None:
+            raise ValueError("configure log_root on the supplied runner instead")
         self.progress = progress or sys.stderr
-        self.runner = runner or SubprocessRunner(self.progress)
+        self.runner = runner or SubprocessRunner(self.progress, log_root=log_root)
+
+    def _run(self, command: list[str], stage: str):
+        if isinstance(self.runner, SubprocessRunner):
+            return self.runner.run(command, stage=stage)
+        return self.runner.run(command)
 
     def _notice(self, message: str) -> None:
         self.progress.write(message.replace("transcribe: ", "transcribe: host: ", 1) + "\n")
@@ -55,7 +68,7 @@ class StageTransport:
     def decode(self, source: Path, target: Path) -> StageOutcome:
         self._notice("transcribe: decode started")
         started = time.perf_counter()
-        completed = self.runner.run(canonical_decode_command(source, target))
+        completed = self._run(canonical_decode_command(source, target), "decode")
         wall = time.perf_counter() - started
         if completed.returncode != 0 or not target.is_file():
             detail = completed.stderr.strip() or "ffmpeg did not write the canonical WAV"
@@ -112,7 +125,7 @@ class StageTransport:
         ]
         self._notice(f"transcribe: {role} started ({backend})")
         started = time.perf_counter()
-        completed = self.runner.run(command)
+        completed = self._run(command, role)
         transport_wall = time.perf_counter() - started
         self._diagnostics(completed)
         sampled_peak = getattr(completed, "peak_rss_bytes", None)
@@ -423,7 +436,7 @@ class StageTransport:
             command.append("--overlapping-segments")
         self._notice("transcribe: diarizer started (fluidaudio)")
         started = time.perf_counter()
-        completed = self.runner.run(command)
+        completed = self._run(command, "diarizer")
         wall = time.perf_counter() - started
         self._diagnostics(completed)
         if completed.returncode != 0 or not raw_path.is_file():

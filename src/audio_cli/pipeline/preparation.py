@@ -25,6 +25,7 @@ from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad
 from ..vad_contract import VadDetector
 from .models import PipelineError, PreparedRun
 from .outcomes import REGION_BASIS, actual_program
+from .progress import ProgressSink, progress_stage
 from .reporting import _program_observation, _region_manifest, _round_loudness
 
 
@@ -132,35 +133,39 @@ def prepare_run(
     output: Path | None,
     dry_run: bool,
     allow_enhanced_input: bool,
+    progress: ProgressSink | None = None,
 ) -> PreparedRun:
     """Validate and measure the canonical source before any treatment is applied."""
-    require_runtime()
-    if not source.is_file():
-        raise PipelineError(f"Input media does not exist: {source}")
-    if not dry_run and output is None:
-        raise PipelineError("--output is required unless --dry-run is used")
-    if output is not None and source.resolve() == output.resolve():
-        raise PipelineError("Output must not overwrite the canonical input")
+    with progress_stage(progress, "preparation"):
+        require_runtime()
+        if not source.is_file():
+            raise PipelineError(f"Input media does not exist: {source}")
+        if not dry_run and output is None:
+            raise PipelineError("--output is required unless --dry-run is used")
+        if output is not None and source.resolve() == output.resolve():
+            raise PipelineError("Output must not overwrite the canonical input")
 
-    probe = probe_media(source)
-    if is_enhanced_media(probe) and not allow_enhanced_input:
-        raise PipelineError(
-            "Input is marked as an enhanced render. Start from the canonical original, "
-            "or pass --allow-enhanced-input when this is intentional."
+        probe = probe_media(source)
+        if is_enhanced_media(probe) and not allow_enhanced_input:
+            raise PipelineError(
+                "Input is marked as an enhanced render. Start from the canonical original, "
+                "or pass --allow-enhanced-input when this is intentional."
+            )
+        source_info = media_summary(source, probe)
+        resolved_detector = detector or SileroOnnxVad()
+    with progress_stage(progress, "decode"):
+        audio, sample_rate = decode_audio(source)
+        source_info["decoded_audio"] = decoded_audio_timing(len(audio), sample_rate)
+    with progress_stage(progress, "inspection"):
+        speech_regions = _detect_speech(audio, sample_rate, profile, resolved_detector)
+        analysis = analyze_signal(audio, sample_rate, speech_regions, profile)
+        before_program = measure_loudness(
+            source,
+            target_lufs=profile.target_lufs,
+            target_lra=profile.target_lra_lu,
+            target_true_peak=profile.target_true_peak_dbtp,
         )
-    source_info = media_summary(source, probe)
-    resolved_detector = detector or SileroOnnxVad()
-    audio, sample_rate = decode_audio(source)
-    source_info["decoded_audio"] = decoded_audio_timing(len(audio), sample_rate)
-    speech_regions = _detect_speech(audio, sample_rate, profile, resolved_detector)
-    analysis = analyze_signal(audio, sample_rate, speech_regions, profile)
-    before_program = measure_loudness(
-        source,
-        target_lufs=profile.target_lufs,
-        target_lra=profile.target_lra_lu,
-        target_true_peak=profile.target_true_peak_dbtp,
-    )
-    before_regional = regional_measurements(audio, sample_rate, analysis)
+        before_regional = regional_measurements(audio, sample_rate, analysis)
     return PreparedRun(
         source=source,
         output=output,
