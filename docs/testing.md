@@ -6,6 +6,8 @@
 
 Run the full suite with `uv run --extra dev pytest`, or select an owner, for example `uv run --extra dev pytest tests/audio_cli/transcribe/adapters`. Install hooks with `uv run --extra dev pre-commit install`; run the deterministic lint and format gate with `uv run --extra dev pre-commit run --all-files`.
 
+For a user-facing feature, finish with [fresh-agent acceptance](agent-acceptance.md). It defines the operator isolation, original-media cases, required evidence, component-level outcomes and final feature verdict. Green implementation tests alone do not establish that an agent can complete the user's workflow; documentation-only changes follow its narrower verification rule.
+
 Put private recordings and generated acceptance output under `tests/artifacts/`. The directory is ignored except for its placeholder and excluded from source distributions. The local samples are `tests/artifacts/media/autio-test-sample.m4a`, `tests/artifacts/media/test-sample-multispeaker.m4a`, and `tests/artifacts/media/demo-video-audio-to-improve.mp4`. They are optional local inputs and are never modified in place. Write generated output to a separate path, such as `tests/artifacts/runs/`.
 
 Benchmark evidence keeps its existing convention: runners under `model_tests/benchmark/`, tracked compact results under `model_tests/benchmark/results/`, and ignored raw artifacts under `model_tests/benchmark_runs/`. Historical result JSON retains its original paths and hashes; only current runnable examples and fixture discovery use the relocated media paths.

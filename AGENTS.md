@@ -106,6 +106,8 @@ Runners live in `model_tests/benchmark/`, compact results are **tracked** under 
 
 ## Tooling
 
+Use [agent acceptance](docs/agent-acceptance.md) as the final development gate for user-facing features. It requires fresh operator agents with only the shipped skill and public CLI guidance, original-media evidence, explicit capability/delivery verdicts and no fallback after an unexpected failure. Green unit/specification checks alone are not user acceptance. Follow its scope rule for documentation-only changes; keep this developer procedure out of the operator skill.
+
 Write Markdown paragraphs and list-item prose on single physical lines. Do not hard-wrap prose to a column width; use line breaks for Markdown structure such as headings, separate paragraphs, list items, tables, and code blocks.
 
 `uv` manages every environment — `uv venv` and `uv pip install`, never `python3 -m venv` with `pip`. Tests are `uv run --extra dev pytest`. Install the repository hooks with `uv run --extra dev pre-commit install` and run the deterministic lint/format gate with `uv run --extra dev pre-commit run --all-files`; Ruff lint fixes run before Ruff formatting. `ffmpeg` and `ffprobe` are machine runtime dependencies. Python 3.11+.

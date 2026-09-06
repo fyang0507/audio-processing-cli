@@ -245,6 +245,8 @@ Repeat `--input` in source-timeline order to merge compatible continuations. `--
 
 ## Test
 
+Use [agent acceptance](docs/agent-acceptance.md) as the final verdict for user-facing feature work, after the implementation checks below. It defines fresh operator contexts, the regression media matrix, evidence requirements and explicit PASS/FAIL/BLOCKED criteria.
+
 ```bash
 uv run --extra dev pytest
 ```
