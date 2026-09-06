@@ -2,6 +2,10 @@
 
 A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `report summary`, `doctor`, `packages`, `transcribe stacks`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `transcribe export` ship (`export` remains a compatibility alias). JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
 
+## Final feature acceptance
+
+Use [agent acceptance](docs/agent-acceptance.md) as the final development gate for user-facing features. It requires fresh operator agents with only the shipped skill and public CLI guidance, original-media evidence, explicit capability/delivery verdicts and no fallback after an unexpected failure. Green unit/specification checks alone are not user acceptance. Follow its scope rule for documentation-only changes; keep this developer procedure out of the operator skill.
+
 ## The rule that matters most
 
 **A claim about what a model or backend produces must cite a runner source or a recorded artifact, never a summary document.** Three documents here agreed that FireRed emits per-word confidence. The [recorded FireRed fixture](tests/fixtures/firered_lidon_first_vad_region.json) contains word timing and text, with confidence only at sentence level. The incorrect claim survived four review passes because every summary repeated it and only the artifacts refuted it. Summaries are convenient and artifacts are not; read the artifact anyway. Doing so is also *generative* — checking one claim against recorded output is how most of this repository's real findings arrived.
@@ -105,8 +109,6 @@ Keep compact recorded fixtures in `tests/fixtures/`. Private `.m4a`/`.mp4` input
 Runners live in `model_tests/benchmark/`, compact results are **tracked** under `model_tests/benchmark/results/` as `YYYY-MM-DD-<topic>.json`, and raw artifacts stay **untracked** in `model_tests/benchmark_runs/`. Research prose lives under `docs/model-tests/`. A measurement is reported with its fixture and configuration, or not reported. Distinguish three things and never let them blur: a **declared** interface, a **measured** result, and an **unresolved** question.
 
 ## Tooling
-
-Use [agent acceptance](docs/agent-acceptance.md) as the final development gate for user-facing features. It requires fresh operator agents with only the shipped skill and public CLI guidance, original-media evidence, explicit capability/delivery verdicts and no fallback after an unexpected failure. Green unit/specification checks alone are not user acceptance. Follow its scope rule for documentation-only changes; keep this developer procedure out of the operator skill.
 
 Write Markdown paragraphs and list-item prose on single physical lines. Do not hard-wrap prose to a column width; use line breaks for Markdown structure such as headings, separate paragraphs, list items, tables, and code blocks.
 
