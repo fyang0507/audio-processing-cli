@@ -106,9 +106,9 @@ def summarize_report(path: Path) -> dict[str, Any]:
                     if field in measured
                 },
             }
-        for key in ("region_basis", "timeline_preserved"):
+        for key in ("region_basis", "timeline_verification", "timeline_preserved"):
             if key in report:
-                if key == "region_basis":
+                if key in {"region_basis", "timeline_verification"}:
                     _mapping(report[key], key)
                 elif not isinstance(report[key], bool):
                     raise ValueError(f"{key} must be a boolean")

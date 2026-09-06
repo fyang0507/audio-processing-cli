@@ -116,6 +116,36 @@ def test_older_report_absence_is_not_an_empty_or_successful_outcome(tmp_path, re
         assert field not in summary
     assert summary["measurement_scopes"]["after"] == {"report_pointer": "/measurements/after"}
     assert "component_evaluations" not in summary["stages"][0]
+    assert "timeline_verification" not in summary
+
+
+@pytest.mark.parametrize("checked", [False, True])
+def test_timeline_verification_preserves_exact_nested_abstentions(
+    tmp_path, report, checked, capsys
+):
+    # Shape supplied by the timing owner's pipeline/timing.py in commit 156547e.
+    verification = {
+        "status": "pass" if checked else "not_run",
+        "scope": "decoded_audio_duration_only",
+        "tolerance_ms": 50,
+        "content_alignment": {"status": "abstained", "reason": "not_measured"},
+        "av_sync": {"status": "abstained", "reason": "not_measured"},
+    }
+    report["timeline_verification"] = verification
+    if not checked:
+        report["rendered"] = False
+        report["dry_run"] = True
+        report.pop("timeline_preserved")
+        report["measurements"].pop("after")
+    path = save(tmp_path, report)
+    before = path.read_bytes()
+    assert cli.main(["report", "summary", str(path)]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    summary = json.loads(captured.out)
+    assert summary["timeline_verification"] == verification
+    assert ("timeline_preserved" in summary) is checked
+    assert path.read_bytes() == before
 
 
 def test_dry_run_keeps_prediction_scope_without_fabricating_encoded_measurements(tmp_path, report):
@@ -146,6 +176,10 @@ def test_dry_run_keeps_prediction_scope_without_fabricating_encoded_measurements
         ("unresolved", ["abstained"]),
         ("region_basis", "source"),
         ("timeline_preserved", None),
+        ("timeline_verification", None),
+        ("timeline_verification", []),
+        ("timeline_verification", True),
+        ("timeline_verification", "pass"),
         ("final_peak_validation", None),
     ],
 )
