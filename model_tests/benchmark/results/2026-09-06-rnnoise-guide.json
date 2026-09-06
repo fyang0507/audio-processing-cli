@@ -1,0 +1,178 @@
+{
+  "topic": "RNNoise-guided linked mask on generated voiced/unvoiced signals",
+  "implementation_commit": "0d1cd0ad81677605404791277b48628880a8d9cb",
+  "implementation_clean": true,
+  "fixture": "tests/test_dsp_denoise.py:speech_fixture(48000)",
+  "fixture_seed": 33,
+  "sample_rate_hz": 48000,
+  "profile": "product-demo@5",
+  "scope": "isolated model-guided DSP component before outer speech blend, leveling, and encoding",
+  "model": {
+    "package": "rnnoise-voice",
+    "source": {
+      "type": "git-blob",
+      "repo": "GregorR/rnnoise-models",
+      "revision": "3eee541a283fd3b8f81b85b1748e3b9ccbefa04d",
+      "path": "beguiling-drafter-2018-08-30/bd.rnnn",
+      "url": "https://raw.githubusercontent.com/GregorR/rnnoise-models/3eee541a283fd3b8f81b85b1748e3b9ccbefa04d/beguiling-drafter-2018-08-30/bd.rnnn",
+      "filename": "rnnoise-voice-bd-2018-08-30.rnnn",
+      "git_blob_sha1": "0173a18664f5905dbdc4543d3528741fb32cd69f"
+    },
+    "bytes": 299693,
+    "sha256": "ae3f7411e1e6a884f839a4a145c394408398f09854dbc1216ee02faafc98a17b"
+  },
+  "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "source_sha256": {
+    "tests/test_dsp_denoise.py": "0dc8ab6f7d66a2375f64bf7a64896a2d7888cbc061e9008bcc628a5b0b443e21",
+    "src/audio_cli/profiles.py": "b01669e050e759ede5300b50be53344a676972eb074b66bec2d0dc152bc127a8",
+    "src/audio_cli/media/denoise.py": "743e413bd5ed40043a72f628313363c2f12d19b2338e52e40a2b388c29a9ef53",
+    "src/audio_cli/dsp/denoise/guide.py": "005671ff8c1d1787a958e2d4317c7d65262c1e877977a92da88ced41231d5ce4",
+    "src/audio_cli/dsp/denoise/filtering.py": "d61da990dc49441f4eab0398e4691763b7e1154bd187862107706eafe1b47891",
+    "src/audio_cli/dsp/denoise/processor.py": "8ae6ef91a819a74ef91b03d2d91390ea6cd32d18e2e95b9528925c259dcc63e8",
+    "model_tests/benchmark/measure_rnnoise_guide.py": "0331013265aaa9baa1afb84339ebc4b0082ffe3de0d2149291f155a5a7c8a805"
+  },
+  "measurement_windows_seconds": {
+    "pause": [
+      1.8,
+      2.0
+    ],
+    "speech": [
+      1.05,
+      2.95
+    ],
+    "voiced": [
+      1.15,
+      1.6
+    ],
+    "fricative": [
+      2.83,
+      2.97
+    ]
+  },
+  "cases": [
+    {
+      "name": "stationary",
+      "input_scale": 1.0,
+      "guide_calibration": {
+        "status": "applied",
+        "scope": "model_guide_only",
+        "speech_reference": "supplied_regions",
+        "input_speech_rms_dbfs": -28.252611,
+        "target_speech_rms_dbfs": -24.0,
+        "resolved_gain_db": 4.252611,
+        "resolved_speech_rms_dbfs": -24.0,
+        "peak_limit_dbfs": -3.0,
+        "maximum_gain_db": 40.0
+      },
+      "decision": {
+        "component": "broadband-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "status": "applied",
+        "reason": "model_guided_mask_resolved"
+      },
+      "operation": {
+        "type": "bounded-spectral-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "affected_scope": "speech_regions",
+        "frame_samples": 1536,
+        "hop_samples": 384,
+        "window": "periodic-hann",
+        "maximum_reduction_db": 6.0,
+        "maximum_spectral_reduction_db": 6.0,
+        "channel_link": "maximum_guide_to_input_magnitude_ratio",
+        "gain_smoothing_frames": 5,
+        "gain_smoothing_bins": 3
+      },
+      "input_samples": 192000,
+      "output_samples": 192000,
+      "pause_noise_reduction_db": 5.85702,
+      "speech_clean_reference_error_reduction_db": 4.588102,
+      "voiced_projection_gain_db": -0.234806,
+      "fricative_energy_difference_from_clean_db": 0.43052
+    },
+    {
+      "name": "changing_level",
+      "input_scale": 1.0,
+      "guide_calibration": {
+        "status": "applied",
+        "scope": "model_guide_only",
+        "speech_reference": "supplied_regions",
+        "input_speech_rms_dbfs": -27.584726,
+        "target_speech_rms_dbfs": -24.0,
+        "resolved_gain_db": 3.584726,
+        "resolved_speech_rms_dbfs": -24.0,
+        "peak_limit_dbfs": -3.0,
+        "maximum_gain_db": 40.0
+      },
+      "decision": {
+        "component": "broadband-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "status": "applied",
+        "reason": "model_guided_mask_resolved"
+      },
+      "operation": {
+        "type": "bounded-spectral-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "affected_scope": "speech_regions",
+        "frame_samples": 1536,
+        "hop_samples": 384,
+        "window": "periodic-hann",
+        "maximum_reduction_db": 6.0,
+        "maximum_spectral_reduction_db": 6.0,
+        "channel_link": "maximum_guide_to_input_magnitude_ratio",
+        "gain_smoothing_frames": 5,
+        "gain_smoothing_bins": 3
+      },
+      "input_samples": 192000,
+      "output_samples": 192000,
+      "pause_noise_reduction_db": 5.835446,
+      "speech_clean_reference_error_reduction_db": 4.923594,
+      "voiced_projection_gain_db": -0.201635,
+      "fricative_energy_difference_from_clean_db": 1.732587
+    },
+    {
+      "name": "quiet_changing_level",
+      "input_scale": 0.01,
+      "guide_calibration": {
+        "status": "applied",
+        "scope": "model_guide_only",
+        "speech_reference": "supplied_regions",
+        "input_speech_rms_dbfs": -67.584726,
+        "target_speech_rms_dbfs": -24.0,
+        "resolved_gain_db": 40.0,
+        "resolved_speech_rms_dbfs": -27.584726,
+        "peak_limit_dbfs": -3.0,
+        "maximum_gain_db": 40.0
+      },
+      "decision": {
+        "component": "broadband-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "status": "applied",
+        "reason": "model_guided_mask_resolved"
+      },
+      "operation": {
+        "type": "bounded-spectral-denoise",
+        "algorithm": "model-guided-linked-mask-v1",
+        "affected_scope": "speech_regions",
+        "frame_samples": 1536,
+        "hop_samples": 384,
+        "window": "periodic-hann",
+        "maximum_reduction_db": 6.0,
+        "maximum_spectral_reduction_db": 6.0,
+        "channel_link": "maximum_guide_to_input_magnitude_ratio",
+        "gain_smoothing_frames": 5,
+        "gain_smoothing_bins": 3
+      },
+      "input_samples": 192000,
+      "output_samples": 192000,
+      "pause_noise_reduction_db": 5.840884,
+      "speech_clean_reference_error_reduction_db": 4.911738,
+      "voiced_projection_gain_db": -0.110624,
+      "fricative_energy_difference_from_clean_db": 1.334708
+    }
+  ],
+  "limits": [
+    "Synthetic signals are not linguistic speech or recognition/intelligibility evidence.",
+    "No listening judgments or user-recording noise measurements are inferred."
+  ]
+}
