@@ -323,7 +323,7 @@
       "unsized_because": "A Swift build product, whose size depends on the toolchain that builds it. pull records the measured size afterwards.",
       "license_declared": "apache-2.0",
       "license_reviewed": true,
-      "license_source": "model_tests/benchmark/DIARIZATION.md",
+      "license_source": "docs/model-tests/benchmark/DIARIZATION.md",
       "requires_tool": [
         "swift"
       ],
@@ -355,7 +355,7 @@
       "bytes": 21599417,
       "license_declared": "cc-by-4.0",
       "license_reviewed": true,
-      "license_source": "model_tests/benchmark/DIARIZATION.md",
+      "license_source": "docs/model-tests/benchmark/DIARIZATION.md",
       "source": {
         "type": "huggingface",
         "repo": "FluidInference/speaker-diarization-coreml",

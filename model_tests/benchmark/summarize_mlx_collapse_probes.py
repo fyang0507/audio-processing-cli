@@ -215,7 +215,7 @@ def main() -> int:
             "worth_knowing": (
                 "sortformer is a diarization model, so the `swift` environment has an MLX "
                 "candidate too. FluidAudio was chosen on measured evidence in "
-                "model_tests/benchmark/DIARIZATION.md; replacing it would need the same "
+                "docs/model-tests/benchmark/DIARIZATION.md; replacing it would need the same "
                 "comparison rerun, and none of it is done."
             ),
         },

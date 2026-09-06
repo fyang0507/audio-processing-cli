@@ -99,8 +99,8 @@ for _spec in MODELS.values():
     _spec["path"] = hf_snapshot_path(_spec["repo_id"], _spec["revision"])
 
 FIXTURES: dict[str, Path] = {
-    "multispeaker": REPO_ROOT / "test-sample-multispeaker.m4a",
-    "sichuanese_probe": REPO_ROOT / "autio-test-sample.m4a",
+    "multispeaker": REPO_ROOT / "tests/artifacts/media/test-sample-multispeaker.m4a",
+    "sichuanese_probe": REPO_ROOT / "tests/artifacts/media/autio-test-sample.m4a",
 }
 
 # Prompt wording is itself a variable under test: a single failed prompt

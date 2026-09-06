@@ -178,7 +178,7 @@ Render success verifies the mandatory output gates; it does not imply every comp
 
 ## Model packages
 
-`audio packages pull` is the only operation that fetches provider models or prepares their runtimes. A missing provider package is a refusal carrying a `fix`, never a background download. The shared, hash-pinned Silero VAD bootstrap described under Install remains the sole implicit model fetch. [ENVIRONMENTS.md](ENVIRONMENTS.md) is authoritative for the four runtime environments, the pins, and why the layout is what it is.
+`audio packages pull` is the only operation that fetches provider models or prepares their runtimes. A missing provider package is a refusal carrying a `fix`, never a background download. The shared, hash-pinned Silero VAD bootstrap described under Install remains the sole implicit model fetch. [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) is authoritative for the four runtime environments, the pins, and why the layout is what it is.
 
 ```bash
 audio doctor                            # tools, toolchains, memory, disk, and provisioning state
@@ -234,3 +234,7 @@ uv run --extra dev pre-commit run --all-files
 ```
 
 One agent skill travels with the CLI in the source distribution. [`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix, provision transcription models, check command readiness — and holds only what `--help` cannot say, which is the judgment, the report semantics, and the limits worth admitting to a user.
+
+## Repository layout
+
+See the [documentation index](docs/README.md) for contracts, implementation notes, and research reports, and the [test layout](docs/testing.md) for source ownership, fixtures, and local media.

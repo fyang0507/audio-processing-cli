@@ -3,14 +3,14 @@
 **Status: all four execution stacks and export ship.** Every `run` shape and the refusal blocks
 are exercised against real serializer output. This is the unabridged
 step-by-step an implementer can diff against and an agent can read as a
-worked example. [TRANSCRIBE_CONTRACT.md](../../TRANSCRIBE_CONTRACT.md) is organized around
+worked example. [TRANSCRIBE_CONTRACT.md](../TRANSCRIBE_CONTRACT.md) is organized around
 *why* the surface looks like this and abridges output to whatever differs; this document
 does the opposite — it shows every command in order and the complete stdout of each, with no
 design commentary. §4 covers the refusals, because what an agent actually sees includes being
 told it was wrong, and a refusal that cannot be acted on is a worse outcome than a slow run.
 
 Three use cases, one per recommended stack row in
-[model_tests/DECISION_REPORT.md](../../model_tests/DECISION_REPORT.md):
+[docs/model-tests/DECISION_REPORT.md](../model-tests/DECISION_REPORT.md):
 
 | § | Use case | Stack | Deliverable |
 | --- | --- | --- | --- |
@@ -226,7 +226,7 @@ audio doctor
 
 Exit 0, and unlike every other block in this document this one is **real output**, not a mock —
 `doctor` is implemented, so its shape is checked against a live run by
-`tests/test_shipped_commands_match_the_document.py` rather than maintained by eye — as are the
+`tests/docs/test_shipped_commands_match_the_document.py` rather than maintained by eye — as are the
 `packages list` block in §5 and the `packages verify` block in §1.3, the other two commands that
 ship. Values remain illustrative: paths, versions, and the memory and disk counters are this
 machine's.

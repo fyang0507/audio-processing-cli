@@ -43,7 +43,7 @@ package when one is actually present.
 
 `license` became two fields. `license_declared` is what the model card says at the pinned
 revision; `license_reviewed` is whether anyone read the terms. Only FluidAudio and
-`speaker-diarization-coreml` were read (`model_tests/benchmark/DIARIZATION.md`). One field
+`speaker-diarization-coreml` were read (`docs/model-tests/benchmark/DIARIZATION.md`). One field
 could not tell "nobody looked" apart from "the card says apache-2.0 and nobody checked what
 that obliges", and a scraped string must not read as a clearance.
 

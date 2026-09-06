@@ -38,7 +38,7 @@ def main():
             "--porcelain",
             "--",
             "src",
-            "tests/test_dsp_denoise.py",
+            "tests/audio_cli/dsp/denoise/test_dsp_denoise.py",
             str(Path(__file__).relative_to(ROOT)),
         ],
         cwd=ROOT,
@@ -102,7 +102,7 @@ def main():
             }
         )
     files = [
-        "tests/test_dsp_denoise.py",
+        "tests/audio_cli/dsp/denoise/test_dsp_denoise.py",
         "src/audio_cli/profiles.py",
         "src/audio_cli/media/denoise.py",
         "src/audio_cli/dsp/denoise/guide.py",
@@ -118,7 +118,7 @@ def main():
                     ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
                 ).strip(),
                 "implementation_clean": True,
-                "fixture": "tests/test_dsp_denoise.py:speech_fixture(48000)",
+                "fixture": "tests/audio_cli/dsp/denoise/test_dsp_denoise.py:speech_fixture(48000)",
                 "fixture_seed": 33,
                 "sample_rate_hz": RATE,
                 "profile": "product-demo@5",

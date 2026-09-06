@@ -1,0 +1,11 @@
+# Tests and local artifacts
+
+`tests/audio_cli/` mirrors implementation ownership under `src/audio_cli/`: `dsp/denoise/`, `environments/`, `export/`, `media/`, `packages/`, `pipeline/`, and `transcribe/` with its adapter, orchestrator, planner, refusal, result, stage, and transport subpackages. Tests for root composition modules and shared services remain directly under `tests/audio_cli/`. CLI tests belong there even when they exercise a feature command; provider workflow tests belong to the orchestrator, including tests of the frozen native compatibility entry point.
+
+`tests/architecture/` enforces the package graph, isolated stage imports, source layout, and file size budget. `tests/docs/` checks specification consistency and shipped command payloads. `tests/benchmark/` checks research runner behavior. Shared helpers live beside their owning tests and use explicit package imports; cross-owner helpers are imported from that owner rather than through path injection. `tests/fixtures/` contains tracked, compact recorded fixtures and pinned upstream source samples.
+
+Run the full suite with `uv run --extra dev pytest`, or select an owner, for example `uv run --extra dev pytest tests/audio_cli/transcribe/adapters`. Install hooks with `uv run --extra dev pre-commit install`; run the deterministic lint and format gate with `uv run --extra dev pre-commit run --all-files`.
+
+Put private recordings and generated acceptance output under `tests/artifacts/`. The directory is ignored except for its placeholder and excluded from source distributions. The local samples are `tests/artifacts/media/autio-test-sample.m4a`, `tests/artifacts/media/test-sample-multispeaker.m4a`, and `tests/artifacts/media/demo-video-audio-to-improve.mp4`. They are optional local inputs and are never modified in place. Write generated output to a separate path, such as `tests/artifacts/runs/`.
+
+Benchmark evidence keeps its existing convention: runners under `model_tests/benchmark/`, tracked compact results under `model_tests/benchmark/results/`, and ignored raw artifacts under `model_tests/benchmark_runs/`. Historical result JSON retains its original paths and hashes; only current runnable examples and fixture discovery use the relocated media paths.

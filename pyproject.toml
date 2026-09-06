@@ -40,9 +40,7 @@ include = [
   "/.pre-commit-config.yaml",
   "/*.md",
   "/docs",
-  "/model_tests/*.md",
   "/model_tests/benchmark",
-  "/model_tests/findings",
   "/src",
   "/tests",
   "/LICENSE",
@@ -50,6 +48,8 @@ include = [
   "/pyproject.toml",
   "/uv.lock",
 ]
+
+exclude = ["/tests/artifacts/**"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

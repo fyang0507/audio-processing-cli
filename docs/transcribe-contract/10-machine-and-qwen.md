@@ -215,7 +215,7 @@ it produced identical token text on all 246 aligned tokens
 (`model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json`), so the move costs no
 transcript change; bounds agree to a median of 0 s with a P95 of 80 ms, and boundary accuracy
 is unmeasured against labels on both paths, which is the same caveat `evidence.quality` already
-carries. [ENVIRONMENTS.md](../../ENVIRONMENTS.md) holds the layout.
+carries. [ENVIRONMENTS.md](../ENVIRONMENTS.md) holds the layout.
 
 ```bash
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
