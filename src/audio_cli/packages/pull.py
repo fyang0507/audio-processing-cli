@@ -268,6 +268,7 @@ def pull(
         }
         for key in (
             "revision",
+            "git_blob_sha1",
             "revisions",
             "digest_verified",
             "built",

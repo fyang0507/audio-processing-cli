@@ -217,7 +217,7 @@ audio doctor
   "packages": {
     "firered-asr2s": "absent", "fluidaudio": "absent",
     "qwen3-asr-0.6b-8bit": "absent", "qwen3-asr-1.7b-8bit": "absent",
-    "qwen3-forcedaligner": "absent", "silero-vad": "absent",
+    "qwen3-forcedaligner": "absent", "rnnoise-voice": "absent", "silero-vad": "absent",
     "speaker-diarization-coreml": "absent", "vibevoice-asr-7b": "absent"
   },
   "note": "Swift is required to build or repair FluidAudio; a ready built product runs directly without Swift. Missing provisioning tools are reported rather than fatal."

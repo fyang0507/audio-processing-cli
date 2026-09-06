@@ -13,7 +13,7 @@ environment half is `src/audio_cli/environments/manifest.json`, described below.
 
 | Environment | Interpreter | Packages | Why it is separate |
 | --- | --- | --- | --- |
-| `core` | the tool's own | `silero-vad` | Not provisioned. numpy, scipy, onnxruntime. The only place anything auto-fetches. |
+| `core` | the tool's own | `silero-vad`, `rnnoise-voice` | No separate runtime provisioned. numpy, scipy, onnxruntime and host FFmpeg. Only Silero may auto-fetch. |
 | `mlx` | 3.13.9 | `qwen3-asr-1.7b-8bit`, `qwen3-asr-0.6b-8bit`, `qwen3-forcedaligner` | `mlx-audio==0.4.5` requires `transformers>=5.5.0,<5.13.0`. Torch-free by intent, and now torch-free in fact. |
 | `torch-firered` | 3.12.12 | `firered-asr2s` | FireRed pins `transformers==5.1.0` exactly. It cannot join anything, and it cannot leave PyTorch — see the punctuator finding below. |
 | `torch-vibevoice` | 3.12.12 | `vibevoice-asr-7b` | VibeVoice requires `transformers>=4.51.3,<5.0.0`. **Provisional**: see the VibeVoice finding. |
@@ -255,9 +255,7 @@ declared, documented, and named in four `fix` strings, and nothing read it. For 
 that mattered most: `snapshot_download` returns a revision the cache already holds as it
 stands, so a repair of a corrupt snapshot reported success having moved no bytes. `--repair`
 now passes `force_download=True`, and deletes a checkout before re-cloning rather than patching
-a tree whose state is what is in doubt. It is a no-op for `silero-vad` by construction and for
-that one reason only: `url_file` re-hashes the file against the manifest pin and re-downloads
-unless it matches, so a match already is the strongest re-materialization available.
+a tree whose state is what is in doubt. For the single-file `silero-vad` and `rnnoise-voice` artifacts, repair first re-hashes the actual file against its manifest pin and only re-downloads if it differs; a matching content identity already satisfies re-materialization.
 
 That URL fast path accepts only the manifest-derived path under `<root>/models` as a contained,
 non-symlink regular file. A hash-matching symlink is replaced rather than trusted, and the same
@@ -329,20 +327,7 @@ checkout, or launch a dependent interpreter or built product.
 
 Four checks, all cheap, none loading weights:
 
-1. **Artifact integrity** at the strongest boundary each source declares. `silero-vad` is the
-   only package pinned by content hash. Its default cache path and any explicit
-   `AUDIO_PROCESSING_VAD_MODEL` override are hashed before decode; an override is a
-   pre-populated copy, not an alternate unpinned backend. The manifest pins Hub packages by
-   *revision* and carries
-   no `sha256` for them, so there is nothing to hash a snapshot against: for those, `verify`
-   requires the Hugging Face cache index to bind each repository and pinned revision to the
-   receipt's snapshot path, every manifest `allow_patterns` match (including the VibeVoice
-   tokenizer subset), and the exact tree-byte total recorded when pull materialized the package,
-   then reports the pinned revision or revisions. `verify`
-   says `digest: "ok"` only where bytes were hashed and `revision`/`revisions` where a revision
-   is pinned — the two are different claims and must not print the same word. Every Hub package
-   recorded `digest_verified: true` at pull time until this was corrected, which made `verify`
-   report a digest check for eight packages and perform it for one.
+1. **Artifact integrity** at the strongest boundary each source declares. `silero-vad` pins SHA-256: its default cache path and any explicit `AUDIO_PROCESSING_VAD_MODEL` override are hashed before decode; an override is a pre-populated copy, not an alternate unpinned backend. `rnnoise-voice` pins Git blob SHA-1 plus exact byte count and reports `revision`, `git_blob_sha1`, and `bytes`, without a SHA-256 source claim. Hub packages pin revisions without snapshot digests: verification binds each repository/revision to the receipt through the Hub cache index, requires all `allow_patterns` matches, and checks the recorded tree-byte count. `digest: "ok"` remains the URL SHA-256 verdict; `revision`/`revisions` alone describe Hub identity. See [RNNoise artifact provisioning](docs/packages/rnnoise.md) for the Git content-identity contract and local SHA-256 process handoff.
 2. **Environment root identity, then equality with its lock** — before `uv pip freeze`, the
    manifest-derived environment root itself must be a real directory, not a symlink, and resolve
    under the provisioning root. Only then is its installed set compared with the lock. A normal

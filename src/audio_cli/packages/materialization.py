@@ -5,6 +5,7 @@ from __future__ import annotations
 from .. import paths
 from ..environments import ManifestError, Package
 from . import checkouts, integrity
+from .artifacts import require_git_blob_source, verify_artifact_file
 from .fetcher import Fetcher
 from .integrity import sha256_file
 from .locations import managed_url_artifact_path
@@ -22,15 +23,25 @@ def materialize(
     *,
     repair: bool = False,
 ) -> dict:
-    """Put the package on disk. `digest_verified` appears only where a digest was taken.
+    """Put the package on disk, reporting only the source identity actually checked.
 
-    One source kind pins a content hash — `url` — and it is the only one whose materialization
-    can claim to have been verified against the manifest. The Hub kinds pin a *revision*; no
-    `sha256` exists in the manifest to hash a snapshot against, so they record the revision
-    and nothing more. They used to record `digest_verified: True` regardless, which made
-    `verify` print `digest: "ok"` for a check no code performs.
+    URL artifacts pin SHA-256 and report `digest_verified`. Git blobs instead report their
+    verified Git blob SHA-1, actual byte count, and declared revision. Hub kinds pin revisions
+    without snapshot hashes, so they record revisions and no digest claim.
     """
     kind = package.source["type"]
+    if kind == "git-blob":
+        require_git_blob_source(package)
+        target = paths.models_dir() / package.source["filename"]
+        try:
+            resolved = fetcher.git_blob_file(
+                package.source["url"], package.source["git_blob_sha1"], package.bytes, target
+            )
+        except ProvisioningError as exc:
+            exc.payload.update(package=package.id, fix=f"audio packages pull --repair {package.id}")
+            raise
+        location, verified, _provenance = verify_artifact_file(package, resolved)
+        return {"path": str(location), **verified}
     if kind == "url":
         # The filename is manifest data, not derived: the shipped Silero backend resolves
         # this exact name, and a pull that invented one would leave two copies on disk and

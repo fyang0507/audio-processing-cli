@@ -60,7 +60,7 @@ def _managed_package_locations(package: Package | None) -> list[Path]:
     found: list[Path] = []
     if package.checkout is not None or package.source["type"] == "git+build":
         found.append(paths.checkout_dir(package.environment, package.id))
-    if package.source["type"] == "url":
+    if package.source["type"] in {"url", "git-blob"}:
         found.append(paths.models_dir() / str(package.source["filename"]))
     return found
 

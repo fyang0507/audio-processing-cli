@@ -18,7 +18,7 @@ Everything provisioned lives under one root: `AUDIO_PROCESSING_MODEL_CACHE` when
 
 | Environment | Packages | Constraint |
 | --- | --- | --- |
-| core | `silero-vad` | The `audio` tool's own environment; numpy, scipy, onnxruntime. Nothing to provision. |
+| core | `silero-vad`, `rnnoise-voice` | The `audio` tool's own environment; numpy, scipy, onnxruntime and host FFmpeg. No separate runtime provisioned; only Silero may auto-fetch. |
 | `mlx` | `qwen3-asr-1.7b-8bit`, `qwen3-asr-0.6b-8bit`, `qwen3-forcedaligner` | `mlx` plus `mlx-audio==0.4.5`, whose `transformers>=5.5.0` nothing else accepts; deliberately torch-free, and now torch-free in fact. |
 | `torch-firered` | `firered-asr2s` | `transformers==5.1.0`, pinned exactly, compatible with nothing else here. It also cannot leave PyTorch: `mlx-audio` implements FireRed's AED but no punctuator, and punctuated text is a floor. |
 | `torch-vibevoice` | `vibevoice-asr-7b` | `transformers<5.0.0`. **Provisional** — `mlx-audio` runs VibeVoice-ASR with no added dependencies at 12.4 GB against 20.8 GB, but produces a different transcript, so the move waits on re-measurement rather than on a lock. |
@@ -34,6 +34,7 @@ So the field is two fields, because a card is not a review: `license_declared` i
 
 Rules:
 
+- `rnnoise-voice` is an optional enhancement-only package with empty transcription `roles` and `stacks`. Its `git-blob` source declares an immutable HTTPS URL, repository, full revision, repository-relative path, managed filename, and `git_blob_sha1`; the package's `bytes` is the exact required size. Pull and verification report `revision`, `git_blob_sha1`, and actual `bytes` only after hashing Git's `blob <actual byte count>\0` prefix and the file bytes. They do not report a SHA-256 source verdict. The read-only `packages.verified_artifact` composition helper additionally returns local `sha256` from the same read pass for verified copying into the execution process; it is not an upstream checksum. See [the package contract](../packages/rnnoise.md).
 - Environment dependency sets are locked in this repository. `pull` materializes a lock; it never resolves "latest". This is what keeps the `mlx-audio` private batched API at the one version the source-hash guard expects.
 - Hub weights stay in the Hugging Face cache. The registry records which revisions this tool materialized rather than duplicating a snapshot, while the live cache index binds each repository and pinned revision to its recorded snapshot path.
 - Applying the VibeVoice patch and building the FluidAudio product happen in `pull` and nowhere else. Neither is ever triggered by a transcription request.

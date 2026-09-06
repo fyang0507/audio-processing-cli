@@ -16,10 +16,13 @@ from .ffmpeg import (
     write_float_wav,
 )
 from .files import (
+    FileDigests,
     assert_directory_binding,
     assert_resolved_directory_binding,
     bound_directory,
     hash_file,
+    hash_regular_file_descriptor,
+    regular_file_digests_at,
     resolve_path_identity,
     sha256_regular_file_at,
     temporary_directory,
@@ -51,6 +54,7 @@ from .timing import decoded_audio_timing, probed_duration, stream_timing
 __all__ = [
     "ENHANCED_MARKER",
     "EmptyPcmRangeError",
+    "FileDigests",
     "MediaError",
     "ProtectedFileIdentity",
     "ProtectedOutputError",
@@ -71,6 +75,7 @@ __all__ = [
     "ffmpeg_version",
     "file_identity_from_descriptor",
     "hash_file",
+    "hash_regular_file_descriptor",
     "is_enhanced_media",
     "matching_protected_identity",
     "measure_loudness",
@@ -79,6 +84,7 @@ __all__ = [
     "probed_duration",
     "publish_temporary_file",
     "read_canonical_pcm16",
+    "regular_file_digests_at",
     "render_loudness_normalized",
     "require_runtime",
     "resolve_path_identity",

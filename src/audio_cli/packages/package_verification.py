@@ -6,13 +6,15 @@ from pathlib import Path
 
 from .. import paths
 from ..environments import Package
+from .artifacts import verify_artifact_file
 from .checkouts import (
     _checkout_integrity_issues,
     checkout_file_matches,
     checkout_patch_expectation,
 )
-from .integrity import hub_materialization_issues, sha256_file
-from .locations import managed_checkout_path, managed_url_artifact_path
+from .integrity import hub_materialization_issues
+from .locations import managed_checkout_path
+from .models import ProvisioningError
 from .products import built_product_candidates, validated_built_product
 from .teardown import _source_revision_report
 from .toolchain import Toolchain
@@ -66,28 +68,16 @@ def verify_packages(
                 }
             )
             continue
-        # `digest: "ok"` is reserved for the one kind that has something to hash against.
-        if package.source["type"] == "url":
-            location, location_issue = managed_url_artifact_path(package, materialized.get("path"))
-            digest_matches = False
-            if location_issue is None and location is not None:
-                try:
-                    digest_matches = sha256_file(location) == package.source["sha256"]
-                except OSError as exc:
-                    location_issue = f"could not hash managed artifact {location}: {exc}"
-            if digest_matches:
-                record["digest"] = "ok"
-            else:
-                failed.append(
-                    {
-                        "package": identifier,
-                        "code": "package_integrity_failed",
-                        "detail": location_issue
-                        or (f"{location} is missing or its digest changed"),
-                        "fix": f"audio packages pull --repair {identifier}",
-                    }
+        # Git blob identity is reported explicitly, separately from URL SHA-256 verdicts.
+        if package.source["type"] in {"url", "git-blob"}:
+            try:
+                _path, verdict, _provenance = verify_artifact_file(
+                    package, materialized.get("path")
                 )
+            except ProvisioningError as exc:
+                failed.append(exc.as_dict())
                 continue
+            record.update(verdict)
         elif package.source["type"] in {
             "huggingface",
             "huggingface_multi",

@@ -9,6 +9,7 @@ import stat
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -112,8 +113,60 @@ def bound_directory(
             os.close(descriptor)
 
 
+@dataclass(frozen=True)
+class FileDigests:
+    """Hashes and actual size measured in one pass over the same regular-file descriptor."""
+
+    sha256: str
+    bytes: int
+    git_blob_sha1: str | None = None
+
+
 def sha256_regular_file_at(directory_descriptor: int, name: str) -> str | None:
     """Hash one descriptor-relative regular file without following a leaf symlink."""
+
+    found = regular_file_digests_at(directory_descriptor, name)
+    return found.sha256 if found is not None else None
+
+
+def hash_regular_file_descriptor(descriptor: int, *, git_blob: bool = False) -> FileDigests:
+    """Hash an open regular file from its beginning, checking its size and stable identity.
+
+    Git hashes ``blob <actual byte count>\\0`` followed by the bytes. The initial stat supplies
+    that prefix, and the read count and final stat must agree with it. This is Git content
+    identity over trusted pinned source metadata, not an upstream SHA-256 authentication claim.
+    The caller owns the descriptor and its position, which is left at EOF.
+    """
+
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise OSError("hash input is not a regular file")
+    digest = hashlib.sha256()
+    blob_digest = hashlib.sha1(usedforsecurity=False) if git_blob else None
+    if blob_digest is not None:
+        blob_digest.update(f"blob {before.st_size}\0".encode("ascii"))
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    count = 0
+    while chunk := os.read(descriptor, 1024 * 1024):
+        count += len(chunk)
+        digest.update(chunk)
+        if blob_digest is not None:
+            blob_digest.update(chunk)
+    after = os.fstat(descriptor)
+    if (
+        count != before.st_size
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+        or before.st_ctime_ns != after.st_ctime_ns
+    ):
+        raise OSError("managed file changed while hashing")
+    return FileDigests(digest.hexdigest(), count, blob_digest.hexdigest() if blob_digest else None)
+
+
+def regular_file_digests_at(
+    directory_descriptor: int, name: str, *, git_blob: bool = False
+) -> FileDigests | None:
+    """Hash a descriptor-relative regular file, refusing opening or hashing replacements."""
 
     try:
         before = os.stat(
@@ -127,17 +180,20 @@ def sha256_regular_file_at(directory_descriptor: int, name: str) -> str | None:
         return None
     descriptor = os.open(
         name,
-        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NONBLOCK", 0),
         dir_fd=directory_descriptor,
     )
     try:
         if not os.path.samestat(before, os.fstat(descriptor)):
             raise OSError(f"managed file identity changed while opening: {name}")
-        digest = hashlib.sha256()
-        with os.fdopen(descriptor, "rb", closefd=False) as handle:
-            while chunk := handle.read(1024 * 1024):
-                digest.update(chunk)
-        return digest.hexdigest()
+        result = hash_regular_file_descriptor(descriptor, git_blob=git_blob)
+        current = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
+        if not os.path.samestat(os.fstat(descriptor), current):
+            raise OSError(f"managed file identity changed while hashing: {name}")
+        return result
     finally:
         os.close(descriptor)
 
