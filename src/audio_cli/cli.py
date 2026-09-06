@@ -385,13 +385,14 @@ def main(argv: list[str] | None = None) -> int:
             return _run_enhance(args)
         if args.command == "report":
             if args.report_command == "compare":
-                _print_json(compare_reports(args.left, args.right))
+                _print_json(compare_reports(args.left, args.right, navigation=args.navigation))
             else:
                 _print_json(
                     summarize_report(
                         args.input,
                         include_metrics=args.metrics,
                         include_evidence_limits=args.evidence_limits,
+                        navigation=args.navigation,
                     )
                 )
             return 0

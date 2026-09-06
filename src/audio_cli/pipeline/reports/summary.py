@@ -9,6 +9,7 @@ from ..models import PipelineError
 from .evidence import evidence_limits
 from .loading import mapping, read_report, validate_output, validate_report
 from .metrics import measurement_view, region_view
+from .navigation import report_navigation
 
 DECISION_FIELDS = ("name", "stage", "component", "region_id", "status", "reason", "measured_at")
 
@@ -34,7 +35,11 @@ def _decisions(value: Any, pointer: str, *, stages: bool = False) -> list[dict[s
 
 
 def summarize_report(
-    path: Path, *, include_metrics: bool = False, include_evidence_limits: bool = False
+    path: Path,
+    *,
+    include_metrics: bool = False,
+    include_evidence_limits: bool = False,
+    navigation: bool = False,
 ) -> dict[str, Any]:
     """Keep explicit outcomes, with pointers to their full scope and measurements.
 
@@ -43,8 +48,14 @@ def summarize_report(
     No canonical report field is added or rewritten by this projection.
     """
     try:
+        if navigation and (include_metrics or include_evidence_limits):
+            raise ValueError("--navigation cannot be combined with --metrics or --evidence-limits")
         report = read_report(path)
         validate_report(report)
+        if navigation:
+            result = report_navigation(path, report)
+            validate_output(result)
+            return result
         source = mapping(report.get("source"), "source")
         profile = mapping(report.get("profile"), "profile")
         measurements = mapping(report.get("measurements"), "measurements")

@@ -5,10 +5,10 @@
 ## Optional summary details
 
 ```python
-summarize_report(path: Path, *, include_metrics: bool = False, include_evidence_limits: bool = False) -> dict[str, Any]
+summarize_report(path: Path, *, include_metrics: bool = False, include_evidence_limits: bool = False, navigation: bool = False) -> dict[str, Any]
 ```
 
-The default `audio_enhancement_summary` version `"1"` projection remains unchanged. Each keyword independently adds the following fields to the existing summary:
+The default `audio_enhancement_summary` version `"1"` projection remains unchanged. Each of the two detail keywords independently adds the following fields to the existing summary:
 
 | Keyword | Additional fields |
 | --- | --- |
@@ -24,7 +24,7 @@ Where available, `context` retains the nearest recorded stage/component, time/fr
 ## Compare two reports
 
 ```python
-compare_reports(left: Path, right: Path) -> dict[str, Any]
+compare_reports(left: Path, right: Path, *, navigation: bool = False) -> dict[str, Any]
 ```
 
 Inputs may be two saved `audio_inspection` or `audio_enhancement_report` documents, schema version `"1"`, in either order. The result is `audio_report_comparison`, schema version `"1"`, with `compatibility`, `left`, `right`, and, when both reports supply region manifests, `region_comparison`. The function raises `PipelineError` for invalid reports or unestablished/incompatible identity; callers can use the existing enhancement error envelope and exit 2.
@@ -40,6 +40,22 @@ Each side retains its report path, source identity, profile and region basis whe
 These are comparisons of recorded measurements and detection scopes. A changed interval or classification is not a semantic regression or proof that an event appeared/disappeared. Regional values over different intervals, or relative to different aggregate speech scopes, are retained separately without a fabricated metric delta or quality verdict. Missing region manifests suppress `region_comparison` rather than manufacturing an empty match result.
 
 Both functions reject malformed JSON, duplicate keys at any depth, nonfinite numbers (including exponent overflow), unencodable Unicode, unsupported kinds/versions, and nonregular input files. Requested metric views additionally validate actual metric/region structures. Validation completes before returning machine output.
+
+## Compact navigation
+
+`audio report summary REPORT --navigation` emits `audio_report_navigation`, schema version `"1"`. `audio report compare LEFT RIGHT --navigation` emits `audio_report_comparison_navigation`, schema version `"1"`. These opt-in projections replace the usual stdout view for that invocation; the default projections and canonical report files are unchanged. Summary navigation cannot be combined with `--metrics` or `--evidence-limits`: it already contains compact measurements and a limit index, and conflicting flags refuse at exit 2. The matching Python keyword is `navigation=True`.
+
+Start with `measurements.after.program_actual` for delivered program metrics. `before`, `predicted`, `after`, and `inspected` remain separate recorded measurement blocks. Regional aggregate values have individual pointers; the `machine_regions` count and pointer lead to the full original interval measurements. No legacy loudnorm diagnostic is promoted into an actual metric. `regions` gives the recorded manifest count and kind counts, while `speech_reference` retains that report's aggregate levels and pointers to its own speech intervals. Each comparison side keeps its own region basis and speech reference.
+
+`outcome_counts` counts separate recorded collections by exact `report_pointer`, retaining their status counts where supplied. `/rule_evaluations` belongs to `before` in an enhancement report and `inspected` in an inspection report. Stage-local `inside_target_regions`, `abstained_regions`, and `final_region_evaluations` each have their own row; an intermediate count never substitutes for a final collection count. The `/unresolved` collection may contain several measurement phases and is labeled `mixed_or_unknown`; inspect its individual limit groups for the actual phases. A stage collection without recorded `measured_at` is `unknown`, even in a rendered report. A final collection's name and pointer remain visible without inventing its missing phase field.
+
+`limits.groups` groups indexed occurrences by recorded phase and contextual scope. Explicit `measured_at` values are copied exactly, including intermediate names such as `after_voice_enhance`; their original pointers stay in each occurrence's `context`. Original/inspected rule collections use their schema-defined phase. Other missing phases remain `unknown`: neither an applied parent, membership in `unresolved`, nor a render flag makes an unmarked child an encoded-output measurement. Missing scope is an empty object, never an inferred treatment interval. Local context, region scopes, and every original evidence pointer remain on their occurrences. An exact report-local `observation_id` link, when available, supplies `observation_scopes` with pointers to all matching recorded observations; it is not a cross-report region match.
+
+Each occurrence's zero-based `finding_index` links into `limits.findings`. A finding exposes scalar recorded fields in `preview` and the names of nested `detail_fields`; its complete evidence is available at every occurrence's `report_pointer`. Only exact equality of the entire recorded evidence object shares a finding index, and scopes and phases remain attached to the separate occurrences. `indexed_occurrences` counts index entries, and `distinct_recorded_values` counts exact-equal evidence values; neither counts distinct delivered failures. Identical `not_measured` evidence can concern speech preservation, content alignment and A/V sync at different pointers. Unknown phase stays unknown even when an equal value appears elsewhere with a measured phase.
+
+Comparison navigation retains the usual compatibility checks and adds `comparison_overview.counts` before the per-report and interval details: all positive `overlap_pairs`, `ambiguous_overlap_pairs`, `same_interval_pairs`, `same_kind_pairs`, each side's `regions_with_multiple_overlaps`, and `left_without_overlap` / `right_without_overlap`. Pair counts are not region counts. `overlaps` retains every intersection and its flags, using `left_report_pointer` and `right_report_pointer` to address the corresponding original reports. Each side's `regions.intervals` lists each interval once. Unmatched lists retain side-specific original pointers. Missing manifests still suppress the comparison rather than manufacturing zero counts. No best match, numeric delta, quality score or overall audio-success field is introduced.
+
+For full detail, follow a pointer into the named original report or rerun the same saved-report command without `--navigation`. This performs no audio work. Counts reflect only what the reports recorded, and comparison still establishes neither content alignment nor A/V sync.
 
 ## RNNoise guide calibration metadata
 

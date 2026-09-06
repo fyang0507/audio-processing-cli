@@ -23,11 +23,13 @@ Choose the broadband method before processing and inspect the selected invocatio
 
 ## Read parent and child outcomes
 
-Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Request its optional measurement and evidence-limit views when a compact account of delivered metrics and nested abstentions is useful. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes and does not certify overall success.
+Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Start with its compact navigation view to locate delivered program metrics, separate phase/scope groups, and nested unmeasured checks. Follow its report pointers for full measurements and operation details. Repeated evidence values can share a finding index while their occurrences retain different scopes: an indexed-entry count is not a count of delivered failures. A missing measurement phase remains unknown. The summary preserves recorded outcomes and does not certify overall success.
 
 Stages can be `applied`, `no_op`, `skipped`, `abstained`, or `failed`. `applied` means some work ran, not that every goal was met. Read `stages[].component_evaluations[]` for child statuses and reasons: `environment-denoise` can apply a filter while `broadband-denoise` abstains. Quote the actual child outcome and resolved parameters rather than inferring them from the parent.
 
 For source balancing, also read `stages[].final_region_evaluations[]` when present. `bounded_outside_target` means the safe gain bound was reached without attaining that region's numeric target; `abstained_overlap` preserves a region that could not be adjusted independently. The top-level `unresolved[]` collects explicit component abstentions and unmet measured regional or loudness-range targets. Read its scope, status, reason, and `measured_at` when supplied: `predicted_pre_encode` is a prediction and `encoded_output` is the delivered-file check. An empty list does not establish perceptual quality or rule out undetected problems.
+
+Read each navigation outcome count's collection pointer. A stage's `inside_target_regions` count describes its own recorded stage decision, while `final_region_evaluations` is a separate collection. Neither replaces a fresh inspection's rule evaluations or speech reference. Keep original rule misses, intermediate limits, predictions and delivered measurements separate when explaining remaining targets.
 
 Report these remaining limits even after a successful render. Do not enlarge gains or add a second pass simply to make every row green. An approved listening result remains useful evidence.
 
@@ -59,7 +61,7 @@ For video, compare available `source.timing` and `output.timing` audio/video sta
 
 `region_basis` identifies the source timeline, original detection, fixed source regions, and report-local IDs. Before/after regional measurements reuse those original scopes and IDs to show how the same intervals changed. A fresh `inspect` of the enhanced output runs detection again and may split, merge, or reclassify intervals; its region IDs are local to that new analysis. Compare source-timeline intervals, not equal-looking IDs across reports.
 
-Use `audio report compare` for saved reports with compatible identity and timeline evidence. It keeps each report's intervals, measurements, and speech reference separate, including ambiguous overlaps. A refusal for missing identity or timeline evidence is not permission to guess a link. A matching digest and decoded duration still do not establish content alignment or A/V sync.
+Use `audio report compare` for saved reports with compatible identity and timeline evidence. Its compact navigation view starts with actual overlap, ambiguity and unmatched counts; follow the side-specific pointers to their intervals. Pair counts differ from region counts, and ambiguous overlaps have no preferred match. It keeps each report's intervals, measurements, and speech reference separate. A refusal for missing identity or timeline evidence is not permission to guess a link. A matching digest and decoded duration still do not establish content alignment or A/V sync.
 
 ASR wording and VAD or program classification can change after enhancement. That alone is expected, not evidence of corruption or a reason for speculative re-editing. Keep the canonical original transcript, report substantive listening findings and measured limits, and do not require classification invariance. Enhancement preserves time; it does not remove fillers or other words.
 

@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Index nested abstentions, unmet targets and other recorded limits.",
     )
+    summary_parser.add_argument(
+        "--navigation",
+        action="store_true",
+        help="Emit compact phase/scope groups and exact evidence pointers instead of the "
+        "default summary; cannot combine with --metrics or --evidence-limits.",
+    )
     compare_parser = report_commands.add_parser(
         "compare",
         help="Compare saved reports offline by recorded identity and time overlap.",
@@ -106,6 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare_parser.add_argument("left", type=Path, help="Saved inspection or enhancement report.")
     compare_parser.add_argument("right", type=Path, help="Compatible saved report to compare.")
+    compare_parser.add_argument(
+        "--navigation",
+        action="store_true",
+        help="Emit compact phase/scope navigation with overlap and ambiguity counts.",
+    )
 
     packages_parser = subparsers.add_parser(
         "packages",
