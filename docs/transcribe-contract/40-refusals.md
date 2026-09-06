@@ -1,7 +1,7 @@
 
 ## 5. Refusals
 
-Each of these is shown as a caller sees it, with the corrected command, in [TRANSCRIBE_HAPPY_PATH.md](../../TRANSCRIBE_HAPPY_PATH.md) §4.
+Each of these is shown as a caller sees it, with the corrected command, in [TRANSCRIBE_HAPPY_PATH.md](../TRANSCRIBE_HAPPY_PATH.md) §4.
 
 ```bash
 audio transcribe run --input meeting.m4a --want diarization

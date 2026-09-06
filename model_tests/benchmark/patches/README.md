@@ -40,7 +40,7 @@ PYTORCH_ENABLE_MPS_FALLBACK=0 \
   model_tests/vibevoice/VibeVoice/.venv/bin/python \
   model_tests/benchmark/run_vibevoice.py \
   --model-path model_tests/vibevoice/VibeVoice/pretrained_models/VibeVoice-ASR \
-  --audio autio-test-sample.m4a \
+  --audio tests/artifacts/media/autio-test-sample.m4a \
   --output model_tests/benchmark_runs/vibe_mps_bf16_seed1234_logitskeep_single.json \
   --device mps --dtype bfloat16 --attention sdpa --max-new-tokens 2048 \
   --seed 1234
@@ -58,7 +58,7 @@ PYTORCH_ENABLE_MPS_FALLBACK=0 \
   model_tests/vibevoice/VibeVoice/.venv/bin/python \
   model_tests/benchmark/run_vibevoice.py \
   --model-path model_tests/vibevoice/VibeVoice/pretrained_models/VibeVoice-ASR \
-  --audio autio-test-sample.m4a \
+  --audio tests/artifacts/media/autio-test-sample.m4a \
   --output model_tests/benchmark_runs/vibe_mps_bf16_seed1234_fullprompt_single.json \
   --device mps --dtype bfloat16 --attention sdpa --max-new-tokens 2048 \
   --seed 1234 --full-prompt-logits

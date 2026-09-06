@@ -1,6 +1,6 @@
 # `transcribe` command contract
 
-**Status: v1 implemented.** `capabilities`, `plan`, and `run` work for all four stack ids, and `export` writes every contracted format. This is the agent-facing sequence the complete v1 transcription surface must produce: from a machine with nothing installed, through provisioning and execution and export, to teardown. Terms are defined in [VOCABULARY.md](../../VOCABULARY.md); the backend evidence is in [model_tests/DECISION_REPORT.md](../../model_tests/DECISION_REPORT.md).
+**Status: v1 implemented.** `capabilities`, `plan`, and `run` work for all four stack ids, and `export` writes every contracted format. This is the agent-facing sequence the complete v1 transcription surface must produce: from a machine with nothing installed, through provisioning and execution and export, to teardown. Terms are defined in [VOCABULARY.md](../VOCABULARY.md); the backend evidence is in [docs/model-tests/DECISION_REPORT.md](../model-tests/DECISION_REPORT.md).
 
 Two decisions shape every sequence below:
 
@@ -155,7 +155,7 @@ There is no provenance-only section, and there used to be. It carried the extent
 
 `roles` is one sentence rather than two arrays. FireRedLID is inside the stack but runs only when `lid` is requested, so listing it unconditionally would promise weights this request will not fetch while calling it an add-on would promise a package the stack already contains. Saying "lid as well when lid is requested" is both shorter and truer than a pair of keys.
 
-Two things FireRed emits that this catalog deliberately does not offer. `asr_confidence` is real but *sentence*-level, and there is no requestable capability at that granularity in v1 — see the retired `word_confidence` entry in [VOCABULARY.md](../../VOCABULARY.md), which was the wrong name for it. And `lang` / `lang_confidence` appear on every sentence in the raw output even when LID never ran, defaulted to `null` and `0`; the adapter drops both rather than publishing a zero confidence that reads as measured.
+Two things FireRed emits that this catalog deliberately does not offer. `asr_confidence` is real but *sentence*-level, and there is no requestable capability at that granularity in v1 — see the retired `word_confidence` entry in [VOCABULARY.md](../VOCABULARY.md), which was the wrong name for it. And `lang` / `lang_confidence` appear on every sentence in the raw output even when LID never ran, defaulted to `null` and `0`; the adapter drops both rather than publishing a zero confidence that reads as measured.
 
 ### `plan` — what will this request produce?
 

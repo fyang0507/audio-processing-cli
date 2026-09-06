@@ -17,6 +17,7 @@ model_tests/forced_aligner/
 model_tests/vibeasr_cpp/
 model_tests/benchmark_data/
 model_tests/benchmark_runs/
-autio-test-sample.m4a
-demo-video-audio-to-improve.mp4
-test-sample-multispeaker.m4a
+
+# Private local test media and generated acceptance outputs
+/tests/artifacts/*
+!/tests/artifacts/.gitkeep

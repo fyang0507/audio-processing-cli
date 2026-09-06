@@ -45,7 +45,7 @@ def materialize(
     if kind == "url":
         # The filename is manifest data, not derived: the shipped Silero backend resolves
         # this exact name, and a pull that invented one would leave two copies on disk and
-        # re-download on first use. tests/test_environments.py ties the two together.
+        # re-download on first use. tests/audio_cli/environments/test_environments.py ties the two together.
         target = paths.models_dir() / package.source["filename"]
         # `repair` needs no force here, and the digest is the reason: url_file re-hashes what
         # is on disk against the manifest pin and downloads again unless it matches, so a

@@ -4,10 +4,10 @@ Agreed 2026-08-16. This is the naming contract for the `transcribe` surface and
 the schema beneath it. It consolidates terms already used in
 [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1),
 [HANDOFF.md](../../HANDOFF.md), and
-[model_tests/DECISION_REPORT.md](../../model_tests/DECISION_REPORT.md), and resolves
+[docs/model-tests/DECISION_REPORT.md](../model-tests/DECISION_REPORT.md), and resolves
 the collisions between them. `transcribe` is the most demanding command, so it
 defines the vocabulary; other commands follow it. The command sequences that
-exercise it are in [TRANSCRIBE_CONTRACT.md](../../TRANSCRIBE_CONTRACT.md).
+exercise it are in [TRANSCRIBE_CONTRACT.md](../TRANSCRIBE_CONTRACT.md).
 
 Keep HANDOFF's three kinds of statement separate everywhere below: a declared
 **capability** is an interface, a **measured** result is tied to a recorded
