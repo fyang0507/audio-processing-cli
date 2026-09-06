@@ -21,28 +21,38 @@ from tests.audio_cli.transcribe.orchestrator.transcribe_native_test_support impo
 
 
 @pytest.mark.parametrize(
-    "words",
+    "words, rejection",
     [
-        [],
-        [{"text": "Goodbye", "start": 0.2, "end": 1.8}],
-        [
-            {"text": "Hel", "start": 1.0, "end": 1.4},
-            {"text": "lo", "start": 0.2, "end": 0.8},
-        ],
-        [
-            {"text": "Hel", "start": 0.2, "end": 1.2},
-            {"text": "lo", "start": 1.0, "end": 1.8},
-        ],
-        [
-            {"text": "", "start": 0.2, "end": 0.3},
-            {"text": "Hello", "start": 0.3, "end": 1.8},
-        ],
+        ([], {"code": "text_mismatch"}),
+        ([{"text": "Goodbye", "start": 0.2, "end": 1.8}], {"code": "text_mismatch"}),
+        (
+            [
+                {"text": "Hel", "start": 1.0, "end": 1.4},
+                {"text": "lo", "start": 0.2, "end": 0.8},
+            ],
+            {"code": "word_order", "word_index": 1},
+        ),
+        (
+            [
+                {"text": "Hel", "start": 0.2, "end": 1.2},
+                {"text": "lo", "start": 1.0, "end": 1.8},
+            ],
+            {"code": "word_order", "word_index": 1},
+        ),
+        (
+            [
+                {"text": "", "start": 0.2, "end": 0.3},
+                {"text": "Hello", "start": 0.3, "end": 1.8},
+            ],
+            {"code": "invalid_token", "word_index": 0},
+        ),
     ],
 )
 def test_vibevoice_nonconforming_speech_alignment_is_a_segment_abstention(
     tmp_path: Path,
     monkeypatch,
     words: list[dict],
+    rejection: dict,
 ) -> None:
     _runtime(tmp_path, monkeypatch, "torch-vibevoice")
     _runtime(tmp_path, monkeypatch, "mlx")
@@ -131,12 +141,18 @@ def test_vibevoice_nonconforming_speech_alignment_is_a_segment_abstention(
         {
             "abstention_id": "ab_0",
             "reason": "alignment_unavailable",
+            "alignment": {"unit_id": "native_0", "segment_ids": ["seg_0"], **rejection},
             "start": 0.0,
             "end": 2.0,
         },
         {
             "abstention_id": "ab_1",
             "reason": "alignment_unavailable",
+            "alignment": {
+                "unit_id": "native_1",
+                "segment_ids": ["seg_2"],
+                "code": "provider_unavailable",
+            },
             "start": 3.0,
             "end": 5.0,
         },
@@ -231,6 +247,11 @@ def test_vibevoice_punctuation_only_empty_mapping_differs_from_absence(
             {
                 "abstention_id": "ab_0",
                 "reason": "alignment_unavailable",
+                "alignment": {
+                    "unit_id": "native_0",
+                    "segment_ids": ["seg_0"],
+                    "code": "provider_unavailable",
+                },
                 "start": 0.0,
                 "end": 1.0,
             }

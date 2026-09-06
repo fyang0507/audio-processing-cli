@@ -12,6 +12,7 @@ from .types import (
     _SEGMENT_WORD_EDGE_TOLERANCE_SECONDS,
     ABSENT,
     ABSTENTION_REASONS,
+    ALIGNMENT_CODES,
     CAPABILITY_NAMES,
     JsonMapping,
     NormalizedResult,
@@ -204,17 +205,72 @@ def _validate_abstentions(
     *,
     sample: bool,
     duration: float,
+    segments: Sequence[JsonMapping],
 ) -> None:
+    by_id = {item["segment_id"]: item for item in segments}
+    if len(by_id) != len(segments) and any(
+        isinstance(item, Mapping) and "alignment" in item for item in values
+    ):
+        raise ResultError("alignment evidence requires unique segment IDs")
+    linked: set[str] = set()
     for index, item in enumerate(values):
         if not isinstance(item, Mapping):
             raise ResultError(f"abstentions[{index}] must be an object")
         name = f"abstentions[{index}]"
-        _exact_keys(item, {"abstention_id", "reason", "start", "end"}, name)
+        expected = {"abstention_id", "reason", "start", "end"}
+        if "alignment" in item:
+            expected.add("alignment")
+        _exact_keys(item, expected, name)
+        _validate_bounds(item, name, sample=sample, duration=duration)
+        if "alignment" in item:
+            alignment = item["alignment"]
+            if item.get("reason") != "alignment_unavailable" or not isinstance(alignment, Mapping):
+                raise ResultError(f"{name}.alignment requires an alignment_unavailable object")
+            keys = {"unit_id", "segment_ids", "code"}
+            if "word_index" in alignment:
+                keys.add("word_index")
+                word_index = alignment["word_index"]
+                if (
+                    isinstance(word_index, bool)
+                    or not isinstance(word_index, int)
+                    or word_index < 0
+                ):
+                    raise ResultError(f"{name}.alignment.word_index must be a non-negative integer")
+            _exact_keys(alignment, keys, f"{name}.alignment")
+            if not isinstance(alignment["unit_id"], str) or not alignment["unit_id"]:
+                raise ResultError(f"{name}.alignment.unit_id must be a non-empty string")
+            if not isinstance(alignment["code"], str) or alignment["code"] not in ALIGNMENT_CODES:
+                raise ResultError(f"{name}.alignment.code is not a declared alignment code")
+            if "word_index" in alignment and alignment["code"] in {
+                "provider_unavailable",
+                "text_mismatch",
+                "sentence_reconciliation",
+            }:
+                raise ResultError(f"{name}.alignment.code cannot identify a returned word")
+            identifiers = alignment["segment_ids"]
+            if not isinstance(identifiers, list) or not identifiers:
+                raise ResultError(f"{name}.alignment.segment_ids must be a non-empty array")
+            for identifier in identifiers:
+                if (
+                    not isinstance(identifier, str)
+                    or identifier not in by_id
+                    or identifier in linked
+                ):
+                    raise ResultError(
+                        f"{name}.alignment.segment_ids contains an unknown or repeated segment"
+                    )
+                if "words" in by_id[identifier]:
+                    raise ResultError(f"{name}.alignment cannot reference a segment with words")
+                segment = by_id[identifier]
+                if "start" in segment and (
+                    segment["start"] != item["start"] or segment["end"] != item["end"]
+                ):
+                    raise ResultError(f"{name}.alignment must match the native segment bounds")
+                linked.add(identifier)
         if not isinstance(item["abstention_id"], str) or not item["abstention_id"]:
             raise ResultError(f"{name}.abstention_id must be a non-empty string")
         if item["reason"] not in ABSTENTION_REASONS:
             raise ResultError(f"{name}.reason must be one of {sorted(ABSTENTION_REASONS)}")
-        _validate_bounds(item, name, sample=sample, duration=duration)
 
 
 def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:

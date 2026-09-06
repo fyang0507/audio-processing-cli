@@ -215,3 +215,68 @@ def test_absent_timing_refusal_identifies_original_input_segment() -> None:
     assert refusal.payload["input"] == "qwen.json"
     assert refusal.payload["segment_id"] == "untimed_original_id"
     assert refusal.payload["requires_any_capability"] == ["segment_timestamps", "word_timestamps"]
+
+
+@pytest.mark.parametrize("outcome", [None, "abstained", "produced"])
+def test_readable_remedy_uses_saved_timing_outcome(tmp_path, capsys, outcome):
+    from audio_cli.cli import main
+
+    segment = {"segment_id": "seg_0", "text": "..." if outcome == "produced" else "Like."}
+    if outcome == "produced":
+        segment["words"] = []
+    payload = _payload([segment], outcomes={"word_timestamps": outcome} if outcome else {})
+    if outcome == "abstained":
+        payload["abstentions"] = [
+            {
+                "abstention_id": "ab_0",
+                "reason": "alignment_unavailable",
+                "start": 0,
+                "end": 1,
+                "alignment": {
+                    "unit_id": "turn_25",
+                    "segment_ids": ["seg_0"],
+                    "code": "out_of_unit_bounds",
+                    "word_index": 0,
+                },
+            }
+        ]
+    source = _write(tmp_path / "result.json", payload)
+    assert (
+        main(["transcribe", "export", "--input", str(source), "--format", "md", "--timestamps"])
+        == 2
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    refusal = json.loads(captured.err)
+    assert refusal["code"] == "timing_required_for_timestamps"
+    assert refusal["segment_id"] == "seg_0"
+    if outcome == "abstained":
+        assert "already requested but abstained" in refusal["fix"]
+        assert "alignment_unavailable" in refusal["fix"]
+        assert "rerunning the same request is not an established timing repair" in refusal["fix"]
+    elif outcome == "produced":
+        assert "already records word_timestamps" in refusal["fix"]
+    else:
+        assert "transcribe the original source with" in refusal["fix"]
+
+
+def test_malformed_alignment_ledger_remains_a_normal_cli_refusal(tmp_path, capsys):
+    from audio_cli.cli import main
+
+    payload = _payload(
+        [{"segment_id": "seg_0", "text": "Like.", "start": 0, "end": 1}],
+        outcomes={"word_timestamps": "abstained", "segment_timestamps": "produced"},
+    )
+    payload["abstentions"] = [
+        {
+            "abstention_id": "ab_0",
+            "reason": "alignment_unavailable",
+            "end": 1,
+            "alignment": {"unit_id": "u", "segment_ids": ["seg_0"], "code": "provider_unavailable"},
+        }
+    ]
+    path = _write(tmp_path / "malformed.json", payload)
+    assert main(["transcribe", "export", "--input", str(path), "--format", "md"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["code"] == "export_input_invalid"

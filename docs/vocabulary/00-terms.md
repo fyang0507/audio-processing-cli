@@ -278,17 +278,12 @@ plan must never turn one package or one environment into a claim that those mode
 one at a time. VibeVoice and the later MLX aligner remain separate environment processes and
 have never been measured co-resident.
 
-**abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly
-four allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an
-accepted turn below 500 ms, `raw_fragment` for a span whose only activity was a sub-250 ms
-diarizer fragment, and `alignment_unavailable` for an ordinary VibeVoice speech segment whose
-requested aligner result is absent, invalid, or does not reproduce the segment text after
-punctuation and whitespace are removed. The last uses the segment's native bounds, preserves
-its text, omits `words`, and makes the run-level `word_timestamps` outcome `abstained`; bracketed
-non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must
-survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the
-tool did not reach them rather than declining to assert.
+**abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly four allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an accepted turn below 500 ms, `raw_fragment` for a span whose only activity was a sub-250 ms diarizer fragment, and `alignment_unavailable` for requested alignment that is absent, invalid, or cannot reproduce the recognized text under punctuation and whitespace normalization. Qwen retains the attempted processing-unit interval; VibeVoice retains its native speech-segment interval. Both preserve recognized text, omit `words`, and make the run-level `word_timestamps` outcome `abstained`; bracketed VibeVoice non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the tool did not reach them rather than declining to assert.
 
 ## Media duration evidence
 
 `duration_basis` identifies the measurement behind a duration: `probed_audio_stream` is primary-audio metadata, `probed_container` is the container fallback, `decoded_pcm` is inspection/enhancement sample-count duration, and `canonical_decoded_pcm` is transcription canonical mono 16 kHz PCM16 duration. Decoded timelines begin at the first decoded sample. `timeline_preserved` is the rendered enhancement decoded-duration gate only, qualified by `timeline_verification`; it is not content alignment or A/V sync. See [duration and alignment evidence](../timing-evidence.md) for exact scope, tolerance, and absence semantics.
+
+## Alignment rejection evidence
+
+An `alignment_unavailable` abstention may carry `alignment` with `unit_id`, nonempty `segment_ids`, `code`, and an optional zero-based `word_index` referring to the retained raw word array. New Qwen and VibeVoice aligner abstentions supply this evidence; historical records leave it absent. Codes are `provider_unavailable`, `invalid_token`, `invalid_bounds`, `out_of_unit_bounds`, `word_order`, `text_mismatch`, and `sentence_reconciliation`; [alignment diagnostics](../alignment-diagnostics.md) defines each observed condition and the unchanged strict containment policy. `segment_ids` references actual wordless segments in the same document; links must be unique across alignment abstentions. These links do not turn the attempted interval into word or sentence timing. Qwen's attempted unit can own multiple affected sentences, while VibeVoice uses its native speech-segment interval.

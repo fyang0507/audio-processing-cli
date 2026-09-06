@@ -31,6 +31,18 @@ ABSTENTION_REASONS = frozenset(
     }
 )
 
+ALIGNMENT_CODES = frozenset(
+    {
+        "provider_unavailable",
+        "invalid_token",
+        "invalid_bounds",
+        "out_of_unit_bounds",
+        "word_order",
+        "text_mismatch",
+        "sentence_reconciliation",
+    }
+)
+
 _ARRAY_CAPABILITIES = {
     "diarization": "turns",
     "vad": "vad_regions",

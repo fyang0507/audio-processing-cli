@@ -53,7 +53,13 @@ def _require_readable_timing(merged: MergedTranscript) -> None:
             except ValueError as exc:
                 raise InvalidResultError(document.path, str(exc)) from exc
             if bounds is None:
-                raise ReadableTimingRequiredError(document.path, segment["segment_id"])
+                raise ReadableTimingRequiredError(
+                    document.path,
+                    segment["segment_id"],
+                    word_timing_outcome=document.payload["provenance"]["outcomes"].get(
+                        "word_timestamps"
+                    ),
+                )
 
 
 def _found_timing(document: LoadedResult) -> tuple[str, ...]:
@@ -163,8 +169,8 @@ def _require_word_timing(merged: MergedTranscript) -> None:
                 has_real_word_stream = True
     # A bounded segment can be omitted only when the document explicitly binds
     # its failed alignment to those same bounds. Qwen's public segments have no
-    # segment bounds, and v1 carries no segment-to-unit association; even a real
-    # unit-level abstention elsewhere cannot prove which unbounded text it owns.
+    # segment bounds. Diagnostic segment links identify missing timing but do not
+    # authorize silently omitting recognized text from the requested subtitle.
     for document in merged.documents:
         outcome = document.payload["provenance"]["outcomes"].get("word_timestamps")
         alignment_bounds = _alignment_abstention_bounds(document)

@@ -68,7 +68,10 @@ class TimingRequiredError(ExportError):
 class ReadableTimingRequiredError(ExportError):
     """A readable timestamp request contains a segment without real bounds."""
 
-    def __init__(self, input_path: Path, segment_id: str) -> None:
+    def __init__(
+        self, input_path: Path, segment_id: str, *, word_timing_outcome: str | None = None
+    ) -> None:
+        self.word_timing_outcome = word_timing_outcome
         self.input_path = Path(input_path)
         self.segment_id = segment_id
         super().__init__(f"{self.input_path}: {segment_id} has no segment or word timing")

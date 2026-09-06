@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import unicodedata
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 ROUNDING_TOLERANCE_SECONDS = 0.000501
@@ -24,10 +25,26 @@ def _strict_number(value: Any) -> float:
     return float(value)
 
 
+@dataclass(frozen=True)
+class AlignmentResult:
+    """Validated words and evidence-based per-unit rejection classifications."""
+
+    words: dict[str, list[dict[str, Any]]]
+    rejections: dict[str, dict[str, Any]]
+
+
 def normalize_aligned_words(
     raw: Mapping[str, Any],
     segments: Sequence[Mapping[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
+    """Compatibility projection; workflows retain the full normalization evidence."""
+    return normalize_alignment(raw, segments).words
+
+
+def normalize_alignment(
+    raw: Mapping[str, Any],
+    segments: Sequence[Mapping[str, Any]],
+) -> AlignmentResult:
     if "segments" not in raw:
         raise ValueError("aligner stage result is missing segments")
     values = raw["segments"]
@@ -40,6 +57,7 @@ def normalize_aligned_words(
             raise ValueError(f"aligner received duplicate requested unit {identifier!r}")
         by_id[identifier] = item
     normalized: dict[str, list[dict[str, Any]]] = {}
+    rejections: dict[str, dict[str, Any]] = {}
     seen_ids: set[str] = set()
     for item in values:
         if not isinstance(item, Mapping):
@@ -52,10 +70,12 @@ def normalize_aligned_words(
             raise ValueError(f"aligner result for unit {identifier!r} is missing words")
         words = item["words"]
         if words is None:
+            rejections[identifier] = {"code": "provider_unavailable"}
             continue
         if not isinstance(words, list):
             raise TypeError(f"aligner words for unit {identifier!r} must be an array or null")
         candidate = []
+        rejection: dict[str, Any] = {"code": "invalid_bounds"}
         try:
             unit_start = _strict_number(by_id[identifier].get("start", 0.0))
             raw_unit_end = by_id[identifier].get("end")
@@ -67,21 +87,29 @@ def normalize_aligned_words(
             ):
                 raise ValueError(f"aligner received invalid unit bounds for {identifier!r}")
             previous_end = float("-inf")
-            for word in words:
+            for word_index, word in enumerate(words):
+                rejection = {"code": "invalid_token", "word_index": word_index}
                 if not isinstance(word, Mapping) or not isinstance(word.get("text"), str):
                     raise TypeError(f"aligner returned an invalid word for {identifier!r}")
                 if not _plain(word["text"]):
                     raise ValueError(f"aligner returned an empty word token for {identifier!r}")
+                rejection["code"] = "invalid_bounds"
                 start = _strict_number(word["start"])
                 end = _strict_number(word["end"])
                 if not math.isfinite(start) or not math.isfinite(end):
                     raise ValueError(f"aligner returned invalid bounds for {identifier!r}")
+                if end < start:
+                    raise ValueError(f"aligner returned reversed bounds for {identifier!r}")
                 if start < unit_start and unit_start - start <= ROUNDING_TOLERANCE_SECONDS:
                     start = unit_start
                 if end > unit_end and end - unit_end <= ROUNDING_TOLERANCE_SECONDS:
                     end = unit_end
-                if start < unit_start or end < start or end > unit_end:
+                if end < start:
+                    raise ValueError(f"aligner returned reversed bounds for {identifier!r}")
+                rejection["code"] = "out_of_unit_bounds"
+                if start < unit_start or end > unit_end:
                     raise ValueError(f"aligner returned invalid bounds for {identifier!r}")
+                rejection["code"] = "word_order"
                 if start < previous_end:
                     raise ValueError(
                         f"aligner returned overlapping or reversed words for {identifier!r}"
@@ -89,10 +117,11 @@ def normalize_aligned_words(
                 candidate.append({"text": word["text"], "start": start, "end": end})
                 previous_end = end
         except (KeyError, OverflowError, TypeError, ValueError):
+            rejections[identifier] = rejection
             continue
         normalized[identifier] = candidate
     missing = set(by_id) - seen_ids
     if missing:
         rendered = ", ".join(repr(identifier) for identifier in sorted(missing))
         raise ValueError(f"aligner result is missing requested units: {rendered}")
-    return normalized
+    return AlignmentResult(normalized, rejections)

@@ -304,7 +304,7 @@ def _run_export(args: argparse.Namespace) -> int:
         raise export_refusals.provenance_unsupported_for_format(exc.output_format) from exc
     except ReadableTimingRequiredError as exc:
         raise export_refusals.timing_required_for_timestamps(
-            exc.input_path, exc.segment_id
+            exc.input_path, exc.segment_id, word_timing_outcome=exc.word_timing_outcome
         ) from exc
     except TimestampsUnsupportedError as exc:
         raise export_refusals.timestamps_unsupported_for_format(exc.output_format) from exc

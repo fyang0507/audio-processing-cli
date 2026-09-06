@@ -42,12 +42,30 @@ def timestamps_unsupported_for_format(output_format: str) -> Refusal:
     )
 
 
-def timing_required_for_timestamps(input_path: str | Path, segment_id: str) -> Refusal:
+def timing_required_for_timestamps(
+    input_path: str | Path, segment_id: str, *, word_timing_outcome: str | None = None
+) -> Refusal:
+    if word_timing_outcome == "abstained":
+        fix = (
+            "remove --timestamps to preserve untimed text; word_timestamps was already "
+            "requested but abstained. Inspect this segment's alignment_unavailable entry "
+            "and retained structured stage diagnostics; rerunning the same request is not "
+            "an established timing repair"
+        )
+    elif word_timing_outcome is not None:
+        fix = (
+            "remove --timestamps to preserve untimed text; this result already records "
+            "word_timestamps but this segment has no usable timing"
+        )
+    else:
+        fix = (
+            "remove --timestamps to preserve untimed text, or transcribe the original "
+            "source with segment_timestamps on a native stack or word_timestamps"
+        )
     return build_refusal(
         "timing_required_for_timestamps",
         2,
-        "remove --timestamps to preserve untimed text, or transcribe the original "
-        "source with segment_timestamps on a native stack or word_timestamps",
+        fix,
         field="--timestamps",
         provided=True,
         input=str(input_path),

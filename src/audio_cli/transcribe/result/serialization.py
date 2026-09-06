@@ -47,8 +47,15 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
         assert isinstance(result.coverage, Mapping)
         _validate_coverage(result.coverage, duration=duration)
     _validate_segments(result.segments, requested, sample=result.sample, duration=duration)
-    _validate_abstentions(result.abstentions, sample=result.sample, duration=duration)
+    _validate_abstentions(
+        result.abstentions, sample=result.sample, duration=duration, segments=result.segments
+    )
     _validate_provenance(result.provenance, requested, result, sample=result.sample)
+    if (
+        any("alignment" in item for item in result.abstentions)
+        and result.provenance["outcomes"].get("word_timestamps") != "abstained"
+    ):
+        raise ResultError("alignment evidence requires an abstained word_timestamps outcome")
 
     arrays = {
         "turns": ({"turn_id", "speaker", "start", "end"}, result.turns),
