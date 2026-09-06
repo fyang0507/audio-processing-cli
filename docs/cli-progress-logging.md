@@ -1,6 +1,6 @@
 # Progress and retained-log integration
 
-These APIs provide issue #46's implementation hooks. The CLI composition and parser owners wire their options and contexts; this change does not edit `cli.py` or `cli_parser.py`. Default machine JSON, canonical media and results, absence semantics, model settings, and processing decisions are unchanged.
+`audio enhance` emits stage and elapsed-time notices on stderr, including during dry runs. `audio transcribe run --log-dir DIR` retains raw stage logs under a selected directory. Result JSON stays on stdout; neither interface changes model settings or processing decisions.
 
 ## Enhancement
 
@@ -27,7 +27,7 @@ The pipeline imports no command presentation code. Preparation, stage processing
 
 ## Transcription logs
 
-`audio_cli.transcribe.transport.StageTransport(runner=None, *, progress=None, log_root: Path | None = None)` creates and validates requested log storage at construction, before decode or model execution. Create one transport per transcription run and pass it through the existing `audio_cli.transcribe.orchestrator.run(..., transport=transport)` argument. The CLI should resolve its log option to a `Path`, construct the transport inside its existing error boundary, and represent constructor `OSError`/`ValueError` as an argument/path failure rather than starting the run. The CLI's exact architecture import inventory needs the `audio_cli.transcribe.transport` facade edge when wiring this import; no lower owner gains a CLI dependency.
+`audio_cli.transcribe.transport.StageTransport(runner=None, *, progress=None, log_root: Path | None = None)` creates and validates requested log storage at construction, before decode or model execution. The CLI creates one transport per requested log directory and passes it through `audio_cli.transcribe.orchestrator.run(..., transport=transport)`. A constructor `OSError`/`ValueError` produces the bare stderr refusal `{"code": "log_directory_invalid", "field": "--log-dir", "provided": "DIR", "reason": "...", "fix": "..."}` at exit 2 before probing media. Its remedy preserves the other original arguments. The composition root imports the public transport facade; no lower owner gains a CLI dependency.
 
 ```python
 from audio_cli.transcribe.transport import StageTransport
