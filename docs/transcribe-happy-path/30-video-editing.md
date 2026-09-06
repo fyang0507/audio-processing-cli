@@ -72,6 +72,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
     {"code": "measured_peak_exceeds_target", "blocking": false,
      "detail": "measured 20.28 GiB live MPS allocation on spice-30min-participant; a strict 16 GiB MPS cap OOMs at model load, measured on a 27.8 s probe, while an 18 GiB cap passed that probe"}
   ],
+  "next": "audio packages pull vibevoice-asr-7b",
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",

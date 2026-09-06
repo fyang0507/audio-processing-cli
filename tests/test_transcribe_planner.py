@@ -162,9 +162,10 @@ def test_firered_timing_is_native_and_punctuation_is_a_floor() -> None:
 
 def test_sample_provenance_embeds_the_executable_plan_without_recursing() -> None:
     emitted = plan_for("vibevoice", "diarization,word_timestamps")
-    core = {key: value for key, value in emitted.items() if key != "sample_output"}
+    core = {key: value for key, value in emitted.items() if key not in {"sample_output", "next"}}
     assert emitted["sample_output"]["provenance"]["plan"] == core
     assert "sample_output" not in core
+    assert "next" not in core
     assert emitted["sample_output"]["abstentions"] == []
 
 

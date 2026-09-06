@@ -30,15 +30,43 @@ def output_required_for_force() -> Refusal:
     )
 
 
+def timestamps_unsupported_for_format(output_format: str) -> Refusal:
+    return build_refusal(
+        "timestamps_unsupported_for_format",
+        2,
+        "use --timestamps with --format txt or md, or remove --timestamps",
+        field="--timestamps",
+        provided=True,
+        format=output_format,
+        allowed_formats=["txt", "md"],
+    )
+
+
+def timing_required_for_timestamps(input_path: str | Path, segment_id: str) -> Refusal:
+    return build_refusal(
+        "timing_required_for_timestamps",
+        2,
+        "remove --timestamps to preserve untimed text, or transcribe the original "
+        "source with segment_timestamps on a native stack or word_timestamps",
+        field="--timestamps",
+        provided=True,
+        input=str(input_path),
+        segment_id=segment_id,
+        requires_any_capability=["segment_timestamps", "word_timestamps"],
+        note="every segment needs supplied bounds; processing intervals are never substituted",
+    )
+
+
 def output_exists(
     input_paths: Sequence[str | Path],
     output_format: str,
     output: str | Path,
     *,
     replaceable: bool,
+    timestamps: bool = False,
 ) -> Refusal:
     if replaceable:
-        fix = export_command(input_paths, output_format, output, force=True)
+        fix = export_command(input_paths, output_format, output, force=True, timestamps=timestamps)
     else:
         fix = (
             "choose a regular-file --output path; an existing directory cannot "

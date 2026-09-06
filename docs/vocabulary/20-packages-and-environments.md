@@ -93,9 +93,9 @@ Rules:
 
 Lifecycle: `audio packages list | pull | verify | remove | purge | path`. `pull`
 accepts package ids **or** `--stack`, never both, and it does not accept `--want`:
-narrowing a stack to the capabilities a plan actually uses belongs to the planner
-(#12), so until that exists a stack provisions every package it can use and the flag
-is refused rather than accepted and ignored. `path` prints the resolved root and
+narrowing a stack to the capabilities a plan actually uses belongs to `transcribe plan`.
+Its top-level `next` command names only missing packages and is absent when none are missing.
+A pull with `--stack` provisions every package that stack can use; `--want` is refused here. `path` prints the resolved root and
 per-package locations so a session with no provisioning history can still locate
 everything.
 

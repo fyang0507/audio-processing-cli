@@ -197,9 +197,9 @@ audio transcribe run --input field.wav --stack firered \
 ```
 
 `firered-asr2s` is one package pinning four repositories and `pull` materializes all of
-them, LID weights included, whatever the plan asked for: narrowing a pull to the roles a
-plan actually uses is what `--want` is reserved for, and `pull` refuses that flag today
-rather than appearing to honour it. Neither the whole-package figure nor a narrowed one is
+them, LID weights included, whatever the plan asked for. The plan's `next` narrows missing
+package ids, not repositories inside a package. `pull` refuses `--want`; choose capabilities in
+`transcribe plan`, then use its explicit package selection. Neither the whole-package figure nor a narrowed one is
 recorded in a tracked artifact — the only tracked source is a pre-harness "~9.2 GB" note that
 its own document marks as history rather than decision evidence — so both appear
 as `approximate, unrecorded` until per-artifact sizes are recorded the way the
@@ -285,3 +285,24 @@ audio transcribe run --input interview.wav --stack firered \
   --want verbatim,word_timestamps,diarization,overlapped_speech \
   --format json -o interview.firered.json
 ```
+
+### Interpreting VibeVoice startup warnings
+
+Warnings on stderr are separate from the run's exit code and normalized stdout. At pinned source
+commit `94da20d98b2fa7688e9cbfaf7692ddb4954f7600`, the following messages have identified causes:
+
+- No preprocessor config: `vibevoice/processor/vibevoice_asr_processor.py:117-166` explicitly
+  falls back to its default audio settings. The stage passes the separately managed Qwen tokenizer
+  path; it does not fetch an alternate tokenizer.
+- Tokenizer class mismatch: `vibevoice/modular/modular_vibevoice_text_tokenizer.py:213,267-294`
+  defines the VibeVoice subclasses, while the pinned Qwen tokenizer metadata declares
+  `Qwen2Tokenizer`. The class-name warning alone does not demonstrate incorrect tokenization.
+- Deprecated `torch_dtype`: the pinned provider's `modular/modeling_vibevoice_asr.py:66,166,228`
+  reads `config.torch_dtype`; the host stage already passes `dtype`. It is an upstream access,
+  not evidence that the CLI silently ignored its dtype setting.
+
+Runner evidence is [the isolated VibeVoice stage](../../src/audio_cli/transcribe/stages/vibevoice.py)
+and the named pinned provider sources under the managed checkout; the raw observed warning log is
+`model_tests/benchmark_runs/e2e-agent-acceptance-2026-09-05-174431/01-multispeaker/logs/027-vibevoice-run-provisioned.stderr`.
+These explanations establish configuration provenance only. Warnings remain visible, and transcript
+accuracy still requires comparison with the recording.

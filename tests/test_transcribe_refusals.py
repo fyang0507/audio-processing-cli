@@ -82,7 +82,7 @@ def test_lowercase_language_is_accepted_but_abbreviation_is_only_a_suggestion() 
     assert caught.value.payload["did_you_mean"] == "English"
 
 
-def test_unknown_name_without_a_suggestion_gets_a_runnable_floors_or_valid_fix() -> None:
+def test_unknown_name_without_suggestion_preserves_other_valid_capabilities() -> None:
     with pytest.raises(refusals.Refusal) as caught:
         resolve_request(
             stack_id="qwen-1.7b",
@@ -90,7 +90,8 @@ def test_unknown_name_without_a_suggestion_gets_a_runnable_floors_or_valid_fix()
             wants="vad,banana",
         )
     assert "banana" not in caught.value.payload["fix"]
-    assert caught.value.payload["fix"].endswith("--want vad")
+    assert "set --want to 'vad'" in caught.value.payload["fix"]
+    assert "repeat the original command" in caught.value.payload["fix"]
 
 
 def test_invalid_pin_value_fix_adds_the_capability_the_pin_needs() -> None:
@@ -102,7 +103,9 @@ def test_invalid_pin_value_fix_adds_the_capability_the_pin_needs() -> None:
             vad="silero",
         )
     assert caught.value.payload["code"] == "option_value_unsupported"
-    assert caught.value.payload["fix"].endswith("--want vad --vad silero-vad")
+    assert "set --vad to 'silero-vad'" in caught.value.payload["fix"]
+    assert "set --want to 'vad'" in caught.value.payload["fix"]
+    assert "repeat the original command" in caught.value.payload["fix"]
 
 
 def test_unsupported_reason_and_fix_come_from_the_selected_table_cell(monkeypatch) -> None:
@@ -130,10 +133,7 @@ def test_empty_unsatisfiable_alternative_fails_as_table_drift(monkeypatch) -> No
     monkeypatch.setattr(stacks, "allowed_stacks", lambda capability: [])
     with pytest.raises(stacks.StackTableError, match="has no alternative"):
         refusals.capability_unsatisfiable_on_stack(
-            stacks.get_stack("qwen-1.7b"),
-            "meeting.m4a",
-            "segment_timestamps",
-            ("segment_timestamps",),
+            stacks.get_stack("qwen-1.7b"), "segment_timestamps"
         )
 
 
@@ -251,7 +251,6 @@ EXPECTED_KEYS = {
 
 def all_refusal_examples() -> list[refusals.Refusal]:
     qwen = stacks.get_stack("qwen-1.7b")
-    vibe = stacks.get_stack("vibevoice")
     coverage = {
         "scope_intervals": [[0.0, 2.0]],
         "covered_through_seconds": 1.0,
@@ -262,46 +261,21 @@ def all_refusal_examples() -> list[refusals.Refusal]:
         "units_completed": 1,
     }
     return [
-        refusals.stack_required("meeting.m4a", ("diarization",)),
-        refusals.input_required("qwen-1.7b", ("diarization",)),
-        refusals.capability_unknown(
-            qwen, "meeting.m4a", "word_timing", ("word_timing",), "word_timestamps"
-        ),
-        refusals.option_unsupported_on_stack(
-            vibe, "demo.mp4", "--language", "Cantonese", ("verbatim",)
-        ),
+        refusals.stack_required(),
+        refusals.input_required(),
+        refusals.capability_unknown(qwen, "word_timing", ("word_timing",), "word_timestamps"),
+        refusals.option_unsupported_on_stack("--language", "Cantonese"),
         refusals.option_value_unsupported(
-            qwen,
-            "meeting.m4a",
-            "--language",
-            "EN",
-            stacks.language_vocabulary("qwen"),
-            (),
-            "English",
+            "--language", "EN", stacks.language_vocabulary("qwen"), (), "English"
         ),
-        refusals.capability_unsatisfiable_on_stack(
-            qwen, "meeting.m4a", "segment_timestamps", ("segment_timestamps",)
-        ),
+        refusals.capability_unsatisfiable_on_stack(qwen, "segment_timestamps"),
         refusals.capability_unsupported(
             "token_lid",
             "no_backend_declares",
             "no stack or add-on satisfies this; use region-level lid instead",
         ),
-        refusals.pin_conflicts_with_native_capability(
-            vibe,
-            "demo.mp4",
-            "--diarizer",
-            "fluidaudio",
-            "diarization",
-            ("diarization",),
-        ),
-        refusals.range_invalid(
-            "meeting.m4a",
-            "qwen-1.7b",
-            ("diarization",),
-            "bad",
-            "--range must be START: or START:END",
-        ),
+        refusals.pin_conflicts_with_native_capability("--diarizer", "fluidaudio", "diarization"),
+        refusals.range_invalid("bad", "--range must be START: or START:END"),
         refusals.output_exists(
             "meeting.m4a",
             "qwen-1.7b",
@@ -320,7 +294,6 @@ def all_refusal_examples() -> list[refusals.Refusal]:
             "meeting.json", "srt", (), "qwen-1.7b", ("verbatim",)
         ),
         refusals.packages_not_provisioned(
-            "qwen-1.7b",
             (
                 {
                     "package": "qwen3-asr-1.7b-8bit",

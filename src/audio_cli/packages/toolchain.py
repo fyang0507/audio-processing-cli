@@ -8,7 +8,9 @@ import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import paths
 from ..environments import Environment
+from ..media import bound_directory, run_in_directory
 from .integrity import sha256_file
 from .models import CheckoutState, ProvisioningError
 from .requirements import _distribution_name
@@ -26,8 +28,10 @@ class Toolchain:
         return shutil.which(tool)
 
     def run(
-        self, args: list[str], *, cwd: Path | None = None, timeout: int = 3600
+        self, args: list[str], *, cwd: Path | int | None = None, timeout: int = 3600
     ) -> subprocess.CompletedProcess:
+        if isinstance(cwd, int):
+            return run_in_directory(args, cwd, timeout=timeout)
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
 
     def file_digest(self, path: Path) -> str:
@@ -140,14 +144,62 @@ class Toolchain:
                 f"could not install {checkout.name} into the environment: {result.stderr.strip()}",
             )
 
-    def clean_ignored_checkout(self, checkout: Path) -> None:
-        """Remove install-time ignored artifacts before the checkout becomes executable."""
-        result = self.run(["git", "clean", "-fdX"], cwd=checkout)
+    def clean_checkout_install_artifacts(self, checkout: Path) -> None:
+        """Remove install residue after the caller proved an empty untracked baseline.
+
+        Setuptools creates ordinary build/ and egg-info paths as well as ignored bytecode.
+        This is build-transaction cleanup, never a verification exemption or a repair of
+        an unverified checkout. A single -f deliberately leaves nested Git repositories
+        alone; the caller's post-install integrity check will refuse such residue.
+        """
+        try:
+            with bound_directory(checkout, root=paths.root(), create=False) as descriptor:
+                self.require_checkout_binding(checkout)
+                # The child starts in this held directory even if the checkout pathname
+                # is replaced before launch. Git's worktree and metadata are relative to
+                # that cwd; no cleanup argument can lead back through the replaced path.
+                result = self.run(
+                    ["git", "--git-dir=.git", "--work-tree=.", "clean", "-fdx"],
+                    cwd=descriptor,
+                )
+        except (OSError, ValueError) as exc:
+            raise ProvisioningError("checkout_cleanup_failed", str(exc)) from exc
         if result.returncode != 0:
             raise ProvisioningError(
                 "checkout_cleanup_failed",
-                f"could not remove ignored build artifacts from {checkout.name}: "
-                f"{result.stderr.strip()}",
+                f"could not remove install artifacts from {checkout.name}: {result.stderr.strip()}",
+            )
+
+    def require_checkout_binding(self, checkout: Path) -> None:
+        """Require Git's worktree and metadata to be this ordinary managed clone."""
+        try:
+            root = checkout.resolve(strict=True)
+            metadata = root / ".git"
+            if metadata.is_symlink() or not metadata.is_dir():
+                raise ValueError(f"checkout Git metadata is not a local directory: {metadata}")
+            for name in ("config", "index"):
+                if (metadata / name).is_symlink():
+                    raise ValueError(f"checkout Git metadata is redirected: {metadata / name}")
+            result = self.run(
+                [
+                    "git",
+                    "rev-parse",
+                    "--path-format=absolute",
+                    "--show-toplevel",
+                    "--absolute-git-dir",
+                    "--git-common-dir",
+                    "--git-path",
+                    "index",
+                ],
+                cwd=root,
+            )
+        except OSError as exc:
+            raise ValueError(f"could not bind checkout Git worktree: {exc}") from exc
+        expected = [str(root), str(metadata), str(metadata), str(metadata / "index")]
+        if result.returncode != 0 or result.stdout.splitlines() != expected:
+            raise ValueError(
+                f"checkout Git worktree or metadata is redirected: expected {expected!r}, "
+                f"observed {result.stdout.splitlines()!r}; {result.stderr.strip()}"
             )
 
     def inspect_checkout(self, checkout: Path) -> CheckoutState:
@@ -157,6 +209,8 @@ class Toolchain:
         second ``ls-files`` invocation is intentional.  A default ``git status`` would hide
         exactly the files this check exists to catch.
         """
+
+        self.require_checkout_binding(checkout)
 
         def git(*arguments: str) -> str:
             try:

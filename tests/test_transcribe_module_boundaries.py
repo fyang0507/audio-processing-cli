@@ -114,9 +114,9 @@ ROOT_MODULE_DEPENDENCIES = {
     "stacks": {"result.types"},
 }
 ROOT_EXTERNAL_DEPENDENCIES = {
-    "catalog": set(),
+    "catalog": {"command"},
     "native": set(),
-    "plan": set(),
+    "plan": {"command"},
     "sample": set(),
     "stacks": {"environments"},
 }

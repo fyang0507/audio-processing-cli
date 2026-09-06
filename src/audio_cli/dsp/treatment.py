@@ -44,9 +44,23 @@ def apply_channel_balance(
     gains_db = [-half, half]
     gains = np.power(10.0, np.asarray(gains_db, dtype=np.float64) / 20.0)
     output = audio * gains[None, :]
+    remaining = rms_dbfs(output[:, 0]) - rms_dbfs(output[:, 1])
+    unresolved = []
+    if abs(remaining) > profile.channel_no_op_db:
+        unresolved.append(
+            {
+                "component": "channel-level-difference",
+                "status": "bounded_outside_target",
+                "reason": "channel_correction_bound_reached",
+                "measured_difference_db": round(remaining, 3),
+                "target_maximum_absolute_db": profile.channel_no_op_db,
+                "measured_at": "after_channel_balance",
+            }
+        )
     return output.astype(np.float32), {
         "status": "applied",
         "reason": "correlated_channels_with_level_mismatch",
+        "component_evaluations": unresolved,
         "operations": [
             {
                 "type": "linked-channel-gain",

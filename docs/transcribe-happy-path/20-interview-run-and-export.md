@@ -184,3 +184,25 @@ Exit 0, `meeting.jsonl`:
 Cue bounds come from the first and last word of each segment, not from the segment — this
 stack has no `segment_timestamps` to use, which is exactly why `word_timestamps` was requested in
 step 1.2.
+
+### 1.6 Export readable timestamps
+
+```bash
+audio export --input meeting.timed.json --format md --timestamps
+```
+
+Exit 0, stdout:
+
+```markdown
+# Transcript
+
+[00:00:02.310 --> 00:00:04.710] [S1] 好，我們今天想聊一下你的工作。
+[00:00:05.120 --> 00:00:07.440] [S2] 嗯，好啊，我做咗五年設計。
+```
+
+Here each range comes from the first and last supplied word bounds. With native
+segment timing, the range instead uses that segment's `start`/`end`, including
+bounded non-speech events. `--format txt --timestamps` emits the same lines without
+the Markdown heading. Omitting `--timestamps` preserves the default canonical text
+export. One untimed segment refuses the entire timestamp request; export never
+turns a processing interval or source duration into speech timing.

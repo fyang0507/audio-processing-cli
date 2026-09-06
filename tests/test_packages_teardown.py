@@ -68,24 +68,27 @@ def test_teardown_never_deletes_a_sibling_of_the_models_directory(
 
 def test_want_is_refused_rather_than_accepted_and_ignored(capsys, monkeypatch) -> None:
     """`--want` reached no code that could honour it. TRANSCRIBE_HAPPY_PATH.md §4.6 on why."""
-    assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", "diarization"]) == 2
-    error = json.loads(capsys.readouterr().err)["error"]
-    assert error["code"] == "want_not_implemented"
-    assert error["field"] == "--want"
-    assert error["provided"] == "diarization"
-    assert error["fix"] == "audio packages pull --stack qwen-1.7b"
-    assert pkg.load_registry()["packages"] == {}, "the refused command provisioned something"
-
-    # Without --stack it is still the older refusal, whose fix no longer suggests --want either.
-    assert main(["packages", "pull", "--want", "diarization"]) == 2
-    error = json.loads(capsys.readouterr().err)["error"]
-    assert error["code"] == "stack_required"
-    assert "--want" not in error["fix"]
 
     def provisioner_must_not_start():
         raise AssertionError("a refused --want reached provisioning")
 
     monkeypatch.setattr("audio_cli.cli.Provisioner", provisioner_must_not_start)
+    assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "want_not_implemented"
+    assert error["field"] == "--want"
+    assert error["provided"] == "diarization"
+    assert "transcribe plan" in error["fix"]
+    assert "original --input" in error["fix"]
+    assert "plan next" in error["fix"]
+    assert pkg.load_registry()["packages"] == {}, "the refused command provisioned something"
+
+    # Without --stack the guidance also needs the original-input plan, before any pull.
+    assert main(["packages", "pull", "--want", "diarization"]) == 2
+    error = json.loads(capsys.readouterr().err)["error"]
+    assert error["code"] == "stack_required"
+    assert "transcribe plan" in error["fix"]
+    assert "plan next" in error["fix"]
     assert main(["packages", "pull", "--stack", "qwen-1.7b", "--want", ""]) == 2
     error = json.loads(capsys.readouterr().err)["error"]
     assert error["code"] == "want_not_implemented"

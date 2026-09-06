@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .. import paths
 from ..environments import Package, environments
-from . import materialization, registry
+from . import catalog, environment_verification, materialization, registry
 from .fetcher import Fetcher
 from .integrity import _now, sha256_file
 from .locations import (
@@ -13,6 +13,7 @@ from .locations import (
 )
 from .models import ProvisioningError
 from .reports import is_ready
+from .requirements import _environment_drift, _locked_versions, managed_checkout_requirements
 from .teardown import (
     _selection_bytes,
     _source_revisions,
@@ -21,7 +22,15 @@ from .teardown import (
 from .toolchain import Toolchain
 
 
-def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
+def ensure_environment(
+    toolchain: Toolchain,
+    name: str,
+    document: dict,
+    *,
+    repair_fix: str = "audio packages verify --repair",
+    repair: bool = False,
+    replacing_package: str | None = None,
+) -> bool:
     """Create an environment if it is not already `ready`. Returns whether it was created."""
     environment = environments()[name]
     if not environment.provisioned:
@@ -60,7 +69,44 @@ def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
     entry = document["environments"].get(name, {})
     lock_digest = sha256_file(environment.lock)
     if entry.get("state") == "ready" and entry.get("lock_sha256") == lock_digest:
-        return False
+        required = managed_checkout_requirements(document, name)
+        drift = _environment_drift(
+            _locked_versions(environment),
+            toolchain.frozen_packages(paths.env_python(name)),
+            required,
+        )
+        if not drift:
+            return False
+        if not repair:
+            _require_environment_installation(
+                toolchain,
+                name,
+                required,
+                fix=f"run audio packages verify --repair, then {repair_fix}",
+            )
+            return False
+        # Explicit pull repair replaces its selected checkout after environment sync.
+        # Downgrade it first so syncing never executes the very source being repaired.
+        # Other ready native installs retain their existing integrity-before-build gate.
+        previous = document["packages"].get(replacing_package)
+        if previous is not None:
+            previous["state"] = "pulling"
+            registry.save_registry(document)
+        _states, _probes, _invalid, failed = environment_verification.verify_environments(
+            toolchain, document, catalog.packages(), repair=True, environment_names={name}
+        )
+        if failed:
+            failure = failed[0]
+            raise ProvisioningError(
+                failure["code"],
+                failure["detail"],
+                environment=name,
+                fix=f"run audio packages verify --repair, then {repair_fix}",
+            )
+        # Dropping the selected package's missing direct install from the required
+        # set can resolve the discrepancy without a sync. Only an actual recreation
+        # replaces this environment entry; do not report an untouched one as created.
+        return document["environments"].get(name) is not entry
 
     # Intent first: a crash between here and the flip leaves a `creating` entry, which
     # reads as absent and as reclaimable rather than as a working environment.
@@ -74,9 +120,33 @@ def ensure_environment(toolchain: Toolchain, name: str, document: dict) -> bool:
     registry.save_registry(document)
 
     toolchain.create_environment(environment, target)
+    _require_environment_installation(toolchain, name, {}, fix=repair_fix)
     document["environments"][name]["state"] = "ready"
     registry.save_registry(document)
     return True
+
+
+def _require_environment_installation(
+    toolchain: Toolchain, name: str, required_checkouts: dict, *, fix: str
+) -> None:
+    environment = environments()[name]
+    if not environment.has_interpreter:
+        return
+    drift = _environment_drift(
+        _locked_versions(environment),
+        toolchain.frozen_packages(paths.env_python(name)),
+        required_checkouts,
+    )
+    if drift:
+        raise ProvisioningError(
+            "environment_drifted",
+            f"{len(drift)} package(s) differ from {environment.lock.name} or required checkout installs",
+            environment=name,
+            examples={
+                n: {"locked": drift[n][0], "installed": drift[n][1]} for n in sorted(drift)[:5]
+            },
+            fix=fix,
+        )
 
 
 # -- packages ----------------------------------------------------------------------
@@ -149,7 +219,15 @@ def pull(
             blocked.append((package, missing_tool))
             continue
 
-        if ensure_environment(toolchain, package.environment, document):
+        repair_fix = f"audio packages pull --repair {package.id}"
+        if ensure_environment(
+            toolchain,
+            package.environment,
+            document,
+            repair_fix=repair_fix,
+            repair=repair,
+            replacing_package=package.id,
+        ):
             created.append(package.environment)
 
         previous = document["packages"].get(package.id, {})
@@ -172,6 +250,12 @@ def pull(
         materialized = materialization.materialize(
             toolchain, fetcher, package, pre_existing, repair=repair
         )
+        required = managed_checkout_requirements(document, package.environment)
+        if package.checkout is not None:
+            required[package.checkout["distribution"]] = paths.checkout_dir(
+                package.environment, package.id
+            ).absolute()
+        _require_environment_installation(toolchain, package.environment, required, fix=repair_fix)
         entry["materialized"] = materialized
         entry["state"] = "ready"
         document["packages"][package.id] = entry
@@ -194,9 +278,14 @@ def pull(
                 receipt[key] = materialized[key]
         if materialized.get("hub_revisions_pre_existing"):
             receipt["hub_revisions_pre_existing"] = materialized["hub_revisions_pre_existing"]
+            count = len(pre_existing)
+            total = len(set(_source_revisions(package)))
             receipt["pre_existing_note"] = (
-                "already in the Hugging Face cache; not downloaded, and teardown here will "
-                "not delete it"
+                f"The listed {count} of {total} pinned revisions were recorded as pre-existing "
+                f"in the shared Hugging Face cache ({'all' if count == total else 'some'} "
+                "revisions). Teardown here will not delete those revisions. This records "
+                "ownership, not complete cache reuse: missing files may still be fetched, "
+                "and --repair requests a fresh download. Network bytes are not measured."
             )
         pulled.append(receipt)
 
@@ -226,7 +315,7 @@ def pull(
         )
 
     # A blocked package provisioned nothing, so it carries no license claim and no bytes.
-    # `pulled_known_bytes` says what this pull added, and a skipped package added none of it.
+    # This is ownership-scoped artifact size, not transfer accounting or added disk usage.
     blocked_ids = {package.id for package, _ in blocked}
     provisioned = [p for p in selection if p.id not in blocked_ids]
     unreviewed = sorted(p.id for p in provisioned if not p.license_reviewed)
@@ -258,6 +347,12 @@ def pull(
         # naming both `reclaimable` invited reading one as the other, and this figure
         # legitimately goes down between pulls.
         "pulled_known_bytes": known,
+        "pulled_known_bytes_note": (
+            "Known artifact sizes for packages materialized by this invocation, including "
+            "repairs: manifest-declared sizes for Hub revisions owned by this root, and "
+            "recorded local artifact sizes. Excludes pre-existing shared revisions, skipped "
+            "packages, and environment bytes. Not measured network bytes or added disk usage."
+        ),
         "unsized_packages": unsized,
         "warnings": warnings,
     }
@@ -284,6 +379,37 @@ def _pre_existing_revisions(package: Package, previous: dict, cached: set[str]) 
       in fact fetch. The first attempt's answer is the truthful one, so it is recorded in
       the `pulling` entry and reused.
     """
-    if "hub_revisions_pre_existing" in previous:
-        return set(previous["hub_revisions_pre_existing"])
-    return {revision for revision in _source_revisions(package) if revision in cached}
+    current = _hub_source_identities(package.source)
+    if "hub_revisions_pre_existing" not in previous:
+        return {revision for _repository, revision in current if revision in cached}
+    historical = _hub_source_identities(previous.get("source"))
+    retained = set(previous["hub_revisions_pre_existing"])
+    # A retry's ownership decision applies only to the source identity recorded on
+    # that attempt. A newly pinned repository/revision needs its own pre-download
+    # cache decision; inheriting the old pin's ownership can delete shared weights.
+    return {
+        revision
+        for repository, revision in current
+        if revision in (retained if (repository, revision) in historical else cached)
+    }
+
+
+def _hub_source_identities(source: object) -> set[tuple[str, str]]:
+    if not isinstance(source, dict):
+        return set()
+    repositories = (
+        source.get("repos", [])
+        if source.get("type") == "huggingface_multi"
+        else [source]
+        if source.get("type") == "huggingface"
+        else []
+    )
+    if not isinstance(repositories, list):
+        return set()
+    return {
+        (repository["repo"], repository["revision"])
+        for repository in repositories
+        if isinstance(repository, dict)
+        and isinstance(repository.get("repo"), str)
+        and isinstance(repository.get("revision"), str)
+    }

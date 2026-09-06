@@ -65,6 +65,23 @@ class TimingRequiredError(ExportError):
         super().__init__(f"{self.input_path} has no produced word timing for subtitle export")
 
 
+class ReadableTimingRequiredError(ExportError):
+    """A readable timestamp request contains a segment without real bounds."""
+
+    def __init__(self, input_path: Path, segment_id: str) -> None:
+        self.input_path = Path(input_path)
+        self.segment_id = segment_id
+        super().__init__(f"{self.input_path}: {segment_id} has no segment or word timing")
+
+
+class TimestampsUnsupportedError(ExportError):
+    """The readable timestamp option was supplied for another format."""
+
+    def __init__(self, output_format: str) -> None:
+        self.output_format = output_format
+        super().__init__(f"--timestamps requires txt or md, got {output_format!r}")
+
+
 class OutputExistsError(ExportError):
     """The destination already exists and replacement was not authorized."""
 

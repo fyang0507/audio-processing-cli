@@ -15,15 +15,19 @@ Never generalize from one file. Quiet external-speaker music is intentional in o
 bleed in the next, and only the person can say which. And never build a frequency correction from
 intent alone — a hum you were told about but did not measure is a hum you cannot scope.
 
-Work from the canonical original, and inspect it first so the scope you claim traces to measured
-facts. Then resolve without rendering and read the `adjustments` block back: placement, fade, and
-predicted regional measurements are all visible before anything is written.
+Work from the canonical original and inspect it so the scope traces to measured facts. If
+transcription is also requested or needed, retain its original-source result before enhancement.
+Then resolve without rendering and read the
+`adjustments` block back: placement, fade, and predicted regional measurements are visible before
+anything is written. Reuse the user's existing approval for a scoped correction; do not ask again
+or keep increasing it merely because every numeric preference was not reached.
 
 ## The file
 
 Exactly one top-level `adjustments` array. Each item holds exactly `type`, `gain_db`, and `scope`;
 each scope holds exactly `time` and `frequency`. Unknown keys are rejected rather than ignored, so
 do not add comments, labels, or ids of your own — the report assigns each adjustment a stable id.
+The numbers below are examples, not measurements or approved corrections for the current media.
 
 ```json
 {
@@ -65,7 +69,7 @@ have verified is silent, then confirm the resolved fade in the report.
 ## Rejection is structured, and nothing is repaired for you
 
 Scopes are treated as untrusted input and validated against the media's real duration before any
-model loads or anything renders. An invalid file exits **2**, prints one JSON error, and creates
+model loads or anything renders. An invalid file exits **2**, prints an `error` envelope on stderr, and creates
 neither media nor a report. Values are never clamped, `start` and `end` are never swapped, units are
 never reinterpreted, and an adjustment is never silently dropped — a wrong scope is worse than no
 adjustment, so the tool refuses instead of guessing.

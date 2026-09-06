@@ -231,3 +231,32 @@ def test_an_inside_placed_mask_ramps_within_the_interval() -> None:
     inside = smooth_time_mask(3 * SR, [(1.0, 2.0)], SR, FADE_MS, transition_placement="inside")
     assert inside[round(1.0 * SR)] < 0.05
     assert inside[round(1.5 * SR)] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_bounded_channel_correction_reports_the_measured_remaining_difference():
+    mono = _sine(16_000, 2, 440, 0.05)
+    audio = np.column_stack((mono, mono * 0.01))
+    profile = PROFILES["product-demo"]
+    analysis = analyze_signal(audio, 16_000, [SpeechRegion(0, 2, 0.9, 1)], profile)
+    output, stage = apply_channel_balance(audio, profile, analysis)
+    difference = dsp.rms_dbfs(output[:, 0]) - dsp.rms_dbfs(output[:, 1])
+    assert difference > profile.channel_no_op_db
+    assert stage["status"] == "applied"
+    component = stage["component_evaluations"][0]
+    assert component["status"] == "bounded_outside_target"
+    assert component["measured_difference_db"] == pytest.approx(difference, abs=0.001)
+
+
+def test_bounded_voice_correction_reports_the_stage_local_measurement():
+    mono = _sine(16_000, 2, 440, 0.00001)
+    audio = mono[:, None]
+    profile = PROFILES["product-demo"]
+    analysis = analyze_signal(audio, 16_000, [SpeechRegion(0, 2, 0.9, 1)], profile)
+    output, stage = apply_voice_enhancement(audio, 16_000, profile, analysis)
+    measured = dsp.rms_dbfs(output)
+    assert measured < profile.voice_target_rms_dbfs - 0.5
+    assert stage["status"] == "applied"
+    component = stage["component_evaluations"][0]
+    assert component["status"] == "bounded_outside_target"
+    assert component["measured_rms_dbfs"] == pytest.approx(measured, abs=0.001)
+    assert component["measured_at"] == "after_voice_enhance"

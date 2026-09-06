@@ -23,6 +23,7 @@ from ..profiles import PROFILES, Profile
 from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad
 from ..vad_contract import VadDetector
 from .models import PipelineError, PreparedRun
+from .outcomes import REGION_BASIS, actual_program
 from .reporting import _program_observation, _region_manifest, _round_loudness
 
 
@@ -107,7 +108,11 @@ def inspect_source(
         "source": media_summary(source, probe),
         "observations": observations,
         "regions": _region_manifest(analysis),
-        "measurements": {"program": _round_loudness(program)},
+        "region_basis": {**REGION_BASIS, "detection": "inspected_source"},
+        "measurements": {
+            "program": _round_loudness(program),
+            "program_actual": actual_program(program),
+        },
     }
     if profile is not None:
         payload["profile"] = profile.as_dict()

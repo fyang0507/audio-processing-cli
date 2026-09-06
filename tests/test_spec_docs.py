@@ -104,6 +104,17 @@ def test_most_fixes_are_runnable_commands() -> None:
             if isinstance(doc, dict) and "code" in doc and not doc["fix"].startswith("audio "):
                 sentence_fixes.add(doc["code"])
     assert sentence_fixes == {
+        "stack_required",
+        "capability_unknown",
+        "capability_unsatisfiable_on_stack",
+        "option_unsupported_on_stack",
+        "option_value_unsupported",
+        "pin_conflicts_with_native_capability",
+        "range_invalid",
+        "input_required",
+        "want_not_implemented",
+        "timing_required_for_timestamps",
+        "timestamps_unsupported_for_format",
         "capability_unsupported",
         "backend_failed",
         "output_is_canonical_input",

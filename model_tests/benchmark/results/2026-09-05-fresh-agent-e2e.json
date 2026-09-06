@@ -1,0 +1,136 @@
+{
+  "date": "2026-09-05",
+  "topic": "fresh-agent CLI-only end-to-end acceptance",
+  "commit": "3a4fa161b2ddf77c794cb5882644497c6fe583b8",
+  "branch": "codex/decompose-large-files",
+  "raw_artifacts": "model_tests/benchmark_runs/e2e-agent-acceptance-2026-09-05-174431",
+  "configuration": {
+    "agents": 3,
+    "fork_context": false,
+    "guidance": "audio-cli skill and references plus live CLI help/output only",
+    "audio_operations": "audio CLI only; no source fixes or alternate audio tools",
+    "model_inference_serialized": true,
+    "host_architecture": "arm64",
+    "host_memory_bytes": 68719476736
+  },
+  "test_execution": "complete",
+  "full_request_acceptance": "FAIL",
+  "cases": [
+    {
+      "input": "test-sample-multispeaker.m4a",
+      "acceptance": "FAIL",
+      "delivery": "partial",
+      "stacks": [
+        "firered",
+        "vibevoice"
+      ],
+      "want": [
+        "diarization",
+        "verbatim",
+        "segment_timestamps"
+      ],
+      "firered": {
+        "status": "BLOCKED_BY_CLI",
+        "code": "package_integrity_failed",
+        "pull_exit": 0,
+        "verify_exit": 3,
+        "repair_exit": 0,
+        "verify_after_repair_exit": 3,
+        "identical_failure_after_repair": true,
+        "transcript_produced": false,
+        "evidence": "01-multispeaker/logs/024-verify-after-firered-repair.stdout"
+      },
+      "vibevoice": {
+        "status": "PASS_ARTIFACT_DELIVERY",
+        "run_exit": 0,
+        "complete": true,
+        "source_duration_seconds": 139.284,
+        "segments": 20,
+        "turns": 17,
+        "anonymous_speakers": [
+          "0",
+          "1"
+        ],
+        "command_wall_seconds": 70.41336854198016,
+        "artifact": "01-multispeaker/vibevoice.canonical.json",
+        "readable": "01-multispeaker/vibevoice.transcript.md"
+      }
+    },
+    {
+      "input": "demo-video-audio-to-improve.mp4",
+      "acceptance": "FAIL",
+      "delivery": "partial",
+      "profile": "product-demo",
+      "profile_version": "4",
+      "custom_adjustments": [],
+      "render_exit": 0,
+      "artifact": "02-demo-enhancement/demo-enhanced.mp4",
+      "report": "02-demo-enhancement/demo-enhanced.mp4.report.json",
+      "actual_lufs_before": -37.22,
+      "actual_lufs_after": -16.43,
+      "actual_true_peak_dbtp_after": -1.77,
+      "peak_validation": "pass",
+      "duration_delta_ms": -0.333,
+      "filler_removal": "unsupported",
+      "broadband_denoise": "abstained: input_speech_too_quiet_for_reliable_noise_estimate",
+      "relative_balance_regions_in_target": 8,
+      "relative_balance_regions_total": 9,
+      "remaining_region_relative_db": -4.751,
+      "lra_lu_after": 17.5,
+      "lra_target_lu": 11.0,
+      "lra_control": "abstained"
+    },
+    {
+      "input": "autio-test-sample.m4a",
+      "acceptance": "FAIL",
+      "delivery": "partial",
+      "stack": "qwen-1.7b",
+      "want": [],
+      "transcription_exit": 0,
+      "complete": true,
+      "source_decoded_duration_seconds": 27.753312,
+      "segments": 4,
+      "canonical": "03-mixed-language/canonical-transcript.json",
+      "readable": "03-mixed-language/canonical-transcript.txt",
+      "verbatim_fidelity": "not requested or established",
+      "profile": "product-demo",
+      "profile_version": "4",
+      "custom_adjustments": [],
+      "render_exit": 0,
+      "artifact": "03-mixed-language/enhanced-audio.wav",
+      "report": "03-mixed-language/enhanced-audio.wav.report.json",
+      "actual_lufs_before": -37.32,
+      "actual_lufs_after": -16.17,
+      "actual_true_peak_dbtp_after": -2.49,
+      "peak_validation": "pass",
+      "duration_delta_ms": -44.0,
+      "environment_operation": "75 Hz high-pass over speech regions",
+      "broadband_denoise": "abstained: conservative_v1_has_no_reliable_stationary_noise_profile",
+      "filler_removal": "unsupported",
+      "fresh_output_inspection_residual": {
+        "start_seconds": 9.16,
+        "end_seconds": 9.34,
+        "relative_db": 1.468,
+        "status": "outside_target; original overlapping interval labelled speech; correction scope unresolved",
+        "evidence": "03-mixed-language/enhanced-inspection.json"
+      }
+    }
+  ],
+  "original_source_hashes": {
+    "test-sample-multispeaker.m4a": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+    "demo-video-audio-to-improve.mp4": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+    "autio-test-sample.m4a": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834"
+  },
+  "original_sources_unchanged": true,
+  "accuracy": "not assessed; unedited CLI transcripts supplied for user review",
+  "perceptual_quality": "not assessed; CLI measurements and partial renders supplied for user review",
+  "important_feedback": [
+    "FireRed prescribed repair returns success without resolving its verification failure.",
+    "PATH audio differs from checkout uv run audio; skill and fixes should preserve chosen invocation.",
+    "Skill failure-channel rule disagrees with packages verify stdout failed array.",
+    "Filler editing is unsupported and must be explicit in the skill.",
+    "Applied stages can contain abstained components or unmet targets; final measured fields are easy to misread.",
+    "Canonical saved text does not establish verbatim fidelity; the agent selected default Qwen text in case 3.",
+    "Fresh post-enhancement detection may disagree with original-region verification; preserve scope and unresolved evidence."
+  ]
+}

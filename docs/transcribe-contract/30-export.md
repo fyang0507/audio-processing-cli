@@ -9,6 +9,7 @@ audio export --input meeting.timed.json --format vtt -o meeting.vtt
 audio export --input meeting.transcript.json --format md
 audio export --input meeting.transcript.json --format txt
 audio export --input meeting.transcript.json --format jsonl
+audio export --input meeting.timed.json --format md --timestamps
 ```
 
 Subtitle formats require word timing and refuse without it.
@@ -97,6 +98,66 @@ start time — the same segment objects the JSON result carries, without the env
 or the provenance — so a consumer can stream or `grep` a long transcript without
 parsing the whole document. It has no timing requirement, and because it drops the
 provenance it is an export for reading, not an artifact to audit against.
+
+`--timestamps` explicitly adds a source-relative range before each TXT or Markdown
+segment, for example `[00:00:02.310 --> 00:00:04.710] [S1] Hello.`. It uses the
+segment's supplied native `start`/`end` when present; otherwise it uses the first
+and last real word bounds. Ranges round to milliseconds for display, without
+extending them, filling gaps, cutting text, or changing the saved result. Sentence
+text, punctuation, speaker absence, and bounded event tags stay intact. Default
+TXT/Markdown content and export summaries are unchanged. These coarse readable
+ranges do not change the word-timing requirement for subtitles.
+
+Before falling back to word bounds, export checks that the complete word stream
+reproduces the segment's lexical text under the punctuation invariant: casing,
+punctuation and whitespace may differ; missing, extra or reordered lexical text
+may not. A word containing only punctuation cannot supply timing. A contradictory
+word fallback refuses with `export_input_invalid`, while default text remains
+exportable. Native segment bounds remain independent of that word-stream check.
+Supplied bounds that overflow millisecond conversion also refuse with
+`export_input_invalid` before publication, rather than emitting a traceback.
+
+Every segment must have supplied timing. A bounded VibeVoice segment can be shown
+even if its requested word alignment abstained. An untimed Qwen segment cannot
+borrow bounds from a diarizer turn, processing chunk, requested range, coverage,
+or source duration. If any segment lacks both native segment bounds and a nonempty
+word stream, the whole export refuses with exit 2 before writing output; it never
+drops untimed text. An empty transcript stays empty (Markdown retains its heading).
+For example, `audio export --input meeting.transcript.json --format md --timestamps`
+on an untimed segment returns this stderr:
+
+```json
+{
+  "code": "timing_required_for_timestamps",
+  "field": "--timestamps",
+  "provided": true,
+  "input": "meeting.transcript.json",
+  "segment_id": "seg_0",
+  "requires_any_capability": ["segment_timestamps", "word_timestamps"],
+  "note": "every segment needs supplied bounds; processing intervals are never substituted",
+  "fix": "remove --timestamps to preserve untimed text, or transcribe the original source with segment_timestamps on a native stack or word_timestamps"
+}
+```
+
+With SRT, VTT, or JSONL, `--timestamps` refuses with exit 2 and code
+`timestamps_unsupported_for_format`: remove the option or select TXT/Markdown.
+
+```bash
+audio export --input meeting.transcript.json --format jsonl --timestamps
+```
+
+Exit 2, stderr:
+
+```json
+{
+  "code": "timestamps_unsupported_for_format",
+  "field": "--timestamps",
+  "provided": true,
+  "format": "jsonl",
+  "allowed_formats": ["txt", "md"],
+  "fix": "use --timestamps with --format txt or md, or remove --timestamps"
+}
+```
 
 VTT carries speaker labels as voice tags when `diarization` is present,
 which is a commitment to VTT as a real format rather than SRT with dots. V1 ships a

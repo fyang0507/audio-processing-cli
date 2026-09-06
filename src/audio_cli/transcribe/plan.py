@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from audio_cli.command import packages_pull_command
+
 from .sample import build_sample_output
 
 
@@ -43,6 +45,9 @@ def serialize_plan(plan: Plan) -> dict[str, Any]:
         abstention_reason=plan.sample_abstention_reason,
     )
     payload = {**core, "sample_output": sample}
+    missing = [item["package"] for item in plan.packages if not item["provisioned"]]
+    if missing:
+        payload["next"] = packages_pull_command(missing)
     # The stack table is checked at load time, but this final round trip also prevents a future
     # template from smuggling a non-JSON type into stdout.
     return json.loads(json.dumps(payload, ensure_ascii=False, allow_nan=False))

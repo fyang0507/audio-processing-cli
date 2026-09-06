@@ -75,6 +75,7 @@ audio transcribe plan --input field.wav --stack firered \
   "total_known_download_bytes": 9583893873,
   "unsized_packages": [],
   "warnings": [],
+  "next": "audio packages pull firered-asr2s",
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",

@@ -20,6 +20,12 @@ def test_want_arguments_in_examples_use_real_capability_names() -> None:
     intentionally_invalid = {"word_timing"}  # the capability_unknown demonstration
     for path in SPEC_DOCS:
         for line in read_spec_document(path).splitlines():
+            # A prose description of --want is not an executable argument example.
+            if not (
+                line.lstrip().startswith(("audio ", "--want "))
+                or re.search(r'"(?:fix|next)":\s*"audio ', line)
+            ):
+                continue
             match = re.search(r"--want ([a-z_][a-z_,]*)", line)
             if not match:
                 continue  # `--want <capabilities>` placeholders carry no names to check
@@ -65,7 +71,5 @@ def test_repository_and_shipped_skill_describe_the_current_run_surface() -> None
     assert "transcribe through four explicit stacks" in repository_text
     assert "`transcribe run`, and `export` ship" in repository_text
 
-    transcribe_text = SHIPPED_SKILL_GUIDANCE[-1].read_text()
-    for stack in ("`qwen-1.7b`", "`qwen-0.6b`", "`firered`", "`vibevoice`"):
-        assert stack in transcribe_text
-    assert "`audio export` can merge" in transcribe_text
+    # The skill routes to live help/capabilities instead of duplicating stack catalogs.
+    # Fresh-context acceptance evaluates its guidance; literal backend lists are not required.

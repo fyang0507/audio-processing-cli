@@ -58,26 +58,20 @@ def resolve_request(
     """Reject the complete request before any registry or provisioning check."""
     requested = parse_wants(wants)
     if stack_id is None or stack_id not in stacks.stack_definitions():
-        raise refusals.stack_required(input_path, requested)
+        raise refusals.stack_required()
     definition = stacks.get_stack(stack_id)
     if input_path is None:
-        raise refusals.input_required(stack_id, requested)
+        raise refusals.input_required()
 
     for capability in requested:
         if capability not in stacks.capability_order():
             raise refusals.capability_unknown(
-                definition,
-                input_path,
-                capability,
-                requested,
-                _suggest(capability, stacks.capability_order()),
+                definition, capability, requested, _suggest(capability, stacks.capability_order())
             )
     for capability in requested:
         resolution = definition.capabilities[capability]["resolution"]
         if resolution == "unsatisfiable_on_stack":
-            raise refusals.capability_unsatisfiable_on_stack(
-                definition, input_path, capability, requested
-            )
+            raise refusals.capability_unsatisfiable_on_stack(definition, capability)
         if resolution == "unsupported":
             cell = definition.capabilities[capability]
             raise refusals.capability_unsupported(capability, cell["reason"], cell["refusal_fix"])
@@ -85,46 +79,28 @@ def resolve_request(
     canonical_language = language
     if language is not None:
         if definition.language_vocabulary is None:
-            raise refusals.option_unsupported_on_stack(
-                definition, input_path, "--language", language, requested
-            )
+            raise refusals.option_unsupported_on_stack("--language", language)
         allowed = stacks.language_vocabulary(definition.language_vocabulary)
         by_fold = {value.casefold(): value for value in allowed}
         canonical_language = by_fold.get(language.casefold())
         if canonical_language is None:
             raise refusals.option_value_unsupported(
-                definition,
-                input_path,
-                "--language",
-                language,
-                allowed,
-                requested,
-                _suggest(language, allowed, cutoff=0.4),
+                "--language", language, allowed, requested, _suggest(language, allowed, cutoff=0.4)
             )
 
     if vad is not None:
         if vad not in _PIN_VALUES["--vad"]:
             fixed_wants = requested if "vad" in requested else (*requested, "vad")
             raise refusals.option_value_unsupported(
-                definition,
-                input_path,
-                "--vad",
-                vad,
-                _PIN_VALUES["--vad"],
-                fixed_wants,
-                _suggest(vad, _PIN_VALUES["--vad"]),
+                "--vad", vad, _PIN_VALUES["--vad"], fixed_wants, _suggest(vad, _PIN_VALUES["--vad"])
             )
         if "vad" not in requested:
-            raise refusals.pin_conflicts_with_native_capability(
-                definition, input_path, "--vad", vad, "vad", requested
-            )
+            raise refusals.pin_conflicts_with_native_capability("--vad", vad, "vad")
 
     if diarizer is not None:
         if diarizer not in _PIN_VALUES["--diarizer"]:
             fixed_wants = requested if "diarization" in requested else (*requested, "diarization")
             raise refusals.option_value_unsupported(
-                definition,
-                input_path,
                 "--diarizer",
                 diarizer,
                 _PIN_VALUES["--diarizer"],
@@ -138,12 +114,7 @@ def resolve_request(
         )
         if not has_diarizer_role:
             raise refusals.pin_conflicts_with_native_capability(
-                definition,
-                input_path,
-                "--diarizer",
-                diarizer,
-                "diarization",
-                requested,
+                "--diarizer", diarizer, "diarization"
             )
 
     return ResolvedRequest(

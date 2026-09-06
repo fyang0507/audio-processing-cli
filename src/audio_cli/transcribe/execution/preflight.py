@@ -55,7 +55,7 @@ def preflight(
     if missing:
         known = sum(int(item["bytes"] or 0) for item in missing)
         unsized = [str(item["package"]) for item in missing if item["bytes"] is None]
-        raise refusals.packages_not_provisioned(plan.stack, missing, known, unsized)
+        raise refusals.packages_not_provisioned(missing, known, unsized)
 
     failures = []
     catalog = package_catalog()

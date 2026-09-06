@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
-import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from audio_cli.command import transcribe_plan_command
 
 from . import stacks
 
@@ -142,9 +143,5 @@ def build_catalog(
             ),
         },
         "capabilities": capabilities,
-        "next": (
-            f"audio transcribe plan --input {shlex.quote(metadata.path)} "
-            f"--stack {definition.id} "
-            "--want <capabilities>"
-        ),
+        "next": transcribe_plan_command(metadata.path, definition.id),
     }

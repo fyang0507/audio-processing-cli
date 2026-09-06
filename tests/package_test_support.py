@@ -140,7 +140,11 @@ class FakeToolchain(pkg.Toolchain):
     def create_environment(self, environment, target: Path) -> None:
         self.created.append(environment.name)
         (target / "bin").mkdir(parents=True, exist_ok=True)
-        (target / "bin" / "python").write_text("#!/bin/sh\n")
+        interpreter = target / "bin" / "python"
+        assert not interpreter.is_symlink(), (
+            "fake environment must not overwrite a real interpreter"
+        )
+        interpreter.write_text("#!/bin/sh\n")
         # Re-syncing from the lock is what removes drift, so this is where it goes.
         self._synced.add(environment.name)
         self._direct_installs[environment.name] = {}
@@ -222,6 +226,11 @@ class FakeToolchain(pkg.Toolchain):
             modified=modified,
             untracked=tuple(sorted(files - set(tracked))),
         )
+
+    def require_checkout_binding(self, checkout: Path) -> None:
+        # This double's clone inventory represents its Git metadata; real-Git tests
+        # override this method and exercise the production binding probe.
+        assert checkout in self._checkout_tracked
 
     def swift_build(self, checkout: Path) -> None:
         product = env.packages()[checkout.name].source["product"]

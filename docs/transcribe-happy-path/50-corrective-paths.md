@@ -1,12 +1,12 @@
 
 ## 4. Paths that correct themselves
 
-Every refusal carries a `fix`, and `fix` is a runnable command wherever a configuration
-exists that would work. That is the point: an agent that misconfigures a request should be
-able to copy one line and be right on the next attempt, without reading this document. The
-seven request errors below are the ones where self-correction is the whole story; the
-remaining five are in [TRANSCRIBE_CONTRACT.md](../../TRANSCRIBE_CONTRACT.md) §5 and summarised at
-the end.
+Every refusal carries a `fix`. Package and output remedies are runnable where the CLI knows a
+complete corrective invocation. Request-field errors instead identify only the field edits and
+ask the caller to repeat its original command, preserving all other arguments. This retains
+`run` versus `plan`, language and backend pins, the selected source range, output format,
+destination, and replacement policy. An error never silently broadens a ranged run to the whole
+recording. A sentence fix is guidance to apply, not shell text to execute.
 
 ### 4.1 No stack
 
@@ -27,15 +27,13 @@ Exit 2:
     "vibevoice": "native speakers and segment bounds, highest memory, prefix-only recovery after generation truncation",
     "firered": "native word timing, speech regions and region language; no speakers"
   },
-  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want diarization"
+  "fix": "choose --stack from allowed and repeat the original command with its other arguments"
 }
 ```
 
-The `fix` names one stack rather than listing four again, because a fix a caller has to
-choose between is not a fix. `stacks` is there so the choice can be revisited deliberately,
-and the one-liners say what each stack costs as well as what it gives — including that
-`vibevoice` can salvage only a complete decoded prefix after generation truncation, while a
-model-load failure still leaves nothing.
+The missing stack is a user choice. `fix` asks the caller to select from `allowed` and repeat
+its original command, preserving its input, capabilities, language, range, and output options.
+`stacks` explains each choice; no default stack or invented media path is inserted.
 
 ### 4.2 No input
 
@@ -50,7 +48,7 @@ Exit 2:
   "code": "input_required",
   "field": "--input",
   "note": "a stack alone cannot be planned: how the audio is partitioned, how many units that is, what the run will cost, and whether a failure leaves anything usable are all properties of this file",
-  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want diarization"
+  "fix": "provide --input with the original media path and repeat the original command"
 }
 ```
 
@@ -73,7 +71,7 @@ Exit 2:
     "requires_add_on": ["diarization", "overlapped_speech", "vad", "word_timestamps"],
     "impossible": ["segment_timestamps", "lid", "token_lid"]
   },
-  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timestamps"
+  "fix": "set --want to 'word_timestamps'; repeat the original command, preserving every other argument"
 }
 ```
 
@@ -101,7 +99,7 @@ Exit 2:
     "requires_add_on": ["diarization", "overlapped_speech", "vad", "word_timestamps"],
     "impossible": ["segment_timestamps", "lid", "token_lid"]
   },
-  "fix": "audio transcribe plan --input meeting.m4a --stack firered --want segment_timestamps"
+  "fix": "use --stack 'firered' to request this capability; repeat the original command, preserving every other argument"
 }
 ```
 
@@ -130,8 +128,8 @@ Exit 2:
 }
 ```
 
-This is the one case where `fix` is a sentence rather than a command, because there is no
-command. Emitting a plausible-looking one would be worse than admitting it: an agent that
+This remedy explains an unavailable capability rather than suggesting a field correction.
+No command satisfies it: an agent that
 retries a suggested fix and fails again learns nothing, while an agent told "nothing does
 this, here is the nearest thing that does" can decide whether region-level labels are enough.
 
@@ -150,7 +148,7 @@ Exit 2:
   "provided": "Cantonese",
   "allowed": [],
   "stacks_accepting": ["qwen-1.7b", "qwen-0.6b"],
-  "fix": "audio transcribe plan --input demo.mp4 --stack vibevoice --want verbatim"
+  "fix": "remove --language and its value; repeat the original command, preserving every other argument"
 }
 ```
 
@@ -174,7 +172,7 @@ Exit 2:
   "provided": "EN",
   "allowed": ["Chinese", "English", "Cantonese", "Arabic", "German", "French", "Spanish", "Portuguese", "Indonesian", "Italian", "Korean", "Russian", "Thai", "Vietnamese", "Japanese", "Turkish", "Hindi", "Malay", "Dutch", "Swedish", "Danish", "Finnish", "Polish", "Czech", "Filipino", "Persian", "Greek", "Romanian", "Hungarian", "Macedonian"],
   "did_you_mean": "English",
-  "fix": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --language English"
+  "fix": "set --language to 'English'; repeat the original command, preserving every other argument"
 }
 ```
 
@@ -198,7 +196,7 @@ Exit 2:
   "provided": "fluidaudio",
   "allowed": [],
   "capability": "diarization",
-  "fix": "audio transcribe plan --input demo.mp4 --stack vibevoice --want diarization"
+  "fix": "remove --diarizer and its value; repeat the original command, preserving every other argument"
 }
 ```
 
@@ -295,7 +293,7 @@ VibeVoice documents separately, or rerun the desired ranges together as one gene
 
 | Code | Exit | Trigger | What `fix` says |
 | --- | --- | --- | --- |
-| `packages_not_provisioned` | 3 | `run` before `pull` | The `audio packages pull --stack` line for this stack — every package it can use, since narrowing a pull to a want set is reserved for the planner |
+| `packages_not_provisioned` | 3 | `run` before `pull` | A runnable `audio packages pull` naming exactly the missing package ids resolved by the plan |
 | `package_integrity_failed` | 3 | a digest/revision/Hub cache identity/allowlist/recorded-size mismatch; a URL artifact that is not the contained non-symlink manifest file; a nonlaunching interpreter or redirected managed environment root; or a live source checkout whose HEAD, tracked-name set, manifest hashes, receipt shape/hashes, or ordinary/ignored untracked files differ | `audio packages pull --repair <package>`; for a redirected environment, first replace the path named by `actual` |
 | `timing_required_for_format` | 2 | subtitle export with no recorded word timing and a safe absolute source identity | The `transcribe run` line that would produce timing, with `word_timestamps` added |
 | `timing_required_for_format` | 2 | `word_timestamps` is already `produced`, but no segment contains usable timed words | A sentence choosing `md`/`txt`/`jsonl` or a different transcript with real timed words; rerunning the same request would be inert |
@@ -303,7 +301,8 @@ VibeVoice documents separately, or rerun the desired ranges together as one gene
 | `run_incomplete` | 4 | budget exhausted, or a stage died part-way on a partitioned stack | The `--range <watermark>:` line that transcribes only what is missing; a sentence instead when zero units completed and no range can make progress |
 | `backend_failed` | 1 | a crash, most often out of memory | A suggestion — a smaller stack, or freeing memory — and it is a suggestion, not a guarantee |
 
-The sentence remedies are the honest exceptions. Output safety and export validation require the
+The sentence remedies are the honest exceptions. Request-field corrections preserve the complete original invocation rather than replacing it
+with a partial plan command. Output safety and export validation require the
 caller to choose a destination, remove an inert flag, repair a transcript, or separate incompatible
 inputs; the CLI cannot invent those decisions. Replaying an already-produced timing outcome cannot
 create words it did not contain; a legacy relative or vanished `source.path` cannot safely identify

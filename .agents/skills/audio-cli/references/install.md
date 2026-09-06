@@ -1,56 +1,33 @@
-# Installing the command
+# Selecting or installing the command
 
-Read this only when `command -v audio` finds nothing, or the command will not start. Inside a
-checkout of this repository, `uv run audio ...` from the root works without installing anything, so
-try that first before installing on someone's machine.
+Read this when the selected command is missing or cannot start. When using or testing a checkout,
+select `uv run audio` from that root even if another `audio` is on PATH. Verify its source identity
+as described in [SKILL.md](../SKILL.md). Missing commands in an older PATH tool do not require
+changing that installation to work in a checkout.
 
-## What the machine has to supply
+## Host dependencies
 
-FFmpeg and FFprobe do the decoding, encoding, and measurement. They are machine tools, not Python
-packages, so no installation of this CLI provides them:
+FFmpeg and FFprobe provide decoding, encoding, and measurement; installing the CLI does not provide
+these machine tools. Check them with `command -v ffmpeg` and `command -v ffprobe`.
+Installation needs `uv`; if it is absent, follow its official installation instructions.
 
-```bash
-command -v ffmpeg
-command -v ffprobe
-```
+## Install when requested or needed outside a checkout
 
-Installing needs `uv`. If it is absent, follow the official `uv` installation instructions rather
-than inventing an installer command.
-
-## Install
+Choose the source appropriate to the task:
 
 ```bash
 uv tool install .                                                          # from a checkout
 uv tool install "git+https://github.com/fyang0507/audio-processing-cli.git"  # without one
 ```
 
-`uv tool install` puts the command in an isolated environment of its own, which is why it is
-preferred over installing into whatever environment happens to be active. The executable normally
-lands in `~/.local/bin`; if that is not on `PATH`, run `uv tool update-shell` once and open a new
-shell.
+This creates an isolated tool environment. The executable normally lands in `~/.local/bin`;
+if it is not on PATH, `uv tool update-shell` and a new shell make it discoverable.
 
-## Verify
+Verify from outside the repository with `command -v audio` and the resolved executable's `--help`.
+Then use its `doctor` to inspect host dependencies and provisioning state. This distinguishes a
+command that starts from a machine ready for the selected task.
 
-Check from outside the repository, and confirm the command resolves through the user tool directory
-rather than a project `.venv`:
-
-```bash
-command -v audio
-audio doctor
-```
-
-`doctor` is the real verification: it reports everything the installation does *not* own — FFmpeg,
-FFprobe, the toolchains, memory, disk, and the provisioning root — so it tells you whether the
-machine can actually do the work, not merely whether the command starts.
-
-## Update or remove
-
-```bash
-uv tool install --force --reinstall .        # after changing a checkout
-uv tool uninstall audio-processing-cli
-```
-
-Use `--reinstall` when a checkout changed without its version changing, or the cached build gets
-reused and the changes never land. Reclaim provisioned models *before* uninstalling — see
-[model-packages.md](model-packages.md) — because the provisioning root does not go away with the
-command.
+Keep checkout work on its selected launcher. Updating or removing an installed PATH tool is a
+separate task; a command mismatch or model failure is not authorization for it. If removal is
+requested, reclaim only the intended provisioned models first — see
+[model-packages.md](model-packages.md) — because their root survives uninstalling the command.

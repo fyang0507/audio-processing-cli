@@ -9,8 +9,10 @@ audio transcribe run --input meeting.m4a --want diarization
 ```
 
 Exit 2, `code: "stack_required"`, `field: "--stack"`, `allowed` listing the four
-stack ids, and `stacks` mapping each to a one-line characterization plus a pointer to
-the decision report.
+stack ids, and `stacks` mapping each to a one-line characterization. `fix` asks the caller to
+choose the stack and repeat the original command; it does not insert a default stack or change
+`run` to `plan`. Missing-input guidance likewise names the missing original media path without
+inventing a filename. These semantic refusals remain bare JSON on stderr for all three commands.
 
 ```bash
 audio transcribe plan --stack qwen-1.7b --want diarization
@@ -89,7 +91,7 @@ A malformed or nonintersecting resume range is a request error, not an FFmpeg fa
   "field": "--range",
   "provided": "400:",
   "reason": "range does not intersect the source duration",
-  "fix": "audio transcribe run --input demo.mp4 --stack qwen-0.6b"
+  "fix": "correct --range using the reported reason; keep the intended source interval; repeat the original command, preserving every other argument"
 }
 ```
 

@@ -229,46 +229,59 @@ def _checkout_and_install(toolchain: Toolchain, package: Package) -> dict:
     toolchain.clone(package.checkout["repo"], resolved_commit, checkout)
 
     applied, digests = materialize_checkout_patch(package, checkout, toolchain)
-    _expected_patches, expected_names, _expected_digests = checkout_patch_expectation(package)
-    try:
-        state = toolchain.inspect_checkout(checkout)
-    except ValueError as exc:
-        raise ProvisioningError(
-            "checkout_integrity_failed",
-            f"could not inspect fresh checkout: {exc}",
-            package=package.id,
-            fix=f"audio packages pull --repair {package.id}",
-        ) from exc
-    if (
-        state.head != resolved_commit
-        or set(state.modified) != set(expected_names)
-        or state.untracked
-    ):
-        raise ProvisioningError(
-            "checkout_integrity_failed",
-            f"{package.id} checkout was not exact before install",
-            package=package.id,
-            expected={
-                "head": resolved_commit,
-                "modified": sorted(expected_names),
-                "untracked": [],
-            },
-            actual={
-                "head": state.head,
-                "modified": list(state.modified),
-                "untracked": list(state.untracked),
-            },
-            fix=f"audio packages pull --repair {package.id}",
-        )
-
-    toolchain.install_checkout(paths.env_python(package.environment), checkout)
-    # Stage interpreters use ``-B`` so they never recreate ignored bytecode.  Cleaning
-    # anything the wheel build left in the source tree makes a successful pull start
-    # from the same inspectable state that run preflight requires.
-    toolchain.clean_ignored_checkout(checkout)
-    return {
+    materialized = {
         "checkout": str(checkout),
         "checkout_commit": resolved_commit,
         "patches_applied": applied,
         "patched_file_digests": digests,
     }
+    install_verified_checkout(package, materialized, toolchain)
+    return materialized
+
+
+def install_verified_checkout(package: Package, materialized: dict, toolchain: Toolchain) -> None:
+    """Install only a proven checkout, clean build residue, then prove it again.
+
+    Keeping the direct install at its canonical path preserves the environment's exact
+    file-URL provenance. Cleanup is safe only with an empty untracked baseline; an
+    existing untrusted artifact is refused before any build backend or cleanup runs.
+    """
+    issues = _checkout_integrity_issues(package, materialized, toolchain)
+    if issues:
+        raise ProvisioningError(
+            "checkout_integrity_failed",
+            "; ".join(issues),
+            package=package.id,
+            fix=f"audio packages pull --repair {package.id}",
+        )
+    checkout = paths.checkout_dir(package.environment, package.id)
+    try:
+        toolchain.install_checkout(paths.env_python(package.environment), checkout)
+    finally:
+        # Failed/interrupted builds can leave the same ordinary and ignored artifacts.
+        # Never follow a redirected managed path to clean someone else's files.
+        _checkout, location_issue = managed_checkout_path(package, str(checkout))
+        if location_issue is not None:
+            raise ProvisioningError(
+                "checkout_cleanup_failed",
+                location_issue,
+                package=package.id,
+                fix=f"audio packages pull --repair {package.id}",
+            )
+        try:
+            toolchain.clean_checkout_install_artifacts(checkout)
+        except ProvisioningError as exc:
+            raise ProvisioningError(
+                exc.code,
+                exc.message,
+                package=package.id,
+                fix=f"audio packages pull --repair {package.id}",
+            ) from exc
+    issues = _checkout_integrity_issues(package, materialized, toolchain)
+    if issues:
+        raise ProvisioningError(
+            "package_integrity_failed",
+            "; ".join(issues),
+            package=package.id,
+            fix=f"audio packages pull --repair {package.id}",
+        )

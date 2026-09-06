@@ -205,6 +205,10 @@ def main() -> int:
         torch.manual_seed(config["seed"])
         torch.mps.manual_seed(config["seed"])
 
+        # Pinned provider 94da20d: the ASR checkpoint lacks preprocessor_config.json,
+        # so its processor uses built-in 24 kHz / 3200 / normalize_audio defaults.
+        # Its VibeVoiceASRTextTokenizerFast intentionally subclasses Qwen2TokenizerFast.
+        # Keep those upstream fallback/class warnings visible; neither is a fetch request.
         processor = VibeVoiceASRProcessor.from_pretrained(
             str(model_path),
             language_model_pretrained_name=str(tokenizer_path),
@@ -213,6 +217,8 @@ def main() -> int:
         model = (
             VibeVoiceASRForConditionalGeneration.from_pretrained(
                 str(model_path),
+                # The provider still reads config.torch_dtype internally (lines 66,
+                # 166, 228); its deprecation warning is not a deprecated argument here.
                 dtype=torch.bfloat16,
                 attn_implementation=config["attention"],
                 trust_remote_code=True,

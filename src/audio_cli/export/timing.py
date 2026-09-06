@@ -1,4 +1,4 @@
-"""Word-timing ledger validation for timed transcript exports."""
+"""Supplied-bound selection and timing validation for transcript exports."""
 
 from __future__ import annotations
 
@@ -7,8 +7,53 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .errors import InvalidResultError, TimingRequiredError
+from .errors import InvalidResultError, ReadableTimingRequiredError, TimingRequiredError
+from .lexical import normalized_word_texts
 from .models import LoadedResult, MergedTranscript
+
+
+def readable_bounds(
+    segment: Mapping[str, Any], *, segment_index: int = 0
+) -> tuple[float, float] | None:
+    """Read validated native segment bounds, otherwise the real word-stream extent.
+
+    The result contract reserves segment start/end for supplied ASR timing. Turns,
+    processing ranges, coverage, and source duration cannot time this segment's text.
+    """
+    if "start" in segment and "end" in segment:
+        return float(segment["start"]), float(segment["end"])
+    words = segment.get("words")
+    if words:
+        normalized_word_texts(segment["text"], words, field=f"segments[{segment_index}]")
+        return float(words[0]["start"]), float(words[-1]["end"])
+    return None
+
+
+def readable_milliseconds(
+    segment: Mapping[str, Any], *, segment_index: int = 0
+) -> tuple[int, int] | None:
+    """Quantize only supplied bounds, refusing finite values that overflow display math."""
+    bounds = readable_bounds(segment, segment_index=segment_index)
+    if bounds is None:
+        return None
+    try:
+        return round(bounds[0] * 1000), round(bounds[1] * 1000)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(
+            f"segments[{segment_index}] timestamp is finite but too large for readable "
+            "millisecond quantization"
+        ) from exc
+
+
+def _require_readable_timing(merged: MergedTranscript) -> None:
+    for document in merged.documents:
+        for index, segment in enumerate(document.payload["segments"]):
+            try:
+                bounds = readable_milliseconds(segment, segment_index=index)
+            except ValueError as exc:
+                raise InvalidResultError(document.path, str(exc)) from exc
+            if bounds is None:
+                raise ReadableTimingRequiredError(document.path, segment["segment_id"])
 
 
 def _found_timing(document: LoadedResult) -> tuple[str, ...]:

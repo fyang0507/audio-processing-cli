@@ -24,6 +24,7 @@ from ..media import (
 )
 from .cues import Cue
 from .errors import OutputExistsError, OutputWriteError, UnsafeOutputError
+from .timing import readable_milliseconds
 
 
 def _clock(total_ms: int, separator: str) -> str:
@@ -86,16 +87,23 @@ def render_vtt(cues: Sequence[Cue]) -> str:
     return "\n".join(lines)
 
 
-def render_text(segments: Sequence[Mapping[str, Any]]) -> str:
-    lines = [
-        (f"[{segment['speaker']}] " if "speaker" in segment else "") + str(segment["text"])
-        for segment in segments
-    ]
+def render_text(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = False) -> str:
+    lines = []
+    for index, segment in enumerate(segments):
+        prefix = ""
+        if timestamps:
+            bounds = readable_milliseconds(segment, segment_index=index)
+            if bounds is None:
+                raise ValueError("readable timestamps require segment or word bounds")
+            start, end = (_clock(value, ".") for value in bounds)
+            prefix = f"[{start} --> {end}] "
+        speaker = f"[{segment['speaker']}] " if "speaker" in segment else ""
+        lines.append(prefix + speaker + str(segment["text"]))
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def render_markdown(segments: Sequence[Mapping[str, Any]]) -> str:
-    return "# Transcript\n\n" + render_text(segments)
+def render_markdown(segments: Sequence[Mapping[str, Any]], *, timestamps: bool = False) -> str:
+    return "# Transcript\n\n" + render_text(segments, timestamps=timestamps)
 
 
 def render_jsonl(segments: Sequence[Mapping[str, Any]]) -> str:

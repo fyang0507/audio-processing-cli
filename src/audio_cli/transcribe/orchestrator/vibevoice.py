@@ -127,16 +127,7 @@ def _run_vibevoice(
                         end=scope[1],
                     )
                 except EmptyPcmRangeError as exc:
-                    raise refusals.range_invalid(
-                        request.input_path,
-                        request.stack.id,
-                        request.wants,
-                        run_range.provided,
-                        str(exc),
-                        language=request.language,
-                        vad=request.vad,
-                        diarizer=request.diarizer,
-                    ) from exc
+                    raise refusals.range_invalid(run_range.provided, str(exc)) from exc
 
             active_role, active_backend = "diarizer", "fluidaudio"
             entries = preflight(plan, document)

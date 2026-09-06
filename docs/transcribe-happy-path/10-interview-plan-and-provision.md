@@ -56,7 +56,7 @@ audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a
     "token_lid": {"availability": "impossible", "reason": "no_backend_declares",
                   "note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them."}
   },
-  "next": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want <capabilities>"
+  "next": "audio transcribe plan --input meeting.m4a --stack qwen-1.7b"
 }
 ```
 
@@ -140,6 +140,7 @@ audio transcribe plan --input meeting.m4a \
   "total_known_download_bytes": 3765934426,
   "unsized_packages": [],
   "warnings": [],
+  "next": "audio packages pull qwen3-asr-1.7b-8bit fluidaudio speaker-diarization-coreml qwen3-forcedaligner",
   "sample_output": {
     "sample": true,
     "note": "shape only; values are placeholders and cardinality is unknown until run",
@@ -200,6 +201,7 @@ Progress goes to stderr; stdout is the receipt:
   "root": "/Users/you/Library/Caches/audio-processing-cli",
   "registry": "/Users/you/Library/Caches/audio-processing-cli/registry.json",
   "pulled_known_bytes": 4239465790,
+  "pulled_known_bytes_note": "Known artifact sizes for packages materialized by this invocation, including repairs: manifest-declared sizes for Hub revisions owned by this root, and recorded local artifact sizes. Excludes pre-existing shared revisions, skipped packages, and environment bytes. Not measured network bytes or added disk usage.",
   "unsized_packages": [],
   "warnings": [
     {"code": "license_unreviewed", "blocking": false,
@@ -227,9 +229,27 @@ not reopened as `pulling`, which an interrupt would leave behind as a downgraded
 trusting what is on disk, which for a Hub snapshot means re-downloading it and for a checkout means
 discarding and re-cloning it.
 
-A package whose revision the shared Hugging Face cache already holds is not downloaded again. It
-reports `hub_revisions_pre_existing` in place of a fetch, and teardown will not delete it: see
-§5.
+Before a package is materialized, pull checks an existing interpreter environment against its lock
+and required direct installs. A drifted environment is refused before model downloads on an ordinary
+pull; the guidance asks for environment repair followed by the package retry. `pull --repair`
+reconciles dependency drift in the selected environment before force-fetching its package. It does
+not execute the selected package's old checkout while replacing it. Other ready checkouts retain
+their integrity gate before reinstall, and a failed sync never promotes an environment to ready.
+
+Native installation proves the pinned checkout before executing its build, removes generated
+ordinary/ignored build residue within that install transaction, then proves integrity again.
+The Git worktree and metadata must resolve to the managed clone. Cleanup keeps that directory
+open through child execution and uses Git paths relative to it, so configuration changes or a
+replaced pathname cannot redirect deletion elsewhere. Verification still
+rejects arbitrary ordinary and ignored files outside that controlled build transaction.
+
+
+`hub_revisions_pre_existing` lists only revisions this root found in the shared Hub cache before
+materialization. `pre_existing_note` states the listed count out of the package's pinned revisions:
+a multi-repository package may reuse only some of them. This is ownership evidence, not measured
+transfer: missing files can still be fetched, and repair requests a fresh download. Teardown does
+not delete those pre-existing revisions; see §5. `pulled_known_bytes_note` defines the accounting
+scope, which excludes those revisions and is neither network bytes nor added disk usage.
 
 On a machine with no Swift toolchain this same command exits 0 having provisioned everything else,
 and reports what it could not:
@@ -383,8 +403,8 @@ audio packages pull --stack qwen-1.7b --want diarization,word_timestamps
   "code": "want_not_implemented",
   "field": "--want",
   "provided": "diarization,word_timestamps",
-  "detail": "capabilities cannot narrow a pull yet: resolving them to packages is the planner's job, so --stack qwen-1.7b provisions every package it can use",
-  "fix": "audio packages pull --stack qwen-1.7b"
+  "detail": "--want belongs to transcribe plan; packages pull accepts explicit package ids or every package available to --stack",
+  "fix": "use transcribe plan with the original --input, --stack, and --want; then run the plan next command for missing packages"
 }
 ```
 

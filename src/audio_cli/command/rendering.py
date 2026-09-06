@@ -19,14 +19,29 @@ def export_command(
     output: str | Path,
     *,
     force: bool = False,
+    timestamps: bool = False,
 ) -> str:
     parts = ["audio", "export"]
     for input_path in input_paths:
         parts.extend(("--input", command_path_argument(input_path)))
     parts.extend(("--format", output_format, "-o", command_path_argument(output)))
+    if timestamps:
+        parts.append("--timestamps")
     if force:
         parts.append("--force")
     return shlex.join(parts)
+
+
+def packages_pull_command(package_ids: Sequence[str], *, repair: bool = False) -> str:
+    """Render the exact package selection chosen by the calling feature."""
+    if not package_ids:
+        raise ValueError("a pull command requires at least one package")
+    parts = ["audio", "packages", "pull"]
+    if repair:
+        parts.append("--repair")
+    if any(identifier.startswith("-") for identifier in package_ids):
+        parts.append("--")
+    return shlex.join([*parts, *package_ids])
 
 
 def transcribe_plan_command(

@@ -9,11 +9,16 @@ from typing import Any
 from audio_cli.media import ProtectedFileIdentity, capture_file_identity, resolve_path_identity
 
 from .cues import Cue, CueError, build_cues
-from .errors import IncompatibleResultsError, InvalidResultError, OutputWriteError
+from .errors import (
+    IncompatibleResultsError,
+    InvalidResultError,
+    OutputWriteError,
+    TimestampsUnsupportedError,
+)
 from .loading import load_result_document
 from .merge import merge_documents
 from .models import _TIMED_FORMATS, EXPORT_FORMATS, ExportProduct
-from .timing import _require_word_timing, _validate_word_timing_ledger
+from .timing import _require_readable_timing, _require_word_timing, _validate_word_timing_ledger
 from .writers import (
     normalize_voice_annotation,
     render_jsonl,
@@ -30,14 +35,20 @@ def export_documents(
     output_format: str,
     output: Path | None = None,
     force: bool = False,
+    *,
+    timestamps: bool = False,
 ) -> ExportProduct:
     """Read, merge, render, and optionally atomically publish transcript exports."""
     if output_format not in EXPORT_FORMATS:
         raise ValueError(
             f"output_format must be one of {sorted(EXPORT_FORMATS)}, got {output_format!r}"
         )
+    if timestamps and output_format not in {"txt", "md"}:
+        raise TimestampsUnsupportedError(output_format)
     loaded = tuple(load_result_document(Path(path)) for path in inputs)
     merged = merge_documents(loaded)
+    if timestamps:
+        _require_readable_timing(merged)
     source_path: Path | None = None
     source_file_identity: ProtectedFileIdentity | None = None
     if output is not None:
@@ -103,9 +114,9 @@ def export_documents(
                 for cue in cues
             )
     elif output_format == "md":
-        content = render_markdown(merged.segments)
+        content = render_markdown(merged.segments, timestamps=timestamps)
     elif output_format == "txt":
-        content = render_text(merged.segments)
+        content = render_text(merged.segments, timestamps=timestamps)
     else:
         content = render_jsonl(merged.segments)
 

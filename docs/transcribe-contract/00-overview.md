@@ -68,6 +68,8 @@ field not listed for its code, or missing one that is, is a defect:
 | `export_input_invalid` | 2 | `field`, `provided`, `reason` |
 | `export_inputs_incompatible` | 2 | `field`, `provided`, `reason` |
 | `timing_required_for_format` | 2 | `field`, `provided`, `requires_capability`, `found`, `note` |
+| `timing_required_for_timestamps` | 2 | `field`, `provided`, `input`, `segment_id`, `requires_any_capability`, `note` |
+| `timestamps_unsupported_for_format` | 2 | `field`, `provided`, `format`, `allowed_formats` |
 | `packages_not_provisioned` | 3 | `missing`, `total_known_download_bytes`, `unsized_packages` |
 | `package_integrity_failed` | 3 | `failed` (package, check, expected, actual) |
 | `package_build_unusable` | 3 | `package`, `product`, `built`, `fix` |
@@ -214,7 +216,7 @@ yet and `satisfaction` is defined only for a requested capability:
     "token_lid": {"availability": "impossible", "reason": "no_backend_declares",
                   "note": "Named only so a request fails loudly. Code-switching support does not imply per-token labels, and no backend here produces them."}
   },
-  "next": "audio transcribe plan --input field.wav --stack firered --want <capabilities>"
+  "next": "audio transcribe plan --input field.wav --stack firered"
 }
 ```
 
@@ -291,6 +293,11 @@ zero confidence that reads as measured.
 ### `plan` — what will this request produce?
 
 Adds the resolved roles, the packages to provision, and a `sample_output` block.
+When the registry snapshot marks packages missing, top-level `next` is a runnable
+`audio packages pull` command naming exactly those package ids in plan order. It is absent
+when all planned packages are provisioned. This is provisioning guidance, not an integrity
+check, and is not copied into the durable result's embedded plan. `capabilities.next` is a
+runnable floors-only plan; add `--want` deliberately for capabilities beyond the floors.
 
 ### How `sample_output` is produced, and what it guarantees
 
@@ -342,3 +349,21 @@ guarantee, and it is parametrized over the derivation table: each stack against 
 capability it satisfies natively, each capability requiring an add-on, and each of
 both refusal codes, which are distinct and must not be collapsed into one
 "unsatisfiable" case.
+
+### Duration bases
+
+Capability and plan estimates read primary audio-stream duration, falling back to container duration
+([catalog input metadata](../../src/audio_cli/transcribe/catalog.py)). A completed transcript's
+`source.duration_seconds` comes from the canonical 16 kHz decoded PCM frame count
+([canonical PCM duration](../../src/audio_cli/media/pcm.py)), and its times stay on that source
+basis. Inspection additionally reports container/stream metadata, including an available audio start
+offset. Codec padding and stream offsets can therefore make those durations differ slightly.
+Do not add an offset to every transcript bound or diagnose missing speech from the difference alone;
+inspect actual coverage and canonical decode evidence first. Enhanced ASR/VAD is a separate
+observation and never replaces the original-source transcript.
+
+Request validation remedies correct the offending fields in prose and tell the caller to repeat
+its original command with every other argument preserved. They never change `run` to `plan`,
+drop range/output/format/language options, or silently choose a full-media run. This keeps fixed
+refusal payloads independent of execution-only options. Concrete provisioning and output retry
+commands remain runnable when their builders have the full context.
