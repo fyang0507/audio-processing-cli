@@ -51,3 +51,36 @@ def test_missing_or_silent_speech_has_no_invented_rms_measurement(speech):
     guide, gain, report = calibrate(np.zeros((1000, 1), np.float32), speech)
     assert guide is None and gain == 1
     assert report == {"status": "abstained", "reason": "no_speech_energy"}
+
+
+@pytest.mark.parametrize(
+    ("target", "peak_limit", "maximum", "resolved", "attained", "limits"),
+    [
+        (-24, -3, 40, -24, True, []),  # Attenuation can attain the target.
+        (0, 3, 40, 0, True, []),
+        (3, 0, 40, 0, False, ["peak_headroom"]),
+        (3, 6, 0, 0, False, ["maximum_gain"]),
+        (6, 3, 3, 3, False, ["peak_headroom", "maximum_gain"]),
+        (3, 3, 3, 3, True, []),  # A bound at the target does not prevent attainment.
+        (3, 3 - 5e-10, 3 - 2e-10, 3 - 5e-10, False, ["peak_headroom"]),
+    ],
+)
+def test_target_attainment_and_all_binding_limits_use_unrounded_gain_math(
+    target, peak_limit, maximum, resolved, attained, limits
+):
+    audio = np.ones((1000, 2), np.float32)
+    guide, gain, report = calibrate_guide_input(
+        audio,
+        1000,
+        [SpeechRegion(0, 1, 0.9, 1)],
+        target_rms_dbfs=target,
+        peak_limit_dbfs=peak_limit,
+        maximum_gain_db=maximum,
+    )
+    expected_gain = 10 ** (resolved / 20)
+    assert gain == expected_gain
+    np.testing.assert_array_equal(guide, (audio * expected_gain).astype(np.float32))
+    np.testing.assert_array_equal(audio, np.ones((1000, 2), np.float32))
+    assert report["target_attained"] is attained
+    assert report["limiting_reasons"] == limits
+    assert report["resolved_gain_db"] == round(resolved, 6)
