@@ -31,7 +31,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
-                "config": {"scope": "all_segments",
+                "config": {"scope": "all_segments", "max_overrun_ms": 0.501,
                            "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -73,6 +73,8 @@ audio transcribe run --input demo.mp4 --stack vibevoice \
 Nothing selects this. No backend exposes a verbatim switch — four verbatim-requesting system prompts left Qwen's output byte-identical to its unprompted baseline — and nothing in v1 cleans, so the request asserts an interface and the plan answers for fidelity. It is the one requestable capability that never changes plan composition, by design rather than by oversight.
 
 Three adapter obligations this stack creates, all from its recorded output. VibeVoice emits `Speaker: "N/A"` on non-speech segments; that is the absence of a label, so the adapter emits no speaker rather than a speaker whose id is `"N/A"`. And it emits bracketed non-speech event tags such as `[Environmental Sounds]` as segment `text`. Those segments are real segments with real bounds and no words; they are not sent to the aligner, survive into the transcript, and are not abstentions. Finally, if an ordinary speech segment's requested alignment stream is absent or nonconforming, the adapter preserves the text and native bounds, omits `words`, records one `alignment_unavailable` abstention at those exact bounds, and marks the run-level `word_timestamps` outcome `abstained`. Valid word streams on other segments remain.
+
+The optional `--alignment-max-overrun-ms` follows the same host policy as Qwen in §1.4 and is accepted here only with `word_timestamps`. The default remains 0.501 ms; an explicit larger limit permits bounded clipping with the original and applied word bounds recorded in `provenance.observed.alignment_corrections`. Native segment timing remains independent of this word-alignment policy. A rejected alignment still retains its native segment bounds and diagnostic association; an accepted correction does not prove the acoustic endpoint is accurate.
 
 The memory warning is advisory by explicit product decision, and it is emitted from the plan rather than as a mid-run OOM. Its reference run took roughly fourteen minutes of generation for thirty minutes of audio — an RTF near 0.47, which is the figure to scale by; the plan cannot know `demo.mp4`'s duration cost in advance. Cut and rerender from the original media; this command only reads it.
 

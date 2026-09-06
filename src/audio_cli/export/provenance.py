@@ -33,4 +33,7 @@ def render_provenance(merged: MergedTranscript, output_format: str) -> str:
         field("Owned intervals (seconds)", document.owned_intervals)
         if "coverage" in document.payload:
             field("Coverage", document.payload["coverage"])
+        corrections = document.payload["provenance"]["observed"].get("alignment_corrections")
+        if corrections:
+            field("Alignment boundary corrections", corrections)
     return "\n".join(lines) + "\n\n"

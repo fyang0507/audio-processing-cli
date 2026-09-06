@@ -99,7 +99,7 @@ audio transcribe plan --input meeting.m4a \
                    "determinism_basis": "argmax decode; back-to-back calls in one process produced byte-identical text, cross-process repetition untested"},
     "aligner":    {"backend": "qwen3-forcedaligner", "environment": "mlx",
                    "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
-                   "config": {"scope": "all_segments",
+                   "config": {"scope": "all_segments", "max_overrun_ms": 0.501,
                               "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                    "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -154,6 +154,8 @@ audio transcribe plan --input meeting.m4a \
 ```
 
 Exit 0. `segment_timestamps` was not requested and is impossible on this stack anyway, so segments carry no `start`/`end` — in the sample above or in the real result below.
+
+The aligner's `max_overrun_ms: 0.501` records the unchanged default serialization allowance. Both `plan` and `run` accept an explicit `--alignment-max-overrun-ms` value that is finite and at least `0.501`, only when `word_timestamps` selects ForcedAligner. This changes host clipping acceptance, never the provider request or the input interval. A higher selected limit is recorded in the same plan field; accepted clips beyond the serialization allowance also retain their original and applied bounds in the result's optional `provenance.observed.alignment_corrections`. See [alignment diagnostics](../alignment-diagnostics.md) before deciding whether a changed attempt is appropriate.
 
 ### 1.3 Provision
 

@@ -177,6 +177,44 @@ Exit 2:
 
 `vibevoice` satisfies `diarization` natively, so this plan contains no diarizer role for a pin to select among. Pins choose between implementations of a role that exists.
 
+An invalid alignment limit is a distinct request error. Both `plan` and `run` refuse nonnumeric, nonfinite or below-minimum values before media probing or model work. For example:
+
+```bash
+audio transcribe plan --input meeting.m4a --stack qwen-1.7b --want word_timestamps --alignment-max-overrun-ms 0.5
+```
+
+Exit 2:
+
+```json
+{
+  "code": "alignment_max_overrun_invalid",
+  "field": "--alignment-max-overrun-ms",
+  "provided": "0.5",
+  "minimum_ms": 0.501,
+  "fix": "set --alignment-max-overrun-ms to a finite number at least 0.501; repeat the original command, preserving every other argument"
+}
+```
+
+A valid number is also refused when the requested capabilities select no ForcedAligner. FireRed supplies native word timing, so this request cannot use the option:
+
+```bash
+audio transcribe plan --input field.wav --stack firered --want word_timestamps --alignment-max-overrun-ms 20
+```
+
+Exit 2:
+
+```json
+{
+  "code": "alignment_option_not_applicable",
+  "field": "--alignment-max-overrun-ms",
+  "provided": "20",
+  "requires_backend": "qwen3-forcedaligner",
+  "fix": "remove --alignment-max-overrun-ms and its value; repeat the original command, preserving every other argument"
+}
+```
+
+The same refusal applies to Qwen or VibeVoice without requested `word_timestamps`; parsing the option does not silently activate an aligner or ignore the limit.
+
 ### 4.9 The rest
 
 Existing output is an actionable collision, so the refusal preserves the full request and adds the explicit overwrite decision:

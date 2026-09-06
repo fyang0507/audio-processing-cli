@@ -110,6 +110,8 @@ def test_most_fixes_are_runnable_commands() -> None:
         "capability_unsatisfiable_on_stack",
         "option_unsupported_on_stack",
         "option_value_unsupported",
+        "alignment_max_overrun_invalid",
+        "alignment_option_not_applicable",
         "pin_conflicts_with_native_capability",
         "range_invalid",
         "input_required",

@@ -482,6 +482,13 @@ def test_rejected_unit_links_every_affected_sentence_without_synthesizing_timing
         "segment_ids": ["seg_0", "seg_1"],
         "code": "out_of_unit_bounds",
         "word_index": 1,
+        "boundary": {
+            "original_bounds": [1.0, 2.04],
+            "unit_bounds": [0.0, 2.0],
+            "start_overrun_ms": 0.0,
+            "end_overrun_ms": 40.0,
+            "max_overrun_ms": 0.501,
+        },
     }
     assert result["provenance"]["outcomes"]["word_timestamps"] == "abstained"
     assert source.read_bytes() == b"original source"

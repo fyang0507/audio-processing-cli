@@ -11,6 +11,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from .alignment import _validate_abstentions, validate_alignment_evidence
 from .types import (
     _ARRAY_CAPABILITIES,
     ABSENT,
@@ -22,7 +23,6 @@ from .validation import (
     _array,
     _capabilities,
     _reject_non_label_speakers,
-    _validate_abstentions,
     _validate_coverage,
     _validate_provenance,
     _validate_segments,
@@ -78,6 +78,8 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
             _validate_span_array(
                 value, field, expected_keys, sample=result.sample, duration=duration
             )
+
+    validate_alignment_evidence(result, duration=duration)
 
     payload: dict[str, Any] = {}
     if result.sample:

@@ -22,7 +22,20 @@ def test_recorded_quantized_endpoint_remains_rejected_with_its_word_index():
     original = copy.deepcopy((request, response))
     result = normalize_alignment(response, request)
     assert result.words == {}
-    assert result.rejections == {"turn_25": {"code": "out_of_unit_bounds", "word_index": 0}}
+    assert result.rejections == {
+        "turn_25": {
+            "code": "out_of_unit_bounds",
+            "word_index": 0,
+            "boundary": {
+                "original_bounds": [96.57, 98.01],
+                "unit_bounds": [96.570437, 97.996625],
+                "start_overrun_ms": 0.437,
+                "end_overrun_ms": 13.375,
+                "max_overrun_ms": 0.501,
+            },
+        }
+    }
+    assert result.corrections == {}
     sentences = sentence_segments(request, result.words, rejections=result.rejections)
     assert sentences == [{"unit_id": "turn_25", "text": "Like.", "speaker": "S1"}]
     assert (request, response) == original
@@ -49,7 +62,17 @@ def test_no_model_resolution_allowance_or_invalid_word_repair(word, code):
         [{"unit_id": "u", "text": "Hi.", "start": 0, "end": 1}],
     )
     assert result.words == {}
-    assert result.rejections == {"u": {"code": code, "word_index": 0}}
+    expected = {"code": code, "word_index": 0}
+    if code == "out_of_unit_bounds":
+        expected["boundary"] = {
+            "original_bounds": [word["start"], word["end"]],
+            "unit_bounds": [0, 1],
+            "start_overrun_ms": 0,
+            "end_overrun_ms": {1.001: 1, 1.04: 40, 80: 79000}[word["end"]],
+            "max_overrun_ms": 0.501,
+        }
+    assert result.rejections == {"u": expected}
+    assert result.corrections == {}
 
 
 def test_serialization_only_endpoint_correction_and_provider_unavailability():
@@ -71,6 +94,7 @@ def test_serialization_only_endpoint_correction_and_provider_unavailability():
     )
     assert result.words == {"rounded": [{"text": "Hi", "start": 0.0004, "end": 0.9996}]}
     assert result.rejections == {"error": {"code": "provider_unavailable"}}
+    assert result.corrections == {}
 
 
 def test_sentence_partition_failure_keeps_all_text_and_records_its_unit():

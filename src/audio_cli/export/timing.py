@@ -45,6 +45,18 @@ def readable_milliseconds(
         ) from exc
 
 
+def _alignment_rejections(
+    document: LoadedResult, segment_id: str | None = None
+) -> list[dict[str, Any]] | None:
+    entries = [
+        dict(item)
+        for item in document.payload["abstentions"]
+        if "alignment" in item
+        and (segment_id is None or segment_id in item["alignment"]["segment_ids"])
+    ]
+    return entries or None
+
+
 def _require_readable_timing(merged: MergedTranscript) -> None:
     for document in merged.documents:
         for index, segment in enumerate(document.payload["segments"]):
@@ -59,6 +71,7 @@ def _require_readable_timing(merged: MergedTranscript) -> None:
                     word_timing_outcome=document.payload["provenance"]["outcomes"].get(
                         "word_timestamps"
                     ),
+                    alignment_rejections=_alignment_rejections(document, segment["segment_id"]),
                 )
 
 
@@ -81,6 +94,7 @@ def _raise_timing_required(document: LoadedResult) -> None:
         wants=tuple(payload["provenance"]["outcomes"]),
         plan=payload["provenance"]["plan"],
         word_timing_outcome=payload["provenance"]["outcomes"].get("word_timestamps"),
+        alignment_rejections=_alignment_rejections(document),
     )
 
 

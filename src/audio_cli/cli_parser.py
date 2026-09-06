@@ -204,6 +204,12 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
+    alignment_help = (
+        "Maximum boundary overrun in milliseconds for ForcedAligner host normalization; "
+        "finite and at least 0.501 (default). Requires word_timestamps with a ForcedAligner "
+        "add-on; unsupported for FireRed native timing."
+    )
+    plan_parser.add_argument("--alignment-max-overrun-ms", metavar="MS", help=alignment_help)
     run_parser = transcribe_commands.add_parser(
         "run",
         help="Execute one resolved transcription request.",
@@ -223,6 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
+    run_parser.add_argument("--alignment-max-overrun-ms", metavar="MS", help=alignment_help)
     run_parser.add_argument(
         "--range", dest="run_range", help="Process units intersecting START: or START:END."
     )

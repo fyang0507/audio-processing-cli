@@ -32,6 +32,12 @@ A bracketed non-speech event can deliberately have no aligned words. Ordinary sp
 
 Exit 4 preserves a conforming partial document. Read `complete` and `coverage`, keep the saved result, and evaluate its concrete range-resume fix against the original input. Do not pre-clip or manually offset timestamps. If no progress was made and the fix is a sentence, replaying the same request is not a remedy. Exit 1 is a backend failure and must not be reported as a successful abstention; see [failures.md](failures.md).
 
+## Recover when the task authorizes a changed attempt
+
+For an alignment boundary rejection, read the affected segment and unit, original word bounds, measured overrun and selected limit. If the user permits bounded clipping, choose an explicit limit using that evidence and live help; increasing it permits the CLI to clip a returned estimate to its input unit. Read the recorded corrections as well as capability outcomes afterward. A corrected bound is not a newly measured acoustic endpoint, and a higher limit cannot repair missing provider output, invalid words or text mismatches.
+
+An authorized alternative is a separately chosen stack: check its catalog and plan with the original scope and required capabilities. Changing a recognizer does not necessarily change its timing provider. Keep each attempt's canonical result and diagnostics, use new output paths, and inspect the new transcript, timing, speakers and abstentions before exporting. Neither alternate text nor equal-looking anonymous labels may be spliced into the earlier canonical result. The CLI does not switch models internally; the agent chooses the changed request. Preserve the earlier failure and report what the new attempt actually delivers. Stop when the authorized recovery is exhausted or a failure falls outside it.
+
 ## Export without running models again
 
 Export saved JSON through `audio transcribe export` and inspect its live help for format and output controls. Compatible disjoint results can be merged on the original timeline. Independent VibeVoice runs with native diarization cannot be merged: identical anonymous labels across generations are not proof of shared speaker identity. Export those separately or generate the needed scope together.

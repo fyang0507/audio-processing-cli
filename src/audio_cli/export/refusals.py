@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from audio_cli.command import (
     Refusal,
@@ -42,10 +43,36 @@ def timestamps_unsupported_for_format(output_format: str) -> Refusal:
     )
 
 
+def _boundary_recovery_fix(alignment_rejections: list[dict[str, Any]] | None) -> str | None:
+    for entry in alignment_rejections or ():
+        alignment = entry.get("alignment")
+        if (
+            isinstance(alignment, Mapping)
+            and alignment.get("code") == "out_of_unit_bounds"
+            and isinstance(alignment.get("boundary"), Mapping)
+        ):
+            return (
+                "inspect alignment_rejections for the observed original_bounds, unit_bounds, "
+                "start_overrun_ms, end_overrun_ms and max_overrun_ms. An agent may choose an "
+                "explicit --alignment-max-overrun-ms or another supported stack on the original "
+                "source, preserving the required capabilities and scope and writing a new "
+                "canonical output. Inspect the new result before exporting; the CLI does not "
+                "switch models automatically and neither choice guarantees usable timing"
+            )
+    return None
+
+
 def timing_required_for_timestamps(
-    input_path: str | Path, segment_id: str, *, word_timing_outcome: str | None = None
+    input_path: str | Path,
+    segment_id: str,
+    *,
+    word_timing_outcome: str | None = None,
+    alignment_rejections: list[dict[str, Any]] | None = None,
 ) -> Refusal:
-    if word_timing_outcome == "abstained":
+    boundary_fix = _boundary_recovery_fix(alignment_rejections)
+    if boundary_fix is not None:
+        fix = boundary_fix
+    elif word_timing_outcome == "abstained":
         fix = (
             "remove --timestamps to preserve untimed text; word_timestamps was already "
             "requested but abstained. Inspect this segment's alignment_unavailable entry "
@@ -72,6 +99,11 @@ def timing_required_for_timestamps(
         segment_id=segment_id,
         requires_any_capability=["segment_timestamps", "word_timestamps"],
         note="every segment needs supplied bounds; processing intervals are never substituted",
+        **(
+            {"alignment_rejections": alignment_rejections}
+            if alignment_rejections is not None
+            else {}
+        ),
     )
 
 
@@ -204,6 +236,8 @@ def timing_required_for_format(
     vad: str | None = None,
     run_range: str | None = None,
     word_timing_outcome: str | None = None,
+    alignment_rejections: list[dict[str, Any]] | None = None,
+    alignment_max_overrun_ms: float | None = None,
 ) -> Refusal:
     requested = list(dict.fromkeys([*wants, "word_timestamps"]))
     transcript = Path(input_path)
@@ -217,7 +251,10 @@ def timing_required_for_format(
                 source.resolve(strict=True)
             except (OSError, RuntimeError):
                 unsafe_legacy_source = True
-    if word_timing_outcome == "abstained":
+    boundary_fix = _boundary_recovery_fix(alignment_rejections)
+    if boundary_fix is not None:
+        fix = boundary_fix
+    elif word_timing_outcome == "abstained":
         fix = (
             "choose md, txt, or jsonl, provide another result with produced timed words, "
             "or choose a different stack; this result already attempted word_timestamps "
@@ -255,6 +292,7 @@ def timing_required_for_format(
                 requested,
                 language=language,
                 vad=vad,
+                alignment_max_overrun_ms=alignment_max_overrun_ms,
                 run_range=run_range,
                 output=output_path,
             )
@@ -267,4 +305,9 @@ def timing_required_for_format(
         requires_capability="word_timestamps",
         found=list(found),
         note="subtitle cue bounds come from word timestamps and are never synthesized",
+        **(
+            {"alignment_rejections": alignment_rejections}
+            if alignment_rejections is not None
+            else {}
+        ),
     )

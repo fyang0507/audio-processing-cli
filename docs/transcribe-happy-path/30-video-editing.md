@@ -33,7 +33,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
-                "config": {"scope": "all_segments",
+                "config": {"scope": "all_segments", "max_overrun_ms": 0.501,
                            "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -172,6 +172,8 @@ It carries **no `speaker` key**. VibeVoice emits `Speaker: "N/A"` on non-speech 
 It carries **no `words` array**, which is correct and is not an abstention: the aligner is not run on a segment with no speech to align. So `words` is absent on some segments while `word_timestamps` is `produced`, and `observed.segments_without_words` records how many segments carry no `words` key. A present empty array is a successful alignment with zero lexical tokens, not an abstention.
 
 An ordinary speech segment is different. If its requested alignment result is absent or nonconforming, its text and native bounds remain, `words` is absent, and one `alignment_unavailable` abstention carries those exact bounds. The run-level `word_timestamps` outcome becomes `abstained` while valid word streams on other segments remain. VibeVoice turns likewise do not bridge silence or a wordless event: every bounded speech segment gets its own native turn, even when an adjacent segment carries the same anonymous label.
+
+`--alignment-max-overrun-ms` has the same meaning here as in §1.2 because this request selects ForcedAligner. The default example uses 0.501 ms and records no beyond-allowance correction. If a separately chosen higher limit accepts clipped endpoints, `provenance.observed.alignment_corrections` records only corrections on words that survive the full unit's validation and text reconciliation. Rejected units retain their diagnostic abstentions; the limit cannot create word timing from the native segment interval.
 
 ### 2.3 Export subtitles with speaker voice tags
 

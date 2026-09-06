@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import get_close_matches
@@ -11,6 +12,7 @@ from .. import stacks
 from ..refusals import request as refusals
 
 _PIN_VALUES = {"--vad": ("silero-vad",), "--diarizer": ("fluidaudio",)}
+DEFAULT_ALIGNMENT_MAX_OVERRUN_MS = 0.501
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,7 @@ class ResolvedRequest:
     language: str | None
     vad: str | None
     diarizer: str | None
+    alignment_max_overrun_ms: float | None = None
 
 
 def _dedupe(values: Iterable[str]) -> tuple[str, ...]:
@@ -54,6 +57,7 @@ def resolve_request(
     language: str | None = None,
     vad: str | None = None,
     diarizer: str | None = None,
+    alignment_max_overrun_ms: float | str | None = None,
 ) -> ResolvedRequest:
     """Reject the complete request before any registry or provisioning check."""
     requested = parse_wants(wants)
@@ -117,6 +121,30 @@ def resolve_request(
                 "--diarizer", diarizer, "diarization"
             )
 
+    alignment_limit = None
+    if alignment_max_overrun_ms is not None:
+        try:
+            alignment_limit = float(alignment_max_overrun_ms)
+        except (TypeError, ValueError, OverflowError):
+            raise refusals.alignment_max_overrun_invalid(
+                str(alignment_max_overrun_ms), DEFAULT_ALIGNMENT_MAX_OVERRUN_MS
+            ) from None
+        if (
+            isinstance(alignment_max_overrun_ms, bool)
+            or not math.isfinite(alignment_limit)
+            or alignment_limit < DEFAULT_ALIGNMENT_MAX_OVERRUN_MS
+        ):
+            raise refusals.alignment_max_overrun_invalid(
+                str(alignment_max_overrun_ms), DEFAULT_ALIGNMENT_MAX_OVERRUN_MS
+            )
+        has_forced_aligner = any(
+            definition.capabilities[name]["resolution"] == "add_on"
+            and definition.capabilities[name].get("package") == "qwen3-forcedaligner"
+            for name in requested
+        )
+        if not has_forced_aligner:
+            raise refusals.alignment_option_not_applicable(str(alignment_max_overrun_ms))
+
     return ResolvedRequest(
         stack=definition,
         input_path=input_path,
@@ -124,4 +152,5 @@ def resolve_request(
         language=canonical_language,
         vad=vad,
         diarizer=diarizer,
+        alignment_max_overrun_ms=alignment_limit,
     )

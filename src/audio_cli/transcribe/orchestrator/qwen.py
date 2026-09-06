@@ -44,6 +44,7 @@ from ..result.serialization import serialize_result
 from ..result.types import ABSENT, NormalizedResult, ResultError
 from ..transport.service import StageTransport
 from ..transport.types import StageFailure, StageOutcome
+from .alignment import CorrectionLedger
 from .common import _run_diarizer
 
 
@@ -190,6 +191,7 @@ def _run_qwen(
 
             aligned: dict[str, list[dict[str, Any]]] = {}
             alignment_rejections: dict[str, dict[str, Any]] = {}
+            alignment_corrections: dict[str, list[dict[str, Any]]] = {}
             if "aligner" in plan.roles and completed:
                 active_role, active_backend = "aligner", "qwen3-forcedaligner"
                 entries = preflight(plan, document)
@@ -202,8 +204,13 @@ def _run_qwen(
                 outcomes.append(align)
                 if align.returncode != 0:
                     raise ValueError(f"aligner stage returned unsupported exit {align.returncode}")
-                alignment = normalize_alignment(align.payload, completed)
+                alignment = normalize_alignment(
+                    align.payload,
+                    completed,
+                    max_overrun_ms=plan.roles["aligner"]["config"]["max_overrun_ms"],
+                )
                 aligned, alignment_rejections = alignment.words, alignment.rejections
+                alignment_corrections = alignment.corrections
         except refusals.Refusal:
             raise
         except StageFailure as exc:
@@ -262,6 +269,7 @@ def _run_qwen(
                     )
 
         segments = []
+        corrections = CorrectionLedger(alignment_corrections)
         word_index = 0
         for index, item in enumerate(sentences):
             segment = {"segment_id": f"seg_{index}", "text": item["text"]}
@@ -273,6 +281,7 @@ def _run_qwen(
                     words.append({"word_id": f"w_{word_index}", **word})
                     word_index += 1
                 segment["words"] = words
+                corrections.add_words(item["unit_id"], segment["segment_id"], words)
             segments.append(segment)
 
         incomplete = bool(unfinished)
@@ -366,7 +375,7 @@ def _run_qwen(
                     request.wants,
                     segments=segments,
                 ),
-                "observed": {},
+                "observed": corrections.observed(),
                 "plan": executed_plan,
             },
             requested_capabilities=frozenset(request.wants),

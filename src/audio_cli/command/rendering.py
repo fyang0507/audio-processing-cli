@@ -55,6 +55,7 @@ def transcribe_plan_command(
     language: str | None = None,
     vad: str | None = None,
     diarizer: str | None = None,
+    alignment_max_overrun_ms: float | None = None,
 ) -> str:
     parts = [
         "audio",
@@ -78,6 +79,8 @@ def transcribe_plan_command(
         parts.extend(("--vad", vad))
     if diarizer is not None:
         parts.extend(("--diarizer", diarizer))
+    if alignment_max_overrun_ms is not None:
+        parts.extend(("--alignment-max-overrun-ms", str(alignment_max_overrun_ms)))
     return shlex.join(parts)
 
 
@@ -89,6 +92,7 @@ def transcribe_run_command(
     language: str | None = None,
     vad: str | None = None,
     diarizer: str | None = None,
+    alignment_max_overrun_ms: float | None = None,
     run_range: str | None = None,
     output_format: str = "json",
     output: str | Path | None = None,
@@ -116,6 +120,8 @@ def transcribe_run_command(
         parts.extend(("--vad", vad))
     if diarizer is not None:
         parts.extend(("--diarizer", diarizer))
+    if alignment_max_overrun_ms is not None:
+        parts.extend(("--alignment-max-overrun-ms", str(alignment_max_overrun_ms)))
     if run_range is not None:
         parts.extend(("--range", run_range))
     if output_format != "json":
@@ -128,14 +134,18 @@ def transcribe_run_command(
 
 
 def with_transcribe_run_options(
-    command: str, *, receipt: bool = False, log_dir: Path | None = None
+    command: str,
+    *,
+    receipt: bool = False,
+    log_dir: Path | None = None,
+    alignment_max_overrun_ms: float | str | None = None,
 ) -> str:
-    """Retain invocation-only output choices on a rendered runnable retry.
+    """Retain explicit invocation choices on a rendered runnable retry.
 
     Prose remedies and provisioning commands remain byte-for-byte unchanged.
-    These choices belong to command presentation, not the saved model plan.
+    The caller owns validation and the policy these arguments select.
     """
-    if not receipt and log_dir is None:
+    if not receipt and log_dir is None and alignment_max_overrun_ms is None:
         return command
     try:
         parts = shlex.split(command)
@@ -149,4 +159,9 @@ def with_transcribe_run_options(
         item == "--log-dir" or item.startswith("--log-dir=") for item in parts
     ):
         parts.extend(("--log-dir", command_path_argument(log_dir)))
+    if alignment_max_overrun_ms is not None and not any(
+        item == "--alignment-max-overrun-ms" or item.startswith("--alignment-max-overrun-ms=")
+        for item in parts
+    ):
+        parts.extend(("--alignment-max-overrun-ms", str(alignment_max_overrun_ms)))
     return shlex.join(parts)

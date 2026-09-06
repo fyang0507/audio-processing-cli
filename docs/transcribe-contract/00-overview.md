@@ -30,6 +30,8 @@ Every error payload carries `code` and `fix`. **`fix` is a runnable command wher
 | `capability_unknown` | 2 | `field`, `provided`, `available_on_stack`, `did_you_mean` when a near name exists |
 | `option_unsupported_on_stack` | 2 | `field`, `provided`, `allowed` (empty), `stacks_accepting` |
 | `option_value_unsupported` | 2 | `field`, `provided`, `allowed`, `did_you_mean` when a near value exists |
+| `alignment_max_overrun_invalid` | 2 | `field`, `provided`, `minimum_ms` |
+| `alignment_option_not_applicable` | 2 | `field`, `provided`, `requires_backend` |
 | `capability_unsatisfiable_on_stack` | 2 | `capability`, `allowed` (non-empty), `available_on_stack` |
 | `capability_unsupported` | 2 | `capability`, `allowed` (empty), `reason` |
 | `pin_conflicts_with_native_capability` | 2 | `field`, `provided`, `allowed`, `capability` |
@@ -167,11 +169,11 @@ Adds the resolved roles, the packages to provision, and a `sample_output` block.
 
 The sample is built by populating the real result object with one placeholder entity per requested capability — plus the floor artifacts every conforming run carries, such as the abstention ledger — and serializing it through **the same serializer `run` uses**. It is never a hand-written example, and there is no second code path. Consequently the output shape is a pure function of the resolved capability set, so all combinations are generated on demand rather than enumerated.
 
-Guaranteed identical to a real run: key sets, nesting, types, which fields are absent because a capability was not requested, which are `native` versus `derived`, and the provenance structure.
+The sample declares the base key sets, nesting, types, capability-dependent fields, which capabilities are `native` versus `derived`, and the provenance envelope. It does not predict conditional runtime evidence such as an alignment rejection's diagnostic association or an accepted correction ledger.
 
 Not predictable, and therefore not claimed: cardinality of segments, words, and turns; whether the abstention ledger is populated, since that depends on detected overlap and on whether every requested per-segment alignment conforms; whether a given segment has a word stream at all, since a segment with no speech to align has none — the forced-aligner artifact has two, both VibeVoice non-speech event tags such as `[Environmental Sounds]` — and an ordinary VibeVoice speech segment may instead lack words only with a same-bounds `alignment_unavailable` ledger entry; and output quality wherever a capability's `evidence.quality` is `unmeasured`. The sample is the contract for a successful run; a backend failure exits 1 and writes nothing.
 
-One field a run adds that a plan does not have: each capability in the embedded provenance gains an `outcome` of `produced` or `abstained`. A requested VibeVoice word stream that is absent or nonconforming on even one ordinary speech segment makes the run-level `word_timestamps` outcome `abstained`, while conforming word streams on other segments remain. That is the only difference between the two documents, which is why the key-set test must compare against a real run's provenance rather than the elided placeholder printed below.
+The sample's `provenance.outcomes` and `provenance.observed` are empty maps. A run populates `outcomes` with `produced` or `abstained` for each requested capability and `observed` with supplied runtime measurements and conditional evidence. A requested Qwen or VibeVoice word stream that is absent or nonconforming on even one ordinary speech unit makes the run-level `word_timestamps` outcome `abstained`, while conforming word streams on other units remain. Accepted endpoint clips beyond the default serialization allowance additionally populate `provenance.observed.alignment_corrections`; this field stays absent if none survive validation and reconciliation. The shipped-command tests compare worked examples against actual run provenance rather than the elided placeholder printed below.
 
 Placeholder timing and text values are `null`, never `0.0` or a plausible string. `0.0` is a legal timestamp and would violate the `no_synthesized_bounds` floor the moment a consumer read it as measured. Real metadata that the plan genuinely has — duration, path — is populated rather than stubbed.
 
@@ -209,7 +211,35 @@ Request validation remedies correct the offending fields in prose and tell the c
 
 `outcomes` copies the saved `provenance.outcomes` map without inferring anything from counts or completion. Each recorded requested capability remains `produced` or `abstained`; unrequested capabilities stay absent. A recorded empty floors-only map stays `{}`, and an absent map is not fabricated. For example, `"outcomes": {"diarization": "produced", "word_timestamps": "abstained"}` can accompany `complete: true` and a positive word count: the request finished, but some required word timing was withheld. Read the saved canonical abstentions for the affected scopes before attempting timing-dependent exports. The same projection applies to partial receipts.
 
-An incomplete run still exits 4 and prints the `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt. Runnable output-replacement and range-resume fixes retain the invocation's `--receipt` and `--log-dir` options; prose remedies and package commands are unchanged.
+Conditional `alignment_rejections` contains the saved canonical abstention entries carrying `alignment`, unchanged and in ledger order; it is absent when no such entry exists. Conditional `alignment_corrections` copies `provenance.observed.alignment_corrections` exactly and is absent when that observed field is absent. Historical entries without alignment diagnostics do not acquire them. An illustrative receipt fragment with one rejected unit and one accepted correction under an explicitly selected 20 ms limit is:
+
+```json
+{
+  "alignment_rejections": [
+    {
+      "abstention_id": "ab_0", "reason": "alignment_unavailable", "start": 0.0, "end": 1.0,
+      "alignment": {
+        "unit_id": "chunk_0", "segment_ids": ["seg_0"], "code": "out_of_unit_bounds", "word_index": 0,
+        "boundary": {
+          "original_bounds": [0.0, 1.03], "unit_bounds": [0.0, 1.0],
+          "start_overrun_ms": 0.0, "end_overrun_ms": 30.0, "max_overrun_ms": 20.0
+        }
+      }
+    }
+  ],
+  "alignment_corrections": [
+    {
+      "unit_id": "chunk_1", "segment_id": "seg_1", "word_id": "w_0", "word_index": 0,
+      "original_bounds": [0.99, 1.5], "applied_bounds": [1.0, 1.5], "unit_bounds": [1.0, 2.0],
+      "start_overrun_ms": 10.0, "end_overrun_ms": 0.0, "max_overrun_ms": 20.0
+    }
+  ]
+}
+```
+
+All bound pairs use source-relative seconds in `[start, end]` order; overrun and limit values use milliseconds. A correction identifies the surviving canonical word and its retained raw array index; a rejection identifies the affected wordless segments. The original estimate and the applied endpoint adjustment remain distinct. See [alignment diagnostics](../alignment-diagnostics.md) for the acceptance comparison and evidence limits.
+
+An incomplete run still exits 4 and prints the `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt. Runnable output-replacement and range-resume fixes retain the invocation's `--receipt`, `--log-dir` and explicit `--alignment-max-overrun-ms` options; prose remedies and package commands are unchanged.
 
 When the saved result records `provenance.plan.execution.range`, the receipt copies it as `range`, preserving `requested` and `selected_unit_scope` when supplied. `complete: true` then means the selected request completed, not that the whole original file was transcribed. Absent range and coverage remain absent.
 
