@@ -1,0 +1,106 @@
+{
+  "date": "2026-09-06",
+  "scope": "CLI-only development reproduction of Qwen timing loss, with temporary host file-copy observer",
+  "candidate_commit": "fe64fd0296a33318e3145c72f59261cbc5f9c784",
+  "fixture": "test-sample-multispeaker.m4a",
+  "source_sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+  "configuration": {
+    "stack": "qwen-1.7b",
+    "wants": [
+      "diarization",
+      "overlapped_speech",
+      "word_timestamps"
+    ],
+    "full_source": true,
+    "language_hint": false,
+    "speaker_count_hint": false
+  },
+  "raw_artifacts": "tests/artifacts/qwen-alignment-investigation-2026-09-06",
+  "instrumentation": {
+    "patch": "tests/artifacts/qwen-alignment-investigation-2026-09-06/observer.patch",
+    "effect": "Copies structured aligner request and response into its already-created diagnostic directory, without changing request, inference, normalization or export",
+    "removed": true,
+    "transport_restored_sha256": "380b99604250581f211c7f07a32f65b841072066fe4c0a318b3d68b77903458f"
+  },
+  "run": {
+    "start": "2026-09-06T19:25:50.586620+00:00",
+    "end": "2026-09-06T19:26:01.238499+00:00",
+    "exit_code": 0,
+    "wall_seconds": 10.651681332965381,
+    "source_sha256_after": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+    "observer_patch_sha256": "2d1226e26370cb4f7afb3716a08a8f15e9f60661059f66a95330e80c5cb53a54"
+  },
+  "reproduced": {
+    "missing_segment_id": "seg_27",
+    "missing_alignment_count": 1,
+    "unit": {
+      "unit_id": "turn_25",
+      "start": 96.570437,
+      "end": 97.996625,
+      "text": "Like.",
+      "speaker": "S1"
+    },
+    "stage_response": {
+      "unit_id": "turn_25",
+      "language": "English",
+      "words": [
+        {
+          "text": "Like",
+          "start": 96.57,
+          "end": 98.01
+        }
+      ]
+    },
+    "unit_duration_seconds": 1.426188,
+    "aligned_end_overrun_ms": 13.375,
+    "aligned_start_overrun_ms": 0.437,
+    "host_rounding_tolerance_ms": 0.501,
+    "only_word_with_out_of_bounds_overrun_beyond_tolerance": true,
+    "observed_branch": "normalize_aligned_words rejects the end outside the unit; sentence_segments retains text without words; orchestrator records alignment_unavailable; word_timestamps outcome abstained",
+    "canonical_segments_turns_abstentions_overlap_match_prior": true
+  },
+  "provider": {
+    "config_path": "/Users/fredy/.cache/huggingface/hub/models--mlx-community--Qwen3-ForcedAligner-0.6B-8bit/snapshots/0e1a68e91d815300c7c9754b2a7639378b23db15/config.json",
+    "config_sha256": "8dc126e1a4ac001acb02f3a9ca6277c8a20a25485fde293bc99eeab3aedc604d",
+    "timestamp_segment_time_ms": 80,
+    "source_path": "/Users/fredy/Library/Caches/audio-processing-cli/envs/mlx/lib/python3.13/site-packages/mlx_audio/stt/models/qwen3_asr/qwen3_forced_aligner.py",
+    "source_sha256": "0656ef055e14526cd67673db2246c2579bdffe80da7a1c0b139133858ff05b22",
+    "source_excerpt_lines": [
+      721,
+      753
+    ],
+    "mlx_audio_version": "0.4.5",
+    "recorded_source_excerpt": [
+      "timestamp_segment_time = self.config.timestamp_segment_time",
+      "timestamp_ms = masked_output * timestamp_segment_time",
+      "end_time=round(it[\"end_time\"] / 1000.0, 3)"
+    ]
+  },
+  "evidence": {
+    "aligner_request": {
+      "path": "tests/artifacts/qwen-alignment-investigation-2026-09-06/diagnostics/audio-transcribe-8gnzlegp/004-aligner-acviuh70/request.json",
+      "sha256": "74639cc3d54d70933b9a2edb0a12a1f8b48d92cd6476baf297186e42da93f924"
+    },
+    "aligner_response": {
+      "path": "tests/artifacts/qwen-alignment-investigation-2026-09-06/diagnostics/audio-transcribe-8gnzlegp/004-aligner-acviuh70/result.json",
+      "sha256": "9ae0ff981120072fff5f3e1825632f999562065fe93b1c9959543c02b794637f"
+    },
+    "canonical": {
+      "path": "tests/artifacts/qwen-alignment-investigation-2026-09-06/canonical.json",
+      "sha256": "c2a96097fece428173f436e53ee3a4e7215afbe7689f7248e1acb6f322834388"
+    }
+  },
+  "conclusions": [
+    "ASR produced the word and its speaker; missing public timing was caused by host rejection of a returned out-of-unit alignment.",
+    "The pinned ForcedAligner classifies timestamps at 80 ms spacing. Its captured endpoint is consistent with 1.44 seconds, exceeding this roughly 1.426-second input unit; the integration permits only 0.501 ms serialization-rounding overrun.",
+    "This is forced-aligner boundary integration and diagnosis scope, not evidence of Qwen ASR dropping text.",
+    "The original run had no saved structured response; this separately authorized reproduction matches its canonical affected fields."
+  ],
+  "limits": [
+    "No human word-boundary reference; source accuracy and safe clipping policy remain unverified.",
+    "No timing was invented, clamped, padded or substituted; no alternate model or processor ran.",
+    "No production runtime behavior changed; the original acceptance remains partially delivered.",
+    "An 80 ms output grid does not by itself prove that clipping any out-of-bounds prediction is safe."
+  ],
+  "follow_up_issue": 51
+}

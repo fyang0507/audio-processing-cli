@@ -1,0 +1,420 @@
+{
+  "date": "2026-09-06",
+  "scope": "Four fresh-context, full-source E2E cases on PR #49, including Qwen 1.7B plain and diarized variants",
+  "candidate_commit": "00873235aed5c1ac17e53baaa2a1c687eaa5e26b",
+  "status": "partial",
+  "status_scope": "Three repeated cases passed functional delivery; Qwen plain transcription passed and diarization produced, but one alignment abstention blocked timed Markdown. No perceptual accuracy score is claimed.",
+  "raw_artifacts": "tests/artifacts/e2e-pr49-2026-09-06",
+  "raw_path_basis": "Artifact paths below are relative to raw_artifacts; raw media, transcripts and logs remain untracked.",
+  "sources": [
+    {
+      "fixture": "autio-test-sample.m4a",
+      "sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834"
+    },
+    {
+      "fixture": "demo-video-audio-to-improve.mp4",
+      "sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003"
+    },
+    {
+      "fixture": "test-sample-multispeaker.m4a",
+      "sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c"
+    }
+  ],
+  "protocol": {
+    "fresh_agents": 4,
+    "knowledge": "Shipped skills/audio-cli skill and public CLI help/results only; no implementation, development docs, previous results or other-agent context",
+    "audio_operations": "Supplied audio CLI only; no external processors, direct provider calls or fallback",
+    "original_source_asr_before_enhancement": true,
+    "filler_removal": "Excluded by agreed scope",
+    "model_packages_pulled": 0,
+    "all_source_hashes_unchanged": true,
+    "cli_invocations": 83,
+    "cli_exit_counts": {
+      "0": 82,
+      "2": 1
+    },
+    "locked_operations": 15,
+    "heavy_operation_overlap": false,
+    "non_audio_journal": "Incomplete for bootstrap and some housekeeping; all audio CLI invocations have complete command/raw-stream records"
+  },
+  "cases": [
+    {
+      "case": "01-multispeaker",
+      "status": "pass",
+      "transcriptions": [
+        {
+          "stack": "firered",
+          "requested_capabilities": [
+            "word_timestamps",
+            "segment_timestamps"
+          ],
+          "canonical": {
+            "path": "01-multispeaker/firered.canonical.json",
+            "bytes": 44289,
+            "sha256": "cea09d36cda24bdaf4afbf790e0f1a9bcef2d776de9491578057785d0a5c24f2"
+          },
+          "complete": true,
+          "duration_seconds": 139.284,
+          "outcomes": {
+            "segment_timestamps": "produced",
+            "word_timestamps": "produced"
+          },
+          "segments": 62,
+          "word_records": 246,
+          "speaker_labels": [],
+          "turns": 0,
+          "overlap_intervals": 0,
+          "abstentions": []
+        },
+        {
+          "stack": "vibevoice",
+          "requested_capabilities": [
+            "diarization",
+            "segment_timestamps"
+          ],
+          "canonical": {
+            "path": "01-multispeaker/vibevoice.canonical.json",
+            "bytes": 9095,
+            "sha256": "b1df5298d762a07272fa0f74bdbb22b1f9f471fc8c7c8a9585374b26c2a49718"
+          },
+          "complete": true,
+          "duration_seconds": 139.284,
+          "outcomes": {
+            "diarization": "produced",
+            "segment_timestamps": "produced"
+          },
+          "segments": 20,
+          "word_records": 0,
+          "speaker_labels": [
+            "0",
+            "1"
+          ],
+          "turns": 17,
+          "overlap_intervals": 0,
+          "abstentions": []
+        }
+      ],
+      "readable_exports": [
+        "01-multispeaker/firered.txt",
+        "01-multispeaker/firered.timed.md",
+        "01-multispeaker/vibevoice.txt",
+        "01-multispeaker/vibevoice.timed.md"
+      ]
+    },
+    {
+      "case": "02-demo-enhancement",
+      "status": "pass",
+      "scope": "Functional render/report delivery; measured profile targets only partially attained",
+      "enhancement": {
+        "case": "02-demo-enhancement",
+        "configuration": {
+          "profile": "product-demo",
+          "denoiser": "rnnoise",
+          "full_source": true
+        },
+        "rendered": true,
+        "media": {
+          "path": "02-demo-enhancement/demo-enhanced.mp4",
+          "bytes": 91073983,
+          "sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3"
+        },
+        "report": {
+          "path": "02-demo-enhancement/enhanced.report.json",
+          "bytes": 56365,
+          "sha256": "c29c67c58aa3ab47bf517eaf7ec7957899851bb85b2168606f003484d57123a0"
+        },
+        "delivered_program": {
+          "integrated_loudness_lufs": -16.02,
+          "loudness_range_lu": 16.9,
+          "true_peak_dbtp": -2.48
+        },
+        "unresolved": [
+          {
+            "component": "speech-leveling",
+            "measured_at": "after_voice_enhance",
+            "measured_rms_dbfs": -37.382,
+            "reason": "voice_correction_bound_reached",
+            "stage": "voice-enhance",
+            "status": "bounded_outside_target",
+            "target_rms_dbfs": -30.0
+          },
+          {
+            "component": "loudness-range",
+            "measured_at": "encoded_output",
+            "measured_lra_lu": 16.9,
+            "reason": "dynamic_lra_control_would_change_relative_region_balance",
+            "stage": "program-loudness",
+            "status": "abstained",
+            "target_maximum_lra_lu": 11.0
+          }
+        ],
+        "timeline_verification": {
+          "av_sync": {
+            "reason": "not_measured",
+            "status": "abstained"
+          },
+          "content_alignment": {
+            "reason": "not_measured",
+            "status": "abstained"
+          },
+          "scope": "decoded_audio_duration_only",
+          "status": "pass",
+          "tolerance_ms": 50
+        },
+        "noise_reduction_amount": "unassessed: no clean reference",
+        "speech_preservation": "unassessed: not measured"
+      },
+      "fresh_detection": "Five freshly detected program regions miss the balance target; all nine fixed original regions meet it. These use different scopes and speech references."
+    },
+    {
+      "case": "03-mixed-language",
+      "status": "pass",
+      "transcription": {
+        "stack": "firered",
+        "requested_capabilities": [
+          "word_timestamps",
+          "segment_timestamps"
+        ],
+        "canonical": {
+          "path": "03-mixed-language/canonical.json",
+          "bytes": 13033,
+          "sha256": "935fdcf7c14ad6e626ba6cae622c72bc547ce7948d72935dd38219d9a016dc76"
+        },
+        "complete": true,
+        "duration_seconds": 27.753312,
+        "outcomes": {
+          "segment_timestamps": "produced",
+          "word_timestamps": "produced"
+        },
+        "segments": 8,
+        "word_records": 60,
+        "speaker_labels": [],
+        "turns": 0,
+        "overlap_intervals": 0,
+        "abstentions": []
+      },
+      "readable_exports": [
+        "03-mixed-language/readable.txt",
+        "03-mixed-language/readable.timed.md"
+      ],
+      "enhancement": {
+        "case": "03-mixed-language",
+        "configuration": {
+          "profile": "product-demo",
+          "denoiser": "rnnoise",
+          "full_source": true
+        },
+        "rendered": true,
+        "media": {
+          "path": "03-mixed-language/enhanced.m4a",
+          "bytes": 651043,
+          "sha256": "5d1af49f5127457d05a1e6611fec31a36c59e58b45869daa182a8b51ab1e0185"
+        },
+        "report": {
+          "path": "03-mixed-language/enhanced.report.json",
+          "bytes": 31449,
+          "sha256": "280065bff17d23f079491d06d5fb59b2d8bd50114155560f3647991e9c077f82"
+        },
+        "delivered_program": {
+          "integrated_loudness_lufs": -16.28,
+          "loudness_range_lu": 4.0,
+          "true_peak_dbtp": -2.41
+        },
+        "unresolved": [],
+        "timeline_verification": {
+          "av_sync": {
+            "reason": "not_measured",
+            "status": "abstained"
+          },
+          "content_alignment": {
+            "reason": "not_measured",
+            "status": "abstained"
+          },
+          "scope": "decoded_audio_duration_only",
+          "status": "pass",
+          "tolerance_ms": 50
+        },
+        "noise_reduction_amount": "unassessed: no clean reference",
+        "speech_preservation": "unassessed: not measured"
+      }
+    },
+    {
+      "case": "04-qwen-diarization",
+      "status": "partial",
+      "baseline_status": "pass",
+      "baseline": {
+        "stack": "qwen-1.7b",
+        "requested_capabilities": [],
+        "canonical": {
+          "path": "04-qwen-diarization/baseline.canonical.json",
+          "bytes": 4558,
+          "sha256": "280f3b66b27c91cdf0f683f9ec54d935b22e93db7e24c7013ef7ff9daed4d439"
+        },
+        "complete": true,
+        "duration_seconds": 139.284,
+        "outcomes": {},
+        "segments": 15,
+        "word_records": 0,
+        "speaker_labels": [],
+        "turns": 0,
+        "overlap_intervals": 0,
+        "abstentions": []
+      },
+      "diarized_status": "diarization produced; requested timing delivery blocked",
+      "diarized": {
+        "stack": "qwen-1.7b",
+        "requested_capabilities": [
+          "diarization",
+          "overlapped_speech",
+          "word_timestamps"
+        ],
+        "canonical": {
+          "path": "04-qwen-diarization/diarized.canonical.json",
+          "bytes": 44891,
+          "sha256": "96dcd460b0892b2febe6bc1cde46dd99493aca31088cb8993d035b07f572fbb3"
+        },
+        "complete": true,
+        "duration_seconds": 139.284,
+        "outcomes": {
+          "diarization": "produced",
+          "overlapped_speech": "produced",
+          "word_timestamps": "abstained"
+        },
+        "segments": 33,
+        "word_records": 237,
+        "speaker_labels": [
+          "S1",
+          "S2"
+        ],
+        "turns": 31,
+        "overlap_intervals": 1,
+        "abstentions": [
+          {
+            "abstention_id": "ab_0",
+            "end": 1.290312,
+            "reason": "overlap",
+            "start": 0.611187
+          },
+          {
+            "abstention_id": "ab_1",
+            "end": 1.578938,
+            "reason": "short_turn",
+            "start": 1.290312
+          },
+          {
+            "abstention_id": "ab_2",
+            "end": 8.8455,
+            "reason": "short_turn",
+            "start": 8.370125
+          },
+          {
+            "abstention_id": "ab_3",
+            "end": 93.005125,
+            "reason": "raw_fragment",
+            "start": 92.818313
+          },
+          {
+            "abstention_id": "ab_4",
+            "end": 97.996625,
+            "reason": "alignment_unavailable",
+            "start": 96.570437
+          },
+          {
+            "abstention_id": "ab_5",
+            "end": 137.266562,
+            "reason": "raw_fragment",
+            "start": 137.249562
+          }
+        ]
+      },
+      "readable_exports": [
+        "04-qwen-diarization/baseline.txt",
+        "04-qwen-diarization/baseline.md",
+        "04-qwen-diarization/diarized.txt",
+        "04-qwen-diarization/diarized.md"
+      ],
+      "blocker": {
+        "operation": "transcribe export --timestamps",
+        "exit_code": 2,
+        "code": "timing_required_for_timestamps",
+        "segment_id": "seg_27",
+        "alignment_unavailable_interval_seconds": [
+          96.570437,
+          97.996625
+        ],
+        "evidence": "04-qwen-diarization/commands/020-diarized-timed-md/stderr.txt",
+        "srt_vtt": "Not attempted after timed Markdown refusal",
+        "retry_or_fallback": false
+      },
+      "timing_limit": "237 word records include 16 zero-duration records; one segment has neither words nor segment bounds. Speaker assignment and word-boundary accuracy are unscored."
+    }
+  ],
+  "prior_accepted_parity": {
+    "baseline": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance in main checkout",
+    "transcripts": [
+      {
+        "artifact": "01-multispeaker/firered.canonical.json",
+        "source_duration_matches": true,
+        "segment_text_equal": true,
+        "segments_equal": true,
+        "prior_segments": 62,
+        "current_segments": 62
+      },
+      {
+        "artifact": "01-multispeaker/vibevoice.canonical.json",
+        "source_duration_matches": true,
+        "segment_text_equal": true,
+        "segments_equal": true,
+        "prior_segments": 20,
+        "current_segments": 20,
+        "turns_equal": true
+      },
+      {
+        "artifact": "03-mixed-language/canonical.json",
+        "source_duration_matches": true,
+        "segment_text_equal": true,
+        "segments_equal": true,
+        "prior_segments": 8,
+        "current_segments": 8
+      }
+    ],
+    "media": [
+      {
+        "artifact": "02-demo-enhancement/demo-enhanced.mp4",
+        "bytes_equal": true,
+        "prior_sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3",
+        "current_sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3"
+      },
+      {
+        "artifact": "03-mixed-language/enhanced.m4a",
+        "bytes_equal": true,
+        "prior_sha256": "5d1af49f5127457d05a1e6611fec31a36c59e58b45869daa182a8b51ab1e0185",
+        "current_sha256": "5d1af49f5127457d05a1e6611fec31a36c59e58b45869daa182a8b51ab1e0185"
+      }
+    ],
+    "scope": "Exact segment structures including text/timings, VibeVoice turns, and rendered media bytes; whole canonical JSON has run-specific metadata and is not claimed byte-identical."
+  },
+  "agent_feedback": {
+    "good": [
+      "Task-shaped skill routing and discoverable capability plans",
+      "Original media and canonical JSON preserved",
+      "Durable transcription logs, stage progress, explicit abstentions and segment-specific refusal",
+      "Native exports and source/output-aware report comparison"
+    ],
+    "improve": [
+      "Show requested capability outcomes and abstention counts in compact run receipts; complete:true is not evidence that all requested capabilities were produced.",
+      "Connect alignment abstentions to segment IDs and distinguish already-requested-but-abstained word timing from missing capability requests in export remediation.",
+      "Document that adding diarization can change recognized text and withhold text in abstained scopes; baseline and diarized outputs differ on this fixture.",
+      "Group original, intermediate, predicted and delivered evidence limits and repeated pointers; demo detailed summary contains 22 entries and comparisons exceed 120 KB.",
+      "Expose concise inspect/enhance receipts and comparison counts, and label fixed-region versus freshly detected-region measurement scope.",
+      "Summarize native warnings and zero-duration word counts while preserving raw diagnostics."
+    ]
+  },
+  "limits": [
+    "Full source was requested once per predeclared variant. Completion is not verbatim coverage, speaker accuracy or complete timing.",
+    "No ground-truth transcript, speaker annotation or perceptual score was produced. New Qwen output awaits user judgment.",
+    "RNNoise applied; delivered noise-reduction amount and speech preservation remain unmeasured, not failed processing.",
+    "Decoded-duration verification does not establish content alignment or A/V sync.",
+    "No CLI implementation was changed or blocker repaired during this test-only replay."
+  ]
+}

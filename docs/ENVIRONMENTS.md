@@ -16,7 +16,7 @@ environment half is `src/audio_cli/environments/manifest.json`, described below.
 | `core` | the tool's own | `silero-vad`, `rnnoise-voice` | No separate runtime provisioned. numpy, scipy, onnxruntime and host FFmpeg. Only Silero may auto-fetch. |
 | `mlx` | 3.13.9 | `qwen3-asr-1.7b-8bit`, `qwen3-asr-0.6b-8bit`, `qwen3-forcedaligner` | `mlx-audio==0.4.5` requires `transformers>=5.5.0,<5.13.0`. Torch-free by intent, and now torch-free in fact. |
 | `torch-firered` | 3.12.12 | `firered-asr2s` | FireRed pins `transformers==5.1.0` exactly. It cannot join anything, and it cannot leave PyTorch — see the punctuator finding below. |
-| `torch-vibevoice` | 3.12.12 | `vibevoice-asr-7b` | VibeVoice requires `transformers>=4.51.3,<5.0.0`. **Provisional**: see the VibeVoice finding. |
+| `torch-vibevoice` | 3.12.12 | `vibevoice-asr-7b` | Retained Torch implementation; VibeVoice requires `transformers>=4.51.3,<5.0.0`. See the historical MLX comparison below. |
 | `swift` | none | `fluidaudio`, `speaker-diarization-coreml` | A Swift build product plus one Core ML package. No interpreter, so no lock. |
 
 Four provisioned environments, where VOCABULARY declared three and marked the reason unverified.
@@ -100,12 +100,7 @@ The memory case is nevertheless real, and it is the one the spec documents worry
 | MLX bf16 | 20.74 GB | 275.1 s |
 | MLX 8-bit | 12.43 GB | 56.3 s |
 
-MLX and PyTorch counters have different scopes and must not be differenced across columns, but
-within its own counter MLX 8-bit is the only attractive MLX configuration, and 12.4 GB is the
-first VibeVoice figure that does not immediately rule out a 16 GiB machine. Adopting it
-replaces every recorded VibeVoice figure, so it is a re-measurement decision, not a lock
-change. `torch-vibevoice` exists until that decision; when it is made, the environment and its
-lock are deleted rather than edited.
+MLX and PyTorch counters have different scopes and must not be differenced across columns. The historical [recorded comparison](../model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json) shows lower allocation for MLX 8-bit within its own counter, but does not validate a physical 16 GiB host. The decision in [#13](https://github.com/fyang0507/audio-processing-cli/issues/13), carried into [#46](https://github.com/fyang0507/audio-processing-cli/issues/46), is to retain the accepted Torch implementation. `torch-vibevoice` and its existing lock are the settled shipped environment. The MLX alternative remains historical evidence; any future migration requires separately scoped measurements and is not a pending provisioning decision.
 
 **FireRed cannot move at all.** `mlx-audio`'s `fireredasr2` is the AED only — Conformer
 encoder, transformer decoder, beam search — and `mlx-audio` ships no punctuation restoration

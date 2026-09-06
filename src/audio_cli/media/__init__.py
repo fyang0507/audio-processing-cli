@@ -1,6 +1,7 @@
 """Public media probing, filesystem, and publication API."""
 
 from .denoise import render_rnnoise
+from .diagnostics import retained_diagnostics_directory
 from .errors import MediaError
 from .ffmpeg import (
     ENHANCED_MARKER,
@@ -90,6 +91,7 @@ __all__ = [
     "render_rnnoise",
     "require_runtime",
     "resolve_path_identity",
+    "retained_diagnostics_directory",
     "run_in_directory",
     "sha256_regular_file_at",
     "stream_timing",

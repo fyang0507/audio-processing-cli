@@ -7,9 +7,10 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
-from audio_cli.media import temporary_directory
+from audio_cli.media import retained_diagnostics_directory, temporary_directory
 
 
 class _MacProcTaskInfo(ctypes.Structure):
@@ -69,24 +70,45 @@ class _ChildRssReader:
 
 
 class SubprocessRunner:
-    def __init__(self, progress, *, heartbeat_seconds: float = 10.0) -> None:
+    def __init__(
+        self, progress, *, heartbeat_seconds: float = 10.0, log_root: Path | None = None
+    ) -> None:
         self.progress = progress
         self.heartbeat_seconds = heartbeat_seconds
+        # Validate requested storage before decode/model execution, with no fallback.
+        self.log_directory = (
+            retained_diagnostics_directory(log_root, prefix="audio-transcribe-")
+            if log_root is not None
+            else None
+        )
+        self._stage_number = 0
 
     def _notice(self, message: str) -> None:
         self.progress.write(f"transcribe: host: {message}\n")
         self.progress.flush()
 
-    def run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+    def run(self, command: list[str], *, stage: str = "child") -> subprocess.CompletedProcess[str]:
+        if not stage or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for char in stage):
+            raise ValueError("diagnostic stage must contain only lowercase letters, digits, _ or -")
         try:
-            return self._run(command)
+            return self._run(command, stage)
         except OSError as exc:
             return subprocess.CompletedProcess(
                 command, 127, "", f"cannot retain backend diagnostics: {exc}"
             )
 
-    def _run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
-        with temporary_directory("audio-transcribe-", preserve=True) as directory:
+    def _run(self, command: list[str], stage: str) -> subprocess.CompletedProcess[str]:
+        self._stage_number += 1
+        storage = (
+            nullcontext(
+                retained_diagnostics_directory(
+                    self.log_directory, prefix=f"{self._stage_number:03d}-{stage}-"
+                )
+            )
+            if self.log_directory is not None
+            else temporary_directory("audio-transcribe-", preserve=True)
+        )
+        with storage as directory:
             stdout_path = directory / "stdout.log"
             stderr_path = directory / "stderr.log"
             peak_rss: int | None = None

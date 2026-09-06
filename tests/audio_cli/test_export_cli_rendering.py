@@ -32,6 +32,7 @@ def test_export_cli_event_only_timing_produces_an_empty_subtitle_file(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -60,6 +61,7 @@ def test_export_cli_does_not_prescribe_an_inert_timing_rerun_for_ordinary_text(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -100,6 +102,7 @@ def test_export_cli_writes_subtitle_and_prints_a_summary(tmp_path: Path, capsys)
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -145,6 +148,7 @@ def test_export_cli_summary_reports_only_emitted_vtt_voice_tags(tmp_path: Path, 
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),

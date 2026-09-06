@@ -68,6 +68,7 @@ def test_export_success_summary_matches_the_happy_path(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "meeting.timed.json",
@@ -84,7 +85,7 @@ def test_export_success_summary_matches_the_happy_path(
     actual = json.loads(captured.out)
     documented = documented_block("### 1.5 Export subtitles")
 
-    assert_documented_shape(actual, documented, "audio export --format srt")
+    assert_documented_shape(actual, documented, "audio transcribe export --format srt")
     assert actual["warnings"][0]["detail"] == documented["warnings"][0]["detail"]
     assert Path("meeting.srt").read_text(encoding="utf-8") == documented_text_block(
         "Exit 0. `meeting.srt`:"
@@ -158,6 +159,7 @@ def test_export_vtt_matches_the_documented_voice_tag_render(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "demo.transcript.json",
@@ -213,6 +215,7 @@ def test_untimed_file_exports_match_the_happy_path(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "meeting.transcript.json",
@@ -313,6 +316,7 @@ def test_multi_input_export_summary_and_merged_order_match_the_happy_path(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "meeting.timed.partial.json",

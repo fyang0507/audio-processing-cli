@@ -17,6 +17,7 @@ EXPECTED_PEER_MODULES = {
         "execution.preflight",
         "execution.product_validation",
         "execution.publication",
+        "execution.receipt",
         "execution.runtime",
         "execution.vad",
     },

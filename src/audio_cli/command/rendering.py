@@ -20,13 +20,16 @@ def export_command(
     *,
     force: bool = False,
     timestamps: bool = False,
+    provenance: bool = False,
 ) -> str:
-    parts = ["audio", "export"]
+    parts = ["audio", "transcribe", "export"]
     for input_path in input_paths:
         parts.extend(("--input", command_path_argument(input_path)))
     parts.extend(("--format", output_format, "-o", command_path_argument(output)))
     if timestamps:
         parts.append("--timestamps")
+    if provenance:
+        parts.append("--provenance")
     if force:
         parts.append("--force")
     return shlex.join(parts)
@@ -121,4 +124,29 @@ def transcribe_run_command(
         parts.extend(("-o", command_path_argument(output)))
     if force:
         parts.append("--force")
+    return shlex.join(parts)
+
+
+def with_transcribe_run_options(
+    command: str, *, receipt: bool = False, log_dir: Path | None = None
+) -> str:
+    """Retain invocation-only output choices on a rendered runnable retry.
+
+    Prose remedies and provisioning commands remain byte-for-byte unchanged.
+    These choices belong to command presentation, not the saved model plan.
+    """
+    if not receipt and log_dir is None:
+        return command
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return command
+    if parts[:3] != ["audio", "transcribe", "run"]:
+        return command
+    if receipt and "--receipt" not in parts:
+        parts.append("--receipt")
+    if log_dir is not None and not any(
+        item == "--log-dir" or item.startswith("--log-dir=") for item in parts
+    ):
+        parts.extend(("--log-dir", command_path_argument(log_dir)))
     return shlex.join(parts)

@@ -30,6 +30,17 @@ def _repeat_request(correction: str) -> str:
     return f"{correction}; repeat the original command, preserving every other argument"
 
 
+def log_directory_invalid(path: Path, reason: str) -> Refusal:
+    return build_refusal(
+        "log_directory_invalid",
+        2,
+        _repeat_request("set --log-dir to a writable directory"),
+        field="--log-dir",
+        provided=str(path),
+        reason=reason,
+    )
+
+
 def stack_required() -> Refusal:
     return build_refusal(
         "stack_required",
@@ -265,4 +276,18 @@ def run_incomplete(
         detail=detail,
         coverage=dict(coverage),
         output=str(output),
+    )
+
+
+def receipt_options_invalid(output: Path | None, output_format: str) -> Refusal:
+    return build_refusal(
+        "receipt_options_invalid",
+        2,
+        "use --receipt with --output PATH and --format json, or remove --receipt; "
+        "repeat the original command, preserving every other argument",
+        field="--receipt",
+        provided=True,
+        output_supplied=output is not None,
+        format=output_format,
+        requires=["--output", "--format json"],
     )

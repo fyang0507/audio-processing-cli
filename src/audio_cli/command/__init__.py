@@ -1,5 +1,6 @@
 """Shared command presentation primitives for the newer CLI surfaces."""
 
+from .progress import ProgressReporter
 from .refusals import (
     Refusal,
     build_refusal,
@@ -13,9 +14,11 @@ from .rendering import (
     packages_pull_command,
     transcribe_plan_command,
     transcribe_run_command,
+    with_transcribe_run_options,
 )
 
 __all__ = [
+    "ProgressReporter",
     "Refusal",
     "build_refusal",
     "command_path_argument",
@@ -26,4 +29,5 @@ __all__ = [
     "packages_pull_command",
     "transcribe_plan_command",
     "transcribe_run_command",
+    "with_transcribe_run_options",
 ]

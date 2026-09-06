@@ -1,6 +1,10 @@
 # Working in this repository
 
-A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `report summary`, `doctor`, `packages`, `transcribe stacks`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `export` ship. JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
+A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `report summary`, `doctor`, `packages`, `transcribe stacks`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `transcribe export` ship (`export` remains a compatibility alias). JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
+
+## Final feature acceptance
+
+Use [agent acceptance](docs/agent-acceptance.md) as the final development gate for user-facing features. It requires fresh operator agents with only the shipped skill and public CLI guidance, original-media evidence, explicit capability/delivery verdicts and no fallback after an unexpected failure. Green unit/specification checks alone are not user acceptance. Follow its scope rule for documentation-only changes; keep this developer procedure out of the operator skill.
 
 ## The rule that matters most
 
@@ -80,7 +84,7 @@ The non-Python directories under `environments` are part of that package's decla
 | Package | Owns | Must not own |
 | --- | --- | --- |
 | `adapters` | Pure, deterministic interpretation of a backend's raw payload into host-side values, including alignment and diarization reconciliation. | Filesystem/process I/O, model imports, planning, publication, or public-result serialization. |
-| `execution` | Provider-neutral host run services after planning: mutable integrity/runtime probes, range validation, materialization receipt access, shared VAD invocation, metrics, completion, resume, and publication. | Media I/O mechanics, stack selection, provider workflow order, model-stage process lifecycle, or backend-payload interpretation. |
+| `execution` | Provider-neutral host run services after planning: mutable integrity/runtime probes, range validation, materialization receipt access, shared VAD invocation, metrics, completion, resume, publication, and published-result command receipts. | Media I/O mechanics, stack selection, provider workflow order, model-stage process lifecycle, or backend-payload interpretation. |
 | `orchestrator` | The sole stack dispatcher and the Qwen, FireRed, and VibeVoice workflows. It decides which operations run and in what order by composing the other transcription packages. | Subprocess mechanics, model-framework imports, package provisioning, or schema ownership. |
 | `planner` | Pure request validation and immutable plan construction from input metadata and declared stack/environment facts. | Installed-state inspection, model execution, normalization, or publication. |
 | `refusals` | Fixed-shape, transcription-specific refusal payload builders that compose the shared runnable-command renderer. Callers detect the condition; this package only represents it. | Detecting failures, running remediation, export-specific failures, or non-transcription command errors. |
@@ -126,4 +130,4 @@ When a decomposition creates a family of modules, give that family a real subpac
 
 ## Skills
 
-[`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the one skill, and it ships in the source distribution so it travels with the CLI. It is written for an agent *using* the tool on someone's audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or command readiness. Two rules keep it that way. Anything `--help` already states stays out of it, and backend internals stay out too — how the models are partitioned into runtimes belongs in [ENVIRONMENTS.md](docs/ENVIRONMENTS.md), where a developer will look for it.
+[`audio-cli`](skills/audio-cli/SKILL.md) is the one skill, developed and shipped under `skills/audio-cli/` in the source distribution so it travels with the CLI. Keep it outside development-agent auto-discovery: do not expose it through `.agents/skills/` or add a compatibility symlink there, and do not install it into another workspace as part of building this repository. It is written for an agent *using* the tool on someone's audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or command readiness. Two rules keep it that way. Anything `--help` already states stays out of it, and backend internals stay out too — how the models are partitioned into runtimes belongs in [ENVIRONMENTS.md](docs/ENVIRONMENTS.md), where a developer will look for it.

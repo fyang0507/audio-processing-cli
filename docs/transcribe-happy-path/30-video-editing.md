@@ -176,7 +176,7 @@ An ordinary speech segment is different. If its requested alignment result is ab
 ### 2.3 Export subtitles with speaker voice tags
 
 ```bash
-audio export --input demo.transcript.json --format vtt -o demo.vtt
+audio transcribe export --input demo.transcript.json --format vtt -o demo.vtt
 ```
 
 Exit 0. `demo.vtt`:

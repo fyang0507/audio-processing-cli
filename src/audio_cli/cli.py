@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .adjustments import AdjustmentError, load_adjustments
 from .cli_parser import build_parser
-from .command import Refusal
+from .command import ProgressReporter, Refusal, with_transcribe_run_options
 from .environments import ManifestError
 from .media import MediaError, media_summary, probe_media
 from .packages import (
@@ -24,6 +24,7 @@ from .pipeline import (
     DenoiserModel,
     EnhancementPipeline,
     PipelineError,
+    compare_reports,
     inspect_source,
     summarize_report,
     validate_skips,
@@ -31,11 +32,13 @@ from .pipeline import (
 )
 from .profiles import STAGE_ORDER, get_profile
 from .transcribe import catalog as transcribe_catalog
+from .transcribe import execution as transcribe_execution
 from .transcribe import orchestrator as transcribe_orchestrator
 from .transcribe import planner as transcribe_planner
 from .transcribe import refusals as transcribe_refusals
 from .transcribe import stacks as transcribe_stacks
 from .transcribe.plan import serialize_plan
+from .transcribe.transport import StageTransport
 from .vad import SileroOnnxVad, VadError
 
 
@@ -113,19 +116,21 @@ def _run_enhance(args: argparse.Namespace) -> int:
         nyquist_hz=24_000.0,
     )
     detector = SileroOnnxVad(args.vad_model)
-    pipeline = EnhancementPipeline(
-        profile,
-        skipped_stages=skipped,
-        adjustments=adjustments,
-        detector=detector,
-        denoiser_model=denoiser_model,
-    )
-    report = pipeline.run(
-        args.input,
-        output=args.output,
-        dry_run=args.dry_run,
-        allow_enhanced_input=args.allow_enhanced_input,
-    )
+    with ProgressReporter("enhance") as progress:
+        pipeline = EnhancementPipeline(
+            profile,
+            skipped_stages=skipped,
+            adjustments=adjustments,
+            detector=detector,
+            denoiser_model=denoiser_model,
+            progress=progress,
+        )
+        report = pipeline.run(
+            args.input,
+            output=args.output,
+            dry_run=args.dry_run,
+            allow_enhanced_input=args.allow_enhanced_input,
+        )
     if report_path is not None:
         write_report(report_path, report)
     _print_json(report)
@@ -189,9 +194,13 @@ def _run_packages(args: argparse.Namespace) -> int:
 
 def _run_transcribe(args: argparse.Namespace) -> int:
     command = args.transcribe_command
+    if command == "export":
+        return _run_export(args)
     if command == "stacks":
         _print_json(transcribe_stacks.discovery())
         return 0
+    if command == "run" and args.receipt:
+        transcribe_execution.validate_receipt_options(args.output, args.format)
     wants = args.want if command in {"plan", "run"} else None
     request = transcribe_planner.resolve_request(
         stack_id=args.stack,
@@ -215,6 +224,12 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         )
     else:
         run_range = None
+    transport = None
+    if command == "run" and args.log_dir is not None:
+        try:
+            transport = StageTransport(log_root=args.log_dir)
+        except (OSError, ValueError) as exc:
+            raise transcribe_refusals.log_directory_invalid(args.log_dir, str(exc)) from exc
     # Validation above is deliberately complete before this probe, and the registry is read
     # only after the probe.  No request refusal can be shadowed by provisioning state.
     metadata = transcribe_catalog.input_metadata(
@@ -231,18 +246,26 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             if entry.get("state") == "ready"
         }
         plan = transcribe_planner.build_plan(request, metadata, provisioned_packages=ready)
-        _print_json(serialize_plan(plan))
+        _print_json(serialize_plan(plan, compact=args.compact))
         return 0
     if command == "run":
-        product = transcribe_orchestrator.run(
-            request,
-            metadata,
-            output=args.output,
-            output_format=args.format,
-            run_range=run_range,
-            force=args.force,
-        )
-        if args.format == "json":
+        try:
+            product = transcribe_orchestrator.run(
+                request,
+                metadata,
+                output=args.output,
+                output_format=args.format,
+                run_range=run_range,
+                force=args.force,
+                **({"transport": transport} if transport is not None else {}),
+            )
+        except transcribe_execution.PublishedPartial as exc:
+            if args.receipt:
+                _print_json(transcribe_execution.build_receipt(exc.result, exc.payload["output"]))
+            raise
+        if args.receipt:
+            _print_json(transcribe_execution.build_receipt(product.payload, args.output))
+        elif args.format == "json":
             _print_json(product.payload)
         else:
             sys.stdout.write(transcribe_orchestrator.render_human(product.payload, args.format))
@@ -256,6 +279,7 @@ def _run_export(args: argparse.Namespace) -> int:
         InvalidResultError,
         OutputExistsError,
         OutputWriteError,
+        ProvenanceUnsupportedError,
         ReadableTimingRequiredError,
         TimestampsUnsupportedError,
         TimingRequiredError,
@@ -274,7 +298,10 @@ def _run_export(args: argparse.Namespace) -> int:
             output=args.output,
             force=args.force,
             timestamps=args.timestamps,
+            provenance=args.provenance,
         )
+    except ProvenanceUnsupportedError as exc:
+        raise export_refusals.provenance_unsupported_for_format(exc.output_format) from exc
     except ReadableTimingRequiredError as exc:
         raise export_refusals.timing_required_for_timestamps(
             exc.input_path, exc.segment_id
@@ -328,6 +355,7 @@ def _run_export(args: argparse.Namespace) -> int:
             exc.output,
             replaceable=exc.replaceable,
             timestamps=args.timestamps,
+            provenance=args.provenance,
         ) from exc
     except UnsafeOutputError as exc:
         raise export_refusals.output_is_canonical_input(exc.output, exc.protected) from exc
@@ -356,7 +384,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "enhance":
             return _run_enhance(args)
         if args.command == "report":
-            _print_json(summarize_report(args.input))
+            if args.report_command == "compare":
+                _print_json(compare_reports(args.left, args.right))
+            else:
+                _print_json(
+                    summarize_report(
+                        args.input,
+                        include_metrics=args.metrics,
+                        include_evidence_limits=args.evidence_limits,
+                    )
+                )
             return 0
         if args.command == "doctor":
             return _run_doctor(args)
@@ -368,6 +405,12 @@ def main(argv: list[str] | None = None) -> int:
             return _run_export(args)
         parser.error(f"Unknown command: {args.command}")
     except Refusal as exc:
+        if args.command == "transcribe" and args.transcribe_command == "run":
+            exc.payload["fix"] = with_transcribe_run_options(
+                exc.payload["fix"],
+                receipt=args.receipt,
+                log_dir=args.log_dir,
+            )
         _print_json(exc.payload, stream=sys.stderr)
         return exc.exit_code
     except ProvisioningError as exc:

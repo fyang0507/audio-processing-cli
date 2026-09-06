@@ -161,6 +161,8 @@ Two things FireRed emits that this catalog deliberately does not offer. `asr_con
 
 Adds the resolved roles, the packages to provision, and a `sample_output` block. When the registry snapshot marks packages missing, top-level `next` is a runnable `audio packages pull` command naming exactly those package ids in plan order. It is absent when all planned packages are provisioned. This is provisioning guidance, not an integrity check, and is not copied into the durable result's embedded plan. `capabilities.next` is a runnable floors-only plan; add `--want` deliberately for capabilities beyond the floors.
 
+`audio transcribe plan --compact` omits only `sample_output` and does not generate it. The default is unchanged. `roles`, `execution`, `capabilities`, `packages`, `total_known_download_bytes`, `unsized_packages`, `warnings`, and conditional `next` retain exactly their default values. This is a presentation choice; request validation, stack selection, package selection, estimates, and warnings are unchanged.
+
 ### How `sample_output` is produced, and what it guarantees
 
 The sample is built by populating the real result object with one placeholder entity per requested capability — plus the floor artifacts every conforming run carries, such as the abstention ledger — and serializing it through **the same serializer `run` uses**. It is never a hand-written example, and there is no second code path. Consequently the output shape is a pure function of the resolved capability set, so all combinations are generated on demand rather than enumerated.
@@ -182,3 +184,42 @@ The binding test is that the sample's key set equals a real run's key set, and t
 Capability and plan estimates use the media-owned probed duration with `duration_basis: probed_audio_stream` or `probed_container`; capability `input.timing` also exposes available stream origins. Runs instead label `source.duration_basis: canonical_decoded_pcm` and use the canonical mono 16 kHz PCM16 frame count. Zero is the first decoded sample, not a container timestamp. [Duration and alignment evidence](../timing-evidence.md) defines these fields, omission rules, and why duration or start differences cannot establish clipping, missing words, or a justified timestamp shift. Legacy v1 sources without a basis remain readable without a fabricated basis.
 
 Request validation remedies correct the offending fields in prose and tell the caller to repeat its original command with every other argument preserved. They never change `run` to `plan`, drop range/output/format/language options, or silently choose a full-media run. This keeps fixed refusal payloads independent of execution-only options. Concrete provisioning and output retry commands remain runnable when their builders have the full context.
+
+### Published-run receipts
+
+`audio transcribe run --receipt` requires `--output PATH` and JSON format (`--format json`, including its default). It applies to all four stacks. The saved normalized JSON remains byte-for-byte identical to the same run without `--receipt`; only stdout becomes a JSON receipt. Default run stdout remains the full result. For example, a complete floors-only Qwen run with three segments and no abstentions returns:
+
+```json
+{
+  "output": "meeting.json",
+  "source": {
+    "path": "/Users/you/recordings/meeting.m4a",
+    "duration_seconds": 361.0,
+    "duration_basis": "canonical_decoded_pcm",
+    "timebase": "seconds"
+  },
+  "stack": "qwen-0.6b",
+  "complete": true,
+  "counts": {"segments": 3, "abstentions": 0}
+}
+```
+
+`output` is the actual published path. `source`, `stack`, and `complete` copy saved facts. Counts always include `segments` and `abstentions`; `words` counts supplied word objects only when a word stream is present, and `turns`, `vad_regions`, `lid_regions`, and `overlapped_speech` appear only when their saved collections exist. Missing collections and source metadata stay absent. Counts do not measure recognition accuracy or missing spoken words; `complete` describes processing completion, and the saved abstention ledger and capability outcomes remain the evidence for capability limitations.
+
+An incomplete run still exits 4 and prints the `run_incomplete` refusal, coverage, and resume fix to stderr. Receipt stdout names the actual partial JSON file, sets `complete: false`, and includes its saved `coverage` and counts. The requested complete output is not reported as published. Backend and publication failures emit no receipt. Runnable output-replacement and range-resume fixes retain the invocation's `--receipt` and `--log-dir` options; prose remedies and package commands are unchanged.
+
+When the saved result records `provenance.plan.execution.range`, the receipt copies it as `range`, preserving `requested` and `selected_unit_scope` when supplied. `complete: true` then means the selected request completed, not that the whole original file was transcribed. Absent range and coverage remain absent.
+
+Invalid receipt combinations refuse at exit 2 before request resolution, media probing, or model work. `--receipt` without `--output` in default JSON format produces:
+
+```json
+{
+  "code": "receipt_options_invalid",
+  "field": "--receipt",
+  "provided": true,
+  "output_supplied": false,
+  "format": "json",
+  "requires": ["--output", "--format json"],
+  "fix": "use --receipt with --output PATH and --format json, or remove --receipt; repeat the original command, preserving every other argument"
+}
+```

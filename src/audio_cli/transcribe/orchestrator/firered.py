@@ -21,6 +21,7 @@ from ..catalog import InputMetadata
 from ..execution.materialization import _checkout, _materialized_role_paths
 from ..execution.preflight import preflight
 from ..execution.publication import (
+    PublishedPartial,
     _backend_fix,
     _coverage,
     _publish_partial,
@@ -297,15 +298,20 @@ def _run_firered(
         )
         error = firered.payload.get("error", {})
         detail = error.get("message") if isinstance(error, Mapping) else None
-        raise refusals.run_incomplete(
-            "firered_process",
-            "firered-asr2s",
-            str(detail)
-            if detail
-            else (f"FireRed stopped after {processed_count} of {len(stage_regions)} VAD regions"),
-            coverage,
-            target,
-            _resume_command(request, coverage, target, run_range),
+        raise PublishedPartial(
+            refusals.run_incomplete(
+                "firered_process",
+                "firered-asr2s",
+                str(detail)
+                if detail
+                else (
+                    f"FireRed stopped after {processed_count} of {len(stage_regions)} VAD regions"
+                ),
+                coverage,
+                target,
+                _resume_command(request, coverage, target, run_range),
+            ),
+            payload,
         )
 
     _write_complete(

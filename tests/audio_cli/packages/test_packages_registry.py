@@ -123,7 +123,7 @@ def test_doctor_separates_pull_toolchains_from_runtime_requirements() -> None:
     assert report["environments"]["swift"]["requires_tool"] == ["swift"]
     assert report["environments"]["swift"]["blocked_by_missing_tool"] == ["swift"]
     assert report["environments"]["mlx"]["blocked_by_missing_tool"] == []
-    assert report["environments"]["torch-vibevoice"]["provisional"] is True
+    assert report["environments"]["torch-vibevoice"]["provisional"] is False
     assert report["packages"]["firered-asr2s"] == "absent"
     assert env.packages()["fluidaudio"].requires_tool == ("swift",)
 

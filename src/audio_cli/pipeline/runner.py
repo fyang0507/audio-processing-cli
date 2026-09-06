@@ -13,6 +13,7 @@ from .denoise import DenoiserModel
 from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import prepare_run
+from .progress import ProgressSink, progress_stage
 from .publication import publish_output
 from .reporting import build_report
 from .stages import process_stages
@@ -27,12 +28,14 @@ class EnhancementPipeline:
         adjustments: list[GainAdjustment] | None = None,
         detector: VadDetector | None = None,
         denoiser_model: DenoiserModel | None = None,
+        progress: ProgressSink | None = None,
     ) -> None:
         self.profile = profile
         self.skipped_stages = skipped_stages or set()
         self.adjustments = adjustments or []
         self.detector = detector
         self.denoiser_model = denoiser_model
+        self.progress = progress
 
     def run(
         self,
@@ -42,42 +45,47 @@ class EnhancementPipeline:
         dry_run: bool,
         allow_enhanced_input: bool = False,
     ) -> dict[str, object]:
-        prepared = prepare_run(
-            self.profile,
-            self.detector,
-            source,
-            output=output,
-            dry_run=dry_run,
-            allow_enhanced_input=allow_enhanced_input,
-        )
-        staged = process_stages(
-            self.profile,
-            self.skipped_stages,
-            self.adjustments,
-            prepared,
-            self.denoiser_model,
-        )
-        with temporary_directory() as temp_dir:
-            loudness = normalize_loudness(
+        with progress_stage(self.progress, "dry-run" if dry_run else "enhancement"):
+            prepared = prepare_run(
+                self.profile,
+                self.detector,
+                source,
+                output=output,
+                dry_run=dry_run,
+                allow_enhanced_input=allow_enhanced_input,
+                progress=self.progress,
+            )
+            staged = process_stages(
                 self.profile,
                 self.skipped_stages,
+                self.adjustments,
                 prepared,
-                staged,
-                temp_dir,
-                apply_region_corrections=apply_machine_region_corrections,
+                self.denoiser_model,
+                progress=self.progress,
             )
-            report = build_report(self.profile, prepared, staged, loudness)
-            if dry_run:
-                return report
-            return publish_output(
-                self.profile,
-                self.skipped_stages,
-                prepared,
-                staged,
-                loudness,
-                temp_dir,
-                report,
-            )
+            with temporary_directory() as temp_dir:
+                with progress_stage(self.progress, "normalization"):
+                    loudness = normalize_loudness(
+                        self.profile,
+                        self.skipped_stages,
+                        prepared,
+                        staged,
+                        temp_dir,
+                        apply_region_corrections=apply_machine_region_corrections,
+                    )
+                report = build_report(self.profile, prepared, staged, loudness)
+                if dry_run:
+                    return report
+                return publish_output(
+                    self.profile,
+                    self.skipped_stages,
+                    prepared,
+                    staged,
+                    loudness,
+                    temp_dir,
+                    report,
+                    progress=self.progress,
+                )
 
 
 def write_report(path: Path, report: dict[str, object]) -> None:

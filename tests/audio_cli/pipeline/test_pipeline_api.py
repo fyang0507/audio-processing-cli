@@ -27,6 +27,7 @@ SUPPORTED_EXPORTS = {
     "apply_voice_enhancement",
     "atomic_write_json",
     "build_report",
+    "compare_reports",
     "decode_audio",
     "encode_output",
     "evaluate_profile",

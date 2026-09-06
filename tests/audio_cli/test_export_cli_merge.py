@@ -53,6 +53,7 @@ def test_export_cli_refuses_multi_input_vibevoice_native_diarization(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(left),
@@ -99,6 +100,7 @@ def test_export_cli_types_an_unresolvable_canonical_source_as_invalid_input(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -137,6 +139,7 @@ def test_export_cli_types_an_embedded_nul_source_path_as_invalid_input(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),

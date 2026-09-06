@@ -33,6 +33,13 @@ def calibrate_guide_input(
     headroom = peak_limit_dbfs - peak
     gain_db = min(requested, headroom, maximum_gain_db)
     gain = 10 ** (gain_db / 20)
+    # Explain the already resolved gain; these fields never feed processing.
+    target_attained = gain_db == requested
+    limiting_reasons = [
+        reason
+        for reason, bound in (("peak_headroom", headroom), ("maximum_gain", maximum_gain_db))
+        if bound == gain_db and bound < requested
+    ]
     return (
         (audio * gain).astype(np.float32),
         gain,
@@ -43,6 +50,8 @@ def calibrate_guide_input(
             "input_speech_rms_dbfs": round(level, 6),
             "target_speech_rms_dbfs": target_rms_dbfs,
             "resolved_gain_db": round(gain_db, 6),
+            "target_attained": target_attained,
+            "limiting_reasons": limiting_reasons,
             "resolved_speech_rms_dbfs": round(level + gain_db, 6),
             "peak_limit_dbfs": peak_limit_dbfs,
             "maximum_gain_db": maximum_gain_db,

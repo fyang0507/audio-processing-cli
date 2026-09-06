@@ -55,12 +55,10 @@
     },
     "torch-vibevoice": {
       "provisioned": true,
-      "provisional": true,
       "python": "3.12.12",
       "lock": "locks/torch-vibevoice.txt",
       "requirements": "requirements/torch-vibevoice.in",
-      "reason": "VibeVoice caps transformers below 5.0.0.",
-      "provisional_because": "mlx-audio 0.4.5 runs VibeVoice-ASR with no added dependencies, at 12.4 GB peak against 20.8 GB, but produces a different transcript (47 segments against 49, some traditional-character orthography, one lexical difference). Adopting it replaces every recorded VibeVoice figure. This environment exists until that re-measurement decides."
+      "reason": "Retained Torch implementation for the vibevoice stack; VibeVoice caps transformers below 5.0.0. The historical MLX comparison is not an adopted runtime replacement."
     },
     "swift": {
       "provisioned": true,

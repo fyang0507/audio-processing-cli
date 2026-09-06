@@ -119,7 +119,7 @@ def test_bad_readable_timing_is_bare_structured_cli_refusal_before_publication(
         _payload([segment], source_path=str(source), duration=1e308, outcomes=outcomes),
     )
     before = path.read_bytes()
-    args = ["export", "--input", str(path), "--format", output_format]
+    args = ["transcribe", "export", "--input", str(path), "--format", output_format]
     assert cli.main(args) == 0
     captured = capsys.readouterr()
     assert captured.err == ""

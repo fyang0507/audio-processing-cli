@@ -212,7 +212,7 @@ audio doctor
     "torch-firered": {"state": "absent", "python": "3.12.12", "requires_tool": [],
                       "provisional": false, "blocked_by_missing_tool": []},
     "torch-vibevoice": {"state": "absent", "python": "3.12.12", "requires_tool": [],
-                        "provisional": true, "blocked_by_missing_tool": []}
+                        "provisional": false, "blocked_by_missing_tool": []}
   },
   "packages": {
     "firered-asr2s": "absent", "fluidaudio": "absent",

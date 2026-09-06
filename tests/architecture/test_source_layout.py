@@ -36,6 +36,7 @@ TRANSCRIBE_FACADES = {
         "export_input_invalid",
         "export_inputs_incompatible",
         "input_required",
+        "log_directory_invalid",
         "option_unsupported_on_stack",
         "option_value_unsupported",
         "output_exists",
@@ -87,6 +88,7 @@ EXPORT_COMPATIBILITY_REFUSALS = {
     "timing_required_for_format",
 }
 COMMAND_PRIMITIVES = {
+    "ProgressReporter",
     "Refusal",
     "build_refusal",
     "command_path_argument",
@@ -97,6 +99,7 @@ COMMAND_PRIMITIVES = {
     "output_path_invalid",
     "transcribe_plan_command",
     "transcribe_run_command",
+    "with_transcribe_run_options",
 }
 DOCUMENT_FRAGMENT_LAYOUT = {
     "TRANSCRIBE_CONTRACT_": (
@@ -255,7 +258,11 @@ def test_transcribe_public_execution_imports_stay_stable() -> None:
         assert module.__all__ == expected
         assert all(hasattr(module, exported) for exported in expected)
 
-    assert importlib.import_module("audio_cli.transcribe.execution").__all__ == []
+    assert importlib.import_module("audio_cli.transcribe.execution").__all__ == [
+        "PublishedPartial",
+        "build_receipt",
+        "validate_receipt_options",
+    ]
 
 
 def test_export_owns_its_command_refusal_builders() -> None:

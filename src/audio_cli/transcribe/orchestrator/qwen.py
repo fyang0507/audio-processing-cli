@@ -18,6 +18,7 @@ from ..catalog import InputMetadata, result_source
 from ..execution.materialization import _materialized_path
 from ..execution.preflight import preflight
 from ..execution.publication import (
+    PublishedPartial,
     _backend_fix,
     _coverage,
     _has_lexical_text,
@@ -381,16 +382,19 @@ def _run_qwen(
         )
         stage_error = asr.payload.get("error", {})
         detail = stage_error.get("message") if isinstance(stage_error, Mapping) else None
-        raise refusals.run_incomplete(
-            "asr",
-            asr_backend,
-            str(detail)
-            if detail
-            else f"global generation budget exhausted after {len(completed)} of "
-            f"{len(selected_units)} units",
-            coverage,
-            target,
-            _resume_command(request, coverage, target, run_range),
+        raise PublishedPartial(
+            refusals.run_incomplete(
+                "asr",
+                asr_backend,
+                str(detail)
+                if detail
+                else f"global generation budget exhausted after {len(completed)} of "
+                f"{len(selected_units)} units",
+                coverage,
+                target,
+                _resume_command(request, coverage, target, run_range),
+            ),
+            payload,
         )
     if output is not None:
         _publish_result(

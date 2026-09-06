@@ -91,7 +91,7 @@ A run invoked with `--range 1402.88:` adds this exact subtree to `provenance.pla
 ### 1.5 Export subtitles
 
 ```bash
-audio export --input meeting.timed.json --format srt -o meeting.srt
+audio transcribe export --input meeting.timed.json --format srt -o meeting.srt
 ```
 
 ```json
@@ -127,9 +127,9 @@ Exit 0. `meeting.srt`:
 An on-disk untimed format reports segments rather than subtitle-only cue fields:
 
 ```bash
-audio export --input meeting.transcript.json --format txt -o meeting.txt
-audio export --input meeting.transcript.json --format md -o meeting.md
-audio export --input meeting.transcript.json --format jsonl -o meeting.jsonl
+audio transcribe export --input meeting.transcript.json --format txt -o meeting.txt
+audio transcribe export --input meeting.transcript.json --format md -o meeting.md
+audio transcribe export --input meeting.transcript.json --format jsonl -o meeting.jsonl
 ```
 
 ```json
@@ -170,7 +170,7 @@ Cue bounds come from the first and last word of each segment, not from the segme
 ### 1.6 Export readable timestamps
 
 ```bash
-audio export --input meeting.timed.json --format md --timestamps
+audio transcribe export --input meeting.timed.json --format md --timestamps
 ```
 
 Exit 0, stdout:

@@ -42,8 +42,9 @@ from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import inspect_source, prepare_run
 from .publication import publish_output
-from .report_summary import summarize_report
 from .reporting import build_report
+from .reports.comparison import compare_reports
+from .reports.summary import summarize_report
 from .runner import EnhancementPipeline, validate_skips, write_report
 from .stages import process_stages
 
@@ -70,6 +71,7 @@ __all__ = [
     "apply_voice_enhancement",
     "atomic_write_json",
     "build_report",
+    "compare_reports",
     "decode_audio",
     "encode_output",
     "evaluate_profile",

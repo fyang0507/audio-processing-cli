@@ -21,6 +21,7 @@ from ..catalog import InputMetadata
 from ..execution.materialization import _checkout, _materialized_path, _materialized_role_paths
 from ..execution.preflight import preflight
 from ..execution.publication import (
+    PublishedPartial,
     _backend_fix,
     _publish_partial,
     _resume_command,
@@ -377,16 +378,19 @@ def _run_vibevoice(
             force=force,
             protected_source_identity=protected_source_identity,
         )
-        raise refusals.run_incomplete(
-            "asr",
-            "vibevoice-asr-7b",
-            (
-                "generation reached max_new_tokens after salvaging "
-                f"{len(public_segments)} complete segment(s)"
+        raise PublishedPartial(
+            refusals.run_incomplete(
+                "asr",
+                "vibevoice-asr-7b",
+                (
+                    "generation reached max_new_tokens after salvaging "
+                    f"{len(public_segments)} complete segment(s)"
+                ),
+                coverage,
+                target,
+                _resume_command(request, coverage, target, run_range),
             ),
-            coverage,
-            target,
-            _resume_command(request, coverage, target, run_range),
+            payload,
         )
 
     _write_complete(

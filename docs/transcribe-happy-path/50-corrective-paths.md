@@ -293,7 +293,7 @@ A Qwen budget stop emits this exit-4 shape and writes the conforming partial nam
 After the ranged resume finishes, multi-input export preserves the caller's source-timeline order and reports that ordered input list rather than collapsing it to one path:
 
 ```bash
-audio export --input meeting.timed.partial.json --input meeting.timed.rest.json \
+audio transcribe export --input meeting.timed.partial.json --input meeting.timed.rest.json \
   --format jsonl -o meeting.timed.merged.jsonl
 ```
 

@@ -20,6 +20,7 @@ If the command is missing, cannot start, or lacks a required operation, follow [
 | The request | Read before running it |
 | --- | --- |
 | Diagnose, enhance, or prepare an audio/video recording | [references/enhance-audio.md](references/enhance-audio.md) |
+| Read or compare saved inspection/enhancement reports | [references/enhance-audio.md](references/enhance-audio.md) |
 | Correct a particular region or measured frequency | [references/targeted-fixes.md](references/targeted-fixes.md) |
 | Transcribe original media or export a saved result | [references/transcribe.md](references/transcribe.md) |
 | Prepare packages, check readiness, or reclaim managed disk | [references/model-packages.md](references/model-packages.md) |
@@ -34,4 +35,4 @@ Read only the relevant references. Diagnosis or enhancement alone does not requi
 - **A measurement is not a preference.** Separate report checks from listening evidence. Preserve an approved result rather than chasing every numeric preference.
 - **`abstained` is unresolved.** Seek evidence for a scoped correction instead of forcing larger values. Gain and EQ cannot independently control speech and music that overlap in one track.
 - **Provision through `audio packages pull`.** The sole automatic exception is the small, hash-verified Silero speech-activity model on first use, including inspection or enhancement. Other models and runtimes require explicit provisioning; never hand-download weights, hand-create a runtime, or edit its pins.
-- **Enhancement does not delete fillers.** Canonical means unedited original-source output, not guaranteed verbatim recognition. Filler editing is future scope; video would require synchronized audio/video cuts, not audio-only muting or deletion.
+- **Enhancement does not delete fillers.** Canonical means unedited original-source output, not guaranteed verbatim recognition. The CLI makes no editorial or filler-removal decisions; issues #1 and #39 are closed as `NOT_PLANNED`.
