@@ -71,29 +71,13 @@ Exit 0. `meeting.timed.json`:
 }
 ```
 
-`provenance` carries three things and embeds a fourth. `stack` names what ran, `outcomes`
-says what became of each requested capability, and `observed` records what the run actually
-cost. The fourth is `plan`: the executed plan verbatim, which these printouts omit because
-§1.2 already shows it in full — a result does not restate what the plan said, it appends
-what only running could tell you. The key-set test therefore compares against a real run,
-not against these trimmed prints.
+`provenance` carries three things and embeds a fourth. `stack` names what ran, `outcomes` says what became of each requested capability, and `observed` records what the run actually cost. The fourth is `plan`: the executed plan verbatim, which these printouts omit because §1.2 already shows it in full — a result does not restate what the plan said, it appends what only running could tell you. The key-set test therefore compares against a real run, not against these trimmed prints.
 
-Note `peak_rss_bytes` is the **maximum** of the per-stage peaks, not their sum — that is
-what `execution.residency` buys, and the per-stage numbers are kept so the claim is
-checkable rather than asserted. A per-stage RSS value is the total footprint of the process
-executing that stage, runtime and orchestration included; it is not backend-owned allocation.
-For in-process VAD it is the core process high-water mark observed through the stage.
-`peak_mps_live_bytes_by_stage` is the MLX allocator's device-memory high-water mark, excludes
-ordinary RSS and non-MLX processes, and its aggregate is likewise a maximum rather than a sum.
+Note `peak_rss_bytes` is the **maximum** of the per-stage peaks, not their sum — that is what `execution.residency` buys, and the per-stage numbers are kept so the claim is checkable rather than asserted. A per-stage RSS value is the total footprint of the process executing that stage, runtime and orchestration included; it is not backend-owned allocation. For in-process VAD it is the core process high-water mark observed through the stage. `peak_mps_live_bytes_by_stage` is the MLX allocator's device-memory high-water mark, excludes ordinary RSS and non-MLX processes, and its aggregate is likewise a maximum rather than a sum.
 
-The run recomputes `source.duration_seconds` from the canonical decode's PCM frame count so
-coverage uses the timeline actually processed. The path is the resolved absolute path of the
-original media, which lets a later export protect it across working directories; no temporary WAV
-format, sample-rate, or channel field enters the public `source` object.
+The run recomputes `source.duration_seconds` from the canonical decode's PCM frame count so coverage uses the timeline actually processed. The path is the resolved absolute path of the original media, which lets a later export protect it across working directories; no temporary WAV format, sample-rate, or channel field enters the public `source` object.
 
-A run invoked with `--range 1402.88:` adds this exact subtree to
-`provenance.plan.execution`; an open end resolves to the canonical WAV duration, and selected
-scope may expand to whole processing-unit bounds:
+A run invoked with `--range 1402.88:` adds this exact subtree to `provenance.plan.execution`; an open end resolves to the canonical WAV duration, and selected scope may expand to whole processing-unit bounds:
 
 ```json
 {
@@ -157,8 +141,7 @@ audio export --input meeting.transcript.json --format jsonl -o meeting.jsonl
 }
 ```
 
-For a two-segment result, the three untimed files are exact deterministic projections of the
-normalized segment array. Exit 0, `meeting.txt`:
+For a two-segment result, the three untimed files are exact deterministic projections of the normalized segment array. Exit 0, `meeting.txt`:
 
 ```text
 First.
@@ -182,9 +165,7 @@ Exit 0, `meeting.jsonl`:
 {"segment_id":"seg_1","text":"Second."}
 ```
 
-Cue bounds come from the first and last word of each segment, not from the segment — this
-stack has no `segment_timestamps` to use, which is exactly why `word_timestamps` was requested in
-step 1.2.
+Cue bounds come from the first and last word of each segment, not from the segment — this stack has no `segment_timestamps` to use, which is exactly why `word_timestamps` was requested in step 1.2.
 
 ### 1.6 Export readable timestamps
 
@@ -202,10 +183,4 @@ Exit 0, stdout:
 [00:00:05.120 --> 00:00:07.440] [S2] 嗯，好啊，我做咗五年設計。
 ```
 
-Here each range comes from the first and last supplied word bounds. With native
-segment timing, the range instead uses that segment's `start`/`end`, including
-bounded non-speech events. `--format txt --timestamps` emits the same segment content
-with single newlines, without the Markdown heading or paragraph separators.
-Omitting `--timestamps` preserves the default canonical text export. One untimed
-segment refuses the entire timestamp request; export never
-turns a processing interval or source duration into speech timing.
+Here each range comes from the first and last supplied word bounds. With native segment timing, the range instead uses that segment's `start`/`end`, including bounded non-speech events. `--format txt --timestamps` emits the same segment content with single newlines, without the Markdown heading or paragraph separators. Omitting `--timestamps` preserves the default canonical text export. One untimed segment refuses the entire timestamp request; export never turns a processing interval or source duration into speech timing.

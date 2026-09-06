@@ -1,13 +1,11 @@
 
 ## 2. Video editing — product demo
 
-Goal: verbatim segments with native speaker structure and word timing, for an editing
-agent that cuts on speaker changes and needs fillers preserved.
+Goal: verbatim segments with native speaker structure and word timing, for an editing agent that cuts on speaker changes and needs fillers preserved.
 
 ### 2.1 Resolve the request
 
-The `capabilities` report is omitted here for length; it takes the same shape as §1.1 with
-`vibevoice`'s own values.
+The `capabilities` report is omitted here for length; it takes the same shape as §1.1 with `vibevoice`'s own values.
 
 ```bash
 audio transcribe plan --input demo.mp4 --stack vibevoice \
@@ -93,16 +91,9 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
 }
 ```
 
-Exit 0. `qwen3-forcedaligner` is already `provisioned: true` from §1, so
-`total_known_download_bytes` is 0 and only VibeVoice needs pulling. `abstentions` is an
-empty array rather than absent: it is a floor artifact, and the plan's warning that nothing
-here detects overlap is what says it cannot fill.
+Exit 0. `qwen3-forcedaligner` is already `provisioned: true` from §1, so `total_known_download_bytes` is 0 and only VibeVoice needs pulling. `abstentions` is an empty array rather than absent: it is a floor artifact, and the plan's warning that nothing here detects overlap is what says it cannot fill.
 
-The `vibevoice` capabilities payload carries the same source-scoped truncation risk in
-`failure_recovery.note`: on `spice-30min-participant`, 11,345 generated tokens over 1,800
-seconds is 6.30 tokens/second, so at that observed rate the declared 16,384-token cap
-projects to about 43 minutes of comparable audio. This is a rate extrapolation, not an
-observed truncation.
+The `vibevoice` capabilities payload carries the same source-scoped truncation risk in `failure_recovery.note`: on `spice-30min-participant`, 11,345 generated tokens over 1,800 seconds is 6.30 tokens/second, so at that observed rate the declared 16,384-token cap projects to about 43 minutes of comparable audio. This is a rate extrapolation, not an observed truncation.
 
 ### 2.2 Provision and run
 
@@ -174,27 +165,13 @@ Exit 0. `demo.transcript.json`:
 }
 ```
 
-Two things in `seg_1` are the recorded VibeVoice behaviours rather than invented shape,
-and both are absences.
+Two things in `seg_1` are the recorded VibeVoice behaviours rather than invented shape, and both are absences.
 
-It carries **no `speaker` key**. VibeVoice emits `Speaker: "N/A"` on non-speech segments,
-and the adapter-normalization floor requires that become an absent key rather than a
-speaker whose id is the string `"N/A"`. A conforming result cannot contain `"N/A"` as an
-attribution anywhere; that string appearing in output is the defect the floor exists to
-catch.
+It carries **no `speaker` key**. VibeVoice emits `Speaker: "N/A"` on non-speech segments, and the adapter-normalization floor requires that become an absent key rather than a speaker whose id is the string `"N/A"`. A conforming result cannot contain `"N/A"` as an attribution anywhere; that string appearing in output is the defect the floor exists to catch.
 
-It carries **no `words` array**, which is correct and is not an abstention: the aligner is
-not run on a segment with no speech to align. So `words` is absent on some segments while
-`word_timestamps` is `produced`, and `observed.segments_without_words` records how many segments
-carry no `words` key. A present empty array is a successful alignment with zero lexical tokens,
-not an abstention.
+It carries **no `words` array**, which is correct and is not an abstention: the aligner is not run on a segment with no speech to align. So `words` is absent on some segments while `word_timestamps` is `produced`, and `observed.segments_without_words` records how many segments carry no `words` key. A present empty array is a successful alignment with zero lexical tokens, not an abstention.
 
-An ordinary speech segment is different. If its requested alignment result is absent or
-nonconforming, its text and native bounds remain, `words` is absent, and one
-`alignment_unavailable` abstention carries those exact bounds. The run-level
-`word_timestamps` outcome becomes `abstained` while valid word streams on other segments remain.
-VibeVoice turns likewise do not bridge silence or a wordless event: every bounded speech segment
-gets its own native turn, even when an adjacent segment carries the same anonymous label.
+An ordinary speech segment is different. If its requested alignment result is absent or nonconforming, its text and native bounds remain, `words` is absent, and one `alignment_unavailable` abstention carries those exact bounds. The run-level `word_timestamps` outcome becomes `abstained` while valid word streams on other segments remain. VibeVoice turns likewise do not bridge silence or a wordless event: every bounded speech segment gets its own native turn, even when an adjacent segment carries the same anonymous label.
 
 ### 2.3 Export subtitles with speaker voice tags
 
@@ -220,14 +197,4 @@ WEBVTT
 <v 1>And it renders straight away?
 ```
 
-The `[Environmental Sounds]` segment produced no cue: it has no word stream, and cue
-bounds come from words. Whether a non-speech event tag *should* render as an SDH cue is a
-subtitle-convention question parked in issue #10, not a transcription one.
-The same omission rule applies to a **bounded** ordinary speech segment carrying a same-bounds
-`alignment_unavailable` abstention when at least one other segment has real timed words; its
-ledger entry and abstained capability outcome preserve the warning. An unbounded Qwen segment
-cannot be associated safely with a unit-level abstention because schema v1 carries no
-segment-to-unit link, so SRT/VTT refuse that mixed result rather than silently dropping text.
-With no real word stream anywhere,
-subtitle export refuses instead of inventing bounds, except for an all-bounded-event result whose
-timing provenance is already `produced`, which deliberately renders an empty subtitle.
+The `[Environmental Sounds]` segment produced no cue: it has no word stream, and cue bounds come from words. Whether a non-speech event tag *should* render as an SDH cue is a subtitle-convention question parked in issue #10, not a transcription one. The same omission rule applies to a **bounded** ordinary speech segment carrying a same-bounds `alignment_unavailable` abstention when at least one other segment has real timed words; its ledger entry and abstained capability outcome preserve the warning. An unbounded Qwen segment cannot be associated safely with a unit-level abstention because schema v1 carries no segment-to-unit link, so SRT/VTT refuse that mixed result rather than silently dropping text. With no real word stream anywhere, subtitle export refuses instead of inventing bounds, except for an all-bounded-event result whose timing provenance is already `produced`, which deliberately renders an empty subtitle.

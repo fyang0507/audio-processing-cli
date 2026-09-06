@@ -1,9 +1,7 @@
 
 ## 3. Dialect field recording
 
-Goal: an audited transcript of a dialect recording, with native word timing, native
-speech regions, and a region language label. Every requirement is native, so there are no
-add-ons and the plan pulls one package.
+Goal: an audited transcript of a dialect recording, with native word timing, native speech regions, and a region language label. Every requirement is native, so there are no add-ons and the plan pulls one package.
 
 ### 3.1 Resolve and run
 
@@ -94,8 +92,7 @@ audio transcribe plan --input field.wav --stack firered \
 }
 ```
 
-Exit 0. Segments carry no `speaker` key in the sample or the result: FireRed has no
-speaker output and `diarization` was not requested.
+Exit 0. Segments carry no `speaker` key in the sample or the result: FireRed has no speaker output and `diarization` was not requested.
 
 ```bash
 audio packages pull --stack firered
@@ -163,18 +160,9 @@ Exit 0. `field.transcript.json`:
 }
 ```
 
-Two things worth reading closely. `lid_regions` is region-granular and its bounds
-match `vad_regions`, not the segments — the label is produced per VAD region, and the
-two segments happen to sit one per region here. And `word_timestamps` covers only the first
-six words of `seg_1` in this printout for length; a real result has one word object per
-non-punctuation token of every segment, which is what the
-`punctuation_invariant_checked` flag asserts.
+Two things worth reading closely. `lid_regions` is region-granular and its bounds match `vad_regions`, not the segments — the label is produced per VAD region, and the two segments happen to sit one per region here. And `word_timestamps` covers only the first six words of `seg_1` in this printout for length; a real result has one word object per non-punctuation token of every segment, which is what the `punctuation_invariant_checked` flag asserts.
 
-`firered_process_overhead` is the measured residual between the one FireRed process wall and its
-explicitly timed VAD/LID/ASR/punctuator phases. It keeps imports, model loading, audio I/O, and
-framework overhead visible so `total_wall_seconds` still equals the real non-overlapping wall
-sum; it is not a sixth backend stage or an estimated allocation. A negative residual beyond the
-measurement tolerance is invalid rather than silently clamped into a plausible total.
+`firered_process_overhead` is the measured residual between the one FireRed process wall and its explicitly timed VAD/LID/ASR/punctuator phases. It keeps imports, model loading, audio I/O, and framework overhead visible so `total_wall_seconds` still equals the real non-overlapping wall sum; it is not a sixth backend stage or an estimated allocation. A negative residual beyond the measurement tolerance is invalid rather than silently clamped into a plausible total.
 
 ### 3.2 Export
 
@@ -194,7 +182,4 @@ This is a测试。
 我们要来看哈，
 ```
 
-FireRed is the only stack whose timing needed no aligner, and its 1.0 ms repeat drift is
-two orders of magnitude below the 41.7 ms of a single frame at 24 fps, so it does not
-affect cue placement. What is still unvalidated is accuracy, not stability: boundary
-MAE/P95 is unmeasured here exactly as it is for the aligner.
+FireRed is the only stack whose timing needed no aligner, and its 1.0 ms repeat drift is two orders of magnitude below the 41.7 ms of a single frame at 24 fps, so it does not affect cue placement. What is still unvalidated is accuracy, not stability: boundary MAE/P95 is unmeasured here exactly as it is for the aligner.
