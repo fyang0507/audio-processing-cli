@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any
 
+from ..media import file_identity_from_descriptor
 from .models import PipelineError
 
 DECISION_FIELDS = ("name", "stage", "component", "region_id", "status", "reason", "measured_at")
@@ -38,6 +40,28 @@ def _mapping(value: Any, location: str) -> dict[str, Any]:
     return value
 
 
+def _read_report(path: Path) -> dict[str, Any]:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0),
+    )
+    try:
+        if file_identity_from_descriptor(descriptor, path) is None:
+            raise ValueError("input must be a regular file")
+        with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as handle:
+            return _mapping(
+                json.load(
+                    handle,
+                    object_pairs_hook=_object,
+                    parse_constant=_constant,
+                    parse_float=_float,
+                ),
+                "report",
+            )
+    finally:
+        os.close(descriptor)
+
+
 def _decisions(value: Any, pointer: str, *, stages: bool = False) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ValueError(f"{pointer} must be an array")
@@ -66,15 +90,7 @@ def summarize_report(path: Path) -> dict[str, Any]:
     No canonical report field is added or rewritten by this projection.
     """
     try:
-        report = _mapping(
-            json.loads(
-                path.read_text(encoding="utf-8"),
-                object_pairs_hook=_object,
-                parse_constant=_constant,
-                parse_float=_float,
-            ),
-            "report",
-        )
+        report = _read_report(path)
         if report.get("kind") != "audio_enhancement_report" or report.get("schema_version") != "1":
             raise ValueError("expected audio_enhancement_report schema_version '1'")
         for key in ("rendered", "dry_run"):
@@ -121,6 +137,11 @@ def summarize_report(path: Path) -> dict[str, Any]:
                 **({"status": peak["status"]} if "status" in peak else {}),
                 "report_pointer": "/final_peak_validation",
             }
+        # Validate the complete machine output before CLI streaming can emit a
+        # prefix and then fail on an escaped lone surrogate in retained evidence.
+        json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False).encode(
+            "utf-8"
+        )
         return summary
     except (OSError, UnicodeError, ValueError, RecursionError) as exc:
         raise PipelineError(f"Cannot summarize enhancement report {path}: {exc}") from exc

@@ -1,6 +1,9 @@
 """Offline summaries retain scoped uncertainty and navigate canonical measurements."""
 
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -205,6 +208,69 @@ def test_missing_file_is_a_json_error(tmp_path, capsys):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert json.loads(captured.err)["error"]["type"] == "PipelineError"
+
+
+def run_summary_cli(path):
+    return subprocess.run(
+        [sys.executable, "-m", "audio_cli", "report", "summary", str(path)],
+        capture_output=True,
+        timeout=10,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8:strict"},
+    )
+
+
+@pytest.mark.parametrize("location", ["reason", "nested_value", "nested_key"])
+def test_unpaired_surrogates_refuse_before_any_cli_stdout(tmp_path, report, location):
+    if location == "reason":
+        report["stages"][0]["reason"] = "bad\ud800"
+    elif location == "nested_value":
+        report["unresolved"][0]["local_evidence"] = {"detail": ["bad\ud800"]}
+    else:
+        report["timeline_verification"] = {"nested": {"bad\ud800": "value"}}
+    completed = run_summary_cli(save(tmp_path, report))
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    error = json.loads(completed.stderr)["error"]
+    assert error["type"] == "PipelineError"
+    assert "surrogates not allowed" in error["message"]
+
+
+@pytest.mark.parametrize("kind", ["fifo", "directory"])
+@pytest.mark.parametrize("via_symlink", [False, True])
+def test_nonregular_reports_refuse_without_blocking(tmp_path, kind, via_symlink):
+    path = tmp_path / "special.json"
+    if kind == "fifo":
+        os.mkfifo(path)
+    else:
+        path.mkdir()
+    if via_symlink:
+        link = tmp_path / "linked.json"
+        link.symlink_to(path.name)
+        path = link
+    # A regression to blocking FIFO open fails via the subprocess timeout, not a
+    # hung test suite. No writer is attached to make the FIFO artificially ready.
+    completed = run_summary_cli(path)
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    error = json.loads(completed.stderr)["error"]
+    assert error["type"] == "PipelineError"
+    assert "input must be a regular file" in error["message"]
+
+
+def test_regular_report_symlink_and_valid_unicode_remain_supported(tmp_path, report):
+    report["stages"][0]["reason"] = "保留原文 🎧"
+    path = save(tmp_path, report)
+    before = path.read_bytes()
+    link = tmp_path / "linked.json"
+    link.symlink_to(path.name)
+    completed = run_summary_cli(link)
+    assert completed.returncode == 0
+    assert completed.stderr == b""
+    summary = json.loads(completed.stdout)
+    assert summary["report"] == str(path.resolve())
+    assert summary["stages"][0]["reason"] == "保留原文 🎧"
+    assert path.read_bytes() == before
+    assert link.is_symlink()
 
 
 def test_real_report_builder_shape_can_be_projected(tmp_path, monkeypatch):
