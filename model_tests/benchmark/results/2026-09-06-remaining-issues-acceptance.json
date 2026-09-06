@@ -1,0 +1,356 @@
+{
+  "date": "2026-09-06",
+  "topic": "Fresh CLI-only acceptance after PR44 merge and remaining-issue fixes",
+  "merged_pr": 44,
+  "followup_pr": 45,
+  "candidate_commit": "c079d91088315f7efc1b1f207a6451dfa747b307",
+  "reporting_polish_commit": "e82bc94",
+  "functional_execution": "PASS",
+  "full_quality_acceptance": "PENDING_HUMAN_REVIEW",
+  "sources_unchanged": true,
+  "source_files": [
+    {
+      "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/test-sample-multispeaker.m4a",
+      "sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c"
+    },
+    {
+      "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/demo-video-audio-to-improve.mp4",
+      "sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003"
+    },
+    {
+      "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/autio-test-sample.m4a",
+      "sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834"
+    }
+  ],
+  "fresh_agent_ids": [
+    "01a074c9-22dc-79a2-a22c-2bf49c78bf5d",
+    "01a074c9-2364-7e02-b62a-03d9f8971252",
+    "01a074cb-ef02-76b0-807a-73c7a1fe7877"
+  ],
+  "constraints": [
+    "All audio and model operations through the supplied audio executable only",
+    "Use shipped skill and public CLI help/results only",
+    "Stop failed or unsatisfactory branches; no fallback processor, model, or manual backend call",
+    "Canonical ASR targets originals before enhancement",
+    "Synchronized filler editing is deferred future scope"
+  ],
+  "command_checks": {
+    "01-multispeaker": {
+      "native_cli_commands": 18,
+      "all_exit_zero": true,
+      "working_directory": "/tmp",
+      "commands_sha256": "cb5decc86f103296f6251ec6bdbf7ebf05a19895c0d0cd2d1855e0a8c50b1455"
+    },
+    "02-demo-enhancement": {
+      "native_cli_commands": 18,
+      "all_exit_zero": true,
+      "working_directory": "/tmp",
+      "commands_sha256": "062d0673fd6f8cfdf34c7f4c8e4423e10b17cc2546f0e735c21db892a2bb31a1"
+    },
+    "03-mixed-language": {
+      "native_cli_commands": 29,
+      "all_exit_zero": true,
+      "working_directory": "/tmp",
+      "commands_sha256": "6faa68018419b5d64f1e54fb7ba09a2b53826fb64088fda4ebf1a080b05dfbf6"
+    }
+  },
+  "transcriptions": [
+    {
+      "case": "01-multispeaker",
+      "stack": "firered",
+      "canonical": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/01-multispeaker/firered.canonical.json",
+        "sha256": "17855103eba9fd69a43043ffee08378c3bcffc80ee4d9267ec41c6178e474029",
+        "bytes": 44268
+      },
+      "native_text": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/01-multispeaker/firered.txt",
+        "sha256": "5594a4e65fe3e77daa6fcd4809d6bff6c0abb789064cefea53882a10b32503b7",
+        "bytes": 1154
+      },
+      "complete": true,
+      "source": {
+        "duration_basis": "canonical_decoded_pcm",
+        "duration_seconds": 139.284,
+        "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/test-sample-multispeaker.m4a",
+        "timebase": "seconds"
+      },
+      "segments": 62,
+      "abstentions": [],
+      "recognition_accuracy": "unscored",
+      "word_entries": 246
+    },
+    {
+      "case": "01-multispeaker",
+      "stack": "vibevoice",
+      "canonical": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/01-multispeaker/vibevoice.canonical.json",
+        "sha256": "3489b8ec141be569db0a328018499ad4257f915ef23a47aa412f76bc91f1a5fb",
+        "bytes": 9072
+      },
+      "native_text": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/01-multispeaker/vibevoice.txt",
+        "sha256": "4a5ed64d7b61a187020ca230a7fccb20ef508282236dc212b2ec7f9077dbb00f",
+        "bytes": 1260
+      },
+      "complete": true,
+      "source": {
+        "duration_basis": "canonical_decoded_pcm",
+        "duration_seconds": 139.284,
+        "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/test-sample-multispeaker.m4a",
+        "timebase": "seconds"
+      },
+      "segments": 20,
+      "abstentions": [],
+      "recognition_accuracy": "unscored",
+      "turns": 17
+    },
+    {
+      "case": "03-mixed-language",
+      "stack": "firered",
+      "canonical": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/03-mixed-language/canonical.json",
+        "sha256": "38cdf199e95912843916f03a5cb22933f626f922ae7cad8cc99cfdb2e98ee4e9",
+        "bytes": 13647
+      },
+      "native_text": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/03-mixed-language/canonical.txt",
+        "sha256": "b28ddbff1711293a9201b5c584a96e2b3cd0c2d37d6f65aa7f2ed12fb9c8f6c5",
+        "bytes": 227
+      },
+      "complete": true,
+      "source": {
+        "duration_basis": "canonical_decoded_pcm",
+        "duration_seconds": 27.753312,
+        "path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/autio-test-sample.m4a",
+        "timebase": "seconds"
+      },
+      "segments": 8,
+      "abstentions": [],
+      "recognition_accuracy": "unscored",
+      "word_entries": 60
+    }
+  ],
+  "enhancements": [
+    {
+      "case": "02-demo-enhancement",
+      "media": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/02-demo-enhancement/demo-enhanced-rnnoise.mp4",
+        "sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3",
+        "bytes": 91073983
+      },
+      "report": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/02-demo-enhancement/canonical.report.json",
+        "sha256": "386e215e4d37a8f08202d180092b2f18a5652943c72247c6ae58673cc8e52763",
+        "bytes": 56088
+      },
+      "denoiser": "rnnoise",
+      "component_status": "applied",
+      "guide_calibration": {
+        "input_speech_rms_dbfs": -54.834241,
+        "maximum_gain_db": 40.0,
+        "peak_limit_dbfs": -3.0,
+        "resolved_gain_db": 16.220833,
+        "resolved_speech_rms_dbfs": -38.613408,
+        "scope": "model_guide_only",
+        "speech_reference": "original_detected_regions_after_environment_filters",
+        "status": "applied",
+        "target_speech_rms_dbfs": -24.0
+      },
+      "delivered": {
+        "integrated_loudness_lufs": -16.02,
+        "loudness_range_lu": 16.9,
+        "true_peak_dbtp": -2.48
+      },
+      "timeline_verification": {
+        "av_sync": {
+          "reason": "not_measured",
+          "status": "abstained"
+        },
+        "content_alignment": {
+          "reason": "not_measured",
+          "status": "abstained"
+        },
+        "scope": "decoded_audio_duration_only",
+        "status": "pass",
+        "tolerance_ms": 50
+      },
+      "duration_delta_ms": 0.0,
+      "final_peak_validation": {
+        "limit_true_peak_dbtp": -1.5,
+        "measured_true_peak_dbtp": -2.48,
+        "status": "pass"
+      },
+      "unresolved": [
+        {
+          "component": "speech-leveling",
+          "measured_at": "after_voice_enhance",
+          "measured_rms_dbfs": -37.382,
+          "reason": "voice_correction_bound_reached",
+          "stage": "voice-enhance",
+          "status": "bounded_outside_target",
+          "target_rms_dbfs": -30.0
+        },
+        {
+          "component": "loudness-range",
+          "measured_at": "encoded_output",
+          "measured_lra_lu": 16.9,
+          "reason": "dynamic_lra_control_would_change_relative_region_balance",
+          "stage": "program-loudness",
+          "status": "abstained",
+          "target_maximum_lra_lu": 11.0
+        }
+      ],
+      "noise_reduction": {
+        "reason": "no_clean_reference",
+        "status": "abstained"
+      },
+      "speech_preservation": {
+        "reason": "not_measured",
+        "status": "abstained"
+      },
+      "listening_quality": "unscored"
+    },
+    {
+      "case": "03-mixed-language",
+      "media": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/03-mixed-language/enhanced.m4a",
+        "sha256": "5d1af49f5127457d05a1e6611fec31a36c59e58b45869daa182a8b51ab1e0185",
+        "bytes": 651043
+      },
+      "report": {
+        "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/acceptance/03-mixed-language/enhanced.report.json",
+        "sha256": "08e4cb5c3d8faf6f965ce94447bd32f433d10f80cda30e188b2b8f99c1707d6e",
+        "bytes": 31252
+      },
+      "denoiser": "rnnoise",
+      "component_status": "applied",
+      "guide_calibration": {
+        "input_speech_rms_dbfs": -36.602618,
+        "maximum_gain_db": 40.0,
+        "peak_limit_dbfs": -3.0,
+        "resolved_gain_db": 12.602618,
+        "resolved_speech_rms_dbfs": -24.0,
+        "scope": "model_guide_only",
+        "speech_reference": "original_detected_regions_after_environment_filters",
+        "status": "applied",
+        "target_speech_rms_dbfs": -24.0
+      },
+      "delivered": {
+        "integrated_loudness_lufs": -16.28,
+        "loudness_range_lu": 4.0,
+        "true_peak_dbtp": -2.41
+      },
+      "timeline_verification": {
+        "av_sync": {
+          "reason": "not_measured",
+          "status": "abstained"
+        },
+        "content_alignment": {
+          "reason": "not_measured",
+          "status": "abstained"
+        },
+        "scope": "decoded_audio_duration_only",
+        "status": "pass",
+        "tolerance_ms": 50
+      },
+      "duration_delta_ms": 1.333,
+      "final_peak_validation": {
+        "limit_true_peak_dbtp": -1.5,
+        "measured_true_peak_dbtp": -2.41,
+        "status": "pass"
+      },
+      "unresolved": [],
+      "noise_reduction": {
+        "reason": "no_clean_reference",
+        "status": "abstained"
+      },
+      "speech_preservation": {
+        "reason": "not_measured",
+        "status": "abstained"
+      },
+      "listening_quality": "unscored"
+    }
+  ],
+  "validation": {
+    "full_suite_passed": 1327,
+    "recorded_artifact_tests_skipped": 7,
+    "live_rnnoise_tests_enabled": true,
+    "lint_format": "PASS",
+    "independent_review": "CONVERGED",
+    "review_evidence": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/independent-reviews.json",
+    "commit": "e82bc9454939ab6b9d98976248f524dde15b5667",
+    "full_suite_seconds": 55.28,
+    "full_suite_log": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/final-polish-pytest.txt",
+    "lint_log": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/development/final-polish-lint.txt"
+  },
+  "raw_root": "model_tests/benchmark_runs/e2e-remaining-2026-09-06",
+  "limitations": [
+    "Complete model runs do not establish perfect recognition, dialect/filler recall, or accurate speaker/timestamp labels.",
+    "Case3 selected FireRed in this fresh test; earlier Qwen results are not a matched recognition regression comparison.",
+    "Noise reduction and speech preservation on the user recordings lack clean-reference/listening validation.",
+    "All nine original demo program regions pass; fresh detection uses different scopes and a different speech reference. Its outside-target regions are reported, not treated as proven semantic regressions.",
+    "Demo intermediate voice-level and delivered LRA preferences remain unmet at the bounded policy.",
+    "Decoded duration passes do not prove content alignment or audiovisual synchronization.",
+    "Filler editing remains deferred in issue39."
+  ],
+  "agent_feedback": {
+    "working": [
+      "Normal stack discovery succeeded without deliberate missing-argument errors.",
+      "Host transcription stage/elapsed notices and raw child log paths were useful.",
+      "Native saved-result exports preserved canonical JSON.",
+      "RNNoise was explicitly selected and applied to both recordings; model provenance and treatment limits were visible.",
+      "Report summaries retained component outcomes and nested evidence, with pointers to recorded measurements.",
+      "Skill routing supported original-source ASR before enhancement, CLI-only processing, and deferred filler editing."
+    ],
+    "fixed_after_acceptance": [
+      "Label the initial program-loudness component measurement as before_initial_program_loudness; preserve encoded-output LRA separately."
+    ],
+    "future_options": [
+      "Optional concise receipts for transcription/plan output.",
+      "Opt-in source/stack provenance in readable exports.",
+      "Enhancement stage progress on stderr.",
+      "Optional actual-metrics projection and unified navigation of nested evidence limits.",
+      "A public comparison of fixed and fresh region scopes by source time, without equating local IDs.",
+      "Explicit limiting reason when model-guide calibration cannot attain its RMS target.",
+      "A simpler durable-log destination convention."
+    ]
+  },
+  "reporting_polish": {
+    "commit": "e82bc9454939ab6b9d98976248f524dde15b5667",
+    "scope": "Native CLI dry-run and offline summary only; no new render or ASR",
+    "source_sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+    "source_unchanged": true,
+    "resolved_operations_unchanged": true,
+    "predicted_measurements_unchanged": true,
+    "pre_program_lra_lu": 17.6,
+    "measured_at": "before_initial_program_loudness",
+    "verdict": "PASS",
+    "evidence": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/report-polish"
+  },
+  "followup_issues": {
+    "human_quality_acceptance": [
+      40,
+      41
+    ],
+    "addressed_in_pr45": [
+      42,
+      43
+    ],
+    "filler_editing_future": 39,
+    "optional_usability": 46
+  },
+  "evidence_audit": {
+    "verdict": "CONVERGED",
+    "path": "model_tests/benchmark_runs/e2e-remaining-2026-09-06/evidence-audit.json",
+    "checked": {
+      "manifest_hash_size_entries": 220,
+      "native_cli_commands": 65,
+      "preserved_child_streams": 12,
+      "canonical_transcripts": 3,
+      "native_exports": 6,
+      "render_reports_and_media": 2,
+      "original_before_after_live_hash_comparisons": 3
+    }
+  }
+}
