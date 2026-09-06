@@ -8,14 +8,10 @@
 #
 # Serves the packages: vibevoice-asr-7b.
 #
-# **This environment is provisional.** mlx-audio 0.4.5 implements VibeVoice-ASR, and
-# mlx-community publishes converted weights, so this stack can run in `mlx` with no added
-# dependencies at all. It does not yet, because the MLX path is not output-equivalent: on the
-# recorded CantoMap fixture it produced 47 segments where torch produced 49, shifted some
-# orthography to traditional characters, and labelled one non-speech interval differently
-# (model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json). Adopting it replaces
-# every recorded VibeVoice figure, so it waits on re-measurement rather than on a lock change.
-# When that lands, this file and its lock are deleted, not edited.
+# The accepted implementation remains Torch (issues #13 and #46). The historical MLX
+# comparison in model_tests/benchmark/results/2026-08-17-mlx-collapse-probes.json is retained
+# as evidence, not as a pending runtime migration. Any future replacement requires its own
+# scope and measurements; the smaller MLX allocation figure does not validate a 16 GiB host.
 #
 # The forced aligner is deliberately *not* here, though the recorded pipeline ran it in the
 # same PyTorch environment. Its MLX implementation is token-identical to the recorded torch
