@@ -41,6 +41,7 @@ from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import inspect_source, prepare_run
 from .publication import publish_output
+from .report_summary import summarize_report
 from .reporting import build_report
 from .runner import EnhancementPipeline, validate_skips, write_report
 from .stages import process_stages
@@ -83,6 +84,7 @@ __all__ = [
     "regional_measurements",
     "render_loudness_normalized",
     "require_runtime",
+    "summarize_report",
     "temporary_directory",
     "temporary_output_path",
     "validate_skips",

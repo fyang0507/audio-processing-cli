@@ -131,6 +131,20 @@ def allowed_stacks(capability: str) -> list[str]:
     ]
 
 
+def discovery() -> dict[str, Any]:
+    """Project the declared catalog without probing media or installed state."""
+    return {
+        "stacks": [
+            {
+                "id": stack.id,
+                "characterization": stack.characterization,
+                **availability_groups(stack),
+            }
+            for stack in stack_definitions().values()
+        ]
+    }
+
+
 def recommended_stack(capability: str) -> str | None:
     return _raw().get("recommendations", {}).get(capability)
 

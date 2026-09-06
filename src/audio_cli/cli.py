@@ -23,6 +23,7 @@ from .pipeline import (
     EnhancementPipeline,
     PipelineError,
     inspect_source,
+    summarize_report,
     validate_skips,
     write_report,
 )
@@ -179,6 +180,9 @@ def _run_packages(args: argparse.Namespace) -> int:
 
 def _run_transcribe(args: argparse.Namespace) -> int:
     command = args.transcribe_command
+    if command == "stacks":
+        _print_json(transcribe_stacks.discovery())
+        return 0
     wants = args.want if command in {"plan", "run"} else None
     request = transcribe_planner.resolve_request(
         stack_id=args.stack,
@@ -342,6 +346,9 @@ def main(argv: list[str] | None = None) -> int:
             return _run_inspect(args)
         if args.command == "enhance":
             return _run_enhance(args)
+        if args.command == "report":
+            _print_json(summarize_report(args.input))
+            return 0
         if args.command == "doctor":
             return _run_doctor(args)
         if args.command == "packages":

@@ -47,6 +47,7 @@ SUPPORTED_EXPORTS = {
     "validate_skips",
     "write_float_wav",
     "write_report",
+    "summarize_report",
 }
 
 

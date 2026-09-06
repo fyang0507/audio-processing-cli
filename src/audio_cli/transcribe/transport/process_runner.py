@@ -1,4 +1,4 @@
-"""Fresh-process execution with streamed progress and child RSS sampling."""
+"""Fresh-process execution with retained raw diagnostics and child RSS sampling."""
 
 from __future__ import annotations
 
@@ -6,9 +6,10 @@ import ctypes
 import os
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
+
+from audio_cli.media import temporary_directory
 
 
 class _MacProcTaskInfo(ctypes.Structure):
@@ -68,52 +69,74 @@ class _ChildRssReader:
 
 
 class SubprocessRunner:
-    def __init__(self, progress) -> None:
+    def __init__(self, progress, *, heartbeat_seconds: float = 10.0) -> None:
         self.progress = progress
+        self.heartbeat_seconds = heartbeat_seconds
+
+    def _notice(self, message: str) -> None:
+        self.progress.write(f"transcribe: host: {message}\n")
+        self.progress.flush()
 
     def run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
         try:
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
+            return self._run(command)
         except OSError as exc:
-            return subprocess.CompletedProcess(command, 127, "", str(exc))
+            return subprocess.CompletedProcess(
+                command, 127, "", f"cannot retain backend diagnostics: {exc}"
+            )
 
-        stdout: list[str] = []
-        stderr: list[str] = []
-
-        def drain(stream, sink: list[str], *, mirror: bool = False) -> None:
-            for line in iter(stream.readline, ""):
-                sink.append(line)
-                if mirror:
-                    self.progress.write(line)
-                    self.progress.flush()
-            stream.close()
-
-        assert process.stdout is not None and process.stderr is not None
-        stdout_thread = threading.Thread(target=drain, args=(process.stdout, stdout))
-        stderr_thread = threading.Thread(
-            target=drain, args=(process.stderr, stderr), kwargs={"mirror": True}
-        )
-        stdout_thread.start()
-        stderr_thread.start()
-        reader = _ChildRssReader()
-        peak_rss: int | None = None
-        while process.poll() is None:
-            sample = reader.read(process.pid)
-            if sample is not None:
-                peak_rss = sample if peak_rss is None else max(peak_rss, sample)
-            time.sleep(0.01)
-        stdout_thread.join()
-        stderr_thread.join()
-        completed = subprocess.CompletedProcess(
-            command, process.returncode, "".join(stdout), "".join(stderr)
-        )
-        completed.peak_rss_bytes = peak_rss  # type: ignore[attr-defined]
-        completed.stderr_streamed = True  # type: ignore[attr-defined]
-        return completed
+    def _run(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+        with temporary_directory("audio-transcribe-", preserve=True) as directory:
+            stdout_path = directory / "stdout.log"
+            stderr_path = directory / "stderr.log"
+            peak_rss: int | None = None
+            # Exclusive files inside a media-owned private directory avoid public-path
+            # replacement and pipe deadlocks. The child writes bytes directly to disk.
+            with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
+                self._notice(f"raw backend stdout: {stdout_path}")
+                self._notice(f"raw backend stderr: {stderr_path}")
+                started = time.monotonic()
+                try:
+                    process = subprocess.Popen(command, stdout=stdout, stderr=stderr)
+                except OSError as exc:
+                    stderr.write(str(exc).encode("utf-8"))
+                    returncode = 127
+                else:
+                    reader = _ChildRssReader()
+                    next_notice = self.heartbeat_seconds
+                    try:
+                        while process.poll() is None:
+                            sample = reader.read(process.pid)
+                            if sample is not None:
+                                peak_rss = sample if peak_rss is None else max(peak_rss, sample)
+                            elapsed = time.monotonic() - started
+                            if elapsed >= next_notice:
+                                self._notice(f"child running; elapsed {elapsed:.1f}s")
+                                next_notice = elapsed + self.heartbeat_seconds
+                            time.sleep(0.01)
+                        returncode = process.returncode
+                    except BaseException:
+                        # Reap the direct child before closing the log handles. Even an
+                        # interrupted stage leaves its bytes at the announced paths.
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                        self._notice("child interrupted; raw diagnostics retained")
+                        raise
+                stdout.flush()
+                stderr.flush()
+            elapsed = time.monotonic() - started
+            self._notice(f"child exited {returncode}; elapsed {elapsed:.1f}s")
+            completed = subprocess.CompletedProcess(
+                command,
+                returncode,
+                stdout_path.read_bytes().decode("utf-8", errors="replace"),
+                stderr_path.read_bytes().decode("utf-8", errors="replace"),
+            )
+            completed.peak_rss_bytes = peak_rss  # type: ignore[attr-defined]
+            completed.stderr_preserved = True  # type: ignore[attr-defined]
+            completed.diagnostics_directory = directory  # type: ignore[attr-defined]
+            return completed

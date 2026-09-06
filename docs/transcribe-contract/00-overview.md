@@ -65,7 +65,11 @@ Every recorded interview figure was produced with `--language Cantonese`, so exp
 
 The accepted `--language` values are case-insensitive but are echoed with this exact spelling: `Chinese`, `English`, `Cantonese`, `Arabic`, `German`, `French`, `Spanish`, `Portuguese`, `Indonesian`, `Italian`, `Korean`, `Russian`, `Thai`, `Vietnamese`, `Japanese`, `Turkish`, `Hindi`, `Malay`, `Dutch`, `Swedish`, `Danish`, `Finnish`, `Polish`, `Czech`, `Filipino`, `Persian`, `Greek`, `Romanian`, `Hungarian`, and `Macedonian`. Those 30 names are the `support_languages` arrays in the pinned [`Qwen3-ASR-1.7B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit/blob/a8379a2e2f9e313c9292cdf1af4055ab56d50d55/config.json) and [`Qwen3-ASR-0.6B-8bit` config](https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit/blob/89e96d92ba34aca20b3e29fb10cc284097d1219f/config.json), not a vocabulary invented by this CLI. FireRed accepts no language input; its `lid` output is the 115 labels after the five special tokens in the pinned [`FireRedLID` dictionary](https://huggingface.co/FireRedTeam/FireRedLID/blob/1bb4d285c8456429385d9c0810300df4297bc11b/dict.txt).
 
-## Two questions, two commands
+## Discovery and input-specific requests
+
+`audio transcribe stacks` prints the declared stack ids, their existing characterization, and the `native`, `requires_add_on`, and `impossible` capability groups as JSON. It requires no input, metadata probe, registry read, model, or provisioning. These are declared interface facts, not installed readiness or new accuracy measurements. Every transcription `--stack` help points to this command; request commands retain the same semantic missing-stack refusal. The complete discovery output and progress/log behavior are documented in [CLI feedback](../cli-feedback.md).
+
+### Two input-specific questions, two commands
 
 Nothing sequences these. An earlier draft called them "step one" and "step two" and made both forms of `plan`, distinguished by whether `--want` was present — which meant `plan` answered two different questions depending on an absent argument, and implied an order the tool never enforced. An agent that already knows what it needs should go straight to a plan; an agent that does not needs somewhere to look. Those are different questions, so they are different commands, and neither is a gate on the other.
 

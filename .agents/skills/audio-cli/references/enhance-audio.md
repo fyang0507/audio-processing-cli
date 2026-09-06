@@ -21,11 +21,15 @@ Gain and EQ affect overlapping speech and music together. Do not promise separat
 
 ## Read parent and child outcomes
 
+Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes, including nested evidence, and does not certify overall success.
+
 Stages can be `applied`, `no_op`, `skipped`, `abstained`, or `failed`. `applied` means some work ran, not that every goal was met. Read `stages[].component_evaluations[]` for child statuses and reasons: `environment-denoise` can apply a filter while `broadband-denoise` abstains. Quote the actual child outcome and resolved parameters rather than inferring them from the parent.
 
 For source balancing, also read `stages[].final_region_evaluations[]` when present. `bounded_outside_target` means the safe gain bound was reached without attaining that region's numeric target; `abstained_overlap` preserves a region that could not be adjusted independently. The top-level `unresolved[]` collects explicit component abstentions and unmet measured regional or loudness-range targets. Read its scope, status, reason, and `measured_at` when supplied: `predicted_pre_encode` is a prediction and `encoded_output` is the delivered-file check. An empty list does not establish perceptual quality or rule out undetected problems.
 
 Report these remaining limits even after a successful render. Do not enlarge gains or add a second pass simply to make every row green. An approved listening result remains useful evidence.
+
+When a component supplies `noise_reference_scopes`, read each scope's eligibility or rejection reason with the component's final decision. Locally eligible references can still fail pooled checks; rejected scopes explain abstention without authorizing a fallback tool, model, or stronger correction.
 
 ## Measure the file that was delivered
 

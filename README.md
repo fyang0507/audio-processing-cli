@@ -84,6 +84,8 @@ audio enhance demo.mp4 \
 
 The durable report is written beside the output as `demo-enhanced.mp4.report.json`. JSON is also emitted on stdout for agents.
 
+Use `audio report summary demo-enhanced.mp4.report.json` to locate recorded component outcomes, unresolved scopes, and measurement blocks without processing the media again. It prints a concise JSON projection with pointers into the original report and preserves abstentions; see [CLI feedback and report navigation](docs/cli-feedback.md).
+
 For a speech-oriented transcription proxy:
 
 ```bash
@@ -200,6 +202,7 @@ Six behaviours to know before dispatching on the payloads:
 The stack is an explicit quality choice. Inspect its capabilities, resolve the packages and stages for one request, provision what the plan names, then run:
 
 ```bash
+audio transcribe stacks
 audio transcribe capabilities --input meeting.m4a --stack qwen-1.7b
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps

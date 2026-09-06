@@ -1,0 +1,186 @@
+"""Offline summaries retain scoped uncertainty and navigate canonical measurements."""
+
+import json
+
+import pytest
+
+from audio_cli import cli
+from audio_cli.pipeline import summarize_report
+from audio_cli.pipeline.models import PipelineError
+
+
+@pytest.fixture
+def report():
+    return {
+        "kind": "audio_enhancement_report",
+        "schema_version": "1",
+        "source": {"path": "/missing/source.wav", "sha256": "recorded"},
+        "profile": {"name": "product-demo", "version": "5", "target_lufs": -16},
+        "dry_run": False,
+        "rendered": True,
+        "timeline_preserved": True,
+        "region_basis": {"regional_measurements": "fixed_source_regions"},
+        "stages": [
+            {
+                "name": "environment-denoise",
+                "status": "applied",
+                "reason": "eligible_environmental_cleanup_resolved",
+                "operations": [{"type": "highpass", "large_data": list(range(1000))}],
+                "component_evaluations": [
+                    {
+                        "component": "broadband-denoise",
+                        "status": "abstained",
+                        "reason": "insufficient_reference",
+                        "scope": {"time": {"start": 1.1, "end": 2.2}},
+                        "reference_evidence": {"future_component_field": [3, 7]},
+                    }
+                ],
+            },
+            {"name": "voice-enhance", "status": "skipped", "reason": "skipped_by_user"},
+        ],
+        "measurements": {
+            "before": {"program_actual": {"integrated_loudness_lufs": -32}},
+            "predicted": {"program_actual": {"integrated_loudness_lufs": -16}},
+            "after": {"program_actual": {"integrated_loudness_lufs": -16.1}},
+        },
+        "unresolved": [
+            {
+                "stage": "source-balance",
+                "region_id": "machine_001",
+                "status": "bounded_outside_target",
+                "reason": "correction_bound_reached",
+                "measured_at": "encoded_output",
+                "scope": {"time": {"start": 5.2, "end": 7.5}, "frequency": "all"},
+                "target_difference_db": {"minimum": -4, "maximum": -2},
+                "difference_from_speech_db": -6,
+                "local_evidence": {"future_field": ["preserve", {"detail": True}]},
+            }
+        ],
+        "final_peak_validation": {"status": "pass", "measured_true_peak_dbtp": -1.8},
+    }
+
+
+def save(tmp_path, report):
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    return path
+
+
+def test_summary_is_offline_json_preserves_scopes_and_does_not_modify_report(
+    tmp_path, report, monkeypatch, capsys
+):
+    def forbidden(*args, **kwargs):
+        pytest.fail("summary must never probe or process audio")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "probe_media", forbidden)
+    monkeypatch.setattr(cli, "SileroOnnxVad", forbidden)
+    monkeypatch.setattr(cli.EnhancementPipeline, "run", forbidden)
+    path = save(tmp_path, report)
+    before = path.read_bytes()
+    assert cli.main(["report", "summary", path.name]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    summary = json.loads(captured.out)
+    assert summary["report"] == str(path)
+    assert path.read_bytes() == before
+    assert len(captured.out) < len(before)
+    assert "status" not in summary  # No invented overall success.
+    assert "measurements" not in summary
+    assert "operations" not in summary["stages"][0]
+    assert summary["stages"][0]["status"] == "applied"
+    assert summary["stages"][1]["status"] == "skipped"
+    assert summary["unresolved"][0] == {
+        **report["unresolved"][0],
+        "report_pointer": "/unresolved/0",
+    }
+    assert summary["stages"][0]["component_evaluations"][0] == {
+        **report["stages"][0]["component_evaluations"][0],
+        "report_pointer": "/stages/0/component_evaluations/0",
+    }
+    for scope, location in summary["measurement_scopes"].items():
+        pointer = location["program_actual"]["report_pointer"]
+        value = report
+        for field in pointer.lstrip("/").split("/"):
+            value = value[field]
+        assert value == report["measurements"][scope]["program_actual"]
+
+
+def test_older_report_absence_is_not_an_empty_or_successful_outcome(tmp_path, report):
+    for field in ("unresolved", "region_basis", "final_peak_validation", "timeline_preserved"):
+        report.pop(field)
+    report["measurements"]["after"] = {"program": {"input_i": -16, "output_i": -12}}
+    report["stages"][0].pop("component_evaluations")
+    summary = summarize_report(save(tmp_path, report))
+    for field in ("unresolved", "region_basis", "final_peak_validation", "timeline_preserved"):
+        assert field not in summary
+    assert summary["measurement_scopes"]["after"] == {"report_pointer": "/measurements/after"}
+    assert "component_evaluations" not in summary["stages"][0]
+
+
+def test_dry_run_keeps_prediction_scope_without_fabricating_encoded_measurements(tmp_path, report):
+    report["rendered"] = False
+    report["dry_run"] = True
+    report["measurements"].pop("after")
+    report["unresolved"][0]["measured_at"] = "predicted_pre_encode"
+    report["final_peak_validation"]["status"] = "predicted_pass"
+    summary = summarize_report(save(tmp_path, report))
+    assert "after" not in summary["measurement_scopes"]
+    assert summary["unresolved"][0]["measured_at"] == "predicted_pre_encode"
+    assert "measured_at" not in summary["stages"][0]["component_evaluations"][0]
+    assert summary["final_peak_validation"]["status"] == "predicted_pass"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("kind", "audio_inspection"),
+        ("schema_version", "2"),
+        ("schema_version", 1),
+        ("rendered", "true"),
+        ("dry_run", None),
+        ("measurements", []),
+        ("stages", None),
+        ("stages", [{"status": None}]),
+        ("unresolved", None),
+        ("unresolved", ["abstained"]),
+        ("region_basis", "source"),
+        ("timeline_preserved", None),
+        ("final_peak_validation", None),
+    ],
+)
+def test_malformed_known_fields_and_unknown_versions_refuse(tmp_path, report, field, value, capsys):
+    report[field] = value
+    path = save(tmp_path, report)
+    assert cli.main(["report", "summary", str(path)]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["type"] == "PipelineError"
+
+
+@pytest.mark.parametrize("raw", ['{"a":1,"a":2}', "[]", '{"a":NaN}', '{"a":1e999}', "{"])
+def test_invalid_json_cannot_silently_select_or_invent_evidence(tmp_path, raw):
+    path = tmp_path / "bad.json"
+    path.write_text(raw)
+    with pytest.raises(PipelineError):
+        summarize_report(path)
+
+
+def test_missing_file_is_a_json_error(tmp_path, capsys):
+    assert cli.main(["report", "summary", str(tmp_path / "missing.json")]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert json.loads(captured.err)["error"]["type"] == "PipelineError"
+
+
+def test_real_report_builder_shape_can_be_projected(tmp_path, monkeypatch):
+    from test_pipeline_reports import PROFILE, report_inputs
+
+    from audio_cli.pipeline import reporting
+
+    monkeypatch.setattr(reporting, "ffmpeg_version", lambda: "synthetic")
+    report = reporting.build_report(PROFILE, *report_inputs(tmp_path))
+    summary = summarize_report(save(tmp_path, report))
+    assert summary["profile"] == {"name": PROFILE.name, "version": PROFILE.version}
+    for original, row in zip(report["unresolved"], summary["unresolved"], strict=True):
+        assert {key: value for key, value in row.items() if key != "report_pointer"} == original

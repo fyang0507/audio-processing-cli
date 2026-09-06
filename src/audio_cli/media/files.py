@@ -143,9 +143,15 @@ def sha256_regular_file_at(directory_descriptor: int, name: str) -> str | None:
 
 
 @contextmanager
-def temporary_directory(prefix: str = "audio-processing-") -> Iterator[Path]:
-    with tempfile.TemporaryDirectory(prefix=prefix) as raw:
-        yield Path(raw)
+def temporary_directory(
+    prefix: str = "audio-processing-", *, preserve: bool = False
+) -> Iterator[Path]:
+    """Create a private directory; retained evidence lasts until OS/user cleanup."""
+    if preserve:
+        yield Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+    else:
+        with tempfile.TemporaryDirectory(prefix=prefix) as raw:
+            yield Path(raw)
 
 
 @contextmanager
