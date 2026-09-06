@@ -26,7 +26,7 @@ class Plan:
     sample_abstention_reason: str | None = None
 
 
-def serialize_plan(plan: Plan) -> dict[str, Any]:
+def serialize_plan(plan: Plan, *, compact: bool = False) -> dict[str, Any]:
     """Return JSON-safe plan data and generate its sample through the result serializer."""
     core = {
         "roles": plan.roles,
@@ -37,14 +37,15 @@ def serialize_plan(plan: Plan) -> dict[str, Any]:
         "unsized_packages": list(plan.unsized_packages),
         "warnings": list(plan.warnings),
     }
-    sample = build_sample_output(
-        source=plan.source,
-        stack=plan.stack,
-        requested_capabilities=plan.requested_capabilities,
-        plan=core,
-        abstention_reason=plan.sample_abstention_reason,
-    )
-    payload = {**core, "sample_output": sample}
+    payload = dict(core)
+    if not compact:
+        payload["sample_output"] = build_sample_output(
+            source=plan.source,
+            stack=plan.stack,
+            requested_capabilities=plan.requested_capabilities,
+            plan=core,
+            abstention_reason=plan.sample_abstention_reason,
+        )
     missing = [item["package"] for item in plan.packages if not item["provisioned"]]
     if missing:
         payload["next"] = packages_pull_command(missing)

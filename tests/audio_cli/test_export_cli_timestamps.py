@@ -36,7 +36,7 @@ def test_cli_readable_timestamps_and_default_text(
         stack="vibevoice" if timing == "segment_timestamps" else "qwen-0.6b",
     )
     before = path.read_bytes()
-    args = ["export", "--input", str(path), "--format", output_format]
+    args = ["transcribe", "export", "--input", str(path), "--format", output_format]
     assert cli.main([*args, "--timestamps"]) == 0
     captured = capsys.readouterr()
     assert captured.err == ""
@@ -61,6 +61,7 @@ def test_cli_untimed_qwen_refusal_matches_contract_and_writes_nothing(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "meeting.transcript.json",
@@ -77,7 +78,9 @@ def test_cli_untimed_qwen_refusal_matches_contract_and_writes_nothing(
     assert captured.out == ""
     assert not Path("result.txt").exists()
     refusal = json.loads(captured.err)
-    assert refusal == documented_block("For example, `audio export", document=EXPORT_CONTRACT)
+    assert refusal == documented_block(
+        "For example, `audio transcribe export", document=EXPORT_CONTRACT
+    )
 
 
 @pytest.mark.parametrize("output_format", ["jsonl", "srt", "vtt"])
@@ -85,6 +88,7 @@ def test_cli_rejects_readable_flag_for_other_formats(tmp_path: Path, capsys, out
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(tmp_path / "missing.json"),
@@ -98,7 +102,7 @@ def test_cli_rejects_readable_flag_for_other_formats(tmp_path: Path, capsys, out
     captured = capsys.readouterr()
     assert captured.out == ""
     refusal = json.loads(captured.err)
-    expected = documented_block("With SRT, VTT, or JSONL", document=EXPORT_CONTRACT)
+    expected = documented_block("With SRT, VTT, or JSONL, `--timestamps`", document=EXPORT_CONTRACT)
     expected["format"] = output_format
     assert refusal == expected
 
@@ -124,6 +128,7 @@ def test_existing_output_retry_preserves_timestamps_and_shell_safe_paths(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 f"--input={transcript}",
                 "--format",
@@ -163,7 +168,10 @@ def test_readable_markdown_matches_documented_happy_path(tmp_path: Path, capsys)
     payload["provenance"]["plan"] = {"execution": {"partition": "fixture"}}
     path = tmp_path / "meeting.timed.json"
     path.write_text(json.dumps(payload))
-    assert cli.main(["export", "--input", str(path), "--format", "md", "--timestamps"]) == 0
+    assert (
+        cli.main(["transcribe", "export", "--input", str(path), "--format", "md", "--timestamps"])
+        == 0
+    )
     captured = capsys.readouterr()
     assert captured.err == ""
     assert captured.out == documented_fenced_block("### 1.6 Export readable timestamps", "markdown")

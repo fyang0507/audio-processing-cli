@@ -28,6 +28,7 @@ def test_output_exists_fix_runs_for_option_like_paths(tmp_path: Path, monkeypatc
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input=-meeting.json",
                 "--format",
@@ -55,6 +56,7 @@ def test_export_cli_timing_refusal_has_a_runnable_transcribe_fix(tmp_path: Path,
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -110,6 +112,7 @@ def test_export_cli_does_not_repeat_a_word_timing_request_that_abstained(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -141,6 +144,7 @@ def test_export_cli_timing_fix_chooses_an_unused_result_path(tmp_path: Path, cap
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -172,6 +176,7 @@ def test_export_cli_timing_fix_keeps_an_option_like_language_parseable(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -207,6 +212,7 @@ def test_export_cli_timing_fix_keeps_an_option_like_stack_parseable(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -241,6 +247,7 @@ def test_export_cli_timing_refusal_handles_a_name_max_input(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -290,6 +297,7 @@ def test_export_cli_timing_fix_preserves_recorded_range_and_vad_pin(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -357,6 +365,7 @@ def test_multi_input_timing_fix_does_not_repeat_an_abstained_alignment(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(event),
@@ -393,6 +402,7 @@ def test_export_cli_does_not_rerun_a_legacy_relative_source_from_another_cwd(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -428,6 +438,7 @@ def test_export_cli_does_not_prescribe_a_rerun_for_an_unusable_source_identity(
         assert (
             cli.main(
                 [
+                    "transcribe",
                     "export",
                     "--input",
                     str(transcript),

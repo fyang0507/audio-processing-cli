@@ -69,7 +69,7 @@ def test_repository_and_shipped_skill_describe_the_current_run_surface() -> None
 
     repository_text = AGENT_GUIDANCE.read_text()
     assert "transcribe through four explicit stacks" in repository_text
-    assert "`transcribe run`, and `export` ship" in repository_text
+    assert "`transcribe run`, and `transcribe export` ship" in repository_text
 
     # The skill routes to live help/capabilities instead of duplicating stack catalogs.
     # Fresh-context acceptance evaluates its guidance; literal backend lists are not required.

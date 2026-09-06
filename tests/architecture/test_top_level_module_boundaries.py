@@ -70,6 +70,7 @@ COMPOSITION_ROOT_DEPENDENCIES = {
         "audio_cli.pipeline",
         "audio_cli.profiles",
         "audio_cli.transcribe.catalog",
+        "audio_cli.transcribe.execution",
         "audio_cli.transcribe.orchestrator",
         "audio_cli.transcribe.plan",
         "audio_cli.transcribe.planner",

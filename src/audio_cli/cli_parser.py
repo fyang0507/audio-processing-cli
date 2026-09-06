@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     transcribe_parser = subparsers.add_parser(
         "transcribe",
-        help="Discover stacks, inspect capabilities, plan, and transcribe.",
+        help="Discover stacks, inspect capabilities, plan, transcribe, and export saved results.",
     )
     transcribe_commands = transcribe_parser.add_subparsers(dest="transcribe_command", required=True)
     transcribe_commands.add_parser(
@@ -165,6 +165,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--stack", help=stack_help)
     plan_parser.add_argument("--input", type=Path, help="Required: original media path.")
     plan_parser.add_argument("--want", help="Comma-separated capability names.")
+    plan_parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Omit generated sample_output; retain every decision and provisioning field.",
+    )
     plan_parser.add_argument("--language")
     plan_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
     plan_parser.add_argument(
@@ -200,11 +205,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Retain raw stage logs in unique run directories here; refuses if unusable.",
     )
     run_parser.add_argument(
+        "--receipt",
+        action="store_true",
+        help="With --output and --format json, print a concise JSON receipt; saved JSON is unchanged. "
+        "Partial runs report the saved partial path and still exit 4.",
+    )
+    run_parser.add_argument(
         "--force", action="store_true", help="Replace an existing output or partial result."
     )
 
-    export_parser = subparsers.add_parser(
-        "export", help="Render one or more normalized transcripts for people or editors."
+    _add_export_arguments(
+        transcribe_commands.add_parser(
+            "export", help="Render saved result JSON offline, without media probing or models."
+        )
+    )
+    _add_export_arguments(
+        subparsers.add_parser("export", help="Compatibility alias for audio transcribe export.")
+    )
+    return parser
+
+
+def _add_export_arguments(export_parser: argparse.ArgumentParser) -> None:
+    export_parser.description = (
+        "Render saved result JSON offline; no stack selection or model provisioning is needed. "
+        "audio export is a compatibility alias for audio transcribe export."
     )
     export_parser.add_argument(
         "--input",
@@ -224,6 +248,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include real segment or word time ranges in txt/md; refuse untimed text.",
     )
     export_parser.add_argument(
+        "--provenance",
+        action="store_true",
+        help="Include saved source, stack, timing basis when present, and input coverage in txt/md.",
+    )
+    export_parser.add_argument(
         "--force", action="store_true", help="Replace an existing export destination."
     )
-    return parser

@@ -82,6 +82,14 @@ class TimestampsUnsupportedError(ExportError):
         super().__init__(f"--timestamps requires txt or md, got {output_format!r}")
 
 
+class ProvenanceUnsupportedError(ExportError):
+    """Provenance headers are only available for readable exports."""
+
+    def __init__(self, output_format: str) -> None:
+        self.output_format = output_format
+        super().__init__(f"--provenance requires txt or md, got {output_format!r}")
+
+
 class OutputExistsError(ExportError):
     """The destination already exists and replacement was not authorized."""
 

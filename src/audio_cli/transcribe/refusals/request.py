@@ -277,3 +277,17 @@ def run_incomplete(
         coverage=dict(coverage),
         output=str(output),
     )
+
+
+def receipt_options_invalid(output: Path | None, output_format: str) -> Refusal:
+    return build_refusal(
+        "receipt_options_invalid",
+        2,
+        "use --receipt with --output PATH and --format json, or remove --receipt; "
+        "repeat the original command, preserving every other argument",
+        field="--receipt",
+        provided=True,
+        output_supplied=output is not None,
+        format=output_format,
+        requires=["--output", "--format json"],
+    )

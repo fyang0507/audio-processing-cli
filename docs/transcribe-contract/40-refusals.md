@@ -165,7 +165,7 @@ The partial result is a **conforming result document** with `complete: false` an
 Ids are document-scoped, so merging two results means re-numbering. `export` accepts several transcripts in timeline order and re-ids as it goes, which covers the subtitle case without anyone hand-editing JSON:
 
 ```bash
-audio export --input meeting.partial.json --input meeting.rest.json \
+audio transcribe export --input meeting.partial.json --input meeting.rest.json \
   --format srt -o meeting.srt
 ```
 

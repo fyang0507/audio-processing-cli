@@ -13,11 +13,13 @@ from .errors import (
     IncompatibleResultsError,
     InvalidResultError,
     OutputWriteError,
+    ProvenanceUnsupportedError,
     TimestampsUnsupportedError,
 )
 from .loading import load_result_document
 from .merge import merge_documents
 from .models import _TIMED_FORMATS, EXPORT_FORMATS, ExportProduct
+from .provenance import render_provenance
 from .timing import _require_readable_timing, _require_word_timing, _validate_word_timing_ledger
 from .writers import (
     normalize_voice_annotation,
@@ -37,6 +39,7 @@ def export_documents(
     force: bool = False,
     *,
     timestamps: bool = False,
+    provenance: bool = False,
 ) -> ExportProduct:
     """Read, merge, render, and optionally atomically publish transcript exports."""
     if output_format not in EXPORT_FORMATS:
@@ -45,6 +48,8 @@ def export_documents(
         )
     if timestamps and output_format not in {"txt", "md"}:
         raise TimestampsUnsupportedError(output_format)
+    if provenance and output_format not in {"txt", "md"}:
+        raise ProvenanceUnsupportedError(output_format)
     loaded = tuple(load_result_document(Path(path)) for path in inputs)
     merged = merge_documents(loaded)
     if timestamps:
@@ -120,6 +125,8 @@ def export_documents(
     else:
         content = render_jsonl(merged.segments)
 
+    if provenance:
+        content = render_provenance(merged, output_format) + content
     product = ExportProduct(
         inputs=merged.inputs,
         output_format=output_format,

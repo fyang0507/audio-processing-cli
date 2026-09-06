@@ -42,6 +42,7 @@ def test_export_timing_refusal_matches_the_contract(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "meeting.transcript.json",
@@ -60,7 +61,7 @@ def test_export_timing_refusal_matches_the_contract(
     )
     documented["fix"] = documented["fix"].replace("/Users/you/recordings/meeting.m4a", str(source))
 
-    assert_documented_shape(actual, documented, "audio export timing refusal")
+    assert_documented_shape(actual, documented, "audio transcribe export timing refusal")
     for field in (
         "code",
         "field",
@@ -94,6 +95,7 @@ def test_export_recorded_timing_without_words_matches_the_contract(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "ordinary.sentences.json",
@@ -131,6 +133,7 @@ def test_export_legacy_source_timing_refusal_matches_the_contract(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 "legacy.transcript.json",

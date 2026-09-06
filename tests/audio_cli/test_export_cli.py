@@ -25,6 +25,7 @@ def test_export_cli_prints_human_formats_without_an_output(tmp_path: Path, capsy
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -49,6 +50,7 @@ def test_export_cli_refuses_inert_force_without_output(tmp_path: Path, capsys) -
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -83,6 +85,7 @@ def test_export_cli_refuses_directory_output_even_with_force(tmp_path: Path, cap
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -119,6 +122,7 @@ def test_export_cli_refuses_replacing_a_fifo_even_with_force(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -154,6 +158,7 @@ def test_export_cli_refuses_overwriting_an_input_transcript_with_truthful_fix(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -188,6 +193,7 @@ def test_export_cli_rejects_a_self_referential_output_symlink(tmp_path: Path, ca
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(transcript),
@@ -224,6 +230,7 @@ def test_export_cli_types_invalid_and_incompatible_inputs(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(invalid),
@@ -257,6 +264,7 @@ def test_export_cli_types_invalid_and_incompatible_inputs(
     assert (
         cli.main(
             [
+                "transcribe",
                 "export",
                 "--input",
                 str(first),

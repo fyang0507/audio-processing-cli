@@ -12,7 +12,7 @@ original + profile
 
 The CLI reports what it measured, which versioned rule matched, the exact DSP parameters it resolved, and whether the result conforms to the selected profile. It does not label audio universally “good” or “bad,” and it abstains where a mixed track cannot be changed safely.
 
-The second implemented surface is transcription, deterministic export, and its explicit provisioning layer. `audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact request, and `audio transcribe run` executes all four stacks: `qwen-1.7b`, `qwen-0.6b`, `firered`, and `vibevoice`. `audio export` renders normalized results without model work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims the pinned packages and runtimes. Provider ASR, alignment, and diarization downloads require an explicit `audio packages pull`. The small shared Silero VAD bootstrap used by inspection, enhancement, or transcription is the sole implicit model fetch and is described under Install.
+The second implemented surface is transcription, deterministic export, and its explicit provisioning layer. `audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact request, and `audio transcribe run` executes all four stacks: `qwen-1.7b`, `qwen-0.6b`, `firered`, and `vibevoice`. `audio transcribe export` renders normalized results without model work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims the pinned packages and runtimes. Provider ASR, alignment, and diarization downloads require an explicit `audio packages pull`. The small shared Silero VAD bootstrap used by inspection, enhancement, or transcription is the sole implicit model fetch and is described under Install.
 
 This implements [Issue #4 — Profile-driven automatic audio enhancement](https://github.com/fyang0507/audio-processing-cli/issues/4) within the product boundary established by [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1).
 
@@ -184,7 +184,7 @@ The [output publication checks](src/audio_cli/pipeline/publication.py) verify th
 
 Render success verifies the mandatory output gates; it does not imply every component achieved its preferred target. Read `unresolved` for abstained denoise components, bounded regional corrections, and loudness-range limits left unresolved to preserve balance. Use `measurements.after.program_actual` for the encoded render's measured LUFS, LRA, and true peak. The legacy `program` object retains raw FFmpeg diagnostics; its `output_*` fields describe a hypothetical additional normalization, not the saved render.
 
-`region_basis` identifies the source intervals used for before/after comparison. A fresh `inspect` on an enhanced file runs detection again, so region ids and classifications may differ. Keep any requested canonical transcription on the original media, and enhance last. Human listening judges preference; overlapping sources require separate tracks or a future separation capability. Enhancement preserves fillers. Optional filler editing is future scope and would need synchronized audio/video cuts when video is present.
+`region_basis` identifies the source intervals used for before/after comparison. A fresh `inspect` on an enhanced file runs detection again, so region ids and classifications may differ. Keep any requested canonical transcription on the original media, and enhance last. Human listening judges preference; overlapping sources require separate tracks or a future separation capability. Enhancement preserves fillers. Editorial and filler-removal decisions are outside the CLI scope; issues #1 and #39 are closed as `NOT_PLANNED`.
 
 ## Model packages
 
@@ -231,14 +231,17 @@ Omitting `--want` requests only the stack’s declared floors. `--language` is a
 
 During transcription, host stage and elapsed-time progress goes to stderr, while stdout remains the requested result format. Raw backend stdout/stderr is retained at announced temporary log paths, including on failure. Preserve those logs with any evidence before operating-system cleanup; warnings alone do not establish recognition quality.
 
-Export saved results without running models:
+Use `transcribe plan --compact` to omit the generated sample while keeping all decisions and provisioning guidance. With `transcribe run --output PATH --format json --receipt`, stdout becomes a concise JSON receipt and the saved canonical JSON stays unchanged. An incomplete run still exits 4 with its refusal on stderr and a receipt naming the actual partial file and coverage.
+
+Export saved results without running models (`audio export` remains a compatibility alias):
 
 ```bash
-audio export --input meeting.timed.json --format srt -o meeting.srt
-audio export --input meeting.timed.json --format md --timestamps -o meeting.md
+audio transcribe export --input meeting.timed.json --format srt -o meeting.srt
+audio transcribe export --input meeting.timed.json --format md --timestamps -o meeting.md
+audio transcribe export --input meeting.timed.json --format md --provenance -o meeting.with-source.md
 ```
 
-Repeat `--input` in source-timeline order to merge compatible continuations. `--timestamps` applies only to Markdown and text and requires real segment or word times. Subtitle export uses real word streams; unsupported timing is refused rather than invented. See the [export contract](docs/transcribe-contract/30-export.md), [cue construction](src/audio_cli/export/cues.py), and [timing validation](src/audio_cli/export/timing.py) for event and abstention handling.
+Repeat `--input` in source-timeline order to merge compatible continuations. `--provenance` adds saved source/stack/timing-basis headers and each input's coverage to Markdown or text. `--timestamps` applies only to Markdown and text and requires real segment or word times. Subtitle export uses real word streams; unsupported timing is refused rather than invented. See the [export contract](docs/transcribe-contract/30-export.md), [cue construction](src/audio_cli/export/cues.py), and [timing validation](src/audio_cli/export/timing.py) for event and abstention handling.
 
 ## Test
 

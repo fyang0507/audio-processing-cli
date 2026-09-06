@@ -57,6 +57,18 @@ def timing_required_for_timestamps(input_path: str | Path, segment_id: str) -> R
     )
 
 
+def provenance_unsupported_for_format(output_format: str) -> Refusal:
+    return build_refusal(
+        "provenance_unsupported_for_format",
+        2,
+        "use --provenance with --format txt or md, or remove --provenance",
+        field="--provenance",
+        provided=True,
+        format=output_format,
+        allowed_formats=["txt", "md"],
+    )
+
+
 def output_exists(
     input_paths: Sequence[str | Path],
     output_format: str,
@@ -64,9 +76,17 @@ def output_exists(
     *,
     replaceable: bool,
     timestamps: bool = False,
+    provenance: bool = False,
 ) -> Refusal:
     if replaceable:
-        fix = export_command(input_paths, output_format, output, force=True, timestamps=timestamps)
+        fix = export_command(
+            input_paths,
+            output_format,
+            output,
+            force=True,
+            timestamps=timestamps,
+            provenance=provenance,
+        )
     else:
         fix = (
             "choose a regular-file --output path; an existing directory cannot "

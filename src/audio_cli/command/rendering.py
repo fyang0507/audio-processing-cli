@@ -20,13 +20,16 @@ def export_command(
     *,
     force: bool = False,
     timestamps: bool = False,
+    provenance: bool = False,
 ) -> str:
-    parts = ["audio", "export"]
+    parts = ["audio", "transcribe", "export"]
     for input_path in input_paths:
         parts.extend(("--input", command_path_argument(input_path)))
     parts.extend(("--format", output_format, "-o", command_path_argument(output)))
     if timestamps:
         parts.append("--timestamps")
+    if provenance:
+        parts.append("--provenance")
     if force:
         parts.append("--force")
     return shlex.join(parts)

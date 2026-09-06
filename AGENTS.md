@@ -1,6 +1,6 @@
 # Working in this repository
 
-A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `report summary`, `doctor`, `packages`, `transcribe stacks`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `export` ship. JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
+A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `report summary`, `doctor`, `packages`, `transcribe stacks`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `transcribe export` ship (`export` remains a compatibility alias). JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
 
 ## The rule that matters most
 
@@ -80,7 +80,7 @@ The non-Python directories under `environments` are part of that package's decla
 | Package | Owns | Must not own |
 | --- | --- | --- |
 | `adapters` | Pure, deterministic interpretation of a backend's raw payload into host-side values, including alignment and diarization reconciliation. | Filesystem/process I/O, model imports, planning, publication, or public-result serialization. |
-| `execution` | Provider-neutral host run services after planning: mutable integrity/runtime probes, range validation, materialization receipt access, shared VAD invocation, metrics, completion, resume, and publication. | Media I/O mechanics, stack selection, provider workflow order, model-stage process lifecycle, or backend-payload interpretation. |
+| `execution` | Provider-neutral host run services after planning: mutable integrity/runtime probes, range validation, materialization receipt access, shared VAD invocation, metrics, completion, resume, publication, and published-result command receipts. | Media I/O mechanics, stack selection, provider workflow order, model-stage process lifecycle, or backend-payload interpretation. |
 | `orchestrator` | The sole stack dispatcher and the Qwen, FireRed, and VibeVoice workflows. It decides which operations run and in what order by composing the other transcription packages. | Subprocess mechanics, model-framework imports, package provisioning, or schema ownership. |
 | `planner` | Pure request validation and immutable plan construction from input metadata and declared stack/environment facts. | Installed-state inspection, model execution, normalization, or publication. |
 | `refusals` | Fixed-shape, transcription-specific refusal payload builders that compose the shared runnable-command renderer. Callers detect the condition; this package only represents it. | Detecting failures, running remediation, export-specific failures, or non-transcription command errors. |

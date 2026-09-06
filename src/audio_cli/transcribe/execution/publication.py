@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from audio_cli.command import transcribe_run_command
+from audio_cli.command import Refusal, transcribe_run_command
 from audio_cli.media import (
     ProtectedFileIdentity,
     ProtectedOutputError,
@@ -22,6 +22,14 @@ from ..refusals import request as refusals
 from ..result.types import ABSENT, NormalizedResult
 from ..transport.types import StageOutcome
 from .runtime import RunRange
+
+
+class PublishedPartial(Refusal):
+    """An incomplete-run refusal carrying the result already durably published."""
+
+    def __init__(self, refusal: Refusal, result: dict[str, Any]) -> None:
+        super().__init__(refusal.payload, exit_code=refusal.exit_code)
+        self.result = result
 
 
 def _record_metrics(outcomes: Sequence[StageOutcome], result: NormalizedResult) -> dict[str, Any]:

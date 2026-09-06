@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from audio_cli.transcribe.execution import PublishedPartial, build_receipt
 from tests.audio_cli.transcribe.orchestrator.transcribe_native_test_support import (
     InputMetadata,
     StageOutcome,
@@ -85,6 +86,12 @@ def test_firered_partial_writes_prefix_coverage_and_runnable_resume(
     }
     assert "--range 1.5:" in refusal.payload["fix"]
     partial = json.loads((tmp_path / "partial.partial.json").read_text(encoding="utf-8"))
+    assert isinstance(refusal, PublishedPartial)
+    assert refusal.result == partial
+    receipt = build_receipt(refusal.result, refusal.payload["output"])
+    assert receipt["complete"] is False
+    assert receipt["coverage"] == refusal.payload["coverage"]
+    assert receipt["counts"]["segments"] == 1
     assert partial["complete"] is False
     assert partial["segments"] == [
         {

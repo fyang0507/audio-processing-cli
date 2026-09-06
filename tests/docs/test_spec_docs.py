@@ -116,6 +116,8 @@ def test_most_fixes_are_runnable_commands() -> None:
         "want_not_implemented",
         "timing_required_for_timestamps",
         "timestamps_unsupported_for_format",
+        "provenance_unsupported_for_format",
+        "receipt_options_invalid",
         "capability_unsupported",
         "backend_failed",
         "output_is_canonical_input",

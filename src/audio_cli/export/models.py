@@ -1,4 +1,4 @@
-"""Strict loading, merging, rendering, and safe publication for ``audio export``."""
+"""Strict loading, merging, rendering, and safe publication for ``audio transcribe export``."""
 
 from __future__ import annotations
 

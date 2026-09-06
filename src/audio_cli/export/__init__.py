@@ -1,4 +1,4 @@
-"""Strict loading, merging, rendering, and safe publication for ``audio export``."""
+"""Strict loading, merging, rendering, and safe publication for ``audio transcribe export``."""
 
 from .core import export_documents
 from .errors import (
@@ -7,6 +7,7 @@ from .errors import (
     InvalidResultError,
     OutputExistsError,
     OutputWriteError,
+    ProvenanceUnsupportedError,
     ReadableTimingRequiredError,
     TimestampsUnsupportedError,
     TimingRequiredError,
@@ -22,6 +23,7 @@ from .refusals import (
     output_is_canonical_input,
     output_path_invalid,
     output_required_for_force,
+    provenance_unsupported_for_format,
     timestamps_unsupported_for_format,
     timing_required_for_format,
     timing_required_for_timestamps,
@@ -37,6 +39,7 @@ __all__ = [
     "MergedTranscript",
     "OutputExistsError",
     "OutputWriteError",
+    "ProvenanceUnsupportedError",
     "ReadableTimingRequiredError",
     "TimestampsUnsupportedError",
     "TimingRequiredError",
@@ -50,6 +53,7 @@ __all__ = [
     "output_is_canonical_input",
     "output_path_invalid",
     "output_required_for_force",
+    "provenance_unsupported_for_format",
     "timestamps_unsupported_for_format",
     "timing_required_for_format",
     "timing_required_for_timestamps",

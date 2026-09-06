@@ -31,6 +31,7 @@ from .pipeline import (
 )
 from .profiles import STAGE_ORDER, get_profile
 from .transcribe import catalog as transcribe_catalog
+from .transcribe import execution as transcribe_execution
 from .transcribe import orchestrator as transcribe_orchestrator
 from .transcribe import planner as transcribe_planner
 from .transcribe import refusals as transcribe_refusals
@@ -192,9 +193,13 @@ def _run_packages(args: argparse.Namespace) -> int:
 
 def _run_transcribe(args: argparse.Namespace) -> int:
     command = args.transcribe_command
+    if command == "export":
+        return _run_export(args)
     if command == "stacks":
         _print_json(transcribe_stacks.discovery())
         return 0
+    if command == "run" and args.receipt:
+        transcribe_execution.validate_receipt_options(args.output, args.format)
     wants = args.want if command in {"plan", "run"} else None
     request = transcribe_planner.resolve_request(
         stack_id=args.stack,
@@ -240,19 +245,26 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             if entry.get("state") == "ready"
         }
         plan = transcribe_planner.build_plan(request, metadata, provisioned_packages=ready)
-        _print_json(serialize_plan(plan))
+        _print_json(serialize_plan(plan, compact=args.compact))
         return 0
     if command == "run":
-        product = transcribe_orchestrator.run(
-            request,
-            metadata,
-            output=args.output,
-            output_format=args.format,
-            run_range=run_range,
-            force=args.force,
-            transport=transport,
-        )
-        if args.format == "json":
+        try:
+            product = transcribe_orchestrator.run(
+                request,
+                metadata,
+                output=args.output,
+                output_format=args.format,
+                run_range=run_range,
+                force=args.force,
+                transport=transport,
+            )
+        except transcribe_execution.PublishedPartial as exc:
+            if args.receipt:
+                _print_json(transcribe_execution.build_receipt(exc.result, exc.payload["output"]))
+            raise
+        if args.receipt:
+            _print_json(transcribe_execution.build_receipt(product.payload, args.output))
+        elif args.format == "json":
             _print_json(product.payload)
         else:
             sys.stdout.write(transcribe_orchestrator.render_human(product.payload, args.format))
@@ -266,6 +278,7 @@ def _run_export(args: argparse.Namespace) -> int:
         InvalidResultError,
         OutputExistsError,
         OutputWriteError,
+        ProvenanceUnsupportedError,
         ReadableTimingRequiredError,
         TimestampsUnsupportedError,
         TimingRequiredError,
@@ -284,7 +297,10 @@ def _run_export(args: argparse.Namespace) -> int:
             output=args.output,
             force=args.force,
             timestamps=args.timestamps,
+            provenance=args.provenance,
         )
+    except ProvenanceUnsupportedError as exc:
+        raise export_refusals.provenance_unsupported_for_format(exc.output_format) from exc
     except ReadableTimingRequiredError as exc:
         raise export_refusals.timing_required_for_timestamps(
             exc.input_path, exc.segment_id
@@ -338,6 +354,7 @@ def _run_export(args: argparse.Namespace) -> int:
             exc.output,
             replaceable=exc.replaceable,
             timestamps=args.timestamps,
+            provenance=args.provenance,
         ) from exc
     except UnsafeOutputError as exc:
         raise export_refusals.output_is_canonical_input(exc.output, exc.protected) from exc

@@ -167,7 +167,7 @@ Two things worth reading closely. `lid_regions` is region-granular and its bound
 ### 3.2 Export
 
 ```bash
-audio export --input field.transcript.json --format srt -o field.srt
+audio transcribe export --input field.transcript.json --format srt -o field.srt
 ```
 
 Exit 0. `field.srt`:

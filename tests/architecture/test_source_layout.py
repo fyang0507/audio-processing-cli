@@ -257,7 +257,11 @@ def test_transcribe_public_execution_imports_stay_stable() -> None:
         assert module.__all__ == expected
         assert all(hasattr(module, exported) for exported in expected)
 
-    assert importlib.import_module("audio_cli.transcribe.execution").__all__ == []
+    assert importlib.import_module("audio_cli.transcribe.execution").__all__ == [
+        "PublishedPartial",
+        "build_receipt",
+        "validate_receipt_options",
+    ]
 
 
 def test_export_owns_its_command_refusal_builders() -> None:
