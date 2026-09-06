@@ -108,6 +108,10 @@ def managed_url_artifact_path(
     candidate = Path(str(value)) if value else None
     if candidate is None:
         return None, "artifact path is absent"
+    # abspath erases '..' lexically, but the OS traverses preceding symlinks first.
+    # Refuse that ambiguity in either input before normalizing or inspecting paths.
+    if ".." in candidate.parts or ".." in expected.parts:
+        return candidate, "artifact path contains parent traversal"
     root_issue = managed_provisioning_root_issue()
     if root_issue is not None:
         return candidate, root_issue
@@ -115,22 +119,23 @@ def managed_url_artifact_path(
         return candidate, f"artifact path {candidate} is not managed path {expected}"
     if expected.parent.is_symlink():
         return candidate, f"managed artifact parent is a symlink: {expected.parent}"
-    if candidate.is_symlink():
-        return candidate, f"managed artifact path is a symlink: {candidate}"
+    if expected.is_symlink():
+        return expected, f"managed artifact path is a symlink: {expected}"
     try:
         parent = expected.parent.resolve(strict=True)
-        resolved = candidate.resolve(strict=True)
+        resolved = expected.resolve(strict=True)
         root = paths.root().resolve(strict=True)
     except (OSError, RuntimeError) as exc:
         return candidate, f"managed artifact path cannot be resolved: {exc}"
     if (
         not expected.parent.is_dir()
         or not parent.is_relative_to(root)
-        or not candidate.is_file()
+        or not expected.is_file()
         or not resolved.is_relative_to(root)
     ):
         return candidate, f"managed artifact is not a contained regular file: {resolved}"
-    return candidate, None
+    # Hashing and the consuming caller must use this same manifest-owned spelling.
+    return expected, None
 
 
 __all__ = [

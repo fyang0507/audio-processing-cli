@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import os
 import types
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from package_test_support import isolated_root as isolated_root
@@ -14,7 +16,92 @@ from rnnoise_test_support import rnnoise as rnnoise
 from audio_cli import packages as pkg
 from audio_cli import paths
 from audio_cli.media import files as media_files
-from audio_cli.packages import artifacts, fetcher
+from audio_cli.packages import artifacts, catalog, fetcher
+
+
+@pytest.fixture(params=["rnnoise-voice", "silero-vad"])
+def single_file(request, rnnoise, monkeypatch):
+    package, provisioner, requested = rnnoise
+    if request.param == "silero-vad":
+        declared = pkg.packages()[request.param]
+        package = replace(
+            declared,
+            bytes=len(PAYLOAD),
+            source={**declared.source, "sha256": hashlib.sha256(PAYLOAD).hexdigest()},
+        )
+        declared_packages = {**pkg.packages(), package.id: package}
+        monkeypatch.setattr(catalog, "packages", lambda: declared_packages)
+    provisioner.pull([package])
+    return package, provisioner, requested
+
+
+@pytest.mark.parametrize("surface", ["helper", "verify"])
+@pytest.mark.parametrize("redirect", [False, True])
+def test_receipt_parent_traversal_is_refused_before_normalization(single_file, surface, redirect):
+    package, provisioner, requested = single_file
+    expected = paths.models_dir() / package.source["filename"]
+    intermediate = expected.parent / "redirect"
+    if redirect:
+        elsewhere = paths.root() / "elsewhere"
+        child = elsewhere / "child"
+        child.mkdir(parents=True)
+        (elsewhere / expected.name).write_bytes(b"different bytes")
+        intermediate.symlink_to(child, target_is_directory=True)
+    else:
+        intermediate.mkdir()
+    hostile = intermediate / ".." / expected.name
+    assert Path(os.path.abspath(hostile)) == expected
+    assert hostile.read_bytes() == (b"different bytes" if redirect else PAYLOAD)
+    document = pkg.load_registry()
+    document["packages"][package.id]["materialized"]["path"] = str(hostile)
+    pkg.save_registry(document)
+
+    if surface == "helper":
+        with pytest.raises(pkg.ProvisioningError) as caught:
+            pkg.verified_artifact(package.id)
+        failure = caught.value.as_dict()
+    else:
+        report = provisioner.verify()
+        assert report["verified"] == []
+        assert len(report["failed"]) == 1
+        failure = report["failed"][0]
+    assert failure["code"] == "package_integrity_failed"
+    assert "parent traversal" in failure["detail"]
+    assert failure["fix"] == f"audio packages pull --repair {package.id}"
+    assert expected.read_bytes() == PAYLOAD
+    assert len(requested) == 1
+
+
+@pytest.mark.parametrize("relative_receipt", [False, True])
+def test_valid_receipt_returns_manifest_path_and_matching_bytes(
+    single_file, monkeypatch, relative_receipt
+):
+    package, provisioner, requested = single_file
+    expected = paths.models_dir() / package.source["filename"]
+    if relative_receipt:
+        monkeypatch.chdir(paths.root())
+        document = pkg.load_registry()
+        document["packages"][package.id]["materialized"]["path"] = str(
+            expected.relative_to(paths.root())
+        )
+        pkg.save_registry(document)
+    location, provenance = pkg.verified_artifact(package.id)
+    assert location == expected
+    assert provenance["sha256"] == hashlib.sha256(location.read_bytes()).hexdigest()
+    report = provisioner.verify()
+    assert report["failed"] == []
+    if package.source["type"] == "url":
+        assert report["verified"] == [{"package": package.id, "digest": "ok"}]
+    else:
+        assert report["verified"] == [
+            {
+                "package": package.id,
+                "revision": package.source["revision"],
+                "git_blob_sha1": BLOB_SHA1,
+                "bytes": len(PAYLOAD),
+            }
+        ]
+    assert len(requested) == 1
 
 
 @pytest.mark.parametrize("payload", [b"jello\n", b"hello", b"hello\nextra"])
