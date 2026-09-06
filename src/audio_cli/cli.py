@@ -24,6 +24,7 @@ from .pipeline import (
     DenoiserModel,
     EnhancementPipeline,
     PipelineError,
+    compare_reports,
     inspect_source,
     summarize_report,
     validate_skips,
@@ -256,7 +257,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
                 output_format=args.format,
                 run_range=run_range,
                 force=args.force,
-                transport=transport,
+                **({"transport": transport} if transport is not None else {}),
             )
         except transcribe_execution.PublishedPartial as exc:
             if args.receipt:
@@ -383,7 +384,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "enhance":
             return _run_enhance(args)
         if args.command == "report":
-            _print_json(summarize_report(args.input))
+            if args.report_command == "compare":
+                _print_json(compare_reports(args.left, args.right))
+            else:
+                _print_json(
+                    summarize_report(
+                        args.input,
+                        include_metrics=args.metrics,
+                        include_evidence_limits=args.evidence_limits,
+                    )
+                )
             return 0
         if args.command == "doctor":
             return _run_doctor(args)

@@ -1,6 +1,6 @@
 # Offline report details and comparison
 
-The public callables `audio_cli.pipeline.summarize_report` and `audio_cli.pipeline.compare_reports` read saved reports only. They never open recorded source/output media paths, run detection, change processing decisions, or rewrite reports. Pipeline owns this offline enhancement-report policy in [`pipeline/reports`](../src/audio_cli/pipeline/reports/). CLI argument wiring is separate from these callables.
+`audio report summary REPORT --metrics --evidence-limits` adds recorded measurements and a flat index of limits to the existing summary. `audio report compare LEFT RIGHT` compares two saved reports by recorded identity and time overlap. Both read report files only; they never open recorded source/output media paths, run detection, change processing decisions, or rewrite reports. The public callables `audio_cli.pipeline.summarize_report` and `audio_cli.pipeline.compare_reports` own this offline enhancement-report policy in [`pipeline/reports`](../src/audio_cli/pipeline/reports/).
 
 ## Optional summary details
 

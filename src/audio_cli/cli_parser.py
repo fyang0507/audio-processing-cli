@@ -88,6 +88,24 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     summary_parser.add_argument("input", type=Path, help="Saved enhancement report JSON.")
+    summary_parser.add_argument(
+        "--metrics",
+        action="store_true",
+        help="Include recorded before/predicted/after metrics with report pointers.",
+    )
+    summary_parser.add_argument(
+        "--evidence-limits",
+        action="store_true",
+        help="Index nested abstentions, unmet targets and other recorded limits.",
+    )
+    compare_parser = report_commands.add_parser(
+        "compare",
+        help="Compare saved reports offline by recorded identity and time overlap.",
+        description="Keep fixed source regions and fresh detection scopes separate. "
+        "Requires recorded digest/timeline evidence; supplies no quality or sync verdict.",
+    )
+    compare_parser.add_argument("left", type=Path, help="Saved inspection or enhancement report.")
+    compare_parser.add_argument("right", type=Path, help="Compatible saved report to compare.")
 
     packages_parser = subparsers.add_parser(
         "packages",
