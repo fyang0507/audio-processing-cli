@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .adjustments import AdjustmentError, load_adjustments
 from .cli_parser import build_parser
-from .command import Refusal
+from .command import ProgressReporter, Refusal
 from .environments import ManifestError
 from .media import MediaError, media_summary, probe_media
 from .packages import (
@@ -36,6 +36,7 @@ from .transcribe import planner as transcribe_planner
 from .transcribe import refusals as transcribe_refusals
 from .transcribe import stacks as transcribe_stacks
 from .transcribe.plan import serialize_plan
+from .transcribe.transport import StageTransport
 from .vad import SileroOnnxVad, VadError
 
 
@@ -113,19 +114,21 @@ def _run_enhance(args: argparse.Namespace) -> int:
         nyquist_hz=24_000.0,
     )
     detector = SileroOnnxVad(args.vad_model)
-    pipeline = EnhancementPipeline(
-        profile,
-        skipped_stages=skipped,
-        adjustments=adjustments,
-        detector=detector,
-        denoiser_model=denoiser_model,
-    )
-    report = pipeline.run(
-        args.input,
-        output=args.output,
-        dry_run=args.dry_run,
-        allow_enhanced_input=args.allow_enhanced_input,
-    )
+    with ProgressReporter("enhance") as progress:
+        pipeline = EnhancementPipeline(
+            profile,
+            skipped_stages=skipped,
+            adjustments=adjustments,
+            detector=detector,
+            denoiser_model=denoiser_model,
+            progress=progress,
+        )
+        report = pipeline.run(
+            args.input,
+            output=args.output,
+            dry_run=args.dry_run,
+            allow_enhanced_input=args.allow_enhanced_input,
+        )
     if report_path is not None:
         write_report(report_path, report)
     _print_json(report)
@@ -215,6 +218,12 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         )
     else:
         run_range = None
+    transport = None
+    if command == "run" and args.log_dir is not None:
+        try:
+            transport = StageTransport(log_root=args.log_dir)
+        except (OSError, ValueError) as exc:
+            raise transcribe_refusals.log_directory_invalid(args.log_dir, str(exc)) from exc
     # Validation above is deliberately complete before this probe, and the registry is read
     # only after the probe.  No request refusal can be shadowed by provisioning state.
     metadata = transcribe_catalog.input_metadata(
@@ -241,6 +250,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             output_format=args.format,
             run_range=run_range,
             force=args.force,
+            transport=transport,
         )
         if args.format == "json":
             _print_json(product.payload)

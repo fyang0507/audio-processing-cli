@@ -176,9 +176,9 @@ def build_parser() -> argparse.ArgumentParser:
         usage="%(prog)s --stack STACK --input INPUT [options]",
         description=(
             "Host stage and elapsed-time progress goes to stderr. Raw backend stdout/stderr "
-            "is retained in temporary log files at the announced paths, including on failure. "
-            "Backend warnings are diagnostics, not recognition-quality verdicts. Copy logs "
-            "with your evidence before operating-system temporary-file cleanup."
+            "is retained at the announced paths, including on failure. Use --log-dir for "
+            "durable storage; the default uses temporary files. Backend warnings are "
+            "diagnostics, not recognition-quality verdicts."
         ),
     )
     run_parser.add_argument("--stack", help=stack_help)
@@ -194,6 +194,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--format", choices=("json", "md", "txt"), default="json")
     run_parser.add_argument("-o", "--output", type=Path)
+    run_parser.add_argument(
+        "--log-dir",
+        type=Path,
+        help="Retain raw stage logs in unique run directories here; refuses if unusable.",
+    )
     run_parser.add_argument(
         "--force", action="store_true", help="Replace an existing output or partial result."
     )

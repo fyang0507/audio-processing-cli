@@ -75,6 +75,7 @@ COMPOSITION_ROOT_DEPENDENCIES = {
         "audio_cli.transcribe.planner",
         "audio_cli.transcribe.refusals",
         "audio_cli.transcribe.stacks",
+        "audio_cli.transcribe.transport",
         "audio_cli.vad",
     },
     "audio_cli.cli_parser": {"audio_cli.profiles"},

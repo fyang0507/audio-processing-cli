@@ -36,6 +36,7 @@ TRANSCRIBE_FACADES = {
         "export_input_invalid",
         "export_inputs_incompatible",
         "input_required",
+        "log_directory_invalid",
         "option_unsupported_on_stack",
         "option_value_unsupported",
         "output_exists",
