@@ -5,27 +5,22 @@ description: Measure, enhance, and transcribe local audio or video with the audi
 
 # Audio work with the `audio` CLI
 
-Use the CLI for audio operations and saved JSON for evidence. This skill supplies the decisions
-and interpretation; the selected invocation's `--help` supplies commands, flags, and defaults.
+Use only the `audio` CLI for audio processing, inspection, transcription, export, and model
+management. Use saved JSON for evidence. This skill supplies decisions and interpretation;
+the CLI's `--help` supplies commands, flags, and defaults.
 
-## Select the invocation first
+## Use the command from any directory
 
-- **Using or testing a checkout:** select `uv run audio` from that checkout's root even when
-  `command -v audio` succeeds. From elsewhere use `uv run --project` with the actual absolute
-  checkout path, followed by `audio`. A PATH installation may expose older commands.
-- **Using an installed tool:** resolve it with `command -v audio` and read that executable's help.
-  If it is missing or cannot start, read [references/install.md](references/install.md).
+Use `audio` from the current working directory. If the task supplies an absolute path to an
+`audio` executable, use that executable consistently, including for remedies printed as
+`audio ...`. Use absolute media and output paths when working across directories.
 
-Keep the selected launcher and working directory for every command, including remedies printed as
-`audio ...`. To verify checkout identity, run this from its root and confirm the module path belongs
-to that checkout:
+Read its help to discover the available surface. `audio doctor` reports the command's path,
+version, and host readiness. Neither step requires a repository checkout or runtime imports.
 
-```bash
-uv run python -c "import audio_cli; print(audio_cli.__file__)"
-uv run audio --help
-```
-
-A mismatched PATH tool is not a reason to reinstall it. Below, `audio` means the selected invocation.
+If the command is missing, cannot start, or lacks a required operation, follow
+[references/readiness.md](references/readiness.md) and report the blocker. Do not switch to an
+alternative audio tool or backend when a CLI result is unsatisfactory.
 
 ## Route by the request
 

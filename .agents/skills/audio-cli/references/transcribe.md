@@ -28,7 +28,7 @@ establishes a person's identity or role.
 
 Planning never provisions. Read `packages`, costs, and warnings. When packages are missing, the
 plan's conditional `next` names a pull for exactly the missing ids; it is absent when no pull is
-needed. Apply the selected launcher and concrete-command checks in [failures.md](failures.md).
+needed. Apply the selected executable and concrete-command checks in [failures.md](failures.md).
 For provisioning or verification, read [model-packages.md](model-packages.md); a `provisioned` plan
 entry is not a fresh integrity check. A selected package failure blocks execution before inference.
 

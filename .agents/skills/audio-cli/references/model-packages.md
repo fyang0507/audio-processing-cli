@@ -2,7 +2,7 @@
 
 Use this lane for preparing a stack, understanding download costs, readiness failures, and
 reclaiming managed disk space. For a transcript request, start with [transcribe.md](transcribe.md).
-Use the launcher selected in [SKILL.md](../SKILL.md) throughout.
+Use the `audio` executable selected in [SKILL.md](../SKILL.md) throughout.
 
 ## Select only the packages the task needs
 

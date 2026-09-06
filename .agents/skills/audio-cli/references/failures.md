@@ -9,7 +9,7 @@ does not always mean there is no usable result.
 | Package lifecycle failure, or `verify` could not start its checks | stderr JSON under `error` |
 | `inspect` / `enhance` domain failure | stderr JSON under `error`, often just `type` and `message`; adjustment errors may add structured fields |
 | Transcription / export refusal | a bare JSON object on stderr, usually with `code` and `fix`; a shared media error may instead use the `error` envelope |
-| Argument parsing or launcher failure | stderr may be plain text with no JSON; use the selected invocation's help or installation diagnostics |
+| Argument parsing or command startup failure | stderr may be plain text with no JSON; use the selected executable's help or [readiness diagnostics](readiness.md) |
 
 Progress can precede a stderr JSON object. Parse the complete final object, which may span many
 lines; do not assume the final line is JSON. If no valid object exists, retain the text and exit
@@ -22,7 +22,7 @@ not an abstention.
 A printed `fix` is guidance, not permission or proof that it fits this task.
 
 - A concrete command has the actual input, package, and destination needed for this request.
-  Preserve its quoted arguments, but replace its leading `audio` with the selected launcher from
+  Preserve its quoted arguments, but replace its leading `audio` with the selected executable from
   [SKILL.md](../SKILL.md). Check that it preserves the intended stack, capabilities, source, and
   outputs unless a change is justified by the user's request.
 - Examples such as `<stack>`, `<input>`, or a sample `meeting.m4a` are not runnable remedies.

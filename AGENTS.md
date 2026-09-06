@@ -230,6 +230,6 @@ rather than stopping just below the line limit.
 distribution so it travels with the CLI. It is written for an agent *using* the tool on someone's
 audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one
 task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or
-installation. Two rules keep it that way. Anything `--help` already states stays out of it, and
+command readiness. Two rules keep it that way. Anything `--help` already states stays out of it, and
 backend internals stay out too — how the models are partitioned into runtimes belongs in
 [ENVIRONMENTS.md](ENVIRONMENTS.md), where a developer will look for it.

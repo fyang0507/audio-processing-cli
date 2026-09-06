@@ -1,16 +1,23 @@
 # Bounded broadband denoising
 
-`linked-spectral-subtraction-v1` is deterministic NumPy/SciPy processing with no
-model runtime. Profile version 5 adds it between high-pass/de-hum and voice
-processing. Existing demo leveling, source balance, compression, and peak targets
-are unchanged. There are no new command-line controls.
+This is the implementation note for the broadband component of
+`environment-denoise`. The [complete enhancement overview](../../../../docs/enhancement.md)
+covers all implemented stages: channel balance, DC/rumble and hum filtering, voice
+EQ/leveling/compression, source balance, manual gain adjustments, and program
+loudness/peak handling, with their limits and recorded evidence.
+
+`linked-spectral-subtraction-v1` is implemented as deterministic NumPy/SciPy processing
+with no model runtime. The [environment caller](../spectral.py) invokes the
+[processor](processor.py) after high-pass/de-hum and before voice processing under
+profile version 5. Application depends on eligible noise evidence; abstention does
+not mean the feature is unimplemented. There are no dedicated command-line controls.
 
 ## Evidence and abstention
 
 Noise estimation uses complete 32 ms Hann frames, at quarter-window hops, outside
 resolved speech treatment and salient non-speech program regions. A 120 ms guard
 protects boundary material. An eligible run must cover at least 250 ms continuously;
-Every eligible run is checked in 250–500 ms blocks before pooling. The final
+every eligible run is checked in 250–500 ms blocks before pooling. The final
 stationary estimate still uses up to 256 evenly distributed frames; each eligibility
 block is processed separately, bounding spectral memory without skipping reference
 runs. These requirements are evidence checks, not proof that VAD found every phoneme.
@@ -70,6 +77,12 @@ total later enhancement gain. Final program loudness/peak checks remain downstre
 
 ## Evidence limits
 
+The [recorded synthetic measurements](../../../../model_tests/benchmark/results/2026-09-05-broadband-denoise.json)
+cover the isolated broadband component before outer speech blending and later
+leveling. The evidence checks live in [estimation.py](estimation.py) and
+[reference.py](reference.py); the filter and reconstruction live in
+[filtering.py](filtering.py).
+
 `tests/test_dsp_denoise.py` constructs known clean voiced harmonics, syllable
 transitions, an unvoiced burst, and seeded broadband noise at 16/44.1/48 kHz.
 It checks noise-power reduction, clean-reference error, voiced projection,
@@ -88,5 +101,13 @@ it does not establish an unchanged noise spectrum inside excluded speech interva
 Reports distinguish component decisions from the applied parent stage. A high-pass
 or de-hum operation alone does not mean broadband denoising ran. Fresh detection
 and transcription of enhanced audio may differ; fixed-source regional verification
-is not classification invariance. User-media listening and CLI acceptance remain
-separate, after original-source transcription and parent integration.
+is not classification invariance.
+
+In the [2026-09-05 real-recording acceptance](../../../../model_tests/benchmark/results/2026-09-05-e2e-followup-acceptance.json),
+both `demo-video-audio-to-improve.mp4` and `autio-test-sample.m4a` rendered with
+`product-demo` v5, but broadband processing abstained with
+`noise_reference_is_nonstationary` in both. Other enhancement operations applied;
+the requested-goal acceptance remained `PARTIAL_FAIL`. These runs do not establish
+broadband reduction on those recordings, a human listening result, or exact A/V sync
+proof. See the [overview's evidence section](../../../../docs/enhancement.md#what-the-recorded-evidence-establishes)
+for the measured outcomes and remaining limits.

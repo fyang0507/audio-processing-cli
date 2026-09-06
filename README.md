@@ -26,6 +26,9 @@ This implements [Issue #4 — Profile-driven automatic audio enhancement](https:
 
 ## Install
 
+This section covers operator setup. Audio-processing agents use the installed `audio` command
+and report setup blockers through its [readiness guidance](.agents/skills/audio-cli/references/readiness.md).
+
 Requirements:
 
 - FFmpeg and FFprobe on `PATH`
@@ -120,6 +123,9 @@ Every stage ends as `applied`, `no_op`, `skipped`, `abstained`, or `failed`. The
 3. `voice-enhance` — treats VAD regions as seeds, expands them to silence-anchored acoustic voice boundaries, then applies bounded presence correction, leveling, and compression at full strength throughout the resolved treatment region. Equal-power transitions finish before the guarded voice onset and begin after the guarded voice offset.
 4. `source-balance` — balances non-overlapping machine-audio regions against treated speech for `product-demo`; it is disabled for `transcription`.
 5. `program-loudness` — uses EBU R128 measurement to resolve fixed gain, then iterates an oversampled true-peak limiter without undoing earlier region balance.
+
+See [Enhancement capabilities and algorithms](docs/enhancement.md) for each stage's mechanism,
+adjustments, report semantics, and recorded evidence, including when noise cleanup abstains.
 
 `transcription@5` targets −23 LUFS / −3 dBTP. `product-demo@5` targets −16 LUFS / −1.5 dBTP and keeps detected machine audio between 4 and 2 dB below the treated speech reference. Version 3 grows reliable VAD seeds to neighboring acoustic activity, reserves silent guard time, and places speech-treatment fades outside that guard. Version 4 changes no threshold: it makes `vad_min_silence_ms` the only thing that decides where a speech region breaks, where a second hard-coded merge had previously required 540 ms of silence to split a region the profile said should split at 300. Renders therefore differ from version 3 wherever a pause falls between those figures — the local 27.8 s fixture moves from 6 speech regions to 10. Detected regions are also clamped to the source timeline: the 16 kHz resample used for detection rounds its sample count up, which had let a region reach 27.753375 s in a 27.753333 s file and then made a speech treatment end 0.042 ms *before* the last detected sample. Every threshold and bound is emitted in the report’s `profile` object. Version 5 adds bounded broadband suppression while retaining the version 4 voice and program-balance targets. The denoiser estimates noise from guarded intervals outside detected speech and salient program audio, checks stationarity and speech/noise contrast, links stereo gains, and applies the result only within speech treatment regions. It never changes the timeline.
 
@@ -277,5 +283,5 @@ uv run --extra dev pre-commit run --all-files
 One agent skill travels with the CLI in the source distribution.
 [`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix
 or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix,
-provision transcription models, install the command — and holds only what `--help` cannot say, which
+provision transcription models, check command readiness — and holds only what `--help` cannot say, which
 is the judgment, the report semantics, and the limits worth admitting to a user.
