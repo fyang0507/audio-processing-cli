@@ -161,12 +161,14 @@ Invalid time or frequency scopes fail before rendering with exit status 2 and a 
 
 A successful render verifies:
 
-- the output duration remains within 50 ms of the original audio timeline;
+- the encoded output decoded-audio duration remains within 50 ms (inclusive) of the original decoded-audio duration;
 - integrated loudness reaches the selected profile within 0.6 LU;
 - encoded true peak stays at or below the declared target (the render reserves 1 dB of codec headroom before lossy encoding);
 - every eligible stage has an explicit terminal status;
 - the before/after speech and machine-region measurements reuse the same stable region IDs;
 - the source hash, profile version, resolved operations, output hash, and runtime versions are recorded.
+
+`timeline_verification` declares the duration-only scope and tolerance, and explicitly abstains on content alignment and A/V sync. Dry runs omit `timeline_preserved`. Read [duration and alignment evidence](docs/timing-evidence.md) for probed versus decoded duration bases, original/output stream timing, codec padding limits, and the content-bearing CLI regression fixtures.
 
 Render success verifies the mandatory output gates; it does not imply every component achieved its preferred target. Read `unresolved` for abstained denoise components, bounded regional corrections, and loudness-range limits left unresolved to preserve balance. Use `measurements.after.program_actual` for the encoded render's measured LUFS, LRA, and true peak. The legacy `program` object retains raw FFmpeg diagnostics; its `output_*` fields describe a hypothetical additional normalization, not the saved render.
 

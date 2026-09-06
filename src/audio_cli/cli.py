@@ -95,6 +95,8 @@ def _run_enhance(args: argparse.Namespace) -> int:
     skipped = validate_skips(args.skip)
     probe = probe_media(args.input)
     summary = media_summary(args.input, probe)
+    if "duration_seconds" not in summary:
+        raise PipelineError("Input has no available probed duration for adjustment validation")
     duration = float(summary["duration_seconds"])
     adjustments = load_adjustments(
         args.adjustments,

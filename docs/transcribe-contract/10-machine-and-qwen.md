@@ -79,7 +79,7 @@ Exits 0 whether or not anything is provisioned:
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
     "complete": true,
-    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
+    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds", "duration_basis": "probed_audio_stream"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null}
     ],
@@ -122,15 +122,7 @@ rule does not reach it. It is also
 genuinely producible from this exact request, since FluidAudio emits
 overlap-permitting output. Whether it fills depends on the audio.
 
-`duration_seconds` is populated because `plan` reads container metadata rather than
-stubbing what it already knows. The value `1794.2` is illustrative — this document
-has no real `meeting.m4a` — and is deliberately not the 30-minute reference fixture behind
-the `capabilities` report's `cost.proved`, which describes a recorded run rather than this input.
-On `run`, the same source-audio duration is recomputed from the canonical decode's PCM frame
-count so range and coverage arithmetic use the timeline actually processed. `source.path` is the
-resolved absolute path of the original media, so a later `export` invocation can protect that
-canonical input even from a different working directory. `source` publishes no temporary format,
-sample-rate, or channel fields; the working WAV remains an unpublished transport artifact.
+`duration_seconds` is populated from probe metadata and labeled by `duration_basis`. The value `1794.2` is illustrative; this document has no real `meeting.m4a`. It is not the recorded reference fixture behind `cost.proved`. On `run`, `source.duration_basis` is `canonical_decoded_pcm`, recomputed from the canonical mono 16 kHz PCM16 frame count, with zero at the first decoded sample. Range and coverage arithmetic use that timeline. `source.path` is the resolved absolute original-media path so export can protect it across working directories. Temporary format, sample-rate, and channel fields remain absent from `source`. See [duration and alignment evidence](../timing-evidence.md); no probed offset is added to transcript bounds.
 
 There is no `measured` block here, and there was one. It restated the `capabilities` report's timing and
 memory figures inside every plan, which duplicated the one place those figures belong now

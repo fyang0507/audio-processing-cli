@@ -41,7 +41,13 @@ Quote `measurements.after.program_actual.integrated_loudness_lufs`, `.true_peak_
 
 Older reports lack `program_actual`. In their `measurements.after.program` block, `input_i` is the delivered file's integrated loudness in LUFS, `input_tp` its true peak in dBTP, and `input_lra` its loudness range in LU. The names come from measuring that file as input to the analyzer. Raw `output_i`, `output_tp`, and related values describe normalization diagnostics, not the file that was delivered; the legacy fields retain that meaning. Never turn an absent or null measurement into zero.
 
-Check `rendered`, `timeline_preserved`, `measurements.after.duration_delta_ms`, and `final_peak_validation` along with the actual after measurements. A dry run has only predictions: `predicted_pass` is not post-encode validation. The CLI enforces its active publication checks; report the actual target/limit and any skipped stage rather than imposing every profile preference as an unconditional acceptance gate. Successful publication does not certify every child target or prove that someone prefers the sound.
+Check `rendered`, `timeline_verification`, an available `timeline_preserved`, `measurements.after.duration_delta_ms`, and `final_peak_validation` along with the actual after measurements. A dry run has only predictions: `predicted_pass` is not post-encode validation. The CLI enforces its active publication checks; report the actual target/limit and any skipped stage rather than imposing every profile preference as an unconditional acceptance gate. Successful publication does not certify every child target or prove that someone prefers the sound.
+
+## Duration is not alignment evidence
+
+Read `duration_basis` before comparing durations. The outer `source`/`output` durations are probed audio-stream or container metadata; their `decoded_audio` objects describe actual decoded samples. `timeline_verification.scope: decoded_audio_duration_only` and its tolerance qualify `timeline_preserved`: a pass checks decoded length only. Dry runs report `not_run` and omit the boolean. Older reports without this scope checked probed duration only and could mark a dry run true.
+
+For video, compare available `source.timing` and `output.timing` audio/video starts and `primary_audio_start_minus_video_start_seconds`. These describe metadata origins. Read the explicit `content_alignment` and `av_sync` abstentions even when durations or starts match. A changed start, codec delay, or padding does not by itself prove clipping or a content shift; never claim exact sync, add an inferred offset to transcript bounds, or shift timestamps to repair an assumed defect. Report the available evidence and unresolved alignment instead.
 
 ## Fixed regions and fresh detection answer different questions
 

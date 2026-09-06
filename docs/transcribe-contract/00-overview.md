@@ -93,7 +93,8 @@ The catalog uses its own axis, `availability`, because nothing has been requeste
   "environment": "torch-firered",
   "roles": "vad, asr and punctuator always; lid as well when lid is requested",
   "input": {"path": "field.wav", "duration_seconds": 27.8, "container": "wav",
-            "sample_rate_hz": 48000, "channels": 1},
+            "sample_rate_hz": 48000, "channels": 1, "duration_basis": "probed_audio_stream",
+            "timing": {"basis": "probed_timestamps", "audio": [{"stream_index": 0, "duration_seconds": 27.8}]}},
   "processing": {
     "unit": "vad_region",
     "unit_count": null,
@@ -174,6 +175,6 @@ The binding test is that the sample's key set equals a real run's key set, and t
 
 ### Duration bases
 
-Capability and plan estimates read primary audio-stream duration, falling back to container duration ([catalog input metadata](../../src/audio_cli/transcribe/catalog.py)). A completed transcript's `source.duration_seconds` comes from the canonical 16 kHz decoded PCM frame count ([canonical PCM duration](../../src/audio_cli/media/pcm.py)), and its times stay on that source basis. Inspection additionally reports container/stream metadata, including an available audio start offset. Codec padding and stream offsets can therefore make those durations differ slightly. Do not add an offset to every transcript bound or diagnose missing speech from the difference alone; inspect actual coverage and canonical decode evidence first. Enhanced ASR/VAD is a separate observation and never replaces the original-source transcript.
+Capability and plan estimates use the media-owned probed duration with `duration_basis: probed_audio_stream` or `probed_container`; capability `input.timing` also exposes available stream origins. Runs instead label `source.duration_basis: canonical_decoded_pcm` and use the canonical mono 16 kHz PCM16 frame count. Zero is the first decoded sample, not a container timestamp. [Duration and alignment evidence](../timing-evidence.md) defines these fields, omission rules, and why duration or start differences cannot establish clipping, missing words, or a justified timestamp shift. Legacy v1 sources without a basis remain readable without a fabricated basis.
 
 Request validation remedies correct the offending fields in prose and tell the caller to repeat its original command with every other argument preserved. They never change `run` to `plan`, drop range/output/format/language options, or silently choose a full-media run. This keeps fixed refusal payloads independent of execution-only options. Concrete provisioning and output retry commands remain runnable when their builders have the full context.

@@ -50,8 +50,19 @@ def _exact_keys(item: JsonMapping, expected: set[str], field: str) -> None:
         raise ResultError(f"{field} has keys {sorted(actual)}, expected {sorted(expected)}")
 
 
-def _validate_source(source: JsonMapping) -> float:
-    _exact_keys(source, {"path", "duration_seconds", "timebase"}, "source")
+def _validate_source(source: JsonMapping, *, sample: bool = False) -> float:
+    expected = {"path", "duration_seconds", "timebase"}
+    if "duration_basis" in source:
+        expected.add("duration_basis")
+        if source["duration_basis"] not in (
+            "probed_audio_stream",
+            "probed_container",
+            "canonical_decoded_pcm",
+        ):
+            raise ResultError("source.duration_basis is not a declared duration basis")
+        if not sample and source["duration_basis"] != "canonical_decoded_pcm":
+            raise ResultError("run source.duration_basis must be canonical_decoded_pcm")
+    _exact_keys(source, expected, "source")
     if not isinstance(source["path"], str) or not source["path"]:
         raise ResultError("source.path must be a non-empty string")
     duration = _number(source["duration_seconds"], "source.duration_seconds")

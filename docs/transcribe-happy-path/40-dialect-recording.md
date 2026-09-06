@@ -79,7 +79,7 @@ audio transcribe plan --input field.wav --stack firered \
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
     "complete": true,
-    "source": {"path": "field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
+    "source": {"path": "field.wav", "duration_seconds": 27.8, "timebase": "seconds", "duration_basis": "probed_audio_stream"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "start": null, "end": null,
        "words": [{"word_id": "w_0", "text": null, "start": null, "end": null}]}
@@ -107,7 +107,7 @@ Exit 0. `field.transcript.json`:
 {
   "schema_version": 1,
   "complete": true,
-  "source": {"path": "/Users/you/recordings/field.wav", "duration_seconds": 27.8, "timebase": "seconds"},
+  "source": {"path": "/Users/you/recordings/field.wav", "duration_seconds": 27.8, "timebase": "seconds", "duration_basis": "canonical_decoded_pcm"},
   "segments": [
     {"segment_id": "seg_0", "start": 0.38, "end": 1.62,
      "text": "This is a测试。",

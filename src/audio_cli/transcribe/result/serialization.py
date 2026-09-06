@@ -42,7 +42,7 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
     if has_coverage and not isinstance(result.coverage, Mapping):
         raise ResultError("coverage must be an object")
 
-    duration = _validate_source(result.source)
+    duration = _validate_source(result.source, sample=result.sample)
     if has_coverage:
         assert isinstance(result.coverage, Mapping)
         _validate_coverage(result.coverage, duration=duration)

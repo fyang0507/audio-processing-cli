@@ -16,7 +16,8 @@ audio transcribe capabilities --stack qwen-1.7b --input meeting.m4a
   "environment": "mlx",
   "roles": "asr only",
   "input": {"path": "meeting.m4a", "duration_seconds": 1794.2, "container": "m4a",
-            "sample_rate_hz": 44100, "channels": 2},
+            "sample_rate_hz": 44100, "channels": 2, "duration_basis": "probed_audio_stream",
+            "timing": {"basis": "probed_timestamps", "audio": [{"stream_index": 0, "duration_seconds": 1794.2}]}},
   "processing": {
     "unit": "fixed_chunk",
     "unit_count": 10,
@@ -136,7 +137,7 @@ audio transcribe plan --input meeting.m4a \
     "note": "shape only; values are placeholders and cardinality is unknown until run",
     "schema_version": 1,
     "complete": true,
-    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds"},
+    "source": {"path": "meeting.m4a", "duration_seconds": 1794.2, "timebase": "seconds", "duration_basis": "probed_audio_stream"},
     "segments": [
       {"segment_id": "seg_0", "text": null, "speaker": null,
        "words": [{"word_id": "w_0", "text": null, "start": null, "end": null}]}

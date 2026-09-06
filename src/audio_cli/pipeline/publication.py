@@ -8,6 +8,7 @@ from pathlib import Path
 from ..dsp import regional_measurements
 from ..media import (
     decode_audio,
+    decoded_audio_timing,
     encode_output,
     measure_loudness,
     media_summary,
@@ -19,6 +20,7 @@ from ..profiles import Profile
 from .models import LoudnessRun, PipelineError, PreparedRun, StageRun
 from .outcomes import actual_program, source_region_evaluations, unresolved_outcomes
 from .reporting import _resolved_operations_hash, _round_loudness
+from .timing import DURATION_TOLERANCE_MS, duration_check, timeline_verification
 
 
 def publish_output(
@@ -51,7 +53,6 @@ def publish_output(
             original_sha256=str(source_info["sha256"]),
             has_video=bool(probe.get("has_video")),
         )
-        after_probe = probe_media(encoded_temp)
         after_program = measure_loudness(
             encoded_temp,
             target_lufs=profile.target_lufs,
@@ -80,7 +81,6 @@ def publish_output(
                 original_sha256=str(source_info["sha256"]),
                 has_video=bool(probe.get("has_video")),
             )
-            after_probe = probe_media(encoded_temp)
             after_program = measure_loudness(
                 encoded_temp,
                 target_lufs=profile.target_lufs,
@@ -104,11 +104,9 @@ def publish_output(
                     "Source-balance verification failed for unbounded regions: "
                     + ", ".join(unbounded_failures)
                 )
-        output_info = media_summary(encoded_temp, after_probe)
-        duration_delta_ms = 1000.0 * (
-            float(output_info["duration_seconds"]) - float(source_info["duration_seconds"])
+        timeline_ok, duration_delta_ms = duration_check(
+            len(prepared.audio), prepared.sample_rate, len(after_audio), after_sample_rate
         )
-        timeline_ok = abs(duration_delta_ms) <= 50.0
         loudness_ok = (
             stage in skipped_stages
             or not profile.stage_enabled(stage)
@@ -117,7 +115,9 @@ def publish_output(
         peak_ok = after_program["input_tp"] <= true_peak_limit
         if not timeline_ok:
             raise PipelineError(
-                f"Timeline verification failed: output duration changed by {duration_delta_ms:.1f} ms"
+                "Decoded audio duration verification failed: "
+                f"output duration changed by {duration_delta_ms:.1f} ms "
+                f"(limit {DURATION_TOLERANCE_MS} ms)"
             )
         if not loudness_ok:
             raise PipelineError(
@@ -134,12 +134,14 @@ def publish_output(
     # Re-probe the final path so its path and hash describe the durable artifact.
     durable_probe = probe_media(output)
     durable_info = media_summary(output, durable_probe)
+    durable_info["decoded_audio"] = decoded_audio_timing(len(after_audio), after_sample_rate)
     report["output"] = durable_info
     report["measurements"]["after"] = {
         "program": _round_loudness(after_program),
         "program_actual": actual_program(after_program),
         "regional": after_regional,
         "duration_delta_ms": round(duration_delta_ms, 3),
+        "duration_basis": "decoded_pcm",
     }
     report["unresolved"] = unresolved_outcomes(
         profile,
@@ -154,6 +156,7 @@ def publish_output(
         "limit_true_peak_dbtp": round(true_peak_limit, 3),
     }
     report["timeline_preserved"] = timeline_ok
+    report["timeline_verification"] = timeline_verification(checked=True)
     report["dry_run"] = False
     report["rendered"] = True
     report["resolved_operations_sha256"] = _resolved_operations_hash(

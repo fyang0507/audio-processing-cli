@@ -18,7 +18,7 @@ If stack or input is missing, supply the actual missing value and repeat the int
 
 ## Read what was produced
 
-Published bounds refer to the original source timeline. Processing-container extents are not speech or word timings. Keep absent keys absent, and read the abstention ledger even on success. A requested capability may have outcome `abstained` while useful text or other timed spans survive; report its reason and affected scope rather than calling the entire result complete in that sense. An empty overlap ledger does not prove no overlap when the selected plan did not detect it.
+Published bounds refer to the original source decoded-audio timeline. Plans label their probed duration basis; runs label `source.duration_basis: canonical_decoded_pcm`, whose zero is the first decoded sample. Container duration, stream starts, and the enhancement decoder at a different sample rate can disagree without establishing lost words or an offset. Do not add a probed start to word or segment times, and do not certify subtitle-to-video sync from duration equality. Processing-container extents are not speech or word timings. Keep absent keys absent, and read the abstention ledger even on success. A requested capability may have outcome `abstained` while useful text or other timed spans survive; report its reason and affected scope rather than calling the entire result complete in that sense. An empty overlap ledger does not prove no overlap when the selected plan did not detect it.
 
 A bracketed non-speech event can deliberately have no aligned words. Ordinary speech with an `alignment_unavailable` abstention retains its available text; do not fabricate word bounds from its segment extent. A speaker label withheld over ambiguous overlap stays absent.
 
