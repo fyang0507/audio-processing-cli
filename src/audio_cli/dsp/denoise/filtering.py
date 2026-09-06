@@ -21,25 +21,62 @@ def filter_noise(
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.stft.html .
     A four-frame halo makes smoothing independent of the 256-frame work batches.
     """
+    return _filter(audio, window, maximum_reduction_db, noise_power=noise_power)
+
+
+def filter_guided(
+    audio: np.ndarray, guide: np.ndarray, window: np.ndarray, maximum_reduction_db: float
+) -> tuple[np.ndarray, float]:
+    """Use a restored signal only to propose magnitude gains, shared across channels."""
+    if guide.shape != audio.shape or not np.isfinite(guide).all():
+        raise ValueError("denoising guide must match the finite input array")
+    return _filter(audio, window, maximum_reduction_db, guide=guide)
+
+
+def _filter(
+    audio: np.ndarray,
+    window: np.ndarray,
+    maximum_reduction_db: float,
+    *,
+    noise_power: np.ndarray | None = None,
+    guide: np.ndarray | None = None,
+) -> tuple[np.ndarray, float]:
     frame = window.size
     hop = frame // 4
     half = frame // 2
     tail = (-len(audio)) % hop
     padded = np.pad(audio.astype(np.float64), ((half, half + tail), (0, 0)), mode="reflect")
+    padded_guide = (
+        None
+        if guide is None
+        else np.pad(guide.astype(np.float64), ((half, half + tail), (0, 0)), mode="reflect")
+    )
     starts = np.arange(0, len(padded) - frame + 1, hop)
     output = np.zeros_like(padded)
     weight = np.zeros(len(padded))
     floor = 10 ** (-maximum_reduction_db / 20)
-    power_floor = max(float(np.max(noise_power)) * 1e-12, 1e-30)
+    power_floor = 1e-30 if noise_power is None else max(float(np.max(noise_power)) * 1e-12, 1e-30)
     maximum_applied = 0.0
     for first in range(0, starts.size, 256):
         last = min(first + 256, starts.size)
         lo, hi = max(0, first - 4), min(starts.size, last + 4)
         frames = padded[starts[lo:hi, None] + np.arange(frame)[None, :]]
         spectra = np.fft.rfft(frames * window[None, :, None], axis=1)
-        observed = uniform_filter1d(np.abs(spectra) ** 2, size=3, axis=0, mode="nearest")
-        ratio = np.max(observed / np.maximum(noise_power, power_floor)[None, :, :], axis=2)
-        gain = np.sqrt(np.maximum(0, 1 - 1 / np.maximum(ratio, 1e-12)))
+        if padded_guide is None:
+            assert noise_power is not None
+            observed = uniform_filter1d(np.abs(spectra) ** 2, size=3, axis=0, mode="nearest")
+            ratio = np.max(observed / np.maximum(noise_power, power_floor)[None, :, :], axis=2)
+            gain = np.sqrt(np.maximum(0, 1 - 1 / np.maximum(ratio, 1e-12)))
+        else:
+            guide_frames = padded_guide[starts[lo:hi, None] + np.arange(frame)[None, :]]
+            guide_spectra = np.fft.rfft(guide_frames * window[None, :, None], axis=1)
+            magnitude = np.abs(spectra)
+            # Empty input bins carry no signal; they should not manufacture a
+            # reduction measurement. Real gains preserve each input channel phase.
+            active = magnitude > 1e-15
+            ratio = np.zeros_like(magnitude)
+            np.divide(np.abs(guide_spectra), magnitude, out=ratio, where=active)
+            gain = np.where(np.any(active, axis=2), np.max(ratio, axis=2), 1.0)
         gain = np.clip(gain, floor, 1)
         gain = maximum_filter1d(gain, size=3, axis=1, mode="nearest")
         gain = maximum_filter1d(gain, size=3, axis=0, mode="nearest")

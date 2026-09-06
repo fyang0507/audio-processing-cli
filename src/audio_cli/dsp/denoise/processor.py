@@ -8,7 +8,7 @@ from scipy.signal import windows
 from ...profiles import Profile
 from ..regions import SignalAnalysis
 from .estimation import estimate_noise
-from .filtering import filter_noise
+from .filtering import filter_guided, filter_noise
 
 
 def apply_broadband_denoise(
@@ -60,3 +60,40 @@ def apply_broadband_denoise(
 
 
 __all__ = ["apply_broadband_denoise"]
+
+
+def apply_guided_denoise(
+    audio: np.ndarray, guide: np.ndarray, sample_rate: int, profile: Profile
+) -> tuple[np.ndarray, dict[str, object], dict[str, object] | None]:
+    """A bounded linked mask from a denoised guide; preserve input spectral phase."""
+    component = {"component": "broadband-denoise", "algorithm": "model-guided-linked-mask-v1"}
+    frame = max(16, 4 * round(sample_rate * 0.032 / 4))
+    if len(audio) < frame:
+        return audio, {**component, "status": "abstained", "reason": "input_too_short"}, None
+    output, maximum_applied = filter_guided(
+        audio, guide, windows.hann(frame, sym=False), profile.broadband_max_reduction_db
+    )
+    if maximum_applied < 0.05 or np.array_equal(output, audio):
+        return (
+            audio,
+            {**component, "status": "no_op", "reason": "noise_reduction_below_threshold"},
+            None,
+        )
+    operation = {
+        "type": "bounded-spectral-denoise",
+        "algorithm": component["algorithm"],
+        "affected_scope": "speech_regions",
+        "frame_samples": frame,
+        "hop_samples": frame // 4,
+        "window": "periodic-hann",
+        "maximum_reduction_db": profile.broadband_max_reduction_db,
+        "maximum_spectral_reduction_db": round(maximum_applied, 6),
+        "channel_link": "maximum_guide_to_input_magnitude_ratio",
+        "gain_smoothing_frames": 5,
+        "gain_smoothing_bins": 3,
+    }
+    return (
+        output,
+        {**component, "status": "applied", "reason": "model_guided_mask_resolved"},
+        operation,
+    )

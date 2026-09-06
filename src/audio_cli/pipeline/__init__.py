@@ -37,6 +37,7 @@ from ..media import (
 from ..profiles import PROFILES, STAGE_ORDER, Profile
 from ..vad import MODEL_SHA256, MODEL_URL, SileroOnnxVad
 from ..vad_contract import VadDetector
+from .denoise import DenoiserModel
 from .loudness import normalize_loudness
 from .models import PipelineError
 from .preparation import inspect_source, prepare_run
@@ -51,6 +52,7 @@ __all__ = [
     "MODEL_URL",
     "PROFILES",
     "STAGE_ORDER",
+    "DenoiserModel",
     "EnhancementPipeline",
     "GainAdjustment",
     "PipelineError",

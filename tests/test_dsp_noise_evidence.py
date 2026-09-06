@@ -73,3 +73,18 @@ def test_too_short_scopes_remain_visible_without_invented_spectral_measurements(
     assert "noise_reference_level_spread_db" not in component
     assert operation is None
     np.testing.assert_array_equal(output, audio)
+
+
+def test_silent_reference_scopes_do_not_invent_flatness():
+    audio = fixture()
+    audio[:RATE] = 0
+    audio[3 * RATE :] = 0
+    output, component, operation = run(audio, [(1, 3)])
+    assert component["reason"] == "noise_reference_is_silent"
+    assert operation is None
+    assert len(component["noise_reference_scopes"]) == 2
+    assert all(
+        "noise_reference_minimum_block_flatness" not in scope
+        for scope in component["noise_reference_scopes"]
+    )
+    np.testing.assert_array_equal(output, audio)

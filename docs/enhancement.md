@@ -1,6 +1,6 @@
 # Audio enhancement
 
-`audio enhance` implements five automatic stages plus optional gain adjustments for speech recordings and product-demo audio. Broadband denoising is implemented as one conditional component of `environment-denoise`; the other stages also work independently of it. This page covers the complete enhancement flow, with links to its implementation and separate evidence from recorded runs. The [broadband algorithm note](../src/audio_cli/dsp/denoise/ALGORITHM.md) documents that component's estimator and filter, rather than the whole enhancement feature.
+`audio enhance` implements five automatic stages plus optional gain adjustments for speech recordings and product-demo audio. Broadband denoising is implemented as one explicitly selected component of `environment-denoise`; the other stages also work independently of it. This page covers the complete enhancement flow, with links to its implementation and separate evidence from recorded runs. The [broadband algorithm note](../src/audio_cli/dsp/denoise/ALGORITHM.md) documents that component's estimator and filter, rather than the whole enhancement feature.
 
 ## Profiles and processing order
 
@@ -38,9 +38,11 @@ Speech cleanup and voice processing use [acoustic boundary expansion and smooth 
 
 - **DC/rumble filtering:** a second-order high-pass runs when the 20–70 Hz power share of the measured speech spectrum reaches the profile threshold (2.5% for `transcription`, 2% for `product-demo`) or absolute DC offset exceeds `1e-4`.
 - **Hum filtering:** narrow notches at 60, 120, and 180 Hz run when measured hum excess reaches 9 dB for `transcription` or 8 dB for `product-demo`. Automatic 50 Hz de-hum is not implemented.
-- **Broadband denoising:** [`apply_broadband_denoise`](../src/audio_cli/dsp/denoise/processor.py) estimates a stationary background and applies linked spectral-subtraction gains across channels. The current maximum reduction is 6 dB per spectral bin, not guaranteed delivered noise reduction or a bound on the full enhancement chain.
+- **Stationary broadband denoising (default):** [`apply_broadband_denoise`](../src/audio_cli/dsp/denoise/processor.py) estimates a stationary background and applies linked spectral-subtraction gains across channels. The current maximum reduction is 6 dB per spectral bin, not guaranteed delivered noise reduction or a bound on the full enhancement chain.
 
 Broadband processing requires at least 250 ms of contiguous reference audio away from speech treatment and salient non-speech regions. Its [estimator](../src/audio_cli/dsp/denoise/estimation.py) and [reference checks](../src/audio_cli/dsp/denoise/reference.py) reject inadequate, changing, tonal, or insufficient-contrast evidence; silent or sufficiently weak backgrounds can be no-ops. Reference consistency outside speech does not establish what the background does underneath speech. The [algorithm note](../src/audio_cli/dsp/denoise/ALGORITHM.md) gives the exact eligibility checks and [filter](../src/audio_cli/dsp/denoise/filtering.py) mechanics. No speech means this whole stage abstains.
+
+The optional `--denoiser rnnoise` selects [model-based speech denoising](rnnoise-denoising.md) before processing begins. It requires the explicitly provisioned `rnnoise-voice` package and uses the existing FFmpeg runtime. It does not require a stationary noise-only reference and never runs as a fallback from stationary abstention. The default remains `stationary`. Both choices apply within the resolved speech treatment scopes; they have different processing limits, and neither removes filler words or separates wanted sounds mixed with speech.
 
 The parent stage can report `applied` because high-pass or de-hum filtering ran while `broadband-denoise` reports `abstained`. Read the component decision and operation list before attributing an output change to broadband suppression.
 

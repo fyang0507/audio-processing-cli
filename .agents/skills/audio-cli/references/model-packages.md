@@ -31,7 +31,7 @@ A zero verify exit does not cancel a `blocked` verdict or a false/unknown runtim
 
 Package-file failures generally prescribe `pull --repair` for named packages; environment lock drift prescribes `verify --repair`. The latter can repair across the managed root, so check its scope before running it on a shared installation. Use the actual failure's fix and the safeguards in [failures.md](failures.md), including stopping after an unchanged prescribed repair. Do not repair an unrelated package merely to obtain a globally green report.
 
-Quote the check that passed. A `revision` or `revisions` entry establishes pinned cache identity and required-file checks, not a content digest. `digest: "ok"` is the hash-pinned file check; `product_digest` is a separate built-product check. `license_declared` is not redistribution clearance; preserve `license_reviewed` and any `license_unreviewed` warning.
+Quote the check that passed. A `revision` or `revisions` entry establishes pinned cache identity and required-file checks, not a content digest. A `git_blob_sha1` with `bytes` records a checked single-file Git content identity and size; it is not a publisher-provided SHA256. `digest: "ok"` is the SHA256-pinned file check; `product_digest` is a separate built-product check. `license_declared` is not redistribution clearance; preserve `license_reviewed` and any `license_unreviewed` warning.
 
 ## Disk accounting and reclaiming
 

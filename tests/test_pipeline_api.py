@@ -5,6 +5,7 @@ from __future__ import annotations
 import audio_cli.pipeline as pipeline
 
 SUPPORTED_EXPORTS = {
+    "DenoiserModel",
     "MODEL_SHA256",
     "MODEL_URL",
     "PROFILES",

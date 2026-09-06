@@ -18,8 +18,10 @@ from .packages import (
     load_registry,
     path_report,
     select,
+    verified_artifact,
 )
 from .pipeline import (
+    DenoiserModel,
     EnhancementPipeline,
     PipelineError,
     inspect_source,
@@ -94,6 +96,12 @@ def _run_enhance(args: argparse.Namespace) -> int:
     _ensure_writable_target(report_path, force=args.force, label="Report")
 
     skipped = validate_skips(args.skip)
+    denoiser_model = None
+    if args.denoiser == "rnnoise":
+        if "environment-denoise" in skipped or not profile.stage_enabled("environment-denoise"):
+            raise PipelineError("--denoiser rnnoise requires an enabled environment-denoise stage")
+        model_path, provenance = verified_artifact("rnnoise-voice")
+        denoiser_model = DenoiserModel(model_path, provenance["sha256"], provenance)
     probe = probe_media(args.input)
     summary = media_summary(args.input, probe)
     if "duration_seconds" not in summary:
@@ -110,6 +118,7 @@ def _run_enhance(args: argparse.Namespace) -> int:
         skipped_stages=skipped,
         adjustments=adjustments,
         detector=detector,
+        denoiser_model=denoiser_model,
     )
     report = pipeline.run(
         args.input,

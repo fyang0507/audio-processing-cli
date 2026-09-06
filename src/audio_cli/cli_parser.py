@@ -45,6 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
             "evaluated otherwise."
         ),
     )
+    enhance_parser.add_argument(
+        "--denoiser",
+        choices=("stationary", "rnnoise"),
+        default="stationary",
+        help="Broadband method: stationary reference (default) or explicitly provisioned rnnoise-voice model; never falls back.",
+    )
     enhance_parser.add_argument("--adjustments", type=Path)
     enhance_parser.add_argument(
         "--dry-run",

@@ -40,7 +40,7 @@ def reference_consistency(
     minimum_level = np.full(audio.shape[1], np.inf)
     maximum_level = np.zeros(audio.shape[1])
     maximum_level_spread = 0.0
-    minimum_flatness = 1.0
+    minimum_flatness: float | None = None
     block_count = 0
     for run in runs:
         count = (run.size + maximum_frames - 1) // maximum_frames
@@ -73,7 +73,9 @@ def reference_consistency(
                             / np.mean(selected, axis=0)
                         )
                     )
-                minimum_flatness = min(minimum_flatness, flatness)
+                minimum_flatness = (
+                    flatness if minimum_flatness is None else min(minimum_flatness, flatness)
+                )
             block_count += 1
     spectral_spread = float(
         np.max(10 * np.log10(np.maximum(maximum_power, 1e-30) / np.maximum(minimum_power, 1e-30)))
@@ -90,11 +92,12 @@ def reference_consistency(
         "noise_reference_block_count": block_count,
         "noise_reference_maximum_band_spread_db": round(spectral_spread, 3),
         "noise_reference_maximum_channel_level_spread_db": round(maximum_level_spread, 3),
-        "noise_reference_minimum_block_flatness": round(minimum_flatness, 6),
     }
+    if minimum_flatness is not None:
+        details["noise_reference_minimum_block_flatness"] = round(minimum_flatness, 6)
     reason = None
     if max(spectral_spread, maximum_level_spread) > 6.0:
         reason = "noise_reference_is_nonstationary"
-    elif minimum_flatness < 0.15:
+    elif minimum_flatness is not None and minimum_flatness < 0.15:
         reason = "noise_reference_is_tonal"
     return reason, details

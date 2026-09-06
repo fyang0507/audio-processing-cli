@@ -19,6 +19,8 @@ Automatic balancing can miss quiet intended music or machine audio below its det
 
 Gain and EQ affect overlapping speech and music together. Do not promise separate control without separate sources. Broadband suppression is likewise bounded cleanup, not source separation; its own reported operation and evaluation determine whether it ran. A high-pass or hum filter alone is not evidence that broadband noise was suppressed.
 
+Choose the broadband method before processing and inspect the selected invocation's live help. The stationary method needs usable reference evidence; the optional RNNoise method needs an explicitly provisioned model. Use [model-packages.md](model-packages.md) for that lifecycle. An abstention does not authorize switching methods when the task forbids fallback. Model-guided processing can still alter wanted sounds within speech. Its reported mask bound is not guaranteed delivered noise reduction or preserved intelligibility, and `applied` does not certify either.
+
 ## Read parent and child outcomes
 
 Use `audio report summary` to navigate a saved enhancement report without processing the audio again; read its help for the input and output surface. Follow its report pointers for full measurements and operation details. The summary preserves recorded outcomes, including nested evidence, and does not certify overall success.

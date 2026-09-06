@@ -1,5 +1,6 @@
 """Public media probing, filesystem, and publication API."""
 
+from .denoise import render_rnnoise
 from .errors import MediaError
 from .ffmpeg import (
     ENHANCED_MARKER,
@@ -86,6 +87,7 @@ __all__ = [
     "read_canonical_pcm16",
     "regular_file_digests_at",
     "render_loudness_normalized",
+    "render_rnnoise",
     "require_runtime",
     "resolve_path_identity",
     "run_in_directory",
