@@ -44,6 +44,8 @@ Broadband processing requires at least 250 ms of contiguous reference audio away
 
 The parent stage can report `applied` because high-pass or de-hum filtering ran while `broadband-denoise` reports `abstained`. Read the component decision and operation list before attributing an output change to broadband suppression.
 
+`noise_reference_scopes` exposes the candidate source-time intervals after speech/program exclusion, each run's eligibility or rejection reason, and the measurements available for that run. A locally eligible interval can still fail the pooled comparison against other intervals. The [recorded diagnostic dry runs](../model_tests/benchmark/results/2026-09-06-noise-reference-diagnostics.json) found no locally eligible complete reference run in either requested recording: 21 candidate runs in the video and 8 in the mixed-language recording. Selecting a nearer complete run does not by itself resolve those cases.
+
 ### 3. Voice enhancement
 
 [`apply_voice_enhancement`](../src/audio_cli/dsp/dynamics.py) combines a presence EQ centered at 3 kHz, one bounded gain calculated from aggregate detected-speech RMS, and a compressor using 20 ms RMS frames with interpolated gain shared across channels. The processed signal is blended over resolved speech treatment intervals. No speech causes abstention. This is not per-speaker leveling; correction bounds or compression can leave speech outside its RMS target. Later program gain changes the final speech level, and gain can also raise background sound within the mix.

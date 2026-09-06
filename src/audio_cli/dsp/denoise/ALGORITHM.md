@@ -14,6 +14,8 @@ Spectral flatness must be at least 0.15 in every block's non-silent channels ove
 
 Successful operations include the measured block count, maximum band-power spread, maximum channel-level spread, and minimum block flatness. Refusals from these checks include the same available diagnostics; the older pooled diagnostics retain their meaning. Incompatible blocks abstain rather than selecting a more convenient subset.
 
+The [reference selector](selection.py) also reports `noise_reference_scopes`: source-time intervals left after speech/program exclusion and guarding, their frame counts, and each run's local eligibility or rejection reason. Runs shorter than 250 ms carry no spectral measurements. Locally eligible runs can still disagree with one another and fail the pooled checks; eligibility alone does not mean a noise model was applied. `noise_reference_level_spread_db` is retained even when the pooled level check rejects before spectral estimation.
+
 The stationary noise-power estimate is the per-bin/per-channel median periodogram divided by log(2), with a three-bin average. The median resists occasional transient contamination; the log(2) correction is the exponential-periodogram approximation for Gaussian stationary noise. Colored and non-Gaussian backgrounds can violate that approximation, which is one reason attenuation is bounded.
 
 ## Filter and reconstruction

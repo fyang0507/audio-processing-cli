@@ -9,6 +9,7 @@ from scipy.ndimage import uniform_filter1d
 
 from ..regions import SignalAnalysis
 from .reference import reference_consistency
+from .selection import select_reference_runs
 
 
 @dataclass(frozen=True)
@@ -32,18 +33,14 @@ def estimate_noise(
     """
     frame = window.size
     hop = frame // 4
-    starts = np.arange(0, max(0, len(audio) - frame + 1), hop)
-    eligible = np.ones(starts.size, dtype=bool)
-    guard = round(0.12 * sample_rate)
-    excluded = [*intervals, *((r.start, r.end) for r in analysis.machine_regions)]
-    for start, end in excluded:
-        eligible &= (starts + frame <= round(start * sample_rate) - guard) | (
-            starts >= round(end * sample_rate) + guard
-        )
-    indices = np.flatnonzero(eligible)
-    runs = np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1)
-    accepted = [r for r in runs if r.size and (r.size - 1) * hop + frame >= 0.25 * sample_rate]
-    refusal: dict[str, object] = {"status": "abstained", "reason": "no_reliable_noise_only_region"}
+    starts, accepted, details = select_reference_runs(
+        audio, sample_rate, analysis, intervals, window
+    )
+    refusal: dict[str, object] = {
+        **details,
+        "status": "abstained",
+        "reason": "no_reliable_noise_only_region",
+    }
     if not accepted:
         return None, refusal
     candidates = np.concatenate(accepted)
@@ -52,15 +49,20 @@ def estimate_noise(
     frames = audio[starts[chosen, None] + np.arange(frame)[None, :]].astype(np.float64)
     levels = np.mean(frames**2, axis=(1, 2))
     if float(np.max(levels)) < 1e-20:
-        return None, {"status": "no_op", "reason": "noise_reference_is_silent"}
+        return None, {**details, "status": "no_op", "reason": "noise_reference_is_silent"}
     floor = max(float(np.max(levels)) * 1e-12, 1e-30)
     level_db = 10 * np.log10(np.maximum(levels, floor))
     spread = float(np.percentile(level_db, 90) - np.percentile(level_db, 10))
+    details["noise_reference_level_spread_db"] = round(spread, 3)
     if spread > 6.0:
-        return None, {"status": "abstained", "reason": "noise_reference_is_nonstationary"}
+        return None, {
+            **details,
+            "status": "abstained",
+            "reason": "noise_reference_is_nonstationary",
+        }
     reason, consistency = reference_consistency(audio, starts, accepted, window, sample_rate)
     if reason is not None:
-        return None, {"status": "abstained", "reason": reason, **consistency}
+        return None, {**details, "status": "abstained", "reason": reason, **consistency}
     spectra = np.fft.rfft(frames * window[None, :, None], axis=1)
     power = np.median(np.abs(spectra) ** 2, axis=0) / np.log(2.0)
     power = uniform_filter1d(power, size=3, axis=0, mode="nearest")
@@ -71,7 +73,11 @@ def estimate_noise(
     active = np.mean(frames**2, axis=(0, 1)) > floor
     band_power = power[band][:, active]
     if not band_power.size or float(np.min(np.mean(band_power, axis=0))) <= 1e-30:
-        return None, {"status": "abstained", "reason": "noise_reference_has_no_broadband_energy"}
+        return None, {
+            **details,
+            "status": "abstained",
+            "reason": "noise_reference_has_no_broadband_energy",
+        }
     spectral_floor = np.maximum(np.max(band_power, axis=0) * 1e-12, 1e-30)
     flatness = float(
         np.min(
@@ -80,7 +86,7 @@ def estimate_noise(
         )
     )
     if flatness < 0.15:
-        return None, {"status": "abstained", "reason": "noise_reference_is_tonal"}
+        return None, {**details, "status": "abstained", "reason": "noise_reference_is_tonal"}
     speech_starts = []
     for region in analysis.speech_regions:
         selected = starts[
@@ -89,7 +95,11 @@ def estimate_noise(
         if selected.size:
             speech_starts.append(selected)
     if not speech_starts:
-        return None, {"status": "abstained", "reason": "insufficient_speech_for_noise_comparison"}
+        return None, {
+            **details,
+            "status": "abstained",
+            "reason": "insufficient_speech_for_noise_comparison",
+        }
     speech_candidates = np.concatenate(speech_starts)
     speech_chosen = speech_candidates[
         np.linspace(0, speech_candidates.size - 1, min(256, speech_candidates.size), dtype=int)
@@ -97,12 +107,17 @@ def estimate_noise(
     speech_frames = audio[speech_chosen[:, None] + np.arange(frame)[None, :]].astype(np.float64)
     contrast = 10 * np.log10(max(float(np.mean(speech_frames**2)), floor) / np.median(levels))
     if contrast < 3.0:
-        return None, {"status": "abstained", "reason": "insufficient_speech_noise_contrast"}
+        return None, {
+            **details,
+            "status": "abstained",
+            "reason": "insufficient_speech_noise_contrast",
+        }
     if contrast > 20.0:
-        return None, {"status": "no_op", "reason": "stationary_noise_below_threshold"}
+        return None, {**details, "status": "no_op", "reason": "stationary_noise_below_threshold"}
     return NoiseEstimate(
         power,
         {
+            **details,
             **consistency,
             "noise_reference_frame_count": int(chosen.size),
             "noise_reference_seconds": round(
