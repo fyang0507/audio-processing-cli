@@ -30,6 +30,17 @@ def _repeat_request(correction: str) -> str:
     return f"{correction}; repeat the original command, preserving every other argument"
 
 
+def log_directory_invalid(path: Path, reason: str) -> Refusal:
+    return build_refusal(
+        "log_directory_invalid",
+        2,
+        _repeat_request("set --log-dir to a writable directory"),
+        field="--log-dir",
+        provided=str(path),
+        reason=reason,
+    )
+
+
 def stack_required() -> Refusal:
     return build_refusal(
         "stack_required",
