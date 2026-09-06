@@ -1,30 +1,15 @@
 # Working in this repository
 
-A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically,
-provision model packages and runtimes, transcribe through four explicit stacks, and export saved
-results deterministically. `inspect`, `enhance`, `doctor`, `packages`, `transcribe capabilities`,
-`transcribe plan`, `transcribe run`, and `export` ship. JSON is the machine-readable result format;
-prose interpretation belongs in your reply, not in the payload.
+A local-first `audio` CLI for agent workflows: measure audio, enhance it deterministically, provision model packages and runtimes, transcribe through four explicit stacks, and export saved results deterministically. `inspect`, `enhance`, `doctor`, `packages`, `transcribe capabilities`, `transcribe plan`, `transcribe run`, and `export` ship. JSON is the machine-readable result format; prose interpretation belongs in your reply, not in the payload.
 
 ## The rule that matters most
 
-**A claim about what a model or backend produces must cite a runner source or a recorded
-artifact, never a summary document.** Three documents here agreed that FireRed emits per-word
-confidence. It does not, and the claim survived four review passes because every summary
-repeated it and only the artifacts refuted it. Summaries are convenient and artifacts are not;
-read the artifact anyway. Doing so is also *generative* — checking one claim against recorded
-output is how most of this repository's real findings arrived.
+**A claim about what a model or backend produces must cite a runner source or a recorded artifact, never a summary document.** Three documents here agreed that FireRed emits per-word confidence. It does not, and the claim survived four review passes because every summary repeated it and only the artifacts refuted it. Summaries are convenient and artifacts are not; read the artifact anyway. Doing so is also *generative* — checking one claim against recorded output is how most of this repository's real findings arrived.
 
 Two invariants that follow, and hold everywhere:
 
-- **The original media is canonical.** Nothing modifies a source file. Renders and transcripts
-  refer back to the source timeline.
-- **Absence is meaningful.** A field that a backend did not supply stays absent rather than
-  becoming a null, a zero, or a default that reads like a measurement. The sharpest instance:
-  `pull` recorded `digest_verified: true` for every Hub package and hashed none of them — the
-  manifest pins a *revision* and carries no `sha256` to hash a snapshot against — so `verify`
-  printed `digest: "ok"` for a check no code performs. The repair is to claim what is true (the
-  pinned `revision`) rather than to confess what is not with a `false`.
+- **The original media is canonical.** Nothing modifies a source file. Renders and transcripts refer back to the source timeline.
+- **Absence is meaningful.** A field that a backend did not supply stays absent rather than becoming a null, a zero, or a default that reads like a measurement. The sharpest instance: `pull` recorded `digest_verified: true` for every Hub package and hashed none of them — the manifest pins a *revision* and carries no `sha256` to hash a snapshot against — so `verify` printed `digest: "ok"` for a check no code performs. The repair is to claim what is true (the pinned `revision`) rather than to confess what is not with a `false`.
 
 ## Where truth lives
 
@@ -39,9 +24,7 @@ Two invariants that follow, and hold everywhere:
 
 ## Source architecture
 
-Treat a directory as an implementation-ownership boundary, not merely a filename namespace. An
-import or compatibility re-export does not transfer ownership. When a change appears to fit two
-owners, separate the lower-level mechanism from the feature policy instead of duplicating either.
+Treat a directory as an implementation-ownership boundary, not merely a filename namespace. An import or compatibility re-export does not transfer ownership. When a change appears to fit two owners, separate the lower-level mechanism from the feature policy instead of duplicating either.
 
 ### Direct packages under `audio_cli`
 
@@ -56,17 +39,9 @@ owners, separate the lower-level mechanism from the feature policy instead of du
 | `transcribe` | Transcription capability catalogs and plans, isolated model-stage execution, provider-result normalization, orchestration, and normalized result production. | Package installation, enhancement policy, or offline export rendering. |
 | `export` | Offline consumption of one or more saved normalized results: strict loading, compatibility checks, merging, cue construction, deterministic rendering, and output publication. | Model execution, capability planning, or transcription-process control. It consumes the result contract without running transcription. |
 
-These boundaries follow lifecycle cuts: `environments` declares desired state while `packages`
-reconciles mutable installed state; `media` performs trusted mechanisms while `pipeline` orders the
-enhancement feature; `transcribe` produces durable results while `export` only consumes them; and
-`command` formats shared presentation primitives while each feature detects its own conditions and
-owns its domain-specific codes and repair policy.
+These boundaries follow lifecycle cuts: `environments` declares desired state while `packages` reconciles mutable installed state; `media` performs trusted mechanisms while `pipeline` orders the enhancement feature; `transcribe` produces durable results while `export` only consumes them; and `command` formats shared presentation primitives while each feature detects its own conditions and owns its domain-specific codes and repair policy.
 
-`media` deliberately includes the generic filesystem primitives used by provisioning as well as
-audio/video tooling: security-critical external-byte handling has one owner. It also writes and
-detects the enhancement marker because that marker is container metadata; `pipeline` decides when
-an enhanced input or output is permitted. The protected export writer and verified-media promotion
-remain feature-specific publication transactions that compose these mechanisms.
+`media` deliberately includes the generic filesystem primitives used by provisioning as well as audio/video tooling: security-critical external-byte handling has one owner. It also writes and detects the enhancement marker because that marker is container metadata; `pipeline` decides when an enhanced input or output is permitted. The protected export writer and verified-media promotion remain feature-specific publication transactions that compose these mechanisms.
 
 The allowed dependency direction is:
 
@@ -85,28 +60,11 @@ vad -> vad_contract | media | paths
 command, environments, media -> no feature package
 ```
 
-Everything not listed is a boundary violation. In particular, `pipeline` and `transcribe` are
-peers; `packages` cannot know about transcription plans; `export` cannot call transcription
-execution; and no lower package imports `cli`. `tests/test_top_level_module_boundaries.py` enforces
-the package graph and the deliberately narrow `export -> transcribe.result` edge. One frozen
-source-compatibility bridge sits outside the ownership DAG:
-`transcribe.refusals -> export.refusals`, limited to four direct aliases whose implementation
-and ownership remain in `export`.
+Everything not listed is a boundary violation. In particular, `pipeline` and `transcribe` are peers; `packages` cannot know about transcription plans; `export` cannot call transcription execution; and no lower package imports `cli`. `tests/test_top_level_module_boundaries.py` enforces the package graph and the deliberately narrow `export -> transcribe.result` edge. One frozen source-compatibility bridge sits outside the ownership DAG: `transcribe.refusals -> export.refusals`, limited to four direct aliases whose implementation and ownership remain in `export`.
 
-Root modules have one of two roles. `__main__.py`, `cli.py`, and `cli_parser.py` are composition
-roots. Small modules such as `adjustments.py`, `profiles.py`, `paths.py`, `vad_contract.py`, and
-`vad.py` hold shared value types or one cross-feature service; feature reports may also read the
-immutable root package version. The root is not a place for another multi-module subsystem. Likewise,
-`transcribe/catalog.py`, `plan.py`, `sample.py`, and `stacks.py` are small shared domain
-contracts, not an alternative home for one of the subpackages below. `transcribe/native.py` is
-a frozen compatibility module: it preserves only the old `run_native` import and its FireRed /
-VibeVoice restriction, then delegates to `transcribe.orchestrator`; it owns no provider workflow.
+Root modules have one of two roles. `__main__.py`, `cli.py`, and `cli_parser.py` are composition roots. Small modules such as `adjustments.py`, `profiles.py`, `paths.py`, `vad_contract.py`, and `vad.py` hold shared value types or one cross-feature service; feature reports may also read the immutable root package version. The root is not a place for another multi-module subsystem. Likewise, `transcribe/catalog.py`, `plan.py`, `sample.py`, and `stacks.py` are small shared domain contracts, not an alternative home for one of the subpackages below. `transcribe/native.py` is a frozen compatibility module: it preserves only the old `run_native` import and its FireRed / VibeVoice restriction, then delegates to `transcribe.orchestrator`; it owns no provider workflow.
 
-`vad_contract.py` owns only the lightweight speech-region value and detector protocol. `vad.py`
-owns the Silero ONNX implementation and the one legacy provisioning exception: first use may
-bootstrap that small, content-hash-pinned model into the managed cache. `packages` owns the
-explicit `audio packages pull silero-vad` lifecycle for the same declared artifact. No other
-model or runtime may be fetched implicitly.
+`vad_contract.py` owns only the lightweight speech-region value and detector protocol. `vad.py` owns the Silero ONNX implementation and the one legacy provisioning exception: first use may bootstrap that small, content-hash-pinned model into the managed cache. `packages` owns the explicit `audio packages pull silero-vad` lifecycle for the same declared artifact. No other model or runtime may be fetched implicitly.
 
 The non-Python directories under `environments` are part of that package's declared state:
 
@@ -129,107 +87,36 @@ The non-Python directories under `environments` are part of that package's decla
 | `stages` | Thin child-process entry points inside managed model environments. They import provider frameworks, run inference, and write the raw stage response. | Imports from core `audio_cli`, cross-stage sequencing, normalization into the public schema, or final publication. |
 | `transport` | The resource-accounted host/child process boundary: launching the media-owned canonical decode specification, provider wire-request encoding, result JSON framing, duplicate-key rejection, and exit translation. | Media command policy, interpreting provider responses, capability decisions, provider workflow order, model inference, or public results. |
 
-The distinctions that most often prevent misplaced code are: planner reads declared facts while
-execution checks mutable installed state; orchestrator decides **what and when** while execution
-provides reusable host operations; transport encodes and moves provider wire requests while stages
-run inference; adapters interpret returned provider semantics while result defines the public
-schema. Stage scripts are reached by process invocation, never imported by host-side code.
-`stages/_firered_protocol.py` is the sole non-`__init__.py` underscore module in this tree: it is
-intentionally private and stdlib-only because the FireRed stage must load the same wire-protocol
-helper both as an installed package module and as a directly executed isolated script.
-The transcription boundary tests exact-inventory every module under these owners, so adding or
-moving a module requires an explicit owner decision rather than merely choosing a plausible name.
-They also require host-side transcription code to depend only on the standard library and other
-`audio_cli` owners: direct third-party model/runtime imports are exact-inventoried per isolated
-stage. Canonical WAV access is confined to `media.pcm`, including from standard-library callers.
-Host runtime modules use static imports. The sole exception is `packages/runtime_probe.py`, a
-stdlib-only child script launched under the managed MLX interpreter; its one dynamic import is the
-private-API target declared by the bundled environment manifest, and it never imports `audio_cli`.
-Boundary tests exact-inventory that exception and reject ordinary loader aliases, reflective
-`builtins` access, and `eval` elsewhere. Function-local static model imports in stages remain
-permitted and keep heavyweight frameworks out of the host process.
+The distinctions that most often prevent misplaced code are: planner reads declared facts while execution checks mutable installed state; orchestrator decides **what and when** while execution provides reusable host operations; transport encodes and moves provider wire requests while stages run inference; adapters interpret returned provider semantics while result defines the public schema. Stage scripts are reached by process invocation, never imported by host-side code. `stages/_firered_protocol.py` is the sole non-`__init__.py` underscore module in this tree: it is intentionally private and stdlib-only because the FireRed stage must load the same wire-protocol helper both as an installed package module and as a directly executed isolated script. The transcription boundary tests exact-inventory every module under these owners, so adding or moving a module requires an explicit owner decision rather than merely choosing a plausible name. They also require host-side transcription code to depend only on the standard library and other `audio_cli` owners: direct third-party model/runtime imports are exact-inventoried per isolated stage. Canonical WAV access is confined to `media.pcm`, including from standard-library callers. Host runtime modules use static imports. The sole exception is `packages/runtime_probe.py`, a stdlib-only child script launched under the managed MLX interpreter; its one dynamic import is the private-API target declared by the bundled environment manifest, and it never imports `audio_cli`. Boundary tests exact-inventory that exception and reject ordinary loader aliases, reflective `builtins` access, and `eval` elsewhere. Function-local static model imports in stages remain permitted and keep heavyweight frameworks out of the host process.
 
-Direct packages import another owner's public facade except for deliberately narrow edges such
-as `export -> transcribe.result`. The composition roots may wire only the exact feature facades
-and contracts declared in `tests/test_top_level_module_boundaries.py`. Inside one package family,
-implementations import the concrete module that owns a behavior rather than reaching back through
-`__init__.py`. The broad exports in `pipeline.__init__`, the execution names exposed by
-`transcribe.orchestrator`, `transcribe.native.run_native`, and the four export-refusal names
-exposed by `transcribe.refusals` are frozen compatibility aliases from earlier layouts. They do
-not confer ownership and are not a pattern for new APIs. New callers import the refusal builders
-from `audio_cli.export` and use `transcribe.orchestrator.run` for all stacks.
+Direct packages import another owner's public facade except for deliberately narrow edges such as `export -> transcribe.result`. The composition roots may wire only the exact feature facades and contracts declared in `tests/test_top_level_module_boundaries.py`. Inside one package family, implementations import the concrete module that owns a behavior rather than reaching back through `__init__.py`. The broad exports in `pipeline.__init__`, the execution names exposed by `transcribe.orchestrator`, `transcribe.native.run_native`, and the four export-refusal names exposed by `transcribe.refusals` are frozen compatibility aliases from earlier layouts. They do not confer ownership and are not a pattern for new APIs. New callers import the refusal builders from `audio_cli.export` and use `transcribe.orchestrator.run` for all stacks.
 
-Specification documents are enforced, not decorative: the `tests/test_spec_docs*.py` suite and
-`tests/test_environments.py` fail when a payload, a name, or an environment drifts from what
-these documents publish. Those two compare documents against documents, which cannot catch a
-document the *code* disagrees with, so `tests/test_shipped_commands_match_the_document.py` runs
-the commands that already exist — `doctor`, `packages list`, `packages verify` — and diffs their
-real stdout against TRANSCRIBE_HAPPY_PATH.md, key set and nesting rather than values. All three
-had drifted when it was written. Where the documents disagree with each other it abstains and
-names the dispute instead of ratifying a side; the open one is the shape of `failed[]`, recorded
-in HANDOFF.md. Add every newly shipped stack's `run` shape when its adapter lands.
+Specification documents are enforced, not decorative: the `tests/test_spec_docs*.py` suite and `tests/test_environments.py` fail when a payload, a name, or an environment drifts from what these documents publish. Those two compare documents against documents, which cannot catch a document the *code* disagrees with, so `tests/test_shipped_commands_match_the_document.py` runs the commands that already exist — `doctor`, `packages list`, `packages verify` — and diffs their real stdout against TRANSCRIBE_HAPPY_PATH.md, key set and nesting rather than values. All three had drifted when it was written. Where the documents disagree with each other it abstains and names the dispute instead of ratifying a side; the open one is the shape of `failed[]`, recorded in HANDOFF.md. Add every newly shipped stack's `run` shape when its adapter lands.
 
 ## Evidence conventions
 
-Runners live in `model_tests/benchmark/`, compact results are **tracked** under
-`model_tests/benchmark/results/` as `YYYY-MM-DD-<topic>.json`, and raw artifacts stay
-**untracked** in `model_tests/benchmark_runs/`. A measurement is reported with its fixture and
-configuration, or not reported. Distinguish three things and never let them blur: a **declared**
-interface, a **measured** result, and an **unresolved** question.
+Runners live in `model_tests/benchmark/`, compact results are **tracked** under `model_tests/benchmark/results/` as `YYYY-MM-DD-<topic>.json`, and raw artifacts stay **untracked** in `model_tests/benchmark_runs/`. A measurement is reported with its fixture and configuration, or not reported. Distinguish three things and never let them blur: a **declared** interface, a **measured** result, and an **unresolved** question.
 
 ## Tooling
 
-`uv` manages every environment — `uv venv` and `uv pip install`, never `python3 -m venv` with
-`pip`. Tests are `uv run --extra dev pytest`. Install the repository hooks with
-`uv run --extra dev pre-commit install` and run the deterministic lint/format gate with
-`uv run --extra dev pre-commit run --all-files`; Ruff lint fixes run before Ruff formatting.
-`ffmpeg` and `ffprobe` are machine runtime dependencies. Python 3.11+.
+Write Markdown paragraphs and list-item prose on single physical lines. Do not hard-wrap prose to a column width; use line breaks for Markdown structure such as headings, separate paragraphs, list items, tables, and code blocks.
 
-Model weights and their runtimes are provisioned **only** by `audio packages pull`, except for
-the documented, hash-verified Silero VAD bootstrap owned by `vad.py`. Never hand-download weights,
-hand-create a virtual environment, or edit a lock file to make an install succeed — the pins are
-what make the recorded measurements mean anything.
+`uv` manages every environment — `uv venv` and `uv pip install`, never `python3 -m venv` with `pip`. Tests are `uv run --extra dev pytest`. Install the repository hooks with `uv run --extra dev pre-commit install` and run the deterministic lint/format gate with `uv run --extra dev pre-commit run --all-files`; Ruff lint fixes run before Ruff formatting. `ffmpeg` and `ffprobe` are machine runtime dependencies. Python 3.11+.
 
-Keep every tracked, authored file below 500 physical lines by splitting at responsibility
-boundaries. `tests/test_file_size_budget.py` enforces the limit and owns the narrow exception
-list for generated locks and indivisible recorded fixtures; do not add an exception merely to
-avoid decomposing maintained code, tests, or prose.
+Model weights and their runtimes are provisioned **only** by `audio packages pull`, except for the documented, hash-verified Silero VAD bootstrap owned by `vad.py`. Never hand-download weights, hand-create a virtual environment, or edit a lock file to make an install succeed — the pins are what make the recorded measurements mean anything.
 
-When a decomposition creates a family of modules, give that family a real subpackage instead
-of encoding the namespace in repeated root-level filename prefixes. Keep each subpackage's
-`__init__.py` as an explicit public facade, have implementation modules depend on the module
-that owns a behavior rather than reaching back through the facade, and split by responsibility
-rather than stopping just below the line limit.
+Keep every tracked, authored file below 500 physical lines by splitting at responsibility boundaries. `tests/test_file_size_budget.py` enforces the limit and owns the narrow exception list for generated locks and indivisible recorded fixtures; do not add an exception merely to avoid decomposing maintained code, tests, or prose.
+
+When a decomposition creates a family of modules, give that family a real subpackage instead of encoding the namespace in repeated root-level filename prefixes. Keep each subpackage's `__init__.py` as an explicit public facade, have implementation modules depend on the module that owns a behavior rather than reaching back through the facade, and split by responsibility rather than stopping just below the line limit.
 
 ## Habits learned the hard way
 
-- **Do not add structure nobody dispatches on.** A capability report here shed four nested
-  objects that each seemed justified when added. The test is whether a caller branches on it.
-- **Do not describe machinery that does not exist.** One rule instructed an adapter to handle
-  output a stage never emits; it was inert and its test passed vacuously. When you write an
-  invariant, write the assertion that would fail if it were violated, then check that it can
-  fail.
-- **A flag that parses is not a flag that works.** `--repair` was declared, documented in
-  TRANSCRIBE_CONTRACT.md, and named in four `fix` strings `verify` emits, and no code read it.
-  `--want` was accepted and ignored; `--stack` beside named packages dropped the stack. The cheap
-  sweep that finds the rest: neutralize each `repair`/`force`/`dry_run`/`stack`/`allow_*` branch
-  in turn and run the suite. Six of twenty were invisible. A flag the code cannot honour yet is
-  refused at exit 2, never accepted quietly.
-- **A double must be able to represent the state a repair produces.** `FakeToolchain` could not
-  stop being drifted, so a repair test's final assertion ran against a second, undrifted toolchain
-  that reports `ok` either way and the `if drift and repair` branch never executed. When a double
-  cannot reach the post-repair state, the test passes without the repair running — and two payload
-  shapes here turned out to be unreachable rather than untested for the same reason.
-- **A parameter that decides nothing is worse than a missing one.** `vad_min_silence_ms` declared
-  300 ms while a hard-coded merge downstream required 540, so the profile's number was inert
-  across a 240 ms band. Two thresholds answering one question can only disagree; keep one.
+- **Do not add structure nobody dispatches on.** A capability report here shed four nested objects that each seemed justified when added. The test is whether a caller branches on it.
+- **Do not describe machinery that does not exist.** One rule instructed an adapter to handle output a stage never emits; it was inert and its test passed vacuously. When you write an invariant, write the assertion that would fail if it were violated, then check that it can fail.
+- **A flag that parses is not a flag that works.** `--repair` was declared, documented in TRANSCRIBE_CONTRACT.md, and named in four `fix` strings `verify` emits, and no code read it. `--want` was accepted and ignored; `--stack` beside named packages dropped the stack. The cheap sweep that finds the rest: neutralize each `repair`/`force`/`dry_run`/`stack`/`allow_*` branch in turn and run the suite. Six of twenty were invisible. A flag the code cannot honour yet is refused at exit 2, never accepted quietly.
+- **A double must be able to represent the state a repair produces.** `FakeToolchain` could not stop being drifted, so a repair test's final assertion ran against a second, undrifted toolchain that reports `ok` either way and the `if drift and repair` branch never executed. When a double cannot reach the post-repair state, the test passes without the repair running — and two payload shapes here turned out to be unreachable rather than untested for the same reason.
+- **A parameter that decides nothing is worse than a missing one.** `vad_min_silence_ms` declared 300 ms while a hard-coded merge downstream required 540, so the profile's number was inert across a 240 ms band. Two thresholds answering one question can only disagree; keep one.
 
 ## Skills
 
-[`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the one skill, and it ships in the source
-distribution so it travels with the CLI. It is written for an agent *using* the tool on someone's
-audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one
-task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or
-installation. Two rules keep it that way. Anything `--help` already states stays out of it, and
-backend internals stay out too — how the models are partitioned into runtimes belongs in
-[ENVIRONMENTS.md](ENVIRONMENTS.md), where a developer will look for it.
+[`audio-cli`](.agents/skills/audio-cli/SKILL.md) is the one skill, and it ships in the source distribution so it travels with the CLI. It is written for an agent *using* the tool on someone's audio, not for someone developing it: a short router in `SKILL.md` sends the reader to one task-shaped reference — diagnosing and fixing audio, a targeted fix, model provisioning, or command readiness. Two rules keep it that way. Anything `--help` already states stays out of it, and backend internals stay out too — how the models are partitioned into runtimes belongs in [ENVIRONMENTS.md](ENVIRONMENTS.md), where a developer will look for it.

@@ -7,6 +7,8 @@ from .errors import (
     InvalidResultError,
     OutputExistsError,
     OutputWriteError,
+    ReadableTimingRequiredError,
+    TimestampsUnsupportedError,
     TimingRequiredError,
     UnsafeOutputError,
 )
@@ -20,7 +22,9 @@ from .refusals import (
     output_is_canonical_input,
     output_path_invalid,
     output_required_for_force,
+    timestamps_unsupported_for_format,
     timing_required_for_format,
+    timing_required_for_timestamps,
 )
 
 __all__ = [
@@ -33,6 +37,8 @@ __all__ = [
     "MergedTranscript",
     "OutputExistsError",
     "OutputWriteError",
+    "ReadableTimingRequiredError",
+    "TimestampsUnsupportedError",
     "TimingRequiredError",
     "UnsafeOutputError",
     "export_documents",
@@ -44,5 +50,7 @@ __all__ = [
     "output_is_canonical_input",
     "output_path_invalid",
     "output_required_for_force",
+    "timestamps_unsupported_for_format",
     "timing_required_for_format",
+    "timing_required_for_timestamps",
 ]

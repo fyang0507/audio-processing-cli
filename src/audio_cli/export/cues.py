@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any
 
+from .lexical import normalized_word_texts, plain_positions
+
 _SENTENCE_FINAL = frozenset(".!?…。！？；‼⁇⁈⁉")
 _CLAUSE_FINAL = frozenset(",;:，；：、")
 _TRAILING_WRAPPERS = frozenset("'\"’”»》」』】〕〗〙〛）)]}")
@@ -85,28 +87,6 @@ class _MappedWord:
     char_end: int
 
 
-def _plain(value: str) -> str:
-    return "".join(
-        character
-        for character in value.casefold()
-        if not character.isspace() and not unicodedata.category(character).startswith("P")
-    )
-
-
-def _plain_positions(value: str) -> tuple[str, list[int]]:
-    plain: list[str] = []
-    positions: list[int] = []
-    for position, character in enumerate(value):
-        if character.isspace() or unicodedata.category(character).startswith("P"):
-            continue
-        for folded in character.casefold():
-            if folded.isspace() or unicodedata.category(folded).startswith("P"):
-                continue
-            plain.append(folded)
-            positions.append(position)
-    return "".join(plain), positions
-
-
 def _finite_number(value: object, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise CueError(f"{field} must be a finite number")
@@ -134,23 +114,15 @@ def _map_words(
     text = segment["text"]
     words = segment["words"]
     _reject_non_whitespace_controls(text, f"segments[{segment_index}].text")
-    plain_text, positions = _plain_positions(text)
-    normalized_words: list[str] = []
     for word_index, word in enumerate(words):
         _reject_non_whitespace_controls(
             word["text"], f"segments[{segment_index}].words[{word_index}].text"
         )
-        normalized = _plain(word["text"])
-        if not normalized:
-            raise CueError(
-                f"segments[{segment_index}].words[{word_index}].text has no lexical content"
-            )
-        normalized_words.append(normalized)
-    if "".join(normalized_words) != plain_text:
-        raise CueError(
-            f"segments[{segment_index}] word text does not map to segment text under "
-            "the punctuation invariant"
-        )
+    try:
+        normalized_words = normalized_word_texts(text, words, field=f"segments[{segment_index}]")
+    except ValueError as exc:
+        raise CueError(str(exc)) from exc
+    _plain_text, positions = plain_positions(text)
 
     lexical_starts: list[int] = []
     lexical_ends: list[int] = []

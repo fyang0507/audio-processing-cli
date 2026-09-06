@@ -1,74 +1,37 @@
 ---
 name: audio-cli
-description: Do audio work on local media with the `audio` CLI — diagnose what is wrong with a recording, clean up and level speech in a video or podcast, render an ASR-ready proxy, transcribe through an explicit local stack, export saved results, apply an evidence-backed targeted fix, and provision the models each request needs. Use this whenever someone wants audio measured, cleaned up, made clearer or more consistent, prepared for transcription, transcribed, or turned into transcript and subtitle files, even if they never mention this CLI, a profile, or a model — results come back as structured data you can act on, and the failure modes here are the kind that produce confident wrong answers.
+description: Measure, enhance, and transcribe local audio or video with the audio CLI; export transcripts and subtitles, apply scoped audio corrections, and manage required model packages. Use for recording diagnosis, speech cleanup, transcription, and subtitle requests.
 ---
 
 # Audio work with the `audio` CLI
 
-Someone hands you media and a complaint: *the audio in this demo is rough*, *make this usable for
-transcription*, *why does this sound bad?* This CLI is how you answer — it measures, decides,
-renders, and re-measures deterministically, and prints JSON at every step so you can act on facts
-rather than impressions. Your part is judgment: pick the right lane, read the output honestly, and
-say what you actually know.
+Use only the `audio` CLI for audio processing, inspection, transcription, export, and model management. Use saved JSON for evidence. This skill supplies decisions and interpretation; the CLI's `--help` supplies commands, flags, and defaults.
 
-`audio --help` and `audio <command> --help` are the command surface. Every subcommand, flag, and
-default is there, so read it rather than guessing, and expect nothing here to repeat it. This skill
-carries what help text cannot: which lane a request belongs in, what the output means, and where
-the honest limits are.
+## Use the command from any directory
 
-## Start
+Use `audio` from the current working directory. If the task supplies an absolute path to an `audio` executable, use that executable consistently, including for remedies printed as `audio ...`. Use absolute media and output paths when working across directories.
 
-```bash
-command -v audio
-```
+Read its help to discover the available surface. `audio doctor` reports the command's path, version, and host readiness. Neither step requires a repository checkout or runtime imports.
 
-If that finds nothing, read [references/install.md](references/install.md) — except inside a
-checkout of this repository, where `uv run audio ...` works from the root without installing.
+If the command is missing, cannot start, or lacks a required operation, follow [references/readiness.md](references/readiness.md) and report the blocker. Do not switch to an alternative audio tool or backend when a CLI result is unsatisfactory.
 
-## Route by what the person wants
+## Route by the request
 
-| The request | Your lane | Read before running it |
-| --- | --- | --- |
-| "what's wrong with this audio?" | measure, then explain in prose | [references/enhance-audio.md](references/enhance-audio.md) |
-| "fix / clean up / level this recording or video" | inspect, resolve, render, verify | [references/enhance-audio.md](references/enhance-audio.md) |
-| "get this ready for transcription" | the same loop, transcription profile | [references/enhance-audio.md](references/enhance-audio.md) |
-| "this part is too quiet", "there's a hum at 60 Hz" | a scoped gain, authorized by evidence | [references/targeted-fixes.md](references/targeted-fixes.md) |
-| "transcribe this", or "export this transcript/subtitle" | choose capabilities, plan, provision, run, then export when requested | [references/transcribe.md](references/transcribe.md) |
-| "what will this download?" | inspect and provision models explicitly | [references/model-packages.md](references/model-packages.md) |
-| "free up disk", or a command reports something missing | check state, then pull, repair, or reclaim | [references/model-packages.md](references/model-packages.md) |
-| the command is missing or will not run | install and verify | [references/install.md](references/install.md) |
+| The request | Read before running it |
+| --- | --- |
+| Diagnose, enhance, or prepare an audio/video recording | [references/enhance-audio.md](references/enhance-audio.md) |
+| Correct a particular region or measured frequency | [references/targeted-fixes.md](references/targeted-fixes.md) |
+| Transcribe original media or export a saved result | [references/transcribe.md](references/transcribe.md) |
+| Prepare packages, check readiness, or reclaim managed disk | [references/model-packages.md](references/model-packages.md) |
+| A command failed | [references/failures.md](references/failures.md) |
 
-Read the lane's file before running its commands. Each is short, and each exists because that lane
-has a way of producing a plausible wrong answer that `--help` cannot warn you about.
+Read only the relevant references. Diagnosis or enhancement alone does not require transcription; export of an existing result does not require running models.
 
-## Three invariants
+## Preserve the evidence
 
-- **The original media is canonical.** Nothing modifies a source file, and a render is never the
-  input to another render — a report describes the *original's* timeline, so a second pass would be
-  measuring a measurement.
-- **Absence is meaningful.** A field the tool did not supply stays absent rather than becoming a
-  null, a zero, or a default that reads like a measurement. Never fill one in when relaying results.
-- **Machine output belongs to the caller.** JSON is the default and must pass through unchanged;
-  put interpretation in your reply, not in the payload. Human transcript formats appear only when
-  the caller explicitly requests one.
-
-## The honest limits
-
-These are the four claims that get made wrongly. Knowing them is most of the skill:
-
-- **A measurement is not a preference.** The numbers that chose the processing cannot also prove it
-  sounds better. When someone wants to know whether it sounds good, ask them to listen, or say
-  plainly that you verified conformance and not taste.
-- **`abstained` means unresolved, not permission to force.** A stage that abstained found no
-  correction it could make safely. The next move is evidence, not a bigger number.
-- **Overlapping sources in one mixed track cannot be separated.** Gain and EQ move speech and music
-  together when they overlap in time. Preserve the source or abstain; never imply independent
-  control you do not have.
-- **Models arrive only when explicitly pulled.** Capability discovery, planning, and execution
-  cover all four stack ids. Never hand-download weights or hand-build an environment to work
-  around a missing package.
-
-When a command fails, its final stderr item is one JSON error object; `transcribe run` may stream
-plain-text progress before it. Parse the final object. If `fix` begins with `audio`, run that command
-verbatim; otherwise no working command exists, so report the sentence as the blocker instead of
-retrying blindly.
+- **The original media is canonical.** When transcription is requested or needed, save its original-source result before enhancement or reuse the saved result; see [references/transcribe.md](references/transcribe.md). Enhancement is the final media-changing step. Resolve each revision from the original, preserving its timeline, rather than chaining renders. Enhanced-media ASR or VAD checks may differ and never replace the canonical transcript.
+- **Absence is meaningful.** Never fill an omitted measurement, timestamp, or speaker with a null, zero, or inferred value. Preserve the machine JSON unchanged and put interpretation in the reply.
+- **A measurement is not a preference.** Separate report checks from listening evidence. Preserve an approved result rather than chasing every numeric preference.
+- **`abstained` is unresolved.** Seek evidence for a scoped correction instead of forcing larger values. Gain and EQ cannot independently control speech and music that overlap in one track.
+- **Provision through `audio packages pull`.** The sole automatic exception is the small, hash-verified Silero speech-activity model on first use, including inspection or enhancement. Other models and runtimes require explicit provisioning; never hand-download weights, hand-create a runtime, or edit its pins.
+- **Enhancement does not delete fillers.** Canonical means unedited original-source output, not guaranteed verbatim recognition. Filler editing is future scope; video would require synchronized audio/video cuts, not audio-only muting or deletion.

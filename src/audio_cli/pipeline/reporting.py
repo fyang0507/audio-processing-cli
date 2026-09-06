@@ -12,6 +12,7 @@ from ..media import ffmpeg_version
 from ..profiles import STAGE_ORDER, Profile
 from ..vad import MODEL_SHA256, MODEL_URL
 from .models import LoudnessRun, PreparedRun, StageRun
+from .outcomes import REGION_BASIS, actual_program, unresolved_outcomes
 
 
 def _round_loudness(data: dict[str, float]) -> dict[str, float | None]:
@@ -120,6 +121,7 @@ def build_report(
         "source": prepared.source_info,
         "processing_order": list(STAGE_ORDER),
         "regions": _region_manifest(prepared.analysis),
+        "region_basis": dict(REGION_BASIS),
         "observations": [
             *prepared.analysis.observations,
             _program_observation(prepared.before_program),
@@ -130,14 +132,23 @@ def build_report(
         "measurements": {
             "before": {
                 "program": _round_loudness(prepared.before_program),
+                "program_actual": actual_program(prepared.before_program),
                 "regional": prepared.before_regional,
             },
             "predicted": {
                 "program_before_normalization": _round_loudness(loudness.pre_program),
                 "program": _round_loudness(loudness.simulated_program),
+                "program_actual": actual_program(loudness.simulated_program),
                 "regional": loudness.simulated_regional,
             },
         },
+        "unresolved": unresolved_outcomes(
+            profile,
+            staged,
+            loudness.simulated_program,
+            loudness.simulated_regional,
+            measured_at="predicted_pre_encode",
+        ),
         "final_peak_validation": {
             "status": "predicted_pass",
             "predicted_true_peak_dbtp": round(loudness.simulated_program["input_tp"], 3),

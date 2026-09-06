@@ -35,7 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enhance_parser.add_argument("input", type=Path, nargs="?")
     enhance_parser.add_argument("--profile", choices=sorted(PROFILES), required=True)
-    enhance_parser.add_argument("-o", "--output", type=Path)
+    enhance_parser.add_argument(
+        "-o", "--output", type=Path, help="Write enhanced media; incompatible with --dry-run."
+    )
     enhance_parser.add_argument(
         "--skip",
         help=(
@@ -44,7 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     enhance_parser.add_argument("--adjustments", type=Path)
-    enhance_parser.add_argument("--dry-run", action="store_true")
+    enhance_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Evaluate without rendering; incompatible with --output.",
+    )
     enhance_parser.add_argument("--list-stages", action="store_true")
     enhance_parser.add_argument("--report", type=Path)
     enhance_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")
@@ -81,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     pull_parser.add_argument("--stack", help="Provision what this stack can use.")
     pull_parser.add_argument(
         "--want",
-        help="Reserved until the planner lands, and refused until then rather than ignored.",
+        help="Unsupported here; use transcribe plan --want and pull its missing package ids.",
     )
     pull_parser.add_argument(
         "--repair",
@@ -119,16 +125,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     transcribe_commands = transcribe_parser.add_subparsers(dest="transcribe_command", required=True)
     capabilities_parser = transcribe_commands.add_parser(
-        "capabilities", help="Report what one stack can do with one input."
+        "capabilities",
+        help="Report what one stack can do with one input.",
+        usage="%(prog)s --stack STACK --input INPUT [-h]",
     )
-    capabilities_parser.add_argument("--stack")
-    capabilities_parser.add_argument("--input", type=Path)
+    capabilities_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    capabilities_parser.add_argument("--input", type=Path, help="Required: original media path.")
 
     plan_parser = transcribe_commands.add_parser(
-        "plan", help="Resolve requested capabilities to roles and packages."
+        "plan",
+        help="Resolve requested capabilities to roles and packages.",
+        usage="%(prog)s --stack STACK --input INPUT [options]",
     )
-    plan_parser.add_argument("--stack")
-    plan_parser.add_argument("--input", type=Path)
+    plan_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    plan_parser.add_argument("--input", type=Path, help="Required: original media path.")
     plan_parser.add_argument("--want", help="Comma-separated capability names.")
     plan_parser.add_argument("--language")
     plan_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
@@ -136,10 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
     run_parser = transcribe_commands.add_parser(
-        "run", help="Execute one resolved transcription request."
+        "run",
+        help="Execute one resolved transcription request.",
+        usage="%(prog)s --stack STACK --input INPUT [options]",
     )
-    run_parser.add_argument("--stack")
-    run_parser.add_argument("--input", type=Path)
+    run_parser.add_argument("--stack", help="Required: explicit transcription stack.")
+    run_parser.add_argument("--input", type=Path, help="Required: original media path.")
     run_parser.add_argument("--want", help="Comma-separated capability names.")
     run_parser.add_argument("--language")
     run_parser.add_argument("--vad", help="Pin the VAD backend for a requested vad capability.")
@@ -170,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=("srt", "vtt", "md", "txt", "jsonl"), required=True
     )
     export_parser.add_argument("-o", "--output", type=Path)
+    export_parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="Include real segment or word time ranges in txt/md; refuse untimed text.",
+    )
     export_parser.add_argument(
         "--force", action="store_true", help="Replace an existing export destination."
     )

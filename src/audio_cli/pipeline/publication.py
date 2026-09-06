@@ -17,6 +17,7 @@ from ..media import (
 )
 from ..profiles import Profile
 from .models import LoudnessRun, PipelineError, PreparedRun, StageRun
+from .outcomes import actual_program, source_region_evaluations, unresolved_outcomes
 from .reporting import _resolved_operations_hash, _round_loudness
 
 
@@ -38,7 +39,6 @@ def publish_output(
     program_operation = loudness.program_operation
     analysis = prepared.analysis
     source_stage_report = staged.source_stage_report
-    abstained_source_region_ids = staged.abstained_source_region_ids
     stages = staged.stages
     resolved_adjustments = staged.resolved_adjustments
     stage = "program-loudness"
@@ -92,54 +92,12 @@ def publish_output(
         after_audio, after_sample_rate = decode_audio(encoded_temp)
         after_regional = regional_measurements(after_audio, after_sample_rate, analysis)
         if source_stage_report["status"] == "applied":
-            source_operations = source_stage_report.get("operations", [])
-            assert isinstance(source_operations, list)
-            source_operation_by_region = {
-                str(item["region_id"]): item
-                for item in source_operations
-                if isinstance(item, dict) and "region_id" in item
-            }
-            final_region_evaluations: list[dict[str, object]] = []
-            unbounded_failures: list[str] = []
-            for measured_region in after_regional["machine_regions"]:
-                region_id = str(measured_region["region_id"])
-                difference = float(measured_region["difference_from_speech_db"])
-                if region_id in abstained_source_region_ids:
-                    final_region_evaluations.append(
-                        {
-                            "region_id": region_id,
-                            "difference_from_speech_db": round(difference, 3),
-                            "status": "abstained_overlap",
-                        }
-                    )
-                    continue
-                inside = (
-                    profile.machine_relative_minimum_lu - 0.25
-                    <= difference
-                    <= profile.machine_relative_maximum_lu + 0.25
-                )
-                item = source_operation_by_region.get(region_id, {})
-                resolved_gain = float(item.get("resolved_gain_db", 0.0))
-                bounded = (
-                    abs(resolved_gain - profile.machine_max_boost_db) <= 0.05
-                    or abs(resolved_gain + profile.machine_max_attenuation_db) <= 0.05
-                )
-                status = (
-                    "inside_target"
-                    if inside
-                    else "bounded_outside_target"
-                    if bounded
-                    else "outside_target"
-                )
-                if status == "outside_target":
-                    unbounded_failures.append(region_id)
-                final_region_evaluations.append(
-                    {
-                        "region_id": region_id,
-                        "difference_from_speech_db": round(difference, 3),
-                        "status": status,
-                    }
-                )
+            final_region_evaluations = source_region_evaluations(profile, staged, after_regional)
+            unbounded_failures = [
+                str(item["region_id"])
+                for item in final_region_evaluations
+                if item["status"] == "outside_target"
+            ]
             source_stage_report["final_region_evaluations"] = final_region_evaluations
             if unbounded_failures:
                 raise PipelineError(
@@ -179,9 +137,17 @@ def publish_output(
     report["output"] = durable_info
     report["measurements"]["after"] = {
         "program": _round_loudness(after_program),
+        "program_actual": actual_program(after_program),
         "regional": after_regional,
         "duration_delta_ms": round(duration_delta_ms, 3),
     }
+    report["unresolved"] = unresolved_outcomes(
+        profile,
+        staged,
+        after_program,
+        after_regional,
+        measured_at="encoded_output",
+    )
     report["final_peak_validation"] = {
         "status": "pass",
         "measured_true_peak_dbtp": round(after_program["input_tp"], 3),

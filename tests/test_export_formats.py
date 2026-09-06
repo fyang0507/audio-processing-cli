@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from export_test_support import (
     Cue,
     _payload,
@@ -18,26 +19,29 @@ from export_test_support import (
 )
 
 
-def test_human_and_jsonl_exports_do_not_require_timing(tmp_path: Path) -> None:
+@pytest.mark.parametrize("first_text", ["First.", "First.\nStill first.\n\nFinal line.\n"])
+def test_human_and_jsonl_exports_do_not_require_timing(tmp_path: Path, first_text: str) -> None:
     payload = _payload(
         [
-            {"segment_id": "seg_old", "text": "First."},
+            {"segment_id": "seg_old", "text": first_text},
             {"segment_id": "seg_next", "text": "[Music]"},
         ]
     )
     path = _write(tmp_path / "plain.json", payload)
+    original_bytes = path.read_bytes()
     text = export_documents([path], "txt")
     markdown = export_documents([path], "md")
     jsonl = export_documents([path], "jsonl")
 
-    assert text.content == "First.\n[Music]\n"
-    assert markdown.content == "# Transcript\n\nFirst.\n[Music]\n"
+    assert text.content == first_text + "\n[Music]\n"
+    assert markdown.content == "# Transcript\n\n" + first_text + "\n\n[Music]\n"
     rows = [json.loads(line) for line in jsonl.content.splitlines()]
     assert rows == [
-        {"segment_id": "seg_0", "text": "First."},
+        {"segment_id": "seg_0", "text": first_text},
         {"segment_id": "seg_1", "text": "[Music]"},
     ]
     assert all("provenance" not in row for row in rows)
+    assert path.read_bytes() == original_bytes
 
 
 def test_writer_shapes_are_real_srt_vtt_markdown_text_and_jsonl() -> None:

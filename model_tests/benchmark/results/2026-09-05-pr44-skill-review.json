@@ -1,0 +1,127 @@
+{
+  "date": "2026-09-05",
+  "topic": "PR44 CLI-only skill review follow-up from outside the repository",
+  "runtime_source_commit": "95c47cbfe3d913076c18d9dc0c836f59864f97d7",
+  "runtime_changes_for_this_check": false,
+  "raw_artifacts": "model_tests/benchmark_runs/pr44-review-2026-09-05/fresh-cli-agent",
+  "raw_copy_note": "Copied unchanged from the test directory; recorded absolute paths retain the original execution locations.",
+  "agent": {
+    "id": "01a07474-cde6-7aa3-a1b6-711569ca1837",
+    "fresh_context": true,
+    "guidance": "Copied audio-cli skill and live CLI help/results only"
+  },
+  "working_directory": "/tmp/audio-pr44-review-wWAILm",
+  "resolved_working_directory": "/private/tmp/audio-pr44-review-wWAILm",
+  "audio_executable": "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+  "skill_sha256": {
+    "SKILL.md": "92857d624052217b9e76182818b4a382eefaeb44eff12715316a8e14ef05b67b",
+    "agents/openai.yaml": "b22d8820aaa027bf49da65ca6fa01b549de54c88a193924070d1e2d5616de14b",
+    "references/enhance-audio.md": "601d403c07279bb1f1d9be67e0474b6715a4979433453b1eaf7711b252b469ca",
+    "references/failures.md": "fd713e0bdb7fcc1a6c609ec9e96506a6f40cc7837fd67ca52bd9b0c53c90c1a2",
+    "references/model-packages.md": "632600e507667fbf0eb9f0adc6406e076489e4cf95478f0e5dd4dcf6e3eebe3c",
+    "references/readiness.md": "bf6fc2268c8e8e6d12d2c129e28d4e806c6d24ca3a436a562089199d506a52f4",
+    "references/targeted-fixes.md": "f11d400f4260fc6d82f2adc27a456ef7c89f67fe2030125aabac7ddce482f596",
+    "references/transcribe.md": "a9c65843ea114339a784d6afd9054b2db02d8ff6fdfc450e87955c1417f8a57b"
+  },
+  "commands": [
+    {
+      "evidence": "evidence/04-audio-help.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "--help"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "evidence": "evidence/05-doctor-help.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "doctor",
+        "--help"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "evidence": "evidence/06-export-help.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "export",
+        "--help"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "evidence": "evidence/07-doctor.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "doctor"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0
+    },
+    {
+      "evidence": "evidence/08-export-markdown.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "export",
+        "--input",
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/firered.canonical.json",
+        "--format",
+        "md",
+        "--timestamps",
+        "--output",
+        "/tmp/audio-pr44-review-wWAILm/firered.review.md"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0,
+      "receipt": {
+        "format": "md",
+        "input": "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/firered.canonical.json",
+        "output": "/tmp/audio-pr44-review-wWAILm/firered.review.md",
+        "segments": 62
+      }
+    },
+    {
+      "evidence": "evidence/10-export-text.json",
+      "argv": [
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/.venv/bin/audio",
+        "export",
+        "--input",
+        "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/firered.canonical.json",
+        "--format",
+        "txt",
+        "--timestamps",
+        "--output",
+        "/tmp/audio-pr44-review-wWAILm/firered.review.txt"
+      ],
+      "exit_code": 0,
+      "stderr_bytes": 0,
+      "receipt": {
+        "format": "txt",
+        "input": "/Users/fredy/Documents/fred-projects/audio-processing-cli-e2e-followups/model_tests/benchmark_runs/e2e-agent-retest-2026-09-05-195207/01-multispeaker/firered.canonical.json",
+        "output": "/tmp/audio-pr44-review-wWAILm/firered.review.txt",
+        "segments": 62
+      }
+    }
+  ],
+  "result": "pass",
+  "feedback": {
+    "good": [
+      "Executable selection worked outside the repository.",
+      "Skill and live help were sufficient for timestamped offline exports.",
+      "JSON receipts exposed output paths and segment counts."
+    ],
+    "improve": [
+      "doctor --help does not explain the scope and limits of readiness reporting."
+    ]
+  },
+  "scope_limits": [
+    "Offline export and doctor reporting only; no new transcription or enhancement run.",
+    "No model integrity verification or failure/recovery path was exercised.",
+    "No recognition, timing accuracy, source coverage, or perceptual quality judgment.",
+    "Input preservation relied on read-only export behavior; the tester did not compare before/after input digests."
+  ]
+}

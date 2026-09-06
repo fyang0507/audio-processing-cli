@@ -140,21 +140,21 @@ def _run_packages(args: argparse.Namespace) -> int:
                 "stack_required",
                 "--want needs --stack: capabilities are resolved per stack",
                 exit_code=2,
-                fix="audio packages pull --stack <stack>",
+                fix="use transcribe plan with the original --input, an explicit --stack, and --want; "
+                "then run the plan next command for missing packages",
             )
         if args.want is not None:
-            # Refused rather than ignored. Nothing downstream of here reads `--want`: resolving
-            # capabilities to a package set is the planner's job (#12), and a stack still
-            # provisions every package it can use. Accepting the flag silently would be the real
-            # failure — a caller would believe it had narrowed a 17 GiB download it never touched.
+            # A pull has no input-specific plan. Keep capability selection in transcribe plan
+            # and explicit package selection here instead of broadening the requested download.
             raise ProvisioningError(
                 "want_not_implemented",
-                "capabilities cannot narrow a pull yet: resolving them to packages is the "
-                f"planner's job, so --stack {args.stack} provisions every package it can use",
+                "--want belongs to transcribe plan; packages pull accepts explicit package ids "
+                "or every package available to --stack",
                 exit_code=2,
                 field="--want",
                 provided=args.want,
-                fix=f"audio packages pull --stack {args.stack}",
+                fix="use transcribe plan with the original --input, --stack, and --want; "
+                "then run the plan next command for missing packages",
             )
         selection = select(args.packages, stack=args.stack)
         provisioner = Provisioner()
@@ -190,16 +190,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         try:
             run_range = transcribe_orchestrator.parse_range(args.run_range)
         except ValueError as exc:
-            raise transcribe_refusals.range_invalid(
-                request.input_path,
-                request.stack.id,
-                request.wants,
-                str(args.run_range),
-                str(exc),
-                language=request.language,
-                vad=request.vad,
-                diarizer=request.diarizer,
-            ) from exc
+            raise transcribe_refusals.range_invalid(str(args.run_range), str(exc)) from exc
         transcribe_orchestrator.validate_output_targets(
             request,
             args.output,
@@ -250,6 +241,8 @@ def _run_export(args: argparse.Namespace) -> int:
         InvalidResultError,
         OutputExistsError,
         OutputWriteError,
+        ReadableTimingRequiredError,
+        TimestampsUnsupportedError,
         TimingRequiredError,
         UnsafeOutputError,
         export_documents,
@@ -265,7 +258,14 @@ def _run_export(args: argparse.Namespace) -> int:
             args.format,
             output=args.output,
             force=args.force,
+            timestamps=args.timestamps,
         )
+    except ReadableTimingRequiredError as exc:
+        raise export_refusals.timing_required_for_timestamps(
+            exc.input_path, exc.segment_id
+        ) from exc
+    except TimestampsUnsupportedError as exc:
+        raise export_refusals.timestamps_unsupported_for_format(exc.output_format) from exc
     except TimingRequiredError as exc:
         roles = exc.plan.get("roles", {}) if isinstance(exc.plan, dict) else {}
         asr = roles.get("asr", {}) if isinstance(roles, dict) else {}
@@ -312,6 +312,7 @@ def _run_export(args: argparse.Namespace) -> int:
             args.format,
             exc.output,
             replaceable=exc.replaceable,
+            timestamps=args.timestamps,
         ) from exc
     except UnsafeOutputError as exc:
         raise export_refusals.output_is_canonical_input(exc.output, exc.protected) from exc

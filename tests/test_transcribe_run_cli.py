@@ -64,7 +64,7 @@ def test_run_missing_package_is_bare_exit_three_after_probe_but_before_transport
         ],
         "total_known_download_bytes": 1010773761,
         "unsized_packages": [],
-        "fix": "audio packages pull --stack qwen-0.6b",
+        "fix": "audio packages pull qwen3-asr-0.6b-8bit",
     }
 
 

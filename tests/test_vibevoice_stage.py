@@ -42,6 +42,15 @@ def test_vibevoice_stage_uses_one_seeded_offline_whole_media_call(tmp_path, monk
             "local_files_only": True,
         },
     )
+    assert state["model_load"] == (
+        request["model"],
+        {
+            "dtype": sys.modules["torch"].bfloat16,
+            "attn_implementation": "sdpa",
+            "trust_remote_code": True,
+            "local_files_only": True,
+        },
+    )
     generate = state["generate_kwargs"]
     assert generate["max_new_tokens"] == 16384
     assert generate["do_sample"] is False

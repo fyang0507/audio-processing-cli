@@ -13,7 +13,7 @@ from typing import Any
 from audio_cli.command import (
     Refusal,
     build_refusal,
-    transcribe_plan_command,
+    packages_pull_command,
     transcribe_run_command,
 )
 from audio_cli.command import command_path_argument as command_path_argument
@@ -24,12 +24,17 @@ from audio_cli.command import output_path_invalid as output_path_invalid
 from .. import stacks
 
 
-def stack_required(input_path: str | Path | None, wants: Sequence[str]) -> Refusal:
-    chosen_input = input_path or "meeting.m4a"
+def _repeat_request(correction: str) -> str:
+    # These builders have no original command/output/range context. Correct only the
+    # offending fields instead of inventing a lossy replacement invocation.
+    return f"{correction}; repeat the original command, preserving every other argument"
+
+
+def stack_required() -> Refusal:
     return build_refusal(
         "stack_required",
         2,
-        transcribe_plan_command(chosen_input, "qwen-1.7b", wants),
+        "choose --stack from allowed and repeat the original command with its other arguments",
         field="--stack",
         allowed=list(stacks.stack_ids()),
         stacks={
@@ -39,11 +44,11 @@ def stack_required(input_path: str | Path | None, wants: Sequence[str]) -> Refus
     )
 
 
-def input_required(stack: str, wants: Sequence[str]) -> Refusal:
+def input_required() -> Refusal:
     return build_refusal(
         "input_required",
         2,
-        transcribe_plan_command("meeting.m4a", stack, wants),
+        "provide --input with the original media path and repeat the original command",
         field="--input",
         note=(
             "a stack alone cannot be planned: how the audio is partitioned, how many units "
@@ -55,7 +60,6 @@ def input_required(stack: str, wants: Sequence[str]) -> Refusal:
 
 def capability_unknown(
     stack: stacks.StackDefinition,
-    input_path: str | Path,
     provided: str,
     wants: Sequence[str],
     suggestion: str | None,
@@ -65,26 +69,17 @@ def capability_unknown(
         for item in wants
         if item != provided or suggestion is not None
     ]
-    fields: dict[str, Any] = {
-        "field": "--want",
-        "provided": provided,
-    }
+    fields: dict[str, Any] = {"field": "--want", "provided": provided}
     if suggestion is not None:
         fields["did_you_mean"] = suggestion
     fields["available_on_stack"] = stacks.availability_groups(stack)
-    return build_refusal(
-        "capability_unknown",
-        2,
-        transcribe_plan_command(input_path, stack.id, fixed),
-        **fields,
-    )
+    correction = f"set --want to {','.join(fixed)!r}" if fixed else "remove --want and its value"
+    return build_refusal("capability_unknown", 2, _repeat_request(correction), **fields)
 
 
 def capability_unsatisfiable_on_stack(
     stack: stacks.StackDefinition,
-    input_path: str | Path,
     capability: str,
-    wants: Sequence[str],
 ) -> Refusal:
     allowed = stacks.allowed_stacks(capability)
     if not allowed:
@@ -95,7 +90,7 @@ def capability_unsatisfiable_on_stack(
     return build_refusal(
         "capability_unsatisfiable_on_stack",
         2,
-        transcribe_plan_command(input_path, preferred, wants),
+        _repeat_request(f"use --stack {preferred!r} to request this capability"),
         capability=capability,
         allowed=allowed,
         available_on_stack=stacks.availability_groups(stack),
@@ -113,17 +108,11 @@ def capability_unsupported(capability: str, reason: str, fix: str) -> Refusal:
     )
 
 
-def option_unsupported_on_stack(
-    stack: stacks.StackDefinition,
-    input_path: str | Path,
-    field: str,
-    provided: str,
-    wants: Sequence[str],
-) -> Refusal:
+def option_unsupported_on_stack(field: str, provided: str) -> Refusal:
     return build_refusal(
         "option_unsupported_on_stack",
         2,
-        transcribe_plan_command(input_path, stack.id, wants),
+        _repeat_request(f"remove {field} and its value"),
         field=field,
         provided=provided,
         allowed=[],
@@ -136,49 +125,34 @@ def option_unsupported_on_stack(
 
 
 def option_value_unsupported(
-    stack: stacks.StackDefinition,
-    input_path: str | Path,
     field: str,
     provided: str,
     allowed: Sequence[str],
     wants: Sequence[str],
     suggestion: str | None,
 ) -> Refusal:
-    fixed_value = suggestion or allowed[0]
-    kwargs: dict[str, str | None] = {"language": None, "vad": None, "diarizer": None}
-    if field == "--language":
-        kwargs["language"] = fixed_value
-    elif field == "--vad":
-        kwargs["vad"] = fixed_value
-    elif field == "--diarizer":
-        kwargs["diarizer"] = fixed_value
-    fields: dict[str, Any] = {
-        "field": field,
-        "provided": provided,
-        "allowed": list(allowed),
-    }
+    fields: dict[str, Any] = {"field": field, "provided": provided, "allowed": list(allowed)}
     if suggestion is not None:
         fields["did_you_mean"] = suggestion
-    return build_refusal(
-        "option_value_unsupported",
-        2,
-        transcribe_plan_command(input_path, stack.id, wants, **kwargs),
-        **fields,
+    correction = (
+        f"set {field} to {suggestion!r}"
+        if suggestion is not None
+        else f"choose {field} from allowed"
     )
+    if field in {"--vad", "--diarizer"}:
+        correction += f" and set --want to {','.join(wants)!r}"
+    return build_refusal("option_value_unsupported", 2, _repeat_request(correction), **fields)
 
 
 def pin_conflicts_with_native_capability(
-    stack: stacks.StackDefinition,
-    input_path: str | Path,
     field: str,
     provided: str,
     capability: str,
-    wants: Sequence[str],
 ) -> Refusal:
     return build_refusal(
         "pin_conflicts_with_native_capability",
         2,
-        transcribe_plan_command(input_path, stack.id, wants),
+        _repeat_request(f"remove {field} and its value"),
         field=field,
         provided=provided,
         allowed=[],
@@ -186,27 +160,12 @@ def pin_conflicts_with_native_capability(
     )
 
 
-def range_invalid(
-    input_path: str | Path,
-    stack: str,
-    wants: Sequence[str],
-    provided: str,
-    reason: str,
-    *,
-    language: str | None = None,
-    vad: str | None = None,
-    diarizer: str | None = None,
-) -> Refusal:
+def range_invalid(provided: str, reason: str) -> Refusal:
     return build_refusal(
         "range_invalid",
         2,
-        transcribe_run_command(
-            input_path,
-            stack,
-            wants,
-            language=language,
-            vad=vad,
-            diarizer=diarizer,
+        _repeat_request(
+            "correct --range using the reported reason; keep the intended source interval"
         ),
         field="--range",
         provided=provided,
@@ -246,7 +205,6 @@ def output_exists(
 
 
 def packages_not_provisioned(
-    stack: str,
     missing: Sequence[Mapping[str, Any]],
     total_known_download_bytes: int,
     unsized_packages: Sequence[str],
@@ -254,7 +212,7 @@ def packages_not_provisioned(
     return build_refusal(
         "packages_not_provisioned",
         3,
-        f"audio packages pull --stack {stack}",
+        packages_pull_command([item["package"] for item in missing]),
         missing=list(missing),
         total_known_download_bytes=total_known_download_bytes,
         unsized_packages=list(unsized_packages),
@@ -262,11 +220,15 @@ def packages_not_provisioned(
 
 
 def package_integrity_failed(failed: Sequence[Mapping[str, Any]]) -> Refusal:
-    first = failed[0]["package"] if failed else "<package>"
+    fix = (
+        packages_pull_command([failed[0]["package"]], repair=True)
+        if failed
+        else "inspect audio packages verify and repair the packages it identifies"
+    )
     return build_refusal(
         "package_integrity_failed",
         3,
-        f"audio packages pull --repair {first}",
+        fix,
         failed=[dict(item) for item in failed],
     )
 
@@ -275,7 +237,7 @@ def package_build_unusable(package: str, product: str) -> Refusal:
     return build_refusal(
         "package_build_unusable",
         3,
-        f"audio packages pull --repair {package}",
+        packages_pull_command([package], repair=True),
         package=package,
         product=product,
         built=True,

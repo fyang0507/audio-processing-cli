@@ -9,6 +9,7 @@ from scipy import signal
 
 from ..adjustments import GainAdjustment
 from ..profiles import Profile
+from .denoise.processor import apply_broadband_denoise
 from .regions import (
     SignalAnalysis,
     resolve_speech_treatment_intervals,
@@ -73,25 +74,11 @@ def apply_environment_cleanup(
                 "affected_scope": "speech_regions",
             }
         )
-    broadband: dict[str, object]
-    if analysis.speech_rms_dbfs < -45.0:
-        broadband = {
-            "component": "broadband-denoise",
-            "status": "abstained",
-            "reason": "input_speech_too_quiet_for_reliable_noise_estimate",
-        }
-    elif analysis.noise_floor_dbfs <= analysis.speech_rms_dbfs - 20.0:
-        broadband = {
-            "component": "broadband-denoise",
-            "status": "no_op",
-            "reason": "stationary_noise_below_threshold",
-        }
-    else:
-        broadband = {
-            "component": "broadband-denoise",
-            "status": "abstained",
-            "reason": "conservative_v1_has_no_reliable_stationary_noise_profile",
-        }
+    processed, broadband, broadband_operation = apply_broadband_denoise(
+        np.asarray(processed, dtype=np.float32), sample_rate, profile, analysis, intervals
+    )
+    if broadband_operation is not None:
+        operations.append(broadband_operation)
     output = _blend(audio, np.asarray(processed, dtype=np.float32), mask) if operations else audio
     if operations:
         status, reason = "applied", "eligible_environmental_cleanup_resolved"

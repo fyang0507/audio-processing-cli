@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from .. import paths
 from ..environments import Package, environments
 from . import registry
-from .checkouts import _checkout_integrity_issues
+from .checkouts import _checkout_integrity_issues, install_verified_checkout
 from .integrity import _now, sha256_file
 from .locations import managed_checkout_path, managed_environment_path
 from .products import _environment_built_runtime_runs
@@ -25,6 +23,7 @@ def verify_environments(
     package_catalog: dict[str, Package],
     *,
     repair: bool,
+    environment_names: set[str] | None = None,
 ) -> tuple[dict[str, str], dict[str, bool], set[str], list[dict]]:
     failed: list[dict] = []
     environment_states: dict[str, str] = {}
@@ -38,6 +37,8 @@ def verify_environments(
 
     for name, environment in environments().items():
         if not environment.provisioned:
+            continue
+        if environment_names is not None and name not in environment_names:
             continue
         entry = document["environments"].get(name)
         if entry is None or entry.get("state") != "ready":
@@ -105,7 +106,7 @@ def verify_environments(
         required_checkouts = managed_checkout_requirements(document, name)
         drift = _environment_drift(expected, frozen, required_checkouts)
         if drift and repair:
-            ready_checkouts: list[tuple[Package, Path]] = []
+            ready_checkouts: list[tuple[Package, dict]] = []
             checkouts_are_safe = True
             for identifier, package_entry in sorted(document["packages"].items()):
                 package = package_catalog.get(identifier)
@@ -127,7 +128,7 @@ def verify_environments(
                 if issues or checkout_issue is not None or checkout is None:
                     checkouts_are_safe = False
                     continue
-                ready_checkouts.append((package, checkout))
+                ready_checkouts.append((package, materialized))
             if checkouts_are_safe:
                 lock_digest = sha256_file(environment.lock)
                 document["environments"][name] = {
@@ -139,13 +140,13 @@ def verify_environments(
                 }
                 registry.save_registry(document)
                 toolchain.create_environment(environment, paths.env_dir(name))
-                for _package, checkout in ready_checkouts:
-                    toolchain.install_checkout(paths.env_python(name), checkout)
-                    toolchain.clean_ignored_checkout(checkout)
-                document["environments"][name]["state"] = "ready"
-                registry.save_registry(document)
+                for package, materialized in ready_checkouts:
+                    install_verified_checkout(package, materialized, toolchain)
                 frozen = toolchain.frozen_packages(paths.env_python(name))
                 drift = _environment_drift(expected, frozen, required_checkouts)
+                if not drift:
+                    document["environments"][name]["state"] = "ready"
+                    registry.save_registry(document)
         if drift:
             environment_states[name] = "drifted"
             failed.append(

@@ -38,6 +38,7 @@ from .pcm import (
     clip_canonical_pcm,
     read_canonical_pcm16,
 )
+from .process import run_in_directory
 from .publication import (
     ProtectedOutputError,
     atomic_write_json,
@@ -78,6 +79,7 @@ __all__ = [
     "render_loudness_normalized",
     "require_runtime",
     "resolve_path_identity",
+    "run_in_directory",
     "sha256_regular_file_at",
     "temporary_directory",
     "temporary_output_path",

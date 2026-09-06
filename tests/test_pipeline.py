@@ -20,7 +20,8 @@ class FakeVad:
         return [SpeechRegion(1.5, 3.5, 0.9, 1.0)]
 
 
-def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
+@pytest.mark.parametrize("extension", [".wav", ".m4a"])
+def test_end_to_end_render_reports_every_stage(tmp_path, extension) -> None:
     sample_rate = 48_000
     duration = 4.0
     time = np.arange(round(sample_rate * duration)) / sample_rate
@@ -30,7 +31,7 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     audio[machine] = (0.10 * np.sin(2 * np.pi * 900 * time[machine]))[:, None]
     audio[speech] = (0.006 * np.sin(2 * np.pi * 180 * time[speech]))[:, None]
     source = tmp_path / "source.wav"
-    output = tmp_path / "enhanced.wav"
+    output = tmp_path / f"enhanced{extension}"
     wavfile.write(source, sample_rate, audio)
 
     pipeline = EnhancementPipeline(PROFILES["product-demo"], detector=FakeVad())
@@ -48,6 +49,11 @@ def test_end_to_end_wav_render_reports_every_stage(tmp_path) -> None:
     )
     after_lufs = report["measurements"]["after"]["program"]["input_i"]
     assert abs(after_lufs - PROFILES["product-demo"].target_lufs) <= 0.6
+    actual = report["measurements"]["after"]["program_actual"]
+    assert actual["integrated_loudness_lufs"] == after_lufs
+    assert actual["true_peak_dbtp"] == report["final_peak_validation"]["measured_true_peak_dbtp"]
+    assert report["region_basis"]["regional_measurements"] == "fixed_source_regions"
+    assert "after" not in dry_run_report["measurements"]
     assert report["resolved_operations_sha256"] == dry_run_report["resolved_operations_sha256"]
 
 

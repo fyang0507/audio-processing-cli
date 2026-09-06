@@ -88,9 +88,25 @@ def apply_voice_enhancement(
     )
     output = _blend(audio, compressed, mask)
     measured_after = rms_dbfs(output[speech_mask])
+    unresolved = []
+    if abs(measured_after - profile.voice_target_rms_dbfs) > 0.5:
+        bounded = abs(desired_gain - gain_db) > 0.05
+        unresolved.append(
+            {
+                "component": "speech-leveling",
+                "status": "bounded_outside_target" if bounded else "outside_target",
+                "reason": "voice_correction_bound_reached"
+                if bounded
+                else "compression_changed_speech_level",
+                "measured_rms_dbfs": round(measured_after, 3),
+                "target_rms_dbfs": profile.voice_target_rms_dbfs,
+                "measured_at": "after_voice_enhance",
+            }
+        )
     return output, {
         "status": "applied",
         "reason": "speech_regions_received_bounded_tonal_and_level_correction",
+        "component_evaluations": unresolved,
         "operations": [
             {
                 "type": "speech-presence-eq",

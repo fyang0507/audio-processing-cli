@@ -158,14 +158,7 @@ def _validate_range(
     end = min(run_range.end if run_range.end is not None else duration, duration)
     if run_range.start >= duration or end <= run_range.start:
         raise refusals.range_invalid(
-            request.input_path,
-            request.stack.id,
-            request.wants,
-            run_range.provided,
-            "range does not intersect the source duration",
-            language=request.language,
-            vad=request.vad,
-            diarizer=request.diarizer,
+            run_range.provided, "range does not intersect the source duration"
         )
     return RunRange(run_range.start, end, run_range.provided)
 
@@ -173,6 +166,7 @@ def _validate_range(
 def _core_plan(plan: Plan) -> dict[str, Any]:
     payload = serialize_plan(plan)
     payload.pop("sample_output")
+    payload.pop("next", None)
     return payload
 
 

@@ -41,6 +41,7 @@ class Profile:
     target_lra_lu: float
     target_true_peak_dbtp: float
     codec_true_peak_headroom_db: float
+    broadband_max_reduction_db: float = 6.0
     vad_threshold: float = 0.5
     vad_exit_threshold: float = 0.35
     vad_min_speech_ms: int = 100
@@ -67,7 +68,7 @@ class Profile:
 PROFILES: dict[str, Profile] = {
     "transcription": Profile(
         name="transcription",
-        version="4",
+        version="5",
         channel_balance_enabled=True,
         channel_no_op_db=1.5,
         channel_max_correction_db=6.0,
@@ -97,7 +98,7 @@ PROFILES: dict[str, Profile] = {
     ),
     "product-demo": Profile(
         name="product-demo",
-        version="4",
+        version="5",
         channel_balance_enabled=True,
         channel_no_op_db=1.5,
         channel_max_correction_db=6.0,
