@@ -1,6 +1,7 @@
 """Caller-selected diagnostic storage with real child output and refusal before launch."""
 
 import io
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -105,6 +106,8 @@ def test_stage_storage_failure_does_not_fall_back_or_launch(tmp_path, monkeypatc
         (0, '{"metrics":{},"segments":[]}', False),
         (1, '{"metrics":{},"error":{"message":"actual failure"}}', True),
         (0, '{"metrics":{},"metrics":{}}', True),
+        (0, "not JSON", True),
+        (1, None, True),
     ],
 )
 def test_transport_logs_survive_working_directory_cleanup(
@@ -115,8 +118,8 @@ def test_transport_logs_survive_working_directory_cleanup(
         "import os,pathlib,sys\n"
         "os.write(1,b'loading\\r\\xff')\n"
         "os.write(2,b'warning\\r\\n\\xfe')\n"
-        f"pathlib.Path(sys.argv[-1]).write_text({payload!r})\n"
-        f"raise SystemExit({code})\n"
+        + (f"pathlib.Path(sys.argv[-1]).write_text({payload!r})\n" if payload is not None else "")
+        + f"raise SystemExit({code})\n"
     )
     monkeypatch.setattr(service, "managed_environment_path", lambda _: (tmp_path, None))
     monkeypatch.setattr(service.paths, "env_python", lambda _: Path(sys.executable))
@@ -142,6 +145,16 @@ def test_transport_logs_survive_working_directory_cleanup(
     assert "-aligner-" in directory.name
     assert (directory / "stdout.log").read_bytes() == b"loading\r\xff"
     assert (directory / "stderr.log").read_bytes() == b"warning\r\n\xfe"
+    if payload is None:
+        assert not (directory / "result.json").exists()
+    else:
+        assert (directory / "result.json").read_bytes() == payload.encode()
+        assert (directory / "result.json").stat().st_mode & 0o777 == 0o600
+    assert json.loads((directory / "request.json").read_text()) == {
+        "model": str(tmp_path),
+        "audio": str(tmp_path / "audio"),
+        "segments": [],
+    }
 
 
 def test_decode_uses_selected_root_and_stage_label(tmp_path):

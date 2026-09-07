@@ -139,11 +139,10 @@ def test_cue_wrapping_keeps_boundaries_with_leading_whitespace() -> None:
     assert built.cues == (Cue(100, 800, f"{first}\n{second}"),)
 
 
-def test_cues_drop_collapsed_ms_bounds_and_never_trim_real_overlap() -> None:
+def test_cues_refuse_unrenderable_ms_bounds_and_never_trim_real_overlap() -> None:
     collapsed = _timed_segment("A.", [("A", 0.0001, 0.0004)])
-    built = build_cues([collapsed], duration=1.0)
-    assert built.cues == ()
-    assert [warning["code"] for warning in built.warnings] == ["cue_dropped_after_quantization"]
+    with pytest.raises(CueError, match="cannot form a positive subtitle interval"):
+        build_cues([collapsed], duration=1.0)
 
     overlapping = [
         _timed_segment("First.", [("First", 0.1, 0.6)], segment_id="seg_0"),

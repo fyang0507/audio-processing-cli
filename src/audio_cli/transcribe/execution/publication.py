@@ -164,6 +164,7 @@ def validate_output_targets(
                 language=request.language,
                 vad=request.vad,
                 diarizer=request.diarizer,
+                alignment_max_overrun_ms=request.alignment_max_overrun_ms,
                 run_range=run_range.provided if run_range is not None else None,
                 output_format=output_format,
             )
@@ -215,6 +216,7 @@ def _resume_command(
         language=request.language,
         vad=request.vad,
         diarizer=request.diarizer,
+        alignment_max_overrun_ms=request.alignment_max_overrun_ms,
         run_range=range_value,
         output=rest,
     )
@@ -298,6 +300,7 @@ def _publish_result(
             language=request.language,
             vad=request.vad,
             diarizer=request.diarizer,
+            alignment_max_overrun_ms=request.alignment_max_overrun_ms,
             run_range=run_range.provided if run_range is not None else None,
             output_format=output_format,
         ) from exc

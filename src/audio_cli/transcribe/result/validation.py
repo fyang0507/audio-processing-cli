@@ -11,7 +11,6 @@ from .types import (
     _SEGMENT_CAPABILITIES,
     _SEGMENT_WORD_EDGE_TOLERANCE_SECONDS,
     ABSENT,
-    ABSTENTION_REASONS,
     CAPABILITY_NAMES,
     JsonMapping,
     NormalizedResult,
@@ -199,24 +198,6 @@ def _validate_span_array(
                 raise ResultError(f"{name}.confidence must be between 0 and 1")
 
 
-def _validate_abstentions(
-    values: Sequence[JsonMapping],
-    *,
-    sample: bool,
-    duration: float,
-) -> None:
-    for index, item in enumerate(values):
-        if not isinstance(item, Mapping):
-            raise ResultError(f"abstentions[{index}] must be an object")
-        name = f"abstentions[{index}]"
-        _exact_keys(item, {"abstention_id", "reason", "start", "end"}, name)
-        if not isinstance(item["abstention_id"], str) or not item["abstention_id"]:
-            raise ResultError(f"{name}.abstention_id must be a non-empty string")
-        if item["reason"] not in ABSTENTION_REASONS:
-            raise ResultError(f"{name}.reason must be one of {sorted(ABSTENTION_REASONS)}")
-        _validate_bounds(item, name, sample=sample, duration=duration)
-
-
 def _validate_coverage(coverage: JsonMapping, *, duration: float) -> None:
     _exact_keys(
         coverage,
@@ -315,6 +296,7 @@ def _validate_observed(observed: Mapping[str, Any], result: NormalizedResult) ->
         "overlapped_speech",
         "punctuation_invariant_checked",
         "punctuation_invariant_note",
+        "alignment_corrections",
     }
     extra = set(observed) - allowed
     if extra:

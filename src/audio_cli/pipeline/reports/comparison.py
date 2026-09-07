@@ -12,6 +12,7 @@ from .evidence import evidence_limits
 from .loading import read_report, validate_output, validate_report
 from .matching import match_regions, scoped_regions, speech_reference
 from .metrics import measurement_view, pointed, records, region_view
+from .navigation import comparison_navigation
 from .summary import _decisions
 
 
@@ -47,7 +48,7 @@ def _view(path: Path, report: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def compare_reports(left: Path, right: Path) -> dict[str, Any]:
+def compare_reports(left: Path, right: Path, *, navigation: bool = False) -> dict[str, Any]:
     """Compare recorded metrics and scopes; return JSON data or raise PipelineError.
 
     Only report files are read. Identity links and timeline evidence are recorded
@@ -70,6 +71,8 @@ def compare_reports(left: Path, right: Path) -> dict[str, Any]:
         }
         if "regions" in lview and "regions" in rview:
             result["region_comparison"] = match_regions(lview["regions"], rview["regions"])
+        if navigation:
+            result = comparison_navigation(result, reports, (left, right))
         validate_output(result)
         return result
     except (OSError, UnicodeError, ValueError, RecursionError) as exc:

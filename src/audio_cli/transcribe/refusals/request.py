@@ -184,6 +184,28 @@ def range_invalid(provided: str, reason: str) -> Refusal:
     )
 
 
+def alignment_max_overrun_invalid(provided: str, minimum_ms: float) -> Refusal:
+    return build_refusal(
+        "alignment_max_overrun_invalid",
+        2,
+        _repeat_request(f"set --alignment-max-overrun-ms to a finite number at least {minimum_ms}"),
+        field="--alignment-max-overrun-ms",
+        provided=provided,
+        minimum_ms=minimum_ms,
+    )
+
+
+def alignment_option_not_applicable(provided: str) -> Refusal:
+    return build_refusal(
+        "alignment_option_not_applicable",
+        2,
+        _repeat_request("remove --alignment-max-overrun-ms and its value"),
+        field="--alignment-max-overrun-ms",
+        provided=provided,
+        requires_backend="qwen3-forcedaligner",
+    )
+
+
 def output_exists(
     input_path: str | Path,
     stack: str,
@@ -194,6 +216,7 @@ def output_exists(
     language: str | None = None,
     vad: str | None = None,
     diarizer: str | None = None,
+    alignment_max_overrun_ms: float | None = None,
     run_range: str | None = None,
     output_format: str = "json",
 ) -> Refusal:
@@ -207,6 +230,7 @@ def output_exists(
             language=language,
             vad=vad,
             diarizer=diarizer,
+            alignment_max_overrun_ms=alignment_max_overrun_ms,
             run_range=run_range,
             output_format=output_format,
             output=output,

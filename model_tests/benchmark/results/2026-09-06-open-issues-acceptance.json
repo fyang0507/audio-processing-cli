@@ -1,0 +1,416 @@
+{
+  "date": "2026-09-06",
+  "candidate_commit": "ac0ae03bac8540f9ae7eb4594062107d6e57393e",
+  "base_main_commit": "cf34122",
+  "final_gate": "FAIL",
+  "final_gate_reason": "Required Qwen D2 word timing abstained. Dependent native timed Markdown/SRT/VTT were not attempted. Qwen human judgment remains blocked. Demo fresh-region target misses remain FAIL, separate from passing delivery/navigation and reused exact-render judgment.",
+  "raw_artifact_root": "tests/artifacts/acceptance/2026-09-06-open-issues",
+  "report": "docs/model-tests/2026-09-06-open-issues-acceptance.md",
+  "executable": {"path": "/Users/fredy/Documents/fred-projects/audio-processing-cli/.venv/bin/audio", "bytes": 354, "sha256": "01b06888a862471830facffee58d591d157d7a69b9db6fb8b05bf3de5e36a357"},
+  "editable_binding": {
+    "module": "/Users/fredy/Documents/fred-projects/audio-processing-cli/src/audio_cli/__init__.py",
+    "version": "0.1.0",
+    "direct_url": "{\"url\":\"file:///Users/fredy/Documents/fred-projects/audio-processing-cli\",\"dir_info\":{\"editable\":true}}"
+  },
+  "candidate_clean_at_freeze_and_final_product_audit": true,
+  "candidate_source_and_skill_frozen_during_operators": true,
+  "scope_manifest": {"path": "manifest.json", "bytes": 11274, "sha256": "7bb99ee9fd09c79f064af9474a690197e6cb1d38727f581912a4ab7517fbc8ec"},
+  "skill_snapshot": [
+    {"path": "skill-snapshot/audio-cli/SKILL.md", "sha256": "9b2a6c9f43d913dfeaf0ae40d13dbf5068bad5f49fd4afec5ce40487db10b2c3"},
+    {"path": "skill-snapshot/audio-cli/agents/openai.yaml", "sha256": "b22d8820aaa027bf49da65ca6fa01b549de54c88a193924070d1e2d5616de14b"},
+    {"path": "skill-snapshot/audio-cli/references/enhance-audio.md", "sha256": "1bbfcb11e9b3369fa253c98d97bf22b2e13ef3cd24a1fa7e6536d9aeb17ff91d"},
+    {"path": "skill-snapshot/audio-cli/references/failures.md", "sha256": "fbe037ffe94c0846c373eacaa2ef4fb33fc6c82aefd7aba79b29d0e6424f1c91"},
+    {"path": "skill-snapshot/audio-cli/references/model-packages.md", "sha256": "1f5d7288ec502daa10c6d89199dc0cdc6ca7d6f8de548b5a9c16df141ed8f4f6"},
+    {"path": "skill-snapshot/audio-cli/references/readiness.md", "sha256": "c800df5e889f8a9e11af0011ec365adca4d090de42fd81c3ef83c7a985460e6f"},
+    {"path": "skill-snapshot/audio-cli/references/targeted-fixes.md", "sha256": "ea45e1db4c5784bd7be8de9989056c20e005538d21cb8a61528c486c5cf9e79c"},
+    {"path": "skill-snapshot/audio-cli/references/transcribe.md", "sha256": "1da2f1d3d67c7b5508277b04b7f7d7c051b9320686ecdb7a97cf3ec53adc5243"}
+  ],
+  "fixtures": [
+    {
+      "name": "autio-test-sample.m4a",
+      "bytes": 849029,
+      "sha256_before": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "sha256_after": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834"
+    },
+    {
+      "name": "demo-video-audio-to-improve.mp4",
+      "bytes": 91066646,
+      "sha256_before": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "sha256_after": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003"
+    },
+    {
+      "name": "test-sample-multispeaker.m4a",
+      "bytes": 2331384,
+      "sha256_before": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+      "sha256_after": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c"
+    }
+  ],
+  "issue_verdicts": {
+    "50_receipt_outcomes": "PASS",
+    "52_operator_guidance": "PASS",
+    "53_compact_report_navigation": "PASS",
+    "51_diagnostics_and_export_remedy": "PASS",
+    "51_complete_word_timing": "FAIL"
+  },
+  "stacked_prs": [
+    {"number": 54, "issue": 50, "base": "main"},
+    {"number": 55, "issue": 52, "base": "codex/issue-50-receipt-outcomes"},
+    {"number": 56, "issue": 51, "base": "codex/issue-52-diarization-guidance", "scope": "diagnosis_and_remediation_only; timing remains open"},
+    {"number": 57, "issue": 53, "base": "codex/issue-51-alignment"}
+  ],
+  "implementation": {
+    "full_suite": {"passed": 1537, "skipped": 17, "seconds": 76.95},
+    "skipped_scope": "Opt-in real RNNoise checks; all 17 subsequently executed with AUDIO_TEST_RNNOISE=1",
+    "rnnoise_live": {"passed": 17, "seconds": 1.85},
+    "distinct_tests_exercised": 1554,
+    "pre_commit": "PASS",
+    "adversarial_review": "PASS_AFTER_FINDINGS_RESOLVED",
+    "logs": ["implementation-checks.json", "harness/pytest.log", "harness/rnnoise-live.log", "harness/pre-commit.log"]
+  },
+  "protocol": {
+    "verdict": "PASS",
+    "fresh_external_operators": 6,
+    "cli_invocations": 93,
+    "exit_counts": {"0": 91, "2_expected_refusals": 2},
+    "heavy_operations": 15,
+    "all_heavy_operations_locked": true,
+    "heavy_execution_overlaps": 0,
+    "operators": [
+      {
+        "case": "a-firered",
+        "thread_id": "01a0785d-3bc5-79f2-8bb5-f3f7012fe0e2",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/a-firered",
+        "start": "2026-09-06T20:16:11.178806+00:00",
+        "end": "2026-09-06T20:29:27.622037+00:00",
+        "cli_count": 13
+      },
+      {
+        "case": "a-vibevoice",
+        "thread_id": "01a0785d-3bbd-7053-841b-05a07bb88ef5",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/a-vibevoice",
+        "start": "2026-09-06T20:16:11.166751+00:00",
+        "end": "2026-09-06T20:30:06.331974+00:00",
+        "cli_count": 15
+      },
+      {
+        "case": "b-demo",
+        "thread_id": "01a0785d-3bf9-7640-99a7-b634d994e153",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/b-demo",
+        "start": "2026-09-06T20:16:11.222331+00:00",
+        "end": "2026-09-06T20:34:41.775251+00:00",
+        "cli_count": 17
+      },
+      {
+        "case": "c-mixed",
+        "thread_id": "01a0785d-3c04-7f63-ac36-3abdc959adfd",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/c-mixed",
+        "start": "2026-09-06T20:16:11.224319+00:00",
+        "end": "2026-09-06T20:32:09.143751+00:00",
+        "cli_count": 27
+      },
+      {
+        "case": "d-qwen",
+        "thread_id": "01a0785d-3be7-7361-ba64-ff6db49d2a5f",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/d-qwen",
+        "start": "2026-09-06T20:16:11.210757+00:00",
+        "end": "2026-09-06T20:32:14.147223+00:00",
+        "cli_count": 16
+      },
+      {
+        "case": "g-export-negative",
+        "thread_id": "01a07864-fd57-7ac1-b4db-81e77d409a44",
+        "cwd": "/tmp/audio-cli-acceptance-2026-09-06-bundled/g-export-negative",
+        "start": "2026-09-06T20:24:39.226622+00:00",
+        "end": "2026-09-06T20:31:04.412551+00:00",
+        "cli_count": 5
+      }
+    ],
+    "stop_rule": "D2 made no CLI call after timing abstention; B made no CLI call after fresh-target misses were identified; G refusals independently predeclared.",
+    "record_layout": "<case>/commands/<label>/{command.json,stdout.txt,stderr.txt}; <case>/operator-{events.jsonl,stderr.txt,process.json,final.md}",
+    "bootstrap": "Five old-launcher model-selection failures before any operator action; preserved in bootstrap-failures. Existing bundled launcher used for six new fresh contexts."
+  },
+  "transcription": [
+    {
+      "case": "a-firered",
+      "fixture": "test-sample-multispeaker.m4a",
+      "scope": "full_original",
+      "stack": "firered",
+      "requested_capabilities": ["word_timestamps", "segment_timestamps"],
+      "language_or_speaker_hint": "none",
+      "complete": true,
+      "outcomes": {"segment_timestamps": "produced", "word_timestamps": "produced"},
+      "counts": {"segments": 62, "abstentions": 0, "words": 246},
+      "receipt_outcomes_exact": true,
+      "delivery": "PASS",
+      "human_judgment": "REUSED_EXACT_ACCEPTED_CANONICAL_SCOPE",
+      "canonical": {"path": "a-firered/canonical.json", "bytes": 44289, "sha256": "847714a089ba39e0cad70f733dc211335570953d24fad9f42b19acc24a7dc67e"},
+      "native_exports": [
+        {"path": "a-firered/transcript.txt", "bytes": 1154, "sha256": "5594a4e65fe3e77daa6fcd4809d6bff6c0abb789064cefea53882a10b32503b7"},
+        {"path": "a-firered/transcript.timed.md", "bytes": 3663, "sha256": "eeb86adb9ab9221694edf50bcd6eff0ed7babfafc827931310ee0ec476322b9e"}
+      ],
+      "operator_report": "a-firered/report.md"
+    },
+    {
+      "case": "a-vibevoice",
+      "fixture": "test-sample-multispeaker.m4a",
+      "scope": "full_original",
+      "stack": "vibevoice",
+      "requested_capabilities": ["diarization", "segment_timestamps"],
+      "language_or_speaker_hint": "none",
+      "complete": true,
+      "outcomes": {"diarization": "produced", "segment_timestamps": "produced"},
+      "counts": {"segments": 20, "abstentions": 0, "turns": 17},
+      "receipt_outcomes_exact": true,
+      "delivery": "PASS",
+      "human_judgment": "REUSED_EXACT_ACCEPTED_CANONICAL_SCOPE",
+      "canonical": {"path": "a-vibevoice/canonical.json", "bytes": 9095, "sha256": "d668152922b82a0b48c2700acfa786cc472d8acf6db8cd25bb04992f868bd99b"},
+      "native_exports": [
+        {"path": "a-vibevoice/transcript.txt", "bytes": 1260, "sha256": "4a5ed64d7b61a187020ca230a7fccb20ef508282236dc212b2ec7f9077dbb00f"},
+        {"path": "a-vibevoice/transcript-timed.md", "bytes": 2387, "sha256": "a185d5dd10ee2d7afb58fe2f4740d69ef370bad21892515b3f26b43d3a033814"}
+      ],
+      "operator_report": "a-vibevoice/report.md"
+    },
+    {
+      "case": "c-mixed",
+      "fixture": "autio-test-sample.m4a",
+      "scope": "full_original",
+      "stack": "firered",
+      "requested_capabilities": ["word_timestamps", "segment_timestamps"],
+      "language_or_speaker_hint": "none",
+      "complete": true,
+      "outcomes": {"segment_timestamps": "produced", "word_timestamps": "produced"},
+      "counts": {"segments": 8, "abstentions": 0, "words": 60},
+      "receipt_outcomes_exact": true,
+      "delivery": "PASS",
+      "human_judgment": "REUSED_EXACT_ACCEPTED_CANONICAL_SCOPE",
+      "canonical": {"path": "c-mixed/canonical.json", "bytes": 13035, "sha256": "4745c9b1b6f12f4bf7d251a4c4e921212f931ad9707896884874031c53159d3f"},
+      "native_exports": [
+        {"path": "c-mixed/transcript.txt", "bytes": 227, "sha256": "b28ddbff1711293a9201b5c584a96e2b3cd0c2d37d6f65aa7f2ed12fb9c8f6c5"},
+        {"path": "c-mixed/transcript.timed.md", "bytes": 947, "sha256": "83a197a7ee4d72252c1c444f5f0ab6c4de283740f48415f8255d5b0833c554e1"}
+      ],
+      "operator_report": "c-mixed/report.md"
+    },
+    {
+      "case": "d1-qwen",
+      "fixture": "test-sample-multispeaker.m4a",
+      "scope": "full_original",
+      "stack": "qwen-1.7b",
+      "requested_capabilities": [],
+      "language_or_speaker_hint": "none",
+      "complete": true,
+      "outcomes": {},
+      "counts": {"segments": 15, "abstentions": 0},
+      "receipt_outcomes_exact": true,
+      "delivery": "PASS",
+      "human_judgment": "BLOCKED_NO_ACCEPTED_QWEN_BASELINE",
+      "canonical": {"path": "d-qwen/d1.canonical.json", "bytes": 4558, "sha256": "7ee02cb0b69a1209821c90620df078e28078e23af5050fc466fe8ec900cc6718"},
+      "native_exports": [
+        {"path": "d-qwen/d1.txt", "bytes": 1092, "sha256": "0968c31a35c14f2728f98840c2a0d2f0fb3a0251c6f41660b5ee38bcbbc17d0d"},
+        {"path": "d-qwen/d1.md", "bytes": 1120, "sha256": "f0198b4d134c24ae2c63b77b95fee4d376d75a50b1cee1c31e710b477b52428c"}
+      ],
+      "operator_report": "d-qwen/report.md"
+    },
+    {
+      "case": "d2-qwen",
+      "fixture": "test-sample-multispeaker.m4a",
+      "scope": "full_original",
+      "stack": "qwen-1.7b",
+      "requested_capabilities": ["diarization", "overlapped_speech", "word_timestamps"],
+      "language_or_speaker_hint": "none",
+      "complete": true,
+      "outcomes": {"diarization": "produced", "overlapped_speech": "produced", "word_timestamps": "abstained"},
+      "counts": {"segments": 33, "abstentions": 6, "words": 237, "turns": 31, "overlapped_speech": 1},
+      "receipt_outcomes_exact": true,
+      "delivery": "FAIL",
+      "human_judgment": "BLOCKED_NO_ACCEPTED_QWEN_BASELINE",
+      "canonical": {"path": "d-qwen/d2.canonical.json", "bytes": 45068, "sha256": "08dbc347308caf6a5490c65f89bdb260ed4c704c5f47795ada2f0e43bffa60b6"},
+      "native_exports": [],
+      "operator_report": "d-qwen/report.md"
+    }
+  ],
+  "enhancement": [
+    {
+      "case": "b-demo",
+      "fixture": "demo-video-audio-to-improve.mp4",
+      "scope": "full_original",
+      "profile": {"name": "product-demo", "version": "5"},
+      "engine": {
+        "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+        "name": "audio-processing-cli",
+        "vad": {
+          "model": "silero-vad-6.2.1",
+          "model_sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+          "source": "https://raw.githubusercontent.com/snakers4/silero-vad/v6.2.1/src/silero_vad/data/silero_vad.onnx"
+        },
+        "version": "0.1.0"
+      },
+      "workflow_delivery": "PASS",
+      "navigation": "PASS",
+      "operator_overall": "FAIL",
+      "render": {"path": "b-demo/enhanced.mp4", "bytes": 91073983, "sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3"},
+      "report": {"path": "b-demo/enhanced.report.json", "bytes": 56351, "sha256": "c3cf87338dffd6fbb1122e1fa69ac26d6d5487cdc264a20cd000ea87611a53f4"},
+      "program_metrics": {
+        "after": {"integrated_loudness_lufs": -16.02, "loudness_range_lu": 16.9, "true_peak_dbtp": -2.48},
+        "before": {"integrated_loudness_lufs": -37.22, "loudness_range_lu": 28.2, "true_peak_dbtp": -19.02},
+        "predicted": {"integrated_loudness_lufs": -16.02, "loudness_range_lu": 16.9, "true_peak_dbtp": -2.5}
+      },
+      "duration_delta_ms": 0.0,
+      "peak_validation": "PASS",
+      "duration_validation": "PASS",
+      "unresolved": [
+        {
+          "component": "speech-leveling",
+          "measured_at": "after_voice_enhance",
+          "measured_rms_dbfs": -37.382,
+          "reason": "voice_correction_bound_reached",
+          "stage": "voice-enhance",
+          "status": "bounded_outside_target",
+          "target_rms_dbfs": -30.0
+        },
+        {
+          "component": "loudness-range",
+          "measured_at": "encoded_output",
+          "measured_lra_lu": 16.9,
+          "reason": "dynamic_lra_control_would_change_relative_region_balance",
+          "stage": "program-loudness",
+          "status": "abstained",
+          "target_maximum_lra_lu": 11.0
+        }
+      ],
+      "human_judgment": "REUSED_EXACT_ACCEPTED_RENDER",
+      "native_navigation": ["native-summary.navigation.json", "native-comparison.navigation.json"],
+      "unmeasured": ["noise_reduction_effectiveness", "speech_preservation", "content_alignment", "av_sync"]
+    },
+    {
+      "case": "c-mixed",
+      "fixture": "autio-test-sample.m4a",
+      "scope": "full_original",
+      "profile": {"name": "product-demo", "version": "5"},
+      "engine": {
+        "ffmpeg": "ffmpeg version 8.1 Copyright (c) 2000-2026 the FFmpeg developers",
+        "name": "audio-processing-cli",
+        "vad": {
+          "model": "silero-vad-6.2.1",
+          "model_sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+          "source": "https://raw.githubusercontent.com/snakers4/silero-vad/v6.2.1/src/silero_vad/data/silero_vad.onnx"
+        },
+        "version": "0.1.0"
+      },
+      "workflow_delivery": "PASS",
+      "navigation": "PASS",
+      "operator_overall": "PASS",
+      "render": {"path": "c-mixed/enhanced.m4a", "bytes": 651043, "sha256": "5d1af49f5127457d05a1e6611fec31a36c59e58b45869daa182a8b51ab1e0185"},
+      "report": {"path": "c-mixed/enhanced.report.json", "bytes": 31443, "sha256": "be2f83775c74dd66b4634d2e37814abb9cbcec948d03e396727ef1a7bd7f4f0a"},
+      "program_metrics": {
+        "after": {"integrated_loudness_lufs": -16.28, "loudness_range_lu": 4.0, "true_peak_dbtp": -2.41},
+        "before": {"integrated_loudness_lufs": -37.32, "loudness_range_lu": 4.0, "true_peak_dbtp": -17.7},
+        "predicted": {"integrated_loudness_lufs": -16.26, "loudness_range_lu": 4.0, "true_peak_dbtp": -2.5}
+      },
+      "duration_delta_ms": 1.333,
+      "peak_validation": "PASS",
+      "duration_validation": "PASS",
+      "unresolved": [],
+      "human_judgment": "REUSED_EXACT_ACCEPTED_RENDER",
+      "native_navigation": ["summary.navigation.json", "comparison.navigation.json"],
+      "unmeasured": ["noise_reduction_effectiveness", "speech_preservation", "content_alignment", "av_sync"]
+    }
+  ],
+  "demo_scope": {
+    "technical_delivery_and_navigation": "PASS",
+    "raw_operator_overall": "FAIL",
+    "fresh_region_target_verdict": "FAIL",
+    "fresh_non_speech_regions_outside_target": 5,
+    "fresh_non_speech_regions_total": 5,
+    "fixed_original_final_regions_inside_target": 9,
+    "fixed_original_final_regions_total": 9,
+    "stage_local_inside_target_regions": 1,
+    "limit_occurrences": 22,
+    "distinct_limit_values": 17,
+    "comparison_counts": {"overlap_pairs": 16, "ambiguous_pairs": 6, "left_unmatched": 7, "right_unmatched": 2},
+    "scope_note": "Brief required target reporting and technical delivery, not attaining all fresh detected targets. Numeric misses and raw FAIL remain unchanged; no retrospective waiver. Unknown phases remain unknown and speech references remain independent."
+  },
+  "qwen_timing_blocker": {
+    "status": "FAIL",
+    "abstention": {
+      "abstention_id": "ab_4",
+      "alignment": {"code": "out_of_unit_bounds", "segment_ids": ["seg_27"], "unit_id": "turn_25", "word_index": 0},
+      "end": 97.996625,
+      "reason": "alignment_unavailable",
+      "start": 96.570437
+    },
+    "request": {
+      "path": "d-qwen/diagnostics/d2/audio-transcribe-36n2g9da/004-aligner-n6h7a0wp/request.json",
+      "bytes": 4155,
+      "sha256": "eabd8ee6b580a333b234b56574e3722e8f9c694b4271e3d8eb97d0e7b3bf5af0"
+    },
+    "response": {
+      "path": "d-qwen/diagnostics/d2/audio-transcribe-36n2g9da/004-aligner-n6h7a0wp/result.json",
+      "bytes": 13650,
+      "sha256": "238adfdd2137f8ac6edef8167cfec5e13c4f7372fa52d56cd094a441c251d0c1"
+    },
+    "request_interval_seconds": [96.570437, 97.996625],
+    "returned_word_bounds_seconds": [96.57, 98.01],
+    "start_overrun_ms": 0.437,
+    "end_overrun_ms": 13.375,
+    "serialization_allowance_ms": 0.501,
+    "required_timed_md_srt_vtt": "BLOCKED_UNATTEMPTED_AFTER_CANONICAL_ABSTENTION",
+    "other_withheld_scopes": {"overlap": 1, "short_turn": 2, "raw_fragment": 2},
+    "full_source_text_attribution": "NOT_ESTABLISHED; operator records FAIL for exhaustive delivery",
+    "zero_duration_word_records": 16,
+    "recognition_fields_equal_pr49": true,
+    "alignment_request_response_units_equal_diagnostic_reproduction": true,
+    "acoustic_boundary_accuracy": "UNASSESSED",
+    "timing_policy": "Strict containment retained. No endpoint clamp, tolerance increase, alternate model or reduced request."
+  },
+  "independent_negative_export": {
+    "status": "PASS",
+    "requirements_passed": 15,
+    "operator_report": "g-export-negative/report.md",
+    "cases": [
+      {
+        "variant": "d1",
+        "exit_code": 2,
+        "error": "timing_required_for_timestamps",
+        "segment_id": "seg_0",
+        "fix": "remove --timestamps to preserve untimed text, or transcribe the original source with segment_timestamps on a native stack or word_timestamps",
+        "output_published": false,
+        "canonical_unchanged": true,
+        "raw_stderr": "g-export-negative/commands/d1-native-md-timestamps/stderr.txt"
+      },
+      {
+        "variant": "d2",
+        "exit_code": 2,
+        "error": "timing_required_for_timestamps",
+        "segment_id": "seg_27",
+        "fix": "remove --timestamps to preserve untimed text; word_timestamps was already requested but abstained. Inspect this segment's alignment_unavailable entry and retained structured stage diagnostics; rerunning the same request is not an established timing repair",
+        "output_published": false,
+        "canonical_unchanged": true,
+        "raw_stderr": "g-export-negative/commands/d2-native-md-timestamps/stderr.txt"
+      }
+    ]
+  },
+  "human_judgment": {
+    "decisions": ["https://github.com/fyang0507/audio-processing-cli/issues/40", "https://github.com/fyang0507/audio-processing-cli/issues/41"],
+    "reused_scopes": "Three exact canonical segment/word/turn scopes and two byte-identical encoded renders, with matching original identities.",
+    "qwen": "BLOCKED: no accepted Qwen baseline identified; equality to PR49 creates no ground truth.",
+    "limits": "No new listening, accuracy score, boundary annotation, denoising-effectiveness measurement or A/V synchronization judgment."
+  },
+  "independent_audits": [
+    {"path": "product-evidence-audit.json", "bytes": 8648, "sha256": "d4b124586d7aaec95240b5d660426506ee9027745371eb45670dd53d699432e4"},
+    {"path": "evidence-audit.json", "bytes": 19700, "sha256": "6ca3cfd0ef022a159daa68baecbd8ffb8a93d6d8ec7a1fc1dbf624a6e7a88b5f"},
+    {"path": "alignment-evidence-audit.json", "bytes": 8920, "sha256": "120194220ef6d3aff95744cc2a846d8aed40e2c703417992adc9f735e2a456df"},
+    {"path": "protocol-audit.json", "bytes": 48575, "sha256": "45d409638db2704edca2ea84da8a66068f228dfa889d7bebb9c9f915fcfca48c"}
+  ],
+  "harness_limitations": [
+    "Initial developer setup timings incomplete on disk.",
+    "Operator non-audio command order/text/output/exit retained but not every exact start/end or separate raw stream; some journal entries grouped or reconstructed.",
+    "Three premature non-audio log reads exited 1 while waiting for CLI launch; no audio failure, retry or fallback.",
+    "Supplemental RNNoise test exact start/end timestamps not retained.",
+    "Mixed canonical first independent digest was taken after exports; current canonical fields independently match the accepted original."
+  ],
+  "unresolved_goals": [
+    "Complete Qwen D2 word timing and dependent timed exports (#51).",
+    "Qwen recognition, attribution and acoustic-boundary human/reference judgment.",
+    "Demo five fresh-region numeric target misses, intermediate voice bound and encoded LRA limit remain explicitly recorded; current feature does not change enhancement policy."
+  ]
+}

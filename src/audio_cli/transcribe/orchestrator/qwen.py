@@ -12,7 +12,7 @@ from audio_cli.media import canonical_pcm_duration, capture_file_identity, tempo
 from audio_cli.packages import load_registry
 from audio_cli.vad import VadError
 
-from ..adapters.aligner import normalize_aligned_words
+from ..adapters.aligner import normalize_alignment
 from ..adapters.qwen import normalize_qwen_segments, sentence_segments
 from ..catalog import InputMetadata, result_source
 from ..execution.materialization import _materialized_path
@@ -44,6 +44,7 @@ from ..result.serialization import serialize_result
 from ..result.types import ABSENT, NormalizedResult, ResultError
 from ..transport.service import StageTransport
 from ..transport.types import StageFailure, StageOutcome
+from .alignment import CorrectionLedger
 from .common import _run_diarizer
 
 
@@ -189,6 +190,8 @@ def _run_qwen(
                 ]
 
             aligned: dict[str, list[dict[str, Any]]] = {}
+            alignment_rejections: dict[str, dict[str, Any]] = {}
+            alignment_corrections: dict[str, list[dict[str, Any]]] = {}
             if "aligner" in plan.roles and completed:
                 active_role, active_backend = "aligner", "qwen3-forcedaligner"
                 entries = preflight(plan, document)
@@ -201,7 +204,13 @@ def _run_qwen(
                 outcomes.append(align)
                 if align.returncode != 0:
                     raise ValueError(f"aligner stage returned unsupported exit {align.returncode}")
-                aligned = normalize_aligned_words(align.payload, completed)
+                alignment = normalize_alignment(
+                    align.payload,
+                    completed,
+                    max_overrun_ms=plan.roles["aligner"]["config"]["max_overrun_ms"],
+                )
+                aligned, alignment_rejections = alignment.words, alignment.rejections
+                alignment_corrections = alignment.corrections
         except refusals.Refusal:
             raise
         except StageFailure as exc:
@@ -226,7 +235,11 @@ def _run_qwen(
             ) from exc
 
         completed_ids = {item["unit_id"] for item in completed}
-        sentences = sentence_segments(completed, aligned if "aligner" in plan.roles else None)
+        sentences = sentence_segments(
+            completed,
+            aligned if "aligner" in plan.roles else None,
+            rejections=alignment_rejections,
+        )
         alignment_abstentions: list[dict[str, Any]] = []
         if "aligner" in plan.roles:
             for unit in completed:
@@ -241,10 +254,22 @@ def _run_qwen(
                             "reason": "alignment_unavailable",
                             "start": float(unit["start"]),
                             "end": float(unit["end"]),
+                            "alignment": {
+                                "unit_id": unit["unit_id"],
+                                "segment_ids": [
+                                    f"seg_{index}"
+                                    for index, item in enumerate(sentences)
+                                    if item["unit_id"] == unit["unit_id"]
+                                    and _has_lexical_text(str(item["text"]))
+                                    and "words" not in item
+                                ],
+                                **alignment_rejections[unit["unit_id"]],
+                            },
                         }
                     )
 
         segments = []
+        corrections = CorrectionLedger(alignment_corrections)
         word_index = 0
         for index, item in enumerate(sentences):
             segment = {"segment_id": f"seg_{index}", "text": item["text"]}
@@ -256,6 +281,7 @@ def _run_qwen(
                     words.append({"word_id": f"w_{word_index}", **word})
                     word_index += 1
                 segment["words"] = words
+                corrections.add_words(item["unit_id"], segment["segment_id"], words)
             segments.append(segment)
 
         incomplete = bool(unfinished)
@@ -349,7 +375,7 @@ def _run_qwen(
                     request.wants,
                     segments=segments,
                 ),
-                "observed": {},
+                "observed": corrections.observed(),
                 "plan": executed_plan,
             },
             requested_capabilities=frozenset(request.wants),

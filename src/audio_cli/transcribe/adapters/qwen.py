@@ -78,6 +78,8 @@ def _plain(text: str) -> str:
 def sentence_segments(
     completed: Sequence[Mapping[str, Any]],
     aligned: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    *,
+    rejections: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Turn processing-unit text into the sentence artifacts required by the floor.
 
@@ -120,6 +122,8 @@ def sentence_segments(
             if identifier in aligned and word_cursor != len(words):
                 raise ValueError(f"aligned words remain after sentence split for {identifier!r}")
         except ValueError:
+            if rejections is not None:
+                rejections[identifier] = {"code": "sentence_reconciliation"}
             unit_segments = []
             for text in sentences:
                 segment = {"unit_id": identifier, "text": text}

@@ -6,6 +6,8 @@ Run `audio transcribe stacks` from any directory, without an input or installed 
 
 ## Follow a run and retain its diagnostics
 
+Finished transcription model stages also retain structured responses and JSON requests when used; [alignment diagnostics](alignment-diagnostics.md) explains how a saved `alignment_unavailable` entry joins the affected segment to its raw unit response. Raw streams and structured responses are separate evidence.
+
 `audio transcribe run` prints host stage start/finish notices on stderr and a child elapsed-time notice every ten seconds while a child remains running. Elapsed time is liveness information; it is neither a percentage nor a prediction of remaining time. A child exit notice reports the process exit code, while the host still validates its result protocol before reporting stage completion. An exit-zero child with malformed result JSON therefore remains a failure.
 
 Before each decode or model child launches, the host announces absolute paths to `stdout.log` and `stderr.log`. The default is a fresh private `audio-transcribe-*` temporary directory, retained until operating-system or user cleanup. The child writes its original bytes directly to those files, including carriage returns, escape sequences, and non-UTF-8 bytes. Logs are available during execution and retained after success, failure, or handled interruption. The transport also accepts a caller-selected log root for durable storage, with a unique run directory and separate numbered stage directories; see [the integration API](cli-progress-logging.md). An invalid or unwritable requested root fails before child execution, with no temporary fallback. There is no automatic retention policy or transcript-schema change for log locations.

@@ -209,6 +209,7 @@ def _run_transcribe(args: argparse.Namespace) -> int:
         language=getattr(args, "language", None),
         vad=getattr(args, "vad", None),
         diarizer=getattr(args, "diarizer", None),
+        alignment_max_overrun_ms=getattr(args, "alignment_max_overrun_ms", None),
     )
     if command == "run":
         try:
@@ -304,7 +305,10 @@ def _run_export(args: argparse.Namespace) -> int:
         raise export_refusals.provenance_unsupported_for_format(exc.output_format) from exc
     except ReadableTimingRequiredError as exc:
         raise export_refusals.timing_required_for_timestamps(
-            exc.input_path, exc.segment_id
+            exc.input_path,
+            exc.segment_id,
+            word_timing_outcome=exc.word_timing_outcome,
+            alignment_rejections=exc.alignment_rejections,
         ) from exc
     except TimestampsUnsupportedError as exc:
         raise export_refusals.timestamps_unsupported_for_format(exc.output_format) from exc
@@ -313,6 +317,11 @@ def _run_export(args: argparse.Namespace) -> int:
         asr = roles.get("asr", {}) if isinstance(roles, dict) else {}
         config = asr.get("config", {}) if isinstance(asr, dict) else {}
         language = config.get("language") if isinstance(config, dict) else None
+        aligner = roles.get("aligner", {}) if isinstance(roles, dict) else {}
+        aligner_config = aligner.get("config", {}) if isinstance(aligner, dict) else {}
+        max_overrun = (
+            aligner_config.get("max_overrun_ms") if isinstance(aligner_config, dict) else None
+        )
         vad_role = roles.get("vad", {}) if isinstance(roles, dict) else {}
         vad = None
         if (
@@ -347,6 +356,12 @@ def _run_export(args: argparse.Namespace) -> int:
             vad=vad,
             run_range=run_range,
             word_timing_outcome=exc.word_timing_outcome,
+            alignment_rejections=exc.alignment_rejections,
+            alignment_max_overrun_ms=(
+                max_overrun
+                if isinstance(max_overrun, (int, float)) and not isinstance(max_overrun, bool)
+                else None
+            ),
         ) from exc
     except OutputExistsError as exc:
         raise export_refusals.output_exists(
@@ -385,13 +400,14 @@ def main(argv: list[str] | None = None) -> int:
             return _run_enhance(args)
         if args.command == "report":
             if args.report_command == "compare":
-                _print_json(compare_reports(args.left, args.right))
+                _print_json(compare_reports(args.left, args.right, navigation=args.navigation))
             else:
                 _print_json(
                     summarize_report(
                         args.input,
                         include_metrics=args.metrics,
                         include_evidence_limits=args.evidence_limits,
+                        navigation=args.navigation,
                     )
                 )
             return 0
@@ -410,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
                 exc.payload["fix"],
                 receipt=args.receipt,
                 log_dir=args.log_dir,
+                alignment_max_overrun_ms=args.alignment_max_overrun_ms,
             )
         _print_json(exc.payload, stream=sys.stderr)
         return exc.exit_code

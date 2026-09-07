@@ -54,6 +54,7 @@ class TimingRequiredError(ExportError):
         wants: Sequence[str],
         plan: Mapping[str, Any],
         word_timing_outcome: str | None,
+        alignment_rejections: list[dict[str, Any]] | None = None,
     ) -> None:
         self.input_path = Path(input_path)
         self.found = tuple(found)
@@ -62,13 +63,23 @@ class TimingRequiredError(ExportError):
         self.wants = tuple(wants)
         self.plan = dict(plan)
         self.word_timing_outcome = word_timing_outcome
+        self.alignment_rejections = alignment_rejections
         super().__init__(f"{self.input_path} has no produced word timing for subtitle export")
 
 
 class ReadableTimingRequiredError(ExportError):
     """A readable timestamp request contains a segment without real bounds."""
 
-    def __init__(self, input_path: Path, segment_id: str) -> None:
+    def __init__(
+        self,
+        input_path: Path,
+        segment_id: str,
+        *,
+        word_timing_outcome: str | None = None,
+        alignment_rejections: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self.word_timing_outcome = word_timing_outcome
+        self.alignment_rejections = alignment_rejections
         self.input_path = Path(input_path)
         self.segment_id = segment_id
         super().__init__(f"{self.input_path}: {segment_id} has no segment or word timing")

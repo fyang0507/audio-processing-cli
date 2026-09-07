@@ -33,7 +33,7 @@ audio transcribe plan --input demo.mp4 --stack vibevoice \
                 "selected_by": "stack"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
-                "config": {"scope": "all_segments",
+                "config": {"scope": "all_segments", "max_overrun_ms": 0.501,
                            "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -173,6 +173,8 @@ It carries **no `words` array**, which is correct and is not an abstention: the 
 
 An ordinary speech segment is different. If its requested alignment result is absent or nonconforming, its text and native bounds remain, `words` is absent, and one `alignment_unavailable` abstention carries those exact bounds. The run-level `word_timestamps` outcome becomes `abstained` while valid word streams on other segments remain. VibeVoice turns likewise do not bridge silence or a wordless event: every bounded speech segment gets its own native turn, even when an adjacent segment carries the same anonymous label.
 
+`--alignment-max-overrun-ms` has the same meaning here as in §1.2 because this request selects ForcedAligner. The default example uses 0.501 ms and records no beyond-allowance correction. If a separately chosen higher limit accepts clipped endpoints, `provenance.observed.alignment_corrections` records only corrections on words that survive the full unit's validation and text reconciliation. Rejected units retain their diagnostic abstentions; the limit cannot create word timing from the native segment interval.
+
 ### 2.3 Export subtitles with speaker voice tags
 
 ```bash
@@ -197,4 +199,4 @@ WEBVTT
 <v 1>And it renders straight away?
 ```
 
-The `[Environmental Sounds]` segment produced no cue: it has no word stream, and cue bounds come from words. Whether a non-speech event tag *should* render as an SDH cue is a subtitle-convention question parked in issue #10, not a transcription one. The same omission rule applies to a **bounded** ordinary speech segment carrying a same-bounds `alignment_unavailable` abstention when at least one other segment has real timed words; its ledger entry and abstained capability outcome preserve the warning. An unbounded Qwen segment cannot be associated safely with a unit-level abstention because schema v1 carries no segment-to-unit link, so SRT/VTT refuse that mixed result rather than silently dropping text. With no real word stream anywhere, subtitle export refuses instead of inventing bounds, except for an all-bounded-event result whose timing provenance is already `produced`, which deliberately renders an empty subtitle.
+The `[Environmental Sounds]` segment produced no cue: it has no word stream, and cue bounds come from words. Whether a non-speech event tag *should* render as an SDH cue is a subtitle-convention question parked in issue #10, not a transcription one. The same omission rule applies to a **bounded** ordinary speech segment carrying a same-bounds `alignment_unavailable` abstention when at least one other segment has real timed words; its ledger entry and abstained capability outcome preserve the warning. SRT/VTT refuse mixed results containing unbounded Qwen text; diagnostic segment links identify the absent timing but do not authorize silently dropping text or treating attempted unit intervals as word timing. With no real word stream anywhere, subtitle export refuses instead of inventing bounds, except for an all-bounded-event result whose timing provenance is already `produced`, which deliberately renders an empty subtitle.

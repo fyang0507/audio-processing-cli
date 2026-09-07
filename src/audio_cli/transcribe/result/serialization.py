@@ -11,6 +11,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from .alignment import _validate_abstentions, validate_alignment_evidence
 from .types import (
     _ARRAY_CAPABILITIES,
     ABSENT,
@@ -22,7 +23,6 @@ from .validation import (
     _array,
     _capabilities,
     _reject_non_label_speakers,
-    _validate_abstentions,
     _validate_coverage,
     _validate_provenance,
     _validate_segments,
@@ -47,8 +47,15 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
         assert isinstance(result.coverage, Mapping)
         _validate_coverage(result.coverage, duration=duration)
     _validate_segments(result.segments, requested, sample=result.sample, duration=duration)
-    _validate_abstentions(result.abstentions, sample=result.sample, duration=duration)
+    _validate_abstentions(
+        result.abstentions, sample=result.sample, duration=duration, segments=result.segments
+    )
     _validate_provenance(result.provenance, requested, result, sample=result.sample)
+    if (
+        any("alignment" in item for item in result.abstentions)
+        and result.provenance["outcomes"].get("word_timestamps") != "abstained"
+    ):
+        raise ResultError("alignment evidence requires an abstained word_timestamps outcome")
 
     arrays = {
         "turns": ({"turn_id", "speaker", "start", "end"}, result.turns),
@@ -71,6 +78,8 @@ def serialize_result(result: NormalizedResult) -> dict[str, Any]:
             _validate_span_array(
                 value, field, expected_keys, sample=result.sample, duration=duration
             )
+
+    validate_alignment_evidence(result, duration=duration)
 
     payload: dict[str, Any] = {}
     if result.sample:

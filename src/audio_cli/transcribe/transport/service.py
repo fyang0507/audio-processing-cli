@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from audio_cli import paths
-from audio_cli.media import canonical_decode_command
+from audio_cli.media import canonical_decode_command, retain_diagnostic_file
 from audio_cli.packages import managed_environment_path, validated_built_product
 
 from .process_runner import SubprocessRunner
@@ -64,6 +64,21 @@ class StageTransport:
             if not completed.stderr.endswith("\n"):
                 self.progress.write("\n")
             self.progress.flush()
+
+    def _retain_response(self, completed, role, backend, result_path, request_path=None):
+        directory = getattr(completed, "diagnostics_directory", None)
+        if directory is None:
+            return
+        try:
+            if request_path is not None:
+                retain_diagnostic_file(request_path, directory / "request.json")
+            if result_path.exists() or result_path.is_symlink():
+                retain_diagnostic_file(result_path, directory / "result.json")
+        except OSError as exc:
+            raise StageFailure(
+                role, backend, f"cannot retain structured diagnostics: {exc}"
+            ) from exc
+        self._notice(f"transcribe: {role} structured diagnostics: {directory}")
 
     def decode(self, source: Path, target: Path) -> StageOutcome:
         self._notice("transcribe: decode started")
@@ -128,6 +143,7 @@ class StageTransport:
         completed = self._run(command, role)
         transport_wall = time.perf_counter() - started
         self._diagnostics(completed)
+        self._retain_response(completed, role, backend, result_path, request_path)
         sampled_peak = getattr(completed, "peak_rss_bytes", None)
         transport_outcome = StageOutcome(
             role,
@@ -439,6 +455,7 @@ class StageTransport:
         completed = self._run(command, "diarizer")
         wall = time.perf_counter() - started
         self._diagnostics(completed)
+        self._retain_response(completed, "diarizer", "fluidaudio", raw_path)
         if completed.returncode != 0 or not raw_path.is_file():
             detail = completed.stderr.strip() or f"FluidAudio exited {completed.returncode}"
             raise StageFailure("diarizer", "fluidaudio", detail[-4000:])

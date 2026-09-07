@@ -15,7 +15,7 @@ from audio_cli.media import (
 )
 from audio_cli.packages import load_registry
 
-from ..adapters.aligner import normalize_aligned_words
+from ..adapters.aligner import normalize_alignment
 from ..adapters.vibevoice import normalize_vibevoice_alignment, normalize_vibevoice_result
 from ..catalog import InputMetadata
 from ..execution.materialization import _checkout, _materialized_path, _materialized_role_paths
@@ -35,6 +35,7 @@ from ..refusals import request as refusals
 from ..result.types import ABSENT, ResultError
 from ..transport.service import StageTransport
 from ..transport.types import StageFailure, StageOutcome
+from .alignment import CorrectionLedger
 from .common import (
     _diarizer_outputs,
     _finish,
@@ -208,6 +209,8 @@ def _run_vibevoice(
                     }
                 )
             aligned: dict[str, list[dict[str, Any]]] = {}
+            alignment_rejections: dict[str, dict[str, Any]] = {}
+            alignment_corrections: dict[str, list[dict[str, Any]]] = {}
             if "aligner" in plan.roles and alignable:
                 active_role, active_backend = "aligner", "qwen3-forcedaligner"
                 entries = preflight(plan, document)
@@ -220,8 +223,16 @@ def _run_vibevoice(
                 stage_outcomes.append(align)
                 if align.returncode != 0:
                     raise ValueError(f"aligner stage returned unsupported exit {align.returncode}")
-                aligned = normalize_aligned_words(align.payload, alignable)
-                aligned = normalize_vibevoice_alignment(normalized.segments, aligned)
+                alignment = normalize_alignment(
+                    align.payload,
+                    alignable,
+                    max_overrun_ms=plan.roles["aligner"]["config"]["max_overrun_ms"],
+                )
+                aligned, alignment_rejections = alignment.words, alignment.rejections
+                alignment_corrections = alignment.corrections
+                aligned = normalize_vibevoice_alignment(
+                    normalized.segments, aligned, rejections=alignment_rejections
+                )
         except refusals.Refusal:
             raise
         except StageFailure as exc:
@@ -281,6 +292,7 @@ def _run_vibevoice(
         alignable_index = 0
         speech_without_words = False
         alignment_abstentions: list[dict[str, Any]] = []
+        corrections = CorrectionLedger(alignment_corrections)
         for index, item in enumerate(normalized.segments):
             segment: dict[str, Any] = {
                 "segment_id": f"seg_{index}",
@@ -307,6 +319,11 @@ def _run_vibevoice(
                                 "reason": "alignment_unavailable",
                                 "start": float(item["start"]),
                                 "end": float(item["end"]),
+                                "alignment": {
+                                    "unit_id": unit_id,
+                                    "segment_ids": [segment["segment_id"]],
+                                    **alignment_rejections[unit_id],
+                                },
                             }
                         )
                     else:
@@ -319,6 +336,7 @@ def _run_vibevoice(
                                 }
                             )
                             word_index += 1
+                        corrections.add_words(unit_id, segment["segment_id"], segment["words"])
             public_segments.append(segment)
 
         abstentions.extend(alignment_abstentions)
@@ -359,6 +377,7 @@ def _run_vibevoice(
                 complete=not incomplete,
                 coverage=coverage,
                 capability_outcomes=capability_outcomes,
+                observed=corrections.observed(),
             )
         except (ResultError, ValueError) as exc:
             raise refusals.backend_failed(

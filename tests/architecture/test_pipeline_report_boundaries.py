@@ -14,6 +14,7 @@ MODULES = {
     "loading",
     "matching",
     "metrics",
+    "navigation",
     "summary",
 }
 

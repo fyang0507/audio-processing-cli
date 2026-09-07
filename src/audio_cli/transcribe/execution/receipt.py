@@ -30,6 +30,14 @@ def build_receipt(payload: Mapping[str, Any], path: str | Path) -> dict[str, Any
         "complete": payload["complete"],
         "counts": counts,
     }
+    if "outcomes" in payload["provenance"]:
+        receipt["outcomes"] = dict(payload["provenance"]["outcomes"])
+    alignment_rejections = [dict(item) for item in payload["abstentions"] if "alignment" in item]
+    if alignment_rejections:
+        receipt["alignment_rejections"] = alignment_rejections
+    observed = payload["provenance"].get("observed", {})
+    if "alignment_corrections" in observed:
+        receipt["alignment_corrections"] = list(observed["alignment_corrections"])
     if "coverage" in payload:
         receipt["coverage"] = dict(payload["coverage"])
     execution = payload["provenance"].get("plan", {}).get("execution", {})

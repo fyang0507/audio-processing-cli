@@ -82,6 +82,8 @@ def _plain(text: str) -> str:
 def normalize_vibevoice_alignment(
     segments: Sequence[Mapping[str, Any]],
     aligned: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    rejections: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Keep only speech-unit word streams that satisfy the punctuation floor.
 
@@ -108,6 +110,8 @@ def normalize_vibevoice_alignment(
         joined = "".join(plain_words)
         if joined == target:
             valid[identifier] = [dict(word) for word in words]
+        elif rejections is not None:
+            rejections[identifier] = {"code": "text_mismatch"}
     return valid
 
 

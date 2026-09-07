@@ -23,6 +23,7 @@ EXPECTED_PEER_MODULES = {
     },
     "orchestrator": {
         "orchestrator",
+        "orchestrator.alignment",
         "orchestrator.common",
         "orchestrator.firered",
         "orchestrator.qwen",
@@ -30,7 +31,13 @@ EXPECTED_PEER_MODULES = {
     },
     "planner": {"planner", "planner.build", "planner.request"},
     "refusals": {"refusals", "refusals.request"},
-    "result": {"result", "result.serialization", "result.types", "result.validation"},
+    "result": {
+        "result",
+        "result.alignment",
+        "result.serialization",
+        "result.types",
+        "result.validation",
+    },
     "stages": {
         "stages",
         "stages._firered_protocol",

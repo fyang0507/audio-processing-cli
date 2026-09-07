@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Index nested abstentions, unmet targets and other recorded limits.",
     )
+    summary_parser.add_argument(
+        "--navigation",
+        action="store_true",
+        help="Emit compact phase/scope groups and exact evidence pointers instead of the "
+        "default summary; cannot combine with --metrics or --evidence-limits.",
+    )
     compare_parser = report_commands.add_parser(
         "compare",
         help="Compare saved reports offline by recorded identity and time overlap.",
@@ -106,6 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare_parser.add_argument("left", type=Path, help="Saved inspection or enhancement report.")
     compare_parser.add_argument("right", type=Path, help="Compatible saved report to compare.")
+    compare_parser.add_argument(
+        "--navigation",
+        action="store_true",
+        help="Emit compact phase/scope navigation with overlap and ambiguity counts.",
+    )
 
     packages_parser = subparsers.add_parser(
         "packages",
@@ -193,6 +204,12 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
+    alignment_help = (
+        "Maximum boundary overrun in milliseconds for ForcedAligner host normalization; "
+        "finite and at least 0.501 (default). Requires word_timestamps with a ForcedAligner "
+        "add-on; unsupported for FireRed native timing."
+    )
+    plan_parser.add_argument("--alignment-max-overrun-ms", metavar="MS", help=alignment_help)
     run_parser = transcribe_commands.add_parser(
         "run",
         help="Execute one resolved transcription request.",
@@ -212,6 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--diarizer", help="Pin the diarizer backend when the request adds that role."
     )
+    run_parser.add_argument("--alignment-max-overrun-ms", metavar="MS", help=alignment_help)
     run_parser.add_argument(
         "--range", dest="run_range", help="Process units intersecting START: or START:END."
     )

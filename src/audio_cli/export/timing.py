@@ -45,6 +45,18 @@ def readable_milliseconds(
         ) from exc
 
 
+def _alignment_rejections(
+    document: LoadedResult, segment_id: str | None = None
+) -> list[dict[str, Any]] | None:
+    entries = [
+        dict(item)
+        for item in document.payload["abstentions"]
+        if "alignment" in item
+        and (segment_id is None or segment_id in item["alignment"]["segment_ids"])
+    ]
+    return entries or None
+
+
 def _require_readable_timing(merged: MergedTranscript) -> None:
     for document in merged.documents:
         for index, segment in enumerate(document.payload["segments"]):
@@ -53,7 +65,14 @@ def _require_readable_timing(merged: MergedTranscript) -> None:
             except ValueError as exc:
                 raise InvalidResultError(document.path, str(exc)) from exc
             if bounds is None:
-                raise ReadableTimingRequiredError(document.path, segment["segment_id"])
+                raise ReadableTimingRequiredError(
+                    document.path,
+                    segment["segment_id"],
+                    word_timing_outcome=document.payload["provenance"]["outcomes"].get(
+                        "word_timestamps"
+                    ),
+                    alignment_rejections=_alignment_rejections(document, segment["segment_id"]),
+                )
 
 
 def _found_timing(document: LoadedResult) -> tuple[str, ...]:
@@ -75,6 +94,7 @@ def _raise_timing_required(document: LoadedResult) -> None:
         wants=tuple(payload["provenance"]["outcomes"]),
         plan=payload["provenance"]["plan"],
         word_timing_outcome=payload["provenance"]["outcomes"].get("word_timestamps"),
+        alignment_rejections=_alignment_rejections(document),
     )
 
 
@@ -163,8 +183,8 @@ def _require_word_timing(merged: MergedTranscript) -> None:
                 has_real_word_stream = True
     # A bounded segment can be omitted only when the document explicitly binds
     # its failed alignment to those same bounds. Qwen's public segments have no
-    # segment bounds, and v1 carries no segment-to-unit association; even a real
-    # unit-level abstention elsewhere cannot prove which unbounded text it owns.
+    # segment bounds. Diagnostic segment links identify missing timing but do not
+    # authorize silently omitting recognized text from the requested subtitle.
     for document in merged.documents:
         outcome = document.payload["provenance"]["outcomes"].get("word_timestamps")
         alignment_bounds = _alignment_abstention_bounds(document)

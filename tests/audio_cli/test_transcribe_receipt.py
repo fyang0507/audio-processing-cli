@@ -82,6 +82,7 @@ def test_receipt_preserves_saved_bytes_and_partial_exit(tmp_path, monkeypatch, c
         "stack": "qwen-0.6b",
         "complete": not partial,
         "counts": {"segments": 1 if partial else 3, "abstentions": 0},
+        "outcomes": {},
         **({"coverage": payload["coverage"]} if partial else {}),
     }
     assert "segments" not in receipt
@@ -127,6 +128,7 @@ def test_receipt_preserves_absent_and_empty_collections():
     assert receipt["counts"] == {"segments": 1, "abstentions": 0}
     assert "duration_basis" not in receipt["source"]
     assert "range" not in receipt
+    assert "outcomes" not in receipt
     payload["turns"] = []
     payload["segments"].append({"words": [{"text": "A"}, {"text": "B"}]})
     assert build_receipt(payload, "result.json")["counts"] == {
@@ -135,6 +137,29 @@ def test_receipt_preserves_absent_and_empty_collections():
         "turns": 0,
         "words": 2,
     }
+
+
+@pytest.mark.parametrize("stack", ["qwen-0.6b", "qwen-1.7b", "firered", "vibevoice"])
+@pytest.mark.parametrize("complete", [False, True])
+def test_receipt_projects_outcomes_without_inferring_from_counts(stack, complete):
+    outcomes = {"diarization": "produced", "word_timestamps": "abstained"}
+    payload = {
+        "source": {"path": "original.wav"},
+        "provenance": {"stack": stack, "outcomes": outcomes},
+        "complete": complete,
+        "segments": [{"text": "A.", "words": [{"text": "A", "start": 0, "end": 1}]}],
+        "turns": [],
+        "abstentions": [{"capability": "word_timestamps", "reason": "alignment_unavailable"}],
+    }
+    original = json.dumps(payload, sort_keys=True)
+    receipt = build_receipt(payload, "result.json")
+    assert receipt["outcomes"] == outcomes
+    assert receipt["complete"] is complete
+    assert receipt["counts"] == {"segments": 1, "words": 1, "turns": 0, "abstentions": 1}
+    assert "overlapped_speech" not in receipt["outcomes"]
+    assert json.dumps(payload, sort_keys=True) == original
+    receipt["outcomes"]["word_timestamps"] = "produced"
+    assert payload["provenance"]["outcomes"]["word_timestamps"] == "abstained"
 
 
 def test_refused_publication_does_not_emit_receipt(tmp_path, monkeypatch, capsys):

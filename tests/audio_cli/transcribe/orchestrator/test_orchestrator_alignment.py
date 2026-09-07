@@ -62,6 +62,11 @@ def test_alignment_abstention_is_observable_and_does_not_invent_words(tmp_path) 
         {
             "abstention_id": "ab_0",
             "reason": "alignment_unavailable",
+            "alignment": {
+                "unit_id": "unit_0",
+                "segment_ids": ["seg_0"],
+                "code": "provider_unavailable",
+            },
             "start": 0.0,
             "end": 2.0,
         }
@@ -143,6 +148,11 @@ def test_alignment_text_mismatch_records_the_attempted_unit_bounds(tmp_path) -> 
         {
             "abstention_id": "ab_0",
             "reason": "alignment_unavailable",
+            "alignment": {
+                "unit_id": "unit_0",
+                "segment_ids": ["seg_0"],
+                "code": "sentence_reconciliation",
+            },
             "start": 0.0,
             "end": 2.0,
         }
@@ -190,6 +200,11 @@ def test_partial_qwen_alignment_abstention_covers_only_the_completed_prefix(
         {
             "abstention_id": "ab_0",
             "reason": "alignment_unavailable",
+            "alignment": {
+                "unit_id": "unit_0",
+                "segment_ids": ["seg_0"],
+                "code": "provider_unavailable",
+            },
             "start": 0.0,
             "end": 180.0,
         }
@@ -414,3 +429,66 @@ def test_real_qwen_result_shape_matches_its_plan_sample_over_derivation_cells(
         "vad": "vad_regions",
     }.items():
         assert (field in actual) is (capability in wants)
+
+
+def test_rejected_unit_links_every_affected_sentence_without_synthesizing_timing(tmp_path):
+    class RejectedUnit(FullFakeTransport):
+        def qwen(self, *, units, **kwargs):
+            return StageOutcome(
+                "asr",
+                "qwen3-asr-0.6b-8bit",
+                {
+                    "units": [
+                        {"unit_id": unit["unit_id"], "processed": True, "text": "Hello. World!"}
+                        for unit in units
+                    ]
+                },
+                1.0,
+            )
+
+        def align(self, *, segments, **kwargs):
+            return StageOutcome(
+                "aligner",
+                "qwen3-forcedaligner",
+                {
+                    "segments": [
+                        {
+                            "unit_id": unit["unit_id"],
+                            "words": [
+                                {"text": "Hello", "start": 0, "end": 1},
+                                {"text": "World", "start": 1, "end": 2.04},
+                            ],
+                        }
+                        for unit in segments
+                    ]
+                },
+                1.0,
+            )
+
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"original source")
+    result = orchestrator.run(
+        resolve_request(stack_id="qwen-0.6b", input_path=source, wants=("word_timestamps",)),
+        InputMetadata(str(source), 2, "wav", 48_000, 2),
+        registry=full_registry(tmp_path),
+        transport=RejectedUnit(),
+    ).payload
+    assert result["segments"] == [
+        {"segment_id": "seg_0", "text": "Hello."},
+        {"segment_id": "seg_1", "text": "World!"},
+    ]
+    assert result["abstentions"][0]["alignment"] == {
+        "unit_id": "unit_0",
+        "segment_ids": ["seg_0", "seg_1"],
+        "code": "out_of_unit_bounds",
+        "word_index": 1,
+        "boundary": {
+            "original_bounds": [1.0, 2.04],
+            "unit_bounds": [0.0, 2.0],
+            "start_overrun_ms": 0.0,
+            "end_overrun_ms": 40.0,
+            "max_overrun_ms": 0.501,
+        },
+    }
+    assert result["provenance"]["outcomes"]["word_timestamps"] == "abstained"
+    assert source.read_bytes() == b"original source"

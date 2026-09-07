@@ -11,7 +11,7 @@ from audio_cli import environments as env
 from .. import stacks
 from ..catalog import InputMetadata
 from ..plan import Plan
-from .request import ResolvedRequest
+from .request import DEFAULT_ALIGNMENT_MAX_OVERRUN_MS, ResolvedRequest
 
 _STAGE_ORDER = ("decode", "vad", "diarizer", "lid", "asr", "aligner", "punctuator")
 # These templates are executable configuration, not a second capability table.  Their values
@@ -217,6 +217,11 @@ def _role_template(
     elif backend == "qwen3-forcedaligner":
         value = copy.deepcopy(_ALIGNER)
         value["revision"] = _manifest_revision(backend)
+        value["config"]["max_overrun_ms"] = (
+            request.alignment_max_overrun_ms
+            if request.alignment_max_overrun_ms is not None
+            else DEFAULT_ALIGNMENT_MAX_OVERRUN_MS
+        )
     else:
         raise stacks.StackTableError(f"no plan role template for backend {backend!r}")
     if selected_by is not None:

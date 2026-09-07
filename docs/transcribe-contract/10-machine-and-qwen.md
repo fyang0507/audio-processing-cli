@@ -243,7 +243,7 @@ the one package that auto-fetches:
                 "selected_by": "add_on_required_by:vad"},
     "aligner": {"backend": "qwen3-forcedaligner", "environment": "mlx",
                 "revision": "0e1a68e91d815300c7c9754b2a7639378b23db15",
-                "config": {"scope": "all_segments",
+                "config": {"scope": "all_segments", "max_overrun_ms": 0.501,
                            "language_rule": "Chinese when text matches [一-鿿], otherwise English; the ASR --language hint is never forwarded"},
                 "selected_by": "add_on_required_by:word_timestamps"}
   },
@@ -273,6 +273,10 @@ never produced it.
 `silero-vad` is the one package that can be `provisioned: true` on a machine that
 never ran `pull`, because it is the small hash-pinned artifact the existing Silero
 backend already fetches on demand. Everything else fails closed.
+
+`transcribe plan` and `transcribe run` accept `--alignment-max-overrun-ms` only when the requested capabilities select `qwen3-forcedaligner`. Its value must be a finite number at least `0.501`; an invalid value returns `alignment_max_overrun_invalid` at exit 2, and an explicit value without that aligner returns `alignment_option_not_applicable` at exit 2. FireRed's native timing and a Qwen or VibeVoice request without `word_timestamps` cannot consume this option. Every selected aligner records `roles.aligner.config.max_overrun_ms`: the unchanged default is `0.501`, or the explicit configured value. This is a host normalization limit, never an inference parameter sent to the model.
+
+Each endpoint overrun is compared with that limit before clipping to the actual input unit. A higher explicit limit permits accepted clips beyond the existing 0.501 ms serialization allowance; it does not change the input interval, fabricate words, or bypass invalid bounds, raw ordering, collapse or text reconciliation checks. Larger overruns withhold the entire unit's word stream. The result preserves rejected-unit evidence in `alignment_unavailable` abstentions and accepted corrections in optional `provenance.observed.alignment_corrections`, as defined in [alignment diagnostics](../alignment-diagnostics.md). The recorded original estimate, applied bounds and selected limit describe the host adjustment; they do not establish acoustic accuracy. Runnable replacement, resume and export-repair commands preserve an explicitly selected limit when they construct another transcription run.
 
 `--vad` selects among the implementations offered as add-ons: `silero-vad` today, plus
 FluidAudio's Core ML VAD once that ships as a package. FireRed's own VAD is inside its

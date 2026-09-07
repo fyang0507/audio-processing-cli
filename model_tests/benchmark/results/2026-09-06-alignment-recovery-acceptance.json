@@ -1,0 +1,282 @@
+{
+  "date": "2026-09-06",
+  "scope": "Explicit user-selected clipping, failure actionability, and lossless native subtitle delivery; full original-source regression retains separate limits.",
+  "development_workflow": ["plan", "implement", "independent adversarial review", "implementation verification", "fresh operator acceptance"],
+  "candidates": {"boundary_recovery": "5367210b389ee33b10bb17bdad78defd56f6c9c9", "subtitle_correction": "2f63e08eebae947dbdfb4413abb0c0fb12002cd4"},
+  "pull_requests": [54, 55, 56, 57, 59, 60],
+  "fixtures": [
+    {"path": "tests/artifacts/media/autio-test-sample.m4a", "bytes": 849029, "sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834", "scope": "full_original_source"},
+    {"path": "tests/artifacts/media/demo-video-audio-to-improve.mp4", "bytes": 91066646, "sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003", "scope": "full_original_source"},
+    {"path": "tests/artifacts/media/test-sample-multispeaker.m4a", "bytes": 2331384, "sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c", "scope": "full_original_source"}
+  ],
+  "runs": {
+    "r1": {
+      "manifest": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/manifest.json", "bytes": 54697, "sha256": "c13685c44e25566281a59904ebf217ee96b13a3435f313b1540060d862338031"},
+      "cases": {
+        "a-firered": {"commands": 9, "non-audio": 23},
+        "a-vibevoice": {"commands": 12, "non-audio": 20},
+        "b-demo": {"commands": 13, "non-audio": 27},
+        "c-mixed": {"commands": 24, "non-audio": 41},
+        "d-qwen": {"commands": 21, "non-audio": 37},
+        "e-alternative": {"commands": 14, "non-audio": 39},
+        "f-invalid-controls": {"commands": 7, "non-audio": 13}
+      },
+      "exit_counts": {"commands:exit_0": 94, "non-audio:exit_0": 199, "non-audio:exit_1": 1, "commands:exit_2": 6}
+    },
+    "r2": {
+      "manifest": {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/manifest.json", "bytes": 52925, "sha256": "815aa3c3a5c7d6abb8f700c35e35066f1973effc47f3ddee0f928303cbe437be"},
+      "cases": {
+        "a-firered": {"commands": 15, "non-audio": 29},
+        "d-saved-clipped": {"commands": 5, "non-audio": 19},
+        "e-saved-alternative": {"commands": 5, "non-audio": 19}
+      },
+      "exit_counts": {"commands:exit_0": 25, "non-audio:exit_0": 67}
+    }
+  },
+  "source_scope": {
+    "changed_source_paths": ["src/audio_cli/export/cues.py"],
+    "unchanged_source_files": 156,
+    "unchanged_shipped_skill_files": 8,
+    "narrow_rerun_declared_before_launch": true
+  },
+  "implementation": {
+    "full_suite": {
+      "passed": 1708,
+      "skipped": 24,
+      "log": {"path": "/tmp/audio-cli-zero-duration-subtitles/tests/artifacts/zero-duration-subtitle-development/pytest-full.log", "bytes": 2044, "sha256": "4e1c425a6337b3adca804a1c9c50a4cf3f1c7707e55b218ea5c0d9b22deca895"}
+    },
+    "supplemental_raw_artifact_checks_passed": 7,
+    "supplemental_live_rnnoise_checks_passed": 17,
+    "total_tests_exercised": 1732,
+    "supplemental_source": "/tmp/audio-cli-zero-duration-subtitles/src",
+    "supplemental_confirmation": {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/implementation-checks/supplemental-confirmation/command.json", "bytes": 956, "sha256": "08ebac4c46aa08d3c1f2257ca1d96853e2cbcc3871ef76cdff09bdceddd7b615"},
+    "supplemental_raw_stdout": {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/implementation-checks/supplemental-confirmation/stdout.txt", "bytes": 80, "sha256": "12784721e0280443291002b595b03384e8588476665647b621a862f07297e08f"},
+    "supplemental_raw_stderr": {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/implementation-checks/supplemental-confirmation/stderr.txt", "bytes": 0, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    "supplemental_evidence_limit": "Initial supplemental results were retained only in development tool output; one recorded repeat confirms the same24checks with source binding, timestamps, exit and raw streams. Repeats are not added to the distinct test total.",
+    "precommit_all_files": "PASS",
+    "adversarial_subtitle_cases": {"focused_tests": 35, "enumerated_ordered_timings": 12376, "lossless_accepted": 12309, "whole_collapsed_refused": 67}
+  },
+  "canonical_results": {
+    "r1_strict_qwen": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d2.strict.canonical.json", "bytes": 45411, "sha256": "33698a350ae1b384e4790948b299897859c4a27c7fcddddeff93794bb01346b4"},
+      "complete": true,
+      "stack": "qwen-1.7b",
+      "outcomes": {"diarization": "produced", "overlapped_speech": "produced", "word_timestamps": "abstained"},
+      "segment_count": 33,
+      "abstention_count": 6,
+      "word_count": 237,
+      "turn_count": 31
+    },
+    "r1_clipped_qwen": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d3.clipped.canonical.json", "bytes": 45496, "sha256": "38b64260ff16761f9b0d8f3b1f12858c554afba54ab8503c262aa404974dc100"},
+      "complete": true,
+      "stack": "qwen-1.7b",
+      "outcomes": {"diarization": "produced", "overlapped_speech": "produced", "word_timestamps": "produced"},
+      "segment_count": 33,
+      "abstention_count": 5,
+      "word_count": 238,
+      "turn_count": 31
+    },
+    "r1_alternate_firered": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/e-alternative/canonical.json", "bytes": 49073, "sha256": "b872bc0f18478b630b21507940d280b4203c4ff8c89cdffccac4628664a05f6c"},
+      "complete": true,
+      "stack": "firered",
+      "outcomes": {"diarization": "produced", "overlapped_speech": "produced", "word_timestamps": "produced"},
+      "segment_count": 62,
+      "abstention_count": 5,
+      "word_count": 246,
+      "turn_count": 31
+    },
+    "r2_fresh_firered": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/a-firered/canonical.json", "bytes": 44290, "sha256": "c612a9dba56dbd49926eb4c489dd7669e2a4cf819df4d5374cfb01c222e688e5"},
+      "complete": true,
+      "stack": "firered",
+      "outcomes": {"segment_timestamps": "produced", "word_timestamps": "produced"},
+      "segment_count": 62,
+      "abstention_count": 0,
+      "word_count": 246
+    },
+    "r1_vibevoice": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/a-vibevoice/canonical.json", "bytes": 9095, "sha256": "13e079a3b57b926117e9ca38c1d5c3aa74590d51ee83a09387ebf9ad33b1841e"},
+      "complete": true,
+      "stack": "vibevoice",
+      "outcomes": {"diarization": "produced", "segment_timestamps": "produced"},
+      "segment_count": 20,
+      "abstention_count": 0,
+      "turn_count": 17
+    },
+    "r1_mixed_firered": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/c-mixed/canonical.json", "bytes": 13036, "sha256": "97e359343b03e4af50200be004eeb9b3d532c6fcab19ef7a2311a81bc9e489f9"},
+      "complete": true,
+      "stack": "firered",
+      "outcomes": {"segment_timestamps": "produced", "word_timestamps": "produced"},
+      "segment_count": 8,
+      "abstention_count": 0,
+      "word_count": 60
+    },
+    "r1_plain_qwen": {
+      "artifact": {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d1.canonical.json", "bytes": 4559, "sha256": "5bc02fbcb4bcb63dbdd06d488fc05e553bd8135eade3a9af171f15a596e2e8e1"},
+      "complete": true,
+      "stack": "qwen-1.7b",
+      "outcomes": {},
+      "segment_count": 15,
+      "abstention_count": 0
+    }
+  },
+  "alignment_boundary": {
+    "default_limit_ms": 0.501,
+    "configured_recovery_limit_ms": 20.0,
+    "strict_rejections": [
+      {
+        "boundary": {
+          "end_overrun_ms": 13.375,
+          "max_overrun_ms": 0.501,
+          "original_bounds": [96.57, 98.01],
+          "start_overrun_ms": 0.437,
+          "unit_bounds": [96.570437, 97.996625]
+        },
+        "code": "out_of_unit_bounds",
+        "segment_ids": ["seg_27"],
+        "unit_id": "turn_25",
+        "word_index": 0
+      }
+    ],
+    "accepted_corrections": [
+      {
+        "applied_bounds": [96.570437, 97.996625],
+        "end_overrun_ms": 13.375,
+        "max_overrun_ms": 20.0,
+        "original_bounds": [96.57, 98.01],
+        "segment_id": "seg_27",
+        "start_overrun_ms": 0.437,
+        "unit_bounds": [96.570437, 97.996625],
+        "unit_id": "turn_25",
+        "word_id": "w_182",
+        "word_index": 0
+      }
+    ],
+    "raw_unit_count": 31,
+    "raw_word_count": 238,
+    "strict_clipped_raw_units_equal": true,
+    "unchanged_nonalignment_withholding_scopes": 5,
+    "runner_grid_evidence": {"path": "model_tests/benchmark/results/2026-09-06-qwen-alignment-boundary.json", "bytes": 5086, "sha256": "8f4a5e8694f19a05b264e4de525eb80d2224e379456385b13f748e2c223e0c94"},
+    "accuracy": "UNASSESSED: clipping existing estimates is not an acoustic reference measurement."
+  },
+  "subtitle_omission": {
+    "original_attempt": {"srt": "FAIL", "vtt": "BLOCKED_UNATTEMPTED"},
+    "omitted_ids": ["seg_10/w_94", "seg_31/w_224", "seg_31/w_225"],
+    "mechanism": "Quantized zero-interval cue candidates were omitted with a nonblocking quantization warning.",
+    "corrected_policy": "Merge adjacent candidates in the same segment/speaker context, retain every supplied word and its first/last supplied endpoints, or atomically refuse if no positive interval exists.",
+    "new_d_srt_vtt_word_count": 238,
+    "new_d_srt_vtt_cue_count": 45
+  },
+  "enhancement_measurements": {
+    "b-demo": {
+      "profile": {"name": "product-demo", "version": "5"},
+      "denoiser": "rnnoise",
+      "program_actual": {
+        "before": {"integrated_loudness_lufs": -37.22, "loudness_range_lu": 28.2, "true_peak_dbtp": -19.02},
+        "predicted": {"integrated_loudness_lufs": -16.02, "loudness_range_lu": 16.9, "true_peak_dbtp": -2.5},
+        "after": {"integrated_loudness_lufs": -16.02, "loudness_range_lu": 16.9, "true_peak_dbtp": -2.48}
+      },
+      "decoded_duration_delta_ms": 0.0,
+      "unresolved": [
+        {
+          "component": "speech-leveling",
+          "measured_at": "after_voice_enhance",
+          "measured_rms_dbfs": -37.382,
+          "reason": "voice_correction_bound_reached",
+          "stage": "voice-enhance",
+          "status": "bounded_outside_target",
+          "target_rms_dbfs": -30.0
+        },
+        {
+          "component": "loudness-range",
+          "measured_at": "encoded_output",
+          "measured_lra_lu": 16.9,
+          "reason": "dynamic_lra_control_would_change_relative_region_balance",
+          "stage": "program-loudness",
+          "status": "abstained",
+          "target_maximum_lra_lu": 11.0
+        }
+      ]
+    },
+    "c-mixed": {
+      "profile": {"name": "product-demo", "version": "5"},
+      "denoiser": "rnnoise",
+      "program_actual": {
+        "before": {"integrated_loudness_lufs": -37.32, "loudness_range_lu": 4.0, "true_peak_dbtp": -17.7},
+        "predicted": {"integrated_loudness_lufs": -16.26, "loudness_range_lu": 4.0, "true_peak_dbtp": -2.5},
+        "after": {"integrated_loudness_lufs": -16.28, "loudness_range_lu": 4.0, "true_peak_dbtp": -2.41}
+      },
+      "decoded_duration_delta_ms": 1.333,
+      "unresolved": []
+    }
+  },
+  "verdicts": {
+    "receipt_outcomes_issue_50": "PASS",
+    "diarization_scope_guidance_issue_52": "PASS",
+    "diagnostic_and_remedy_issue_51": "PASS",
+    "report_navigation_issue_53": "PASS",
+    "strict_default_word_timing": "FAIL",
+    "explicit_clipping_production_and_actionability": "PASS",
+    "explicit_clipped_result_final_native_delivery": "PASS",
+    "r1_clipped_native_srt": "FAIL",
+    "r1_clipped_native_vtt": "BLOCKED",
+    "r1_firered_operator_protocol": "FAIL",
+    "r1_firered_txt_md": "BLOCKED",
+    "r2_fresh_firered_delivery_and_stopping": "PASS",
+    "r2_fresh_firered_operator_overall": "FAIL_REPORT_ASSEMBLY_PARSE_ERROR_AFTER_DELIVERY",
+    "r2_saved_d_e_exports_and_stopping": "PASS",
+    "r2_recorded_executed_command_protocol": "PASS",
+    "r2_complete_orchestration_trace": "BLOCKED_UNCAPTURED_ORIGINAL_A_PARSE_EVENT_AND_TIME",
+    "r1_alternate_product_artifacts": "PASS",
+    "r1_alternate_complete_child_context_trace": "BLOCKED_UNPROVEN",
+    "b_demo_fresh_region_targets": "FAIL_0_OF_5_ATTAINED",
+    "b_demo_fixed_original_region_targets": "PASS_9_OF_9_ATTAINED",
+    "b_demo_delivered_lra": "FAIL_16.9_EXCEEDS_11_LU",
+    "qwen_and_alternate_human_reference_accuracy": "BLOCKED",
+    "broader_acceptance_gate": "FAIL"
+  },
+  "artifacts": [
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/a-firered/transcript.timed.md", "bytes": 3213, "sha256": "d157073e6106198d8a310c795030788c16383791d8671f2db227e4ac59722a3d"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/a-firered/transcript.srt", "bytes": 3253, "sha256": "3f91cebc88c0e9a9f6b820dd8da634e9dec15b2afd581ff19092a2524ba3f699"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/a-firered/transcript.vtt", "bytes": 3261, "sha256": "cf1cb373bb56e80b6ac497f3c58414707af53ed84ed6c0c6e012a7d7a808872d"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/d-saved-clipped/transcript.timed.md", "bytes": 2394, "sha256": "694b4c54a85c401bbcb99fd5ea8b88fc49b157cb24bb2265545887b8b4dd45b5"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/d-saved-clipped/transcript.srt", "bytes": 2649, "sha256": "f599536ba118e15403219633e958e745d7ccde6202c740e03e7aa978e596b8cd"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/d-saved-clipped/transcript.vtt", "bytes": 2927, "sha256": "083160bce18470333ecfceec1001ef5877c49b7367db5282bebda6a3334b620b"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/e-saved-alternative/transcript.timed.md", "bytes": 3973, "sha256": "3f899d2e9b0e6605c89807410998c55ab6f8f556dd6c0a5ef1b9985af69bc458"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/e-saved-alternative/transcript.srt", "bytes": 3253, "sha256": "3f91cebc88c0e9a9f6b820dd8da634e9dec15b2afd581ff19092a2524ba3f699"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/e-saved-alternative/transcript.vtt", "bytes": 3621, "sha256": "32cf6b56bca48ec24acaed800c81a45eb7165e28c216433786597b272d4c1d90"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/a-firered/transcript.txt", "bytes": 1154, "sha256": "5594a4e65fe3e77daa6fcd4809d6bff6c0abb789064cefea53882a10b32503b7"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/diagnostics/strict/audio-transcribe-xx267ln3/004-aligner-4sfkptka/request.json", "bytes": 4155, "sha256": "eb8064c6f5f6577fde4c1cf9d5e8c008c18d87fbbb52365e472ed00aa566067f"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/diagnostics/strict/audio-transcribe-xx267ln3/004-aligner-4sfkptka/result.json", "bytes": 13650, "sha256": "0dc2b08488d7edb9cf9dfc35cd5a75c3406b82f2230de33370e791272294d624"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/diagnostics/clipped/audio-transcribe-7wiobroh/004-aligner-kt9w4hae/request.json", "bytes": 4155, "sha256": "c9ed332dd18da5b7aa2c6dc9f100ee78d8833aec9b2b55c007c37a21ec7563e9"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/diagnostics/clipped/audio-transcribe-7wiobroh/004-aligner-kt9w4hae/result.json", "bytes": 13650, "sha256": "c92bfcffd01aafc1cccbdff0db2fb6c0f371a8b84b1e2232f7c8e4c1d8546916"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d2.strict.receipt.json", "bytes": 1353, "sha256": "4ee568eeefefac554903af65fdcefcd7b9ab23a3436eb5d95d296077e1452f8e"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d3.clipped.receipt.json", "bytes": 1157, "sha256": "5c431ed5f45ce731f204401baa251dd72f378dafd27b27c98e88eb8292b642d4"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d3.clipped.srt", "bytes": 2635, "sha256": "7d5c2fbf9aac36e96c7baf4513113b9a78d2031726b12c34665d2dc702ab8bcf"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/b-demo/enhanced.report.json", "bytes": 56357, "sha256": "aa0a3a0c29defaf95dece0a76fae39b97b4c120653b6d8fe7086017d19f060e1"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/c-mixed/enhanced.report.json", "bytes": 31449, "sha256": "b79df243f5ad6c5acfe2d14e491c28033d73c40756ad4b67ba1569298de53144"}
+  ],
+  "audits": [
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/alignment-evidence-audit.json", "bytes": 63250, "sha256": "1f0828e0c6130099346b10732f7bc565da34ee2a26fd9692b4534e4d4d145dc9"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/alignment-evidence-identities.json", "bytes": 9481, "sha256": "237f827c43fcaeab09d9eb21ea7b08f979544e6d3a109f6cac34851c3e96e6aa"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/evidence-audit.json", "bytes": 39129, "sha256": "0b64ad5c86fb400a6b69c5b774a9251565300cedae170461a6ae245603ded548"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/baseline-review.json", "bytes": 8644, "sha256": "0dc82ac8e59e5347f55e8170e8db235e7c544395716281f8193fc7a664f285ff"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/protocol-audit.json", "bytes": 1668664, "sha256": "a5505d859b29d140491207e30937877651cb90cd1bc8bfba44e166159901169a"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/protocol-manual-review.json", "bytes": 820895, "sha256": "3a3e11dd6694419f463df5b7918a73b3ba78f450740e2a010987e807cd12adec"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/independent-delivery-audit.json", "bytes": 287571, "sha256": "23e4bca35ae7a9b2f8cdaf7d14e0ed6ad1a906fe607b2b195502eb0f08e2bab5"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/protocol-audit.json", "bytes": 828311, "sha256": "f902e9e2247dbac788657de050b67c12521cb7d2e38a0c3e9a45c8202c3036dc"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/protocol-review.json", "bytes": 58432, "sha256": "d2dee884e5217f7468a564f3ca90d66f45949523dfad35790e8459ba790fac8c"},
+    {"path": "tests/artifacts/acceptance/2026-09-06-subtitle-word-preservation/accepted-identity-audit.json", "bytes": 4982, "sha256": "07aef85a6d793e63b80f919f391d5aa41ef08e6a89aa28eecd24d1178d002952"}
+  ],
+  "limits": [
+    "Earlier failed attempts and blocked exports retain their original verdicts and bytes.",
+    "R2 saved alternate exports do not resolve R1 missing child delegation context or its uncorroborated self-reported failed spawn.",
+    "R2 A reporting error is disclosed after all four exports passed; original failed parser diagnostic/time are absent. No later CLI calls. Four R2 E event displays cannot be compared argv-exactly; unique labels and returned journal records bind all four.",
+    "Prior human acceptance reuses only exact identified canonical fields or rendered bytes; no transfer to changed Qwen/alternate content.",
+    "No acoustic boundary accuracy, full speech recall, speaker identity, denoising effectiveness or A/V synchronization measurement is supplied.",
+    "Parent process exit 0 records operator completion, not a passing product requirement."
+  ]
+}

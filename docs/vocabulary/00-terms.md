@@ -104,15 +104,7 @@ companion is required:
   they would read as untested, which is the inversion this object exists to
   prevent — one level below where it was first caught.
 
-**plan** — the resolved instance: the chosen stack, the requirements, the roles
-they imply, the backends filling those roles with revisions and configuration,
-the policy block, and the packages required. Computed before any model loads, so
-it also drives the provisioning check; emitted afterwards as Issue #1 §11.2
-provenance. Provenance embeds the executed plan verbatim and adds only what running it
-revealed: the `stack` that ran, an `outcomes` map saying what became of each requested
-capability, and an `observed` block of stage walls, peaks, and cardinalities. It does not
-restate the plan's `satisfaction`, `backend`, or `evidence` around each outcome — those are
-in the embedded plan, and repeating them is how two copies of one fact start to disagree.
+**plan** — the resolved instance: the chosen stack, the requirements, the roles they imply, the backends filling those roles with revisions and configuration, the execution order, and the packages required. Computed before any model loads, it also drives the provisioning check and is embedded afterwards as Issue #1 §11.2 provenance. Provenance embeds the executed plan verbatim and adds only what running it revealed: the `stack` that ran, an `outcomes` map saying what became of each requested capability, and an `observed` block of stage walls, peaks, cardinalities and optional accepted alignment corrections. It does not restate the plan's `satisfaction`, `backend`, or `evidence` around each outcome — those are in the embedded plan, and repeating them is how two copies of one fact start to disagree.
 
 Two questions, two commands, and no order between them. `audio transcribe capabilities
 --stack S --input F` answers what a stack can do with a file: the capability catalog, how the
@@ -164,12 +156,7 @@ capability refusals additionally carry `available_on_stack` — every name the c
 accepts, split into native, requires-an-add-on, and impossible — because a caller who got
 `--want` wrong needs the menu for the stack it picked, not a second command to go find it.
 
-**policy** — the decisions the tool makes that no caller can change: abstain on ambiguous
-overlap or an unavailable requested alignment, the three recorded turn thresholds and what
-happens below each, and whether anything in a plan can detect overlap at all. Recorded here and in the research record, and **not
-printed**, on the same reasoning as the floors: a caller cannot select any of it, so putting it
-in every plan invited a reader to mistake it for a set of settings, and the thresholds are
-fixed by the tool version rather than by the request.
+**policy** — the fixed decisions the tool makes: abstain on ambiguous overlap or an unavailable requested alignment, and apply the three recorded turn thresholds and their respective actions. These invariants are recorded here and in the research record, with no separate policy block printed in the plan. The turn thresholds are fixed by the tool version. Request configuration is recorded on the selected roles: `roles.aligner.config.max_overrun_ms` is the effective caller-selectable alignment acceptance limit, including its default, and does not add a policy block. Regardless of that value, an alignment stream that still fails validation or reconciliation remains unavailable and its timing is withheld. Whether the selected plan can detect overlap is surfaced by its roles and warning.
 
 The three thresholds are `raw_fragment_min_ms: 250`, `accepted_turn_min_ms: 500`, and
 `same_label_merge_max_ms: 300`, exactly as declared by
@@ -278,17 +265,20 @@ plan must never turn one package or one environment into a claim that those mode
 one at a time. VibeVoice and the later MLX aligner remain separate environment processes and
 have never been measured co-resident.
 
-**abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly
-four allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an
-accepted turn below 500 ms, `raw_fragment` for a span whose only activity was a sub-250 ms
-diarizer fragment, and `alignment_unavailable` for an ordinary VibeVoice speech segment whose
-requested aligner result is absent, invalid, or does not reproduce the segment text after
-punctuation and whitespace are removed. The last uses the segment's native bounds, preserves
-its text, omits `words`, and makes the run-level `word_timestamps` outcome `abstained`; bracketed
-non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must
-survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the
-tool did not reach them rather than declining to assert.
+**abstention** — a recorded refusal to assert, carrying an interval and a `reason` from exactly four allowed values: `overlap` for ambiguous multi-speaker activity, `short_turn` for an accepted turn below 500 ms, `raw_fragment` for a span whose only activity was a sub-250 ms diarizer fragment, and `alignment_unavailable` for requested alignment that is absent, invalid, or cannot reproduce the recognized text under punctuation and whitespace normalization. Qwen retains the attempted processing-unit interval; VibeVoice retains its native speech-segment interval. Both preserve recognized text, omit `words`, and make the run-level `word_timestamps` outcome `abstained`; bracketed VibeVoice non-speech event tags are not sent to the aligner and are not abstentions. Abstentions must survive to the output. Budget-unprocessed intervals are coverage, not abstentions, because the tool did not reach them rather than declining to assert.
 
 ## Media duration evidence
 
 `duration_basis` identifies the measurement behind a duration: `probed_audio_stream` is primary-audio metadata, `probed_container` is the container fallback, `decoded_pcm` is inspection/enhancement sample-count duration, and `canonical_decoded_pcm` is transcription canonical mono 16 kHz PCM16 duration. Decoded timelines begin at the first decoded sample. `timeline_preserved` is the rendered enhancement decoded-duration gate only, qualified by `timeline_verification`; it is not content alignment or A/V sync. See [duration and alignment evidence](../timing-evidence.md) for exact scope, tolerance, and absence semantics.
+
+## Alignment rejection evidence
+
+An `alignment_unavailable` abstention may carry `alignment` with `unit_id`, nonempty `segment_ids`, `code`, and an optional zero-based `word_index` referring to the retained raw word array. New Qwen and VibeVoice aligner abstentions supply this evidence; historical records leave it absent. Codes are `provider_unavailable`, `invalid_token`, `invalid_bounds`, `out_of_unit_bounds`, `word_order`, `text_mismatch`, and `sentence_reconciliation`; [alignment diagnostics](../alignment-diagnostics.md) defines each observed condition and the configurable host acceptance policy. `segment_ids` references actual wordless segments in the same document; links must be unique across alignment abstentions. These links do not turn the attempted interval into word or sentence timing. Qwen's attempted unit can own multiple affected sentences, while VibeVoice uses its native speech-segment interval.
+
+For `out_of_unit_bounds`, optional `alignment.boundary` contains `original_bounds`, `unit_bounds`, `start_overrun_ms`, `end_overrun_ms`, and `max_overrun_ms`, accompanied by `word_index`. Bound pairs use source-relative seconds in `[start, end]` order. The overruns are each endpoint's nonnegative excursion beyond its input unit, in milliseconds; `max_overrun_ms` is the effective host acceptance limit, not an acoustic error score or a provider inference parameter. Historical diagnostics without these measurements leave the field absent. The receipt's conditional `alignment_rejections` copies the complete canonical abstention entries carrying `alignment` in ledger order.
+
+## Accepted alignment corrections
+
+`--alignment-max-overrun-ms` is an explicit request option for `transcribe plan` and `transcribe run` when the request selects ForcedAligner. It accepts only a finite number at least `0.501`. The selected aligner always records `config.max_overrun_ms` in the plan, using the unchanged default `0.501` when omitted. An explicit higher value permits clipping each endpoint to the actual input unit within that limit. It does not widen the input unit or bypass ordering, invalid bounds, collapsed words or text reconciliation.
+
+`provenance.observed.alignment_corrections` is an optional nonempty ledger of accepted endpoint clips beyond the existing 0.501 ms serialization allowance. Each entry contains exactly `unit_id`, `segment_id`, `word_id`, `word_index`, `original_bounds`, `applied_bounds`, `unit_bounds`, `start_overrun_ms`, `end_overrun_ms`, and `max_overrun_ms`. The IDs link an actual published segment and word to the aligner's unit and raw word index. The original estimate and applied bounds remain separate; a correction is a host adjustment authorized by the selected limit, not proof of the correct acoustic endpoint. Corrections discarded by later unit validation or text reconciliation are not published. The field stays absent if no such correction survives; receipt `alignment_corrections` copies the observed ledger exactly when present.
