@@ -33,3 +33,103 @@ def test_skip_parser_rejects_unknown_and_duplicate_names() -> None:
             pass
         else:
             raise AssertionError(f"Expected invalid skip list to fail: {raw}")
+
+
+def test_bundled_profiles_preserve_version_five_settings() -> None:
+    import json
+    from pathlib import Path
+
+    baseline = Path(__file__).parents[1] / "fixtures" / "profiles-v5.json"
+    assert {name: profile.as_dict() for name, profile in PROFILES.items()} == json.loads(
+        baseline.read_text()
+    )
+
+
+def test_new_bundled_profile_is_discovered_by_cli(tmp_path, monkeypatch) -> None:
+    import json
+    from dataclasses import asdict
+
+    from audio_cli import cli_parser
+    from audio_cli.profiles import _load_profiles
+
+    data = asdict(PROFILES["transcription"])
+    data["name"] = "meeting"
+    (tmp_path / "meeting.json").write_text(json.dumps(data))
+    loaded = _load_profiles(tmp_path)
+    monkeypatch.setattr(cli_parser, "PROFILES", loaded)
+    parser = cli_parser.build_parser()
+    assert (
+        parser.parse_args(["inspect", "recording.wav", "--profile", "meeting"]).profile == "meeting"
+    )
+    assert (
+        parser.parse_args(
+            ["enhance", "recording.wav", "--profile", "meeting", "--output", "out.wav"]
+        ).profile
+        == "meeting"
+    )
+
+
+def test_invalid_bundled_profiles_are_rejected(tmp_path) -> None:
+    import json
+    from dataclasses import asdict
+
+    import pytest
+
+    from audio_cli.profiles import _load_profiles
+
+    original = asdict(PROFILES["transcription"])
+    cases = [
+        ("unexpected", 1, "unknown fields"),
+        ("channel_balance_enabled", 1, "expected bool"),
+        ("vad_min_speech_ms", 1.5, "expected int"),
+        ("target_lufs", True, "expected float"),
+        ("target_lufs", float("nan"), "expected float"),
+        ("voice_max_gain_db", -1, "nonnegative"),
+        ("vad_threshold", 2, "between 0 and 1"),
+        ("highpass_hz", 24000, "Nyquist"),
+        ("compressor_ratio", 0.5, "at least 1"),
+        ("vad_exit_threshold", 0.9, "must not exceed"),
+        ("machine_relative_target_lu", 3, "within"),
+        ("target_true_peak_dbtp", 1, "between -9 and 0"),
+        ("target_true_peak_dbtp", -10, "between -9 and 0"),
+        ("codec_true_peak_headroom_db", 10, "after codec headroom"),
+        ("target_lufs", 0, "between -70 and -5"),
+        ("target_lra_lu", 0, "between 1 and 50"),
+        ("target_lufs", 10**400, "expected float"),
+        ("name", "wrong", "match the filename"),
+        ("version", "", "positive integer string"),
+        ("speech_transition_placement", "inside", "must be 'outside'"),
+    ]
+    path = tmp_path / "transcription.json"
+    for key, value, message in cases:
+        path.write_text(json.dumps(original | {key: value}))
+        with pytest.raises(ValueError, match=message):
+            _load_profiles(tmp_path)
+    for raw, message in [
+        ("[]", "JSON object"),
+        ("{}", "missing fields"),
+        ('{"name":"a","name":"b"}', "duplicate field"),
+        ("{", "Invalid bundled profile transcription.json"),
+    ]:
+        path.write_text(raw)
+        with pytest.raises(ValueError, match=message):
+            _load_profiles(tmp_path)
+    path.unlink()
+    with pytest.raises(ValueError, match="No bundled profile"):
+        _load_profiles(tmp_path)
+
+
+def test_loudness_validation_accepts_supported_boundaries() -> None:
+    from dataclasses import asdict
+
+    from audio_cli.profiles import _validate_profile
+
+    data = asdict(PROFILES["transcription"])
+    for lufs, lra, peak in [(-70, 1, -9), (-5, 50, 0)]:
+        candidate = data | {
+            "target_lufs": lufs,
+            "target_lra_lu": lra,
+            "target_true_peak_dbtp": peak,
+            "codec_true_peak_headroom_db": 0,
+        }
+        assert _validate_profile(candidate, "transcription").target_lufs == lufs

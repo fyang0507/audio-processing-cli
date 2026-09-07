@@ -6,6 +6,10 @@
 
 The two bundled [profiles](../src/audio_cli/profiles.py) are version 5. Their numbers are processing targets and bounds, not promises about the delivered sound.
 
+Complete preset settings live in [transcription.json](../src/audio_cli/profile_configs/transcription.json) and [product-demo.json](../src/audio_cli/profile_configs/product-demo.json). The immutable `Profile` type and strict resource loader remain in `profiles.py`; algorithms and processing order remain in Python. Bundled JSON files are discovered automatically and their names become the `inspect` and `enhance` profile choices.
+
+To add a bundled preset, copy a complete JSON definition into `src/audio_cli/profile_configs/<name>.json`, use the same lowercase hyphenated `name` inside it, and set its positive integer string `version`. Specify every `Profile` field, including speech-region settings; there is no JSON inheritance or implicit defaulting. The loader rejects duplicate, unknown or missing fields, incorrect types, nonfinite numbers, invalid bounds and inconsistent target ranges. Keep `processing_order` out of the file: the report adds that fixed implementation contract. Validate the preset with the profile tests and applicable enhancement acceptance before shipping. User-supplied profile paths are not supported.
+
 | Setting | `transcription` | `product-demo` |
 | --- | --- | --- |
 | Automatic stages | All except `source-balance` | All five |

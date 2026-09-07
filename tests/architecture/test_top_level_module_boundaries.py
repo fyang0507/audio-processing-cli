@@ -154,7 +154,9 @@ def test_every_direct_package_has_a_declared_boundary() -> None:
         if len(path.relative_to(PACKAGE_ROOT).parts) > 1
     }
 
-    assert directories == DIRECT_PACKAGES
+    # Declarative profile resources belong to the profiles root contract, not a new
+    # implementation package. The importable/python-bearing inventories remain exact.
+    assert directories == DIRECT_PACKAGES | {"profile_configs"}
     assert importable == DIRECT_PACKAGES
     assert python_bearing == DIRECT_PACKAGES
 
