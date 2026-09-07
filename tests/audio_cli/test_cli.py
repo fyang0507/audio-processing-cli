@@ -111,7 +111,7 @@ def test_inspect_refuses_an_existing_report_and_replaces_it_with_force(
     assert "pass --force" in message
     assert json.loads(report.read_text()) == {"stale": True}
 
-    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda path: object())
+    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda: object())
     monkeypatch.setattr(
         "audio_cli.cli.inspect_source",
         lambda source, *, profile, detector: {"kind": "audio_inspection", "fresh": True},
@@ -160,7 +160,7 @@ def test_enhance_refuses_existing_targets_and_replaces_them_with_force(
     monkeypatch.setattr(
         "audio_cli.cli.media_summary", lambda path, probe: {"duration_seconds": 4.0}
     )
-    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda path: object())
+    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda: object())
     monkeypatch.setattr("audio_cli.cli.EnhancementPipeline", StubPipeline)
 
     output.write_text("an earlier render")

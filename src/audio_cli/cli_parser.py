@@ -21,7 +21,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("input", type=Path)
     inspect_parser.add_argument("--profile", choices=sorted(PROFILES))
-    inspect_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")
     inspect_parser.add_argument("--report", type=Path, help="Also write the JSON inspection here.")
     inspect_parser.add_argument(
         "--force",
@@ -59,7 +58,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enhance_parser.add_argument("--list-stages", action="store_true")
     enhance_parser.add_argument("--report", type=Path)
-    enhance_parser.add_argument("--vad-model", type=Path, help="Use a local Silero ONNX model.")
     enhance_parser.add_argument(
         "--allow-enhanced-input",
         action="store_true",

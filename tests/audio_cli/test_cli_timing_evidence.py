@@ -106,7 +106,7 @@ def video_frames(path):
 def test_cli_duration_evidence_does_not_overclaim_content_or_av_sync(
     tmp_path, monkeypatch, capsys, case
 ):
-    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda path: NoSpeech())
+    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda: NoSpeech())
     source, extension = make_source(tmp_path, case)
     original_hash = hash_file(source)
     before = cli(capsys, "inspect", source)
@@ -188,7 +188,7 @@ def test_cli_duration_evidence_does_not_overclaim_content_or_av_sync(
 def test_cli_rejects_shortened_decoded_audio_before_publication(tmp_path, monkeypatch, capsys):
     from audio_cli.pipeline import publication
 
-    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda path: NoSpeech())
+    monkeypatch.setattr("audio_cli.cli.SileroOnnxVad", lambda: NoSpeech())
     source, _ = make_source(tmp_path, "mp3-delay")
     source_hash = hash_file(source)
     real_encode = publication.encode_output

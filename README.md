@@ -53,7 +53,7 @@ uv sync --extra dev
 uv run audio enhance --list-stages --profile product-demo
 ```
 
-When no valid local copy is available, the first VAD use downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches implicitly; `audio packages pull silero-vad` provisions it explicitly instead. The [VAD implementation](src/audio_cli/vad.py) enforces that SHA-256 pin. Set `AUDIO_PROCESSING_VAD_MODEL` or pass `--vad-model` to use a pre-populated copy of that same hash-pinned model; an arbitrary ONNX file is refused rather than run under false 6.2.1 provenance. No PyTorch runtime is required.
+When no valid local copy is available, the first VAD use downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches implicitly; `audio packages pull silero-vad` provisions it explicitly instead. The [VAD implementation](src/audio_cli/vad.py) enforces that SHA-256 pin. Set `AUDIO_PROCESSING_MODEL_CACHE` to select the shared provisioning root, or `AUDIO_PROCESSING_VAD_MODEL` to use a pre-populated copy of that same hash-pinned model outside the cache; an arbitrary ONNX file is refused rather than run under false 6.2.1 provenance. See the [migration guide](docs/vad-model-migration.md) for replacing the removed `--vad-model` option with a command-local environment assignment. No PyTorch runtime is required.
 
 ## Use
 

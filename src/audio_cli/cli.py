@@ -63,7 +63,7 @@ def _run_inspect(args: argparse.Namespace) -> int:
     # speech detection over it, and refusing the destination afterwards throws all of that away.
     _ensure_writable_target(args.report, force=args.force, label="Report")
     profile = get_profile(args.profile) if args.profile else None
-    detector = SileroOnnxVad(args.vad_model)
+    detector = SileroOnnxVad()
     report = inspect_source(args.input, profile=profile, detector=detector)
     if args.report:
         write_report(args.report, report)
@@ -115,7 +115,7 @@ def _run_enhance(args: argparse.Namespace) -> int:
         duration=duration,
         nyquist_hz=24_000.0,
     )
-    detector = SileroOnnxVad(args.vad_model)
+    detector = SileroOnnxVad()
     with ProgressReporter("enhance") as progress:
         pipeline = EnhancementPipeline(
             profile,
