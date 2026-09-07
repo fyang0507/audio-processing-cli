@@ -1,0 +1,49 @@
+{
+  "topic": "TOML enhancement profile follow-up",
+  "issue": 70,
+  "pull_request": 71,
+  "candidate_commit": "1aa44812ee597ec445d1667fe957afd77631cd58",
+  "candidate_executable": "/tmp/audio-profile-configs/.venv/bin/audio",
+  "candidate_binding": "Existing uv editable installation resolves to this checkout; clean candidate commit verified before and after execution",
+  "scope": "Full-original demo inspection and stationary-denoiser dry runs for both version 5 profiles; same narrow compatibility scope as 2026-09-07-profile-configs.json. No rendering, transcription, provisioning or perceptual-quality requirement.",
+  "source": {
+    "fixture": "tests/artifacts/media/demo-video-audio-to-improve.mp4",
+    "bytes_before_and_after": 91066646,
+    "sha256_before_and_after": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003"
+  },
+  "skill_snapshot": {
+    "origin": "skills/audio-cli at candidate_commit",
+    "external_path": "/tmp/audio-profile-toml-operator/skill",
+    "hash_inventory": "Same complete eight-file inventory and hashes as 2026-09-07-profile-configs.json; copied from candidate and reverified after execution"
+  },
+  "implementation_checks": {
+    "pytest": "1766 passed, 24 skipped; uv run --extra dev pytest",
+    "lint_format": "PASS: uv run --extra dev pre-commit run --all-files",
+    "independent_code_review": "PASS: all 41 values and Python types preserved; no actionable findings",
+    "distribution": "PASS: uv build --out-dir /tmp/audio-profile-toml-dist; wheel built from sdist, installed with isolated uv outside checkout; baseline profile equality and CLI selection verified",
+    "wheel_sha256": "44acc35b5814aada1e0a966c9b074008de1db6c676fe39922e004e467cccd2cb",
+    "sdist_sha256": "7b170e54e23a33630681014bae18020ab4f6023eaca4db6f8d0a1aae8831947b"
+  },
+  "operator_evidence": "tests/artifacts/acceptance/2026-09-07-profile-toml/operator/",
+  "setup_evidence": "tests/artifacts/acceptance/2026-09-07-profile-toml/",
+  "fresh_context": "fork_turns=none; external cwd /tmp/audio-profile-toml-operator; only brief, shipped skill and public CLI guidance",
+  "operator_verdicts": {
+    "capability": "PASS",
+    "delivery": "PASS",
+    "protocol": "PASS",
+    "reporting": "PASS",
+    "cli_calls": 7,
+    "all_exit_codes": 0,
+    "command_evidence": "operator/report.md retains exact commands, cwd, raw stream paths and exit-0 tool record IDs; direct shell redirection, no custom recorder",
+    "isolation_note": "Unsolicited review progress arrived near completion and was not used for execution or operator evidence; developer baseline comparison was shared after all CLI operations completed."
+  },
+  "reports_sha256": {
+    "inspect-transcription.json": "175829405e37a4c8a411d02dd098938f628035baef26e249e219b00afd77229e",
+    "enhance-transcription.json": "57ba077574277cf3718d663dd4571b2925037ecd30eb18e9af3ea8214966174b",
+    "inspect-product-demo.json": "e669defe3e3f624d7fbda092d23ff405a1e413749916e3c69d0db44e39d2a8e3",
+    "enhance-product-demo.json": "d4ad9e36b303c149a5fabbf4a8cbe39a3ee12d7cd393dc37487eef7e93401733"
+  },
+  "developer_artifact_review": "Four complete profiles equal frozen v5 baseline; each raw stdout equals saved JSON; entire report hashes equal the preceding JSON-candidate acceptance. Candidate, original bytes and skill snapshot unchanged.",
+  "independent_evidence_review": "PASS: no material findings; all four profiles/raw streams, source/skill/candidate identities, recorded commands and scoped delivery verified. Fresh context and exit-code tool records remain orchestration evidence rather than facts established solely by saved JSON.",
+  "observations": "Same stationary broadband abstentions, speech-leveling bounds, LRA limits and product-demo regional miss as preceding acceptance. These are dry-run predictions, not rendered measurements or perceptual improvement."
+}
