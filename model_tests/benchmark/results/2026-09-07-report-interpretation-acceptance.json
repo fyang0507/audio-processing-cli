@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-07",
+  "candidate_commit": "a667b727606f8899e506a7346dde864625446e69",
+  "scope": "Developer acceptance reporting and offline comparison of saved reports from the original custom audio/video clips",
+  "feature_verdict": "PASS",
+  "developer_reporting_verdict": "PASS",
+  "raw_artifact_root": "tests/artifacts/acceptance/2026-09-07-report-interpretation",
+  "implementation": {
+    "pytest_passed": 1741,
+    "pytest_skipped": 17,
+    "skip_scope": "Optional RNNoise live-filter tests; AUDIO_TEST_RNNOISE=1 not selected",
+    "lint_format": "PASS",
+    "independent_review": "PASS",
+    "interval_oracle_cases": 4489,
+    "malformed_report_cases": 35,
+    "media_processing_changed": false
+  },
+  "acceptance": {
+    "fresh_operators": 2,
+    "cli_calls": 12,
+    "all_cli_exit_zero": true,
+    "report_commands": 5,
+    "help_commands": 7,
+    "new_model_runs": 0,
+    "new_media_inspections": 0,
+    "new_renders": 0,
+    "reporting": "PASS",
+    "frozen_identity_checks": 185,
+    "all_frozen_files_unchanged": true,
+    "new_listening_judgment": "NOT REQUIRED",
+    "records": "Native tool events and per-invocation stdout/stderr; no separate complete timestamped shell journal claimed"
+  },
+  "cases": [
+    {
+      "case": "b-demo",
+      "source": "tests/artifacts/media/demo-video-audio-to-improve.mp4",
+      "source_sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "configuration": "Saved full-source product-demo v5, rnnoise inspection/dry-run/render/delivered-inspection reports",
+      "delivery": "PASS",
+      "cli_calls": 5,
+      "original_to_render": {"speech_reference_intervals": "same", "non_speech_region_intervals": "same"},
+      "render_to_delivered_inspection": {"speech_reference_intervals": "different", "non_speech_region_intervals": "different"},
+      "fixed_regions_inside_target": 9,
+      "fresh_regional_rules_outside_target": 5,
+      "fresh_total_rules": 7,
+      "saved_delivered_program": {"integrated_loudness_lufs": -16.02, "true_peak_dbtp": -2.48, "loudness_range_lu": 16.9},
+      "optional_observations": ["Five fresh relative-level misses", "LRA above the 11 LU profile target", "Nested unmeasured denoising, speech-preservation, alignment and sync checks"]
+    },
+    {
+      "case": "c-mixed",
+      "source": "tests/artifacts/media/autio-test-sample.m4a",
+      "source_sha256": "52fb707975d8a49c168d54f994d0a8dde39c679296d0c85b46f033649d0f2834",
+      "configuration": "Saved full-source product-demo v5, rnnoise inspection/dry-run/render/delivered-inspection reports",
+      "delivery": "PASS",
+      "cli_calls": 7,
+      "original_to_render": {"speech_reference_intervals": "same", "non_speech_region_intervals": "same"},
+      "render_to_delivered_inspection": {"speech_reference_intervals": "different", "non_speech_region_intervals": "same"},
+      "recorded_non_speech_regions": {"render": 0, "delivered_inspection": 0},
+      "fixed_final_region_evaluations": "absent",
+      "saved_delivered_program": {"integrated_loudness_lufs": -16.28, "true_peak_dbtp": -2.41, "loudness_range_lu": 4.0},
+      "optional_observations": ["Changed speech reference despite empty non-speech collections", "Nested unmeasured denoising, speech-preservation and alignment checks"]
+    }
+  ],
+  "excluded_work": ["Formal evaluation harness", "Within-region dynamic control", "Tighter loudness-range control"],
+  "cleanup": {"remaining_worktrees": 1, "new_operator_directories_removed": 2, "historical_evidence_preserved": true}
+}

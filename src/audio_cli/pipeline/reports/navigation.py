@@ -97,6 +97,16 @@ def _counts(report: dict[str, Any]) -> list[dict[str, Any]]:
     if "rule_evaluations" in report:
         phase = "inspected" if report["kind"] == "audio_inspection" else "before"
         add(report["rule_evaluations"], "/rule_evaluations", phase)
+        by_rule: dict[str, Counter[str]] = {}
+        for evaluation in report["rule_evaluations"]:
+            rule = evaluation.get("rule")
+            if isinstance(rule, str):
+                by_rule.setdefault(rule, Counter())[evaluation["status"]] += 1
+        if by_rule:
+            result[-1]["by_rule"] = [
+                {"rule": rule, "count": sum(statuses.values()), "statuses": dict(statuses)}
+                for rule, statuses in by_rule.items()
+            ]
     if "unresolved" in report:
         # Mixed phases are retained per occurrence in the limit index.
         add(report["unresolved"], "/unresolved", "mixed_or_unknown")
@@ -241,6 +251,10 @@ def comparison_navigation(
             },
         },
     }
+    if "measurement_scope_comparison" in comparison:
+        result["comparison_overview"]["measurement_scope_comparison"] = comparison[
+            "measurement_scope_comparison"
+        ]
     result["region_comparison"] = {
         "basis": matched["basis"],
         "overlaps": [

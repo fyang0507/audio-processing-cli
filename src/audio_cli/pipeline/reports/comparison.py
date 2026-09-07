@@ -13,6 +13,7 @@ from .loading import read_report, validate_output, validate_report
 from .matching import match_regions, scoped_regions, speech_reference
 from .metrics import measurement_view, pointed, records, region_view
 from .navigation import comparison_navigation
+from .scopes import measurement_scope_comparison
 from .summary import _decisions
 
 
@@ -71,6 +72,9 @@ def compare_reports(left: Path, right: Path, *, navigation: bool = False) -> dic
         }
         if "regions" in lview and "regions" in rview:
             result["region_comparison"] = match_regions(lview["regions"], rview["regions"])
+        scopes = measurement_scope_comparison(lview, rview)
+        if scopes:
+            result["measurement_scope_comparison"] = scopes
         if navigation:
             result = comparison_navigation(result, reports, (left, right))
         validate_output(result)

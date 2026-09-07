@@ -221,3 +221,55 @@ def test_navigation_comparison_keeps_identity_refusal(enhancement, inspection, s
     inspection["source"]["sha256"] = "c" * 64
     with pytest.raises(PipelineError):
         compare_reports(saved(enhancement), saved(inspection, "right.json"), navigation=True)
+
+
+def test_rule_breakdown_keeps_fresh_regional_denominator_separate(enhancement, inspection, saved):
+    machine_rule = "product-demo.machine-audio-relative-level"
+    inspection["rule_evaluations"] = [
+        {"rule": "product-demo.channel-level-difference", "status": "inside_target"},
+        {"rule": "product-demo.program-loudness", "status": "inside_target"},
+        *[{"rule": machine_rule, "status": "outside_target"} for _ in range(5)],
+    ]
+    enhancement["stages"][0]["final_region_evaluations"] = [
+        {"region_id": f"machine_{i}", "status": "inside_target"} for i in range(9)
+    ]
+    nav = compare_reports(saved(enhancement), saved(inspection, "right.json"), navigation=True)
+    rules = next(row for row in nav["right"]["outcome_counts"] if "by_rule" in row)
+    assert rules["count"] == 7
+    assert rules["statuses"] == {"inside_target": 2, "outside_target": 5}
+    assert rules["by_rule"][-1] == {
+        "rule": machine_rule,
+        "count": 5,
+        "statuses": {"outside_target": 5},
+    }
+    final = next(
+        row
+        for row in nav["left"]["outcome_counts"]
+        if row["report_pointer"].endswith("/final_region_evaluations")
+    )
+    assert final["count"] == 9 and final["statuses"] == {"inside_target": 9}
+    assert final["phase"] == "unknown"
+
+
+def test_rule_breakdown_keeps_exact_names_and_unnamed_legacy_totals(enhancement, saved):
+    enhancement["rule_evaluations"] = [
+        {"rule": "literal/~rule", "status": "inside_target"},
+        {"rule": "literal/~rule", "status": "outside_target"},
+        {"rule": None, "status": "outside_target"},
+        {"rule": {"extension": True}, "status": "abstained"},
+        {"status": "inside_target"},
+    ]
+    nav = summarize_report(saved(enhancement), navigation=True)
+    rules = nav["outcome_counts"][0]
+    assert rules["count"] == 5
+    assert rules["statuses"] == {"inside_target": 2, "outside_target": 2, "abstained": 1}
+    assert rules["by_rule"] == [
+        {
+            "rule": "literal/~rule",
+            "count": 2,
+            "statuses": {"inside_target": 1, "outside_target": 1},
+        }
+    ]
+    enhancement["rule_evaluations"] = [{"status": "inside_target"}]
+    nav = summarize_report(saved(enhancement), navigation=True)
+    assert "by_rule" not in nav["outcome_counts"][0]
