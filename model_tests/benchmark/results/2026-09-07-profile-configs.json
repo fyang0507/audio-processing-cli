@@ -1,0 +1,71 @@
+{
+  "topic": "Bundled enhancement profile configuration extraction",
+  "issue": 70,
+  "candidate_commit": "02d43d742638052f1cb168b982f8da5f5b9feac3",
+  "candidate_executable": "/tmp/audio-profile-configs/.venv/bin/audio",
+  "candidate_version": "0.1.0",
+  "candidate_binding": "uv editable installation resolved audio_cli to /private/tmp/audio-profile-configs/src/audio_cli/__init__.py; clean candidate and exact commit verified before and after acceptance",
+  "scope": "Full original demo inspection and stationary-denoiser dry runs for both version 5 profiles; configuration compatibility and CLI execution only",
+  "excluded_scope": "No DSP, transcription, provisioning or export changes. Matrix A, C transcription, D1 and D2 not required. B narrowed to inspection and dry runs with both profiles. Rendering and perceptual improvement are not required; unchanged profile values and pipeline regression checks cover compatibility, without claiming encoded-media equality.",
+  "source": {
+    "fixture": "tests/artifacts/media/demo-video-audio-to-improve.mp4",
+    "bytes_before": 91066646,
+    "bytes_after": 91066646,
+    "sha256_before": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+    "sha256_after": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+    "decoded_duration_seconds": 112.405333
+  },
+  "skill_snapshot": {
+    "origin": "skills/audio-cli at candidate_commit",
+    "external_path": "/tmp/audio-profile-operator/skill",
+    "sha256": {
+      "SKILL.md": "9b2a6c9f43d913dfeaf0ae40d13dbf5068bad5f49fd4afec5ce40487db10b2c3",
+      "references/transcribe.md": "1a31b747a50b311ef855d66c609e1799018bfa6b7931d4a0a59b97aa6d7faacc",
+      "references/targeted-fixes.md": "ea45e1db4c5784bd7be8de9989056c20e005538d21cb8a61528c486c5cf9e79c",
+      "references/failures.md": "fbe037ffe94c0846c373eacaa2ef4fb33fc6c82aefd7aba79b29d0e6424f1c91",
+      "references/enhance-audio.md": "e5de783c16d60c1f7222228ea382ff3eb42c11d125a0a28f83c11436ec74e06b",
+      "references/readiness.md": "c800df5e889f8a9e11af0011ec365adca4d090de42fd81c3ef83c7a985460e6f",
+      "references/model-packages.md": "1f5d7288ec502daa10c6d89199dc0cdc6ca7d6f8de548b5a9c16df141ed8f4f6",
+      "agents/openai.yaml": "b22d8820aaa027bf49da65ca6fa01b549de54c88a193924070d1e2d5616de14b"
+    }
+  },
+  "implementation_checks": {
+    "pytest": "1766 passed, 24 skipped; uv run --extra dev pytest",
+    "lint_format": "PASS: uv run --extra dev pre-commit run --all-files",
+    "profile_checks": "Exact pre-refactor values, strict invalid-definition rejection, supported numeric boundaries, and automatic CLI discovery of an additional bundled preset",
+    "distribution": "PASS: uv build --out-dir /tmp/audio-profile-dist-final builds wheel from sdist; isolated uv installation outside source checkout loads exact baseline values and CLI choices",
+    "wheel_sha256": "5a59ff1bf8c8de24a215761740ac53fae7e514b2a6a72b7083737f6a73029f69",
+    "sdist_sha256": "24f29bf1d6140295ea67770943b3c05bad53eafd46c0a54ef24f66dab49c71ab",
+    "independent_code_review": "PASS: loudnorm-bound finding fixed and independently rechecked; no remaining findings"
+  },
+  "operator": {
+    "fresh_context": true,
+    "cwd": "/tmp/audio-profile-operator",
+    "guidance": "Task brief, shipped skill snapshot, public CLI help/results only",
+    "raw_evidence": "tests/artifacts/acceptance/2026-09-07-profile-configs/operator/",
+    "scope_and_identity": "tests/artifacts/acceptance/2026-09-07-profile-configs/",
+    "commands": 7,
+    "all_exit_statuses": 0,
+    "unexpected_failures": 0,
+    "retries_or_fallbacks": 0,
+    "capability_verdict": "PASS",
+    "delivery_verdict": "PASS",
+    "reporting_verdict": "PASS",
+    "protocol_verdict": "FAIL",
+    "protocol_deviation": "Operator used an external custom subprocess recorder despite acceptance step 4 prohibiting custom recorders. Developer and independent reviewer inspected its transparent logging and verified raw stdout against saved reports; this deviation does not invalidate the checked capability/delivery artifacts. No unqualified conduct pass is claimed."
+  },
+  "reports_sha256": {
+    "inspect-transcription.json": "175829405e37a4c8a411d02dd098938f628035baef26e249e219b00afd77229e",
+    "dry-run-transcription.json": "57ba077574277cf3718d663dd4571b2925037ecd30eb18e9af3ea8214966174b",
+    "inspect-product-demo.json": "e669defe3e3f624d7fbda092d23ff405a1e413749916e3c69d0db44e39d2a8e3",
+    "dry-run-product-demo.json": "d4ad9e36b303c149a5fabbf4a8cbe39a3ee12d7cd393dc37487eef7e93401733"
+  },
+  "developer_artifact_review": "All four complete profile objects equal tests/fixtures/profiles-v5.json; command records and raw reports inspected; source, candidate and skill identity preserved",
+  "independent_evidence_review": "Scoped capability and delivery PASS; all seven commands, raw stream/report equality, baseline profiles and identities independently verified. Custom recorder protocol deviation recorded separately. Fresh context established by fork_turns=none orchestration and external cwd, not inferred from output artifacts.",
+  "observations": [
+    "Both stationary broadband components abstained on nonstationary references; this is not evidence of noise reduction.",
+    "Both speech-leveling bounds and LRA targets remain unresolved; product-demo also has a bounded regional target miss.",
+    "Source balance is disabled/no_op for transcription and applied for product-demo.",
+    "Dry runs are predictions, not rendered-file measurements; no listening, recognition-quality or A/V sync claim."
+  ]
+}
