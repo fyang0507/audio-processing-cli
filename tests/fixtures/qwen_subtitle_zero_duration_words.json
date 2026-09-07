@@ -1,0 +1,36 @@
+{
+  "origin": {
+    "artifact": "tests/artifacts/acceptance/2026-09-06-boundary-recovery/d-qwen/d3.clipped.canonical.json",
+    "sha256": "38b64260ff16761f9b0d8f3b1f12858c554afba54ab8503c262aa404974dc100",
+    "scope": "Two compact excerpts; original word IDs, text and source-relative bounds retained. The second excerpt is the exact substring covering w_222 through w_226, not the full private transcript."
+  },
+  "segments": [
+    {
+      "segment_id": "seg_10",
+      "speaker": "S1",
+      "text": "好，嗯，然后就是说呢。",
+      "words": [
+        {"word_id": "w_93", "text": "好", "start": 40.934, "end": 41.254},
+        {"word_id": "w_94", "text": "嗯", "start": 42.374, "end": 42.374},
+        {"word_id": "w_95", "text": "然", "start": 44.214, "end": 44.374},
+        {"word_id": "w_96", "text": "后", "start": 44.374, "end": 44.534},
+        {"word_id": "w_97", "text": "就", "start": 44.534, "end": 44.694},
+        {"word_id": "w_98", "text": "是", "start": 44.694, "end": 44.854},
+        {"word_id": "w_99", "text": "说", "start": 44.854, "end": 45.094},
+        {"word_id": "w_100", "text": "呢", "start": 45.094, "end": 45.414}
+      ]
+    },
+    {
+      "segment_id": "seg_31",
+      "speaker": "S1",
+      "text": "the verbatim kind of records",
+      "words": [
+        {"word_id": "w_222", "text": "the", "start": 123.77, "end": 124.25},
+        {"word_id": "w_223", "text": "verbatim", "start": 124.33, "end": 124.33},
+        {"word_id": "w_224", "text": "kind", "start": 126.81, "end": 126.81},
+        {"word_id": "w_225", "text": "of", "start": 126.81, "end": 126.81},
+        {"word_id": "w_226", "text": "records", "start": 128.09, "end": 128.89}
+      ]
+    }
+  ]
+}

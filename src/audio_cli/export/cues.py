@@ -282,6 +282,62 @@ def _to_ms(seconds: float, quantum_ms: int) -> int:
     return units * quantum_ms
 
 
+def _cue_groups(
+    mapped: Sequence[_MappedWord], text: str, policy: CuePolicy
+) -> list[list[_MappedWord]]:
+    groups: list[list[_MappedWord]] = []
+    current: list[_MappedWord] = []
+    for word in mapped:
+        if current:
+            prospective_text = _text_for(text, [*current, word])
+            cjk = _contains_cjk(prospective_text)
+            line_width = policy.max_chars_per_line_cjk if cjk else policy.max_chars_per_line_latin
+            gap = word.start - current[-1].end
+            too_long = word.end - current[0].start > policy.max_duration_s
+            too_wide = _visible_length(prospective_text) > (line_width * policy.max_lines)
+            too_many = (
+                not cjk and policy.max_words_latin > 0 and len(current) >= policy.max_words_latin
+            )
+            if gap >= policy.max_gap_s or too_long or too_wide or too_many:
+                groups.append(current)
+                current = []
+        current.append(word)
+        word_text = text[word.char_start : word.char_end]
+        if _ends_with(word_text, _SENTENCE_FINAL) or (
+            _ends_with(word_text, _CLAUSE_FINAL)
+            and _visible_length(_text_for(text, current)) >= policy.min_clause_chars
+        ):
+            groups.append(current)
+            current = []
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _retain_collapsed_groups(
+    groups: Sequence[list[_MappedWord]], policy: CuePolicy, segment_index: int
+) -> list[list[_MappedWord]]:
+    """Merge forward first, then a remaining tail backward, within one segment."""
+    retained: list[list[_MappedWord]] = []
+    pending: list[_MappedWord] = []
+    for group in groups:
+        pending.extend(group)
+        if _to_ms(pending[-1].end, policy.quantization_ms) > _to_ms(
+            pending[0].start, policy.quantization_ms
+        ):
+            retained.append(pending)
+            pending = []
+    if pending:
+        if not retained:
+            raise CueError(
+                f"segments[{segment_index}] supplied word bounds cannot form a positive "
+                "subtitle interval after millisecond quantization; refusing to omit words "
+                "or fabricate timing"
+            )
+        retained[-1].extend(pending)
+    return retained
+
+
 def build_cues(
     segments: Sequence[Mapping[str, Any]],
     *,
@@ -294,108 +350,63 @@ def build_cues(
     independently, so a cue can never cross a segment or speaker change.
     """
     cues: list[Cue] = []
-    exact_cue_bounds: list[tuple[float, float]] = []
     warnings: list[dict[str, Any]] = []
-
+    mapped_segments: list[tuple[int, Mapping[str, Any], list[_MappedWord]]] = []
+    previous_end = -1.0
     for segment_index, segment in enumerate(segments):
         words = segment.get("words")
         if not isinstance(words, (list, tuple)) or not words:
             continue
         mapped = _map_words(segment, segment_index=segment_index, duration=duration)
-        text = segment["text"]
-        speaker = segment.get("speaker")
-        current: list[_MappedWord] = []
-
-        def flush(*, segment_text: str = text, segment_speaker: object = speaker) -> None:
-            nonlocal current
-            if not current:
-                return
-            cue_text = _text_for(segment_text, current)
-            start_ms = _to_ms(current[0].start, policy.quantization_ms)
-            end_ms = _to_ms(current[-1].end, policy.quantization_ms)
-            if cue_text:
-                # Exact chronology is an input invariant, including candidates that
-                # later collapse on the subtitle millisecond grid.
-                exact_cue_bounds.append((current[0].start, current[-1].end))
-            if cue_text and end_ms > start_ms:
-                wrapped, overlong = _wrap(cue_text, current, policy=policy)
-                cues.append(
-                    Cue(
-                        start_ms=start_ms,
-                        end_ms=end_ms,
-                        text=wrapped,
-                        speaker=(segment_speaker if isinstance(segment_speaker, str) else None),
-                    )
-                )
-                if overlong:
-                    warnings.append(
-                        {
-                            "code": "cue_line_overlong",
-                            "blocking": False,
-                            "detail": (
-                                "a cue cannot meet the line-width policy without splitting "
-                                "inside a timed word"
-                            ),
-                        }
-                    )
-                if current[-1].end - current[0].start > policy.max_duration_s:
-                    warnings.append(
-                        {
-                            "code": "cue_duration_overlong",
-                            "blocking": False,
-                            "detail": (
-                                "a single timed word exceeds the cue-duration policy and "
-                                "cannot be split without fabricating a word boundary"
-                            ),
-                        }
-                    )
-            elif cue_text:
-                warnings.append(
-                    {
-                        "code": "cue_dropped_after_quantization",
-                        "blocking": False,
-                        "detail": (
-                            "a cue whose exact word bounds collapse on the millisecond grid "
-                            "was omitted rather than assigned fabricated timing"
-                        ),
-                    }
-                )
-            current = []
-
-        for word in mapped:
-            if current:
-                prospective = [*current, word]
-                prospective_text = _text_for(text, prospective)
-                cjk = _contains_cjk(prospective_text)
-                line_width = (
-                    policy.max_chars_per_line_cjk if cjk else policy.max_chars_per_line_latin
-                )
-                gap = word.start - current[-1].end
-                too_long = word.end - current[0].start > policy.max_duration_s
-                too_wide = _visible_length(prospective_text) > (line_width * policy.max_lines)
-                too_many = (
-                    not cjk
-                    and policy.max_words_latin > 0
-                    and len(current) >= policy.max_words_latin
-                )
-                if gap >= policy.max_gap_s or too_long or too_wide or too_many:
-                    flush()
-            current.append(word)
-            current_text = _text_for(text, current)
-            word_text = text[word.char_start : word.char_end]
-            if _ends_with(word_text, _SENTENCE_FINAL) or (
-                _ends_with(word_text, _CLAUSE_FINAL)
-                and _visible_length(current_text) >= policy.min_clause_chars
-            ):
-                flush()
-        flush()
-
-    for previous, current in pairwise(exact_cue_bounds):
-        if current[0] < previous[1]:
+        # Check every original stream before regrouping or refusing a collapsed one.
+        # Otherwise zero-duration candidates could hide an earlier chronology defect.
+        if mapped[0].start < previous_end:
             raise CueError(
                 "word-derived cues overlap before millisecond quantization; refusing to "
                 "trim or nudge a real word bound"
             )
+        previous_end = mapped[-1].end
+        mapped_segments.append((segment_index, segment, mapped))
+
+    for segment_index, segment, mapped in mapped_segments:
+        text = segment["text"]
+        speaker = segment.get("speaker")
+        groups = _retain_collapsed_groups(_cue_groups(mapped, text, policy), policy, segment_index)
+        for current in groups:
+            cue_text = _text_for(text, current)
+            start_ms = _to_ms(current[0].start, policy.quantization_ms)
+            end_ms = _to_ms(current[-1].end, policy.quantization_ms)
+            wrapped, overlong = _wrap(cue_text, current, policy=policy)
+            cues.append(
+                Cue(
+                    start_ms=start_ms,
+                    end_ms=end_ms,
+                    text=wrapped,
+                    speaker=(speaker if isinstance(speaker, str) else None),
+                )
+            )
+            if overlong:
+                warnings.append(
+                    {
+                        "code": "cue_line_overlong",
+                        "blocking": False,
+                        "detail": (
+                            "a cue exceeds the line-width policy while retaining complete "
+                            "mapped words in a positive-duration cue"
+                        ),
+                    }
+                )
+            if current[-1].end - current[0].start > policy.max_duration_s:
+                warnings.append(
+                    {
+                        "code": "cue_duration_overlong",
+                        "blocking": False,
+                        "detail": (
+                            "a cue exceeds the duration policy while retaining all mapped "
+                            "words and their supplied bounds"
+                        ),
+                    }
+                )
     for previous, current in pairwise(cues):
         if current.start_ms < previous.end_ms:
             raise CueError(
