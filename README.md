@@ -16,7 +16,7 @@ Transcription uses an explicit stack and produces a reusable JSON result for off
 
 ## Install
 
-This section covers operator setup. Audio-processing agents use the installed `audio` command and report setup blockers through its [readiness guidance](skills/audio-cli/references/readiness.md).
+This section covers operator setup. Audio-processing agents use the installed `audio` command and report setup blockers through its [setup and failure guidance](skills/audio-cli/references/failures.md).
 
 Requirements:
 
