@@ -1,0 +1,109 @@
+{
+  "date": "2026-09-07",
+  "issue": 64,
+  "candidate_commit": "b5e6a68877476395913fd8aa62f7256fd00a718b",
+  "candidate_worktree": "/Users/fredy/Documents/fred-projects/audio-processing-cli-issue64",
+  "candidate_executable": "/Users/fredy/Documents/fred-projects/audio-processing-cli-issue64/.venv/bin/audio",
+  "candidate_executable_sha256": "519b5063e0c4d1dc05542241beb577885dfcb475f046848ae60abe0499ef49f5",
+  "candidate_version": "0.1.0",
+  "editable_import_verified_before_and_after": true,
+  "candidate_clean_before_and_after_execution": true,
+  "scope": "Remove inspect/enhance --vad-model while preserving shared model configuration, pinned-model validation and full-source functional enhancement",
+  "feature_verdict": "PASS",
+  "delivery_verdict": "PASS",
+  "raw_artifact_root": "tests/artifacts/acceptance/2026-09-07-issue64",
+  "scope_record": "scope.md",
+  "operator_report": "operator-report.md",
+  "development_report": "development-report.md",
+  "implementation": {
+    "targeted_vad_cli_provisioning_docs_architecture_tests_passed": 196,
+    "additional_cli_pipeline_tests_passed": 168,
+    "targeted_tests_skipped": 0,
+    "lint_format": "PASS",
+    "hooks_installed": true,
+    "independent_source_review": "PASS",
+    "model_resolution_or_enhancement_algorithms_changed": false
+  },
+  "acceptance": {
+    "fresh_operators": 1,
+    "context_fork": "none",
+    "operator_cwd": "/tmp/audio-issue64-operator-20260907",
+    "skill_snapshot": "skill-snapshot/audio-cli",
+    "skill_entry_sha256": "9b2a6c9f43d913dfeaf0ae40d13dbf5068bad5f49fd4afec5ce40487db10b2c3",
+    "skill_files_hashed_and_unchanged": 8,
+    "cli_calls": 22,
+    "exit_zero_calls": 18,
+    "predeclared_exit_two_calls": 4,
+    "unexpected_cli_failures": 0,
+    "real_media_inspections": 4,
+    "real_dry_runs": 2,
+    "real_renders": 2,
+    "audio_processing_sequential": true,
+    "operator": "PASS",
+    "protocol": "PASS",
+    "reporting": "PASS",
+    "independent_evidence_review": "PASS",
+    "independent_review_scope": "Parent reviewer read both canonical reports, actual render hashes, original inspections, configuration log, source identity and all four raw refusal stdout/stderr/exit files; no actionable findings",
+    "new_listening_judgment": "NOT REQUIRED",
+    "records": "Exact executable/arguments/environment/cwd logs and raw stdout/stderr/exit files for every operator CLI call; timestamps limited to available native tool records"
+  },
+  "fixture": {
+    "source": "tests/artifacts/media/demo-video-audio-to-improve.mp4",
+    "source_checkout": "/Users/fredy/Documents/fred-projects/audio-processing-cli",
+    "source_bytes_before_and_after": 91066646,
+    "source_sha256_before_and_after": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+    "source_unchanged": true,
+    "scope": "full_original",
+    "decoded_duration_seconds": 112.405333,
+    "profile": "product-demo",
+    "profile_version": "5",
+    "denoiser": "rnnoise"
+  },
+  "variants": [
+    {
+      "case": "managed",
+      "configuration": "AUDIO_PROCESSING_VAD_MODEL unset; AUDIO_PROCESSING_MODEL_CACHE selects the existing shared root",
+      "delivery": "PASS",
+      "cli_calls": 12,
+      "canonical_render_report": "managed/enhanced.report.json",
+      "render": "managed/enhanced.mp4"
+    },
+    {
+      "case": "override",
+      "configuration": "Command-local AUDIO_PROCESSING_VAD_MODEL selects an exact prepopulated model copy outside the shared cache",
+      "delivery": "PASS",
+      "cli_calls": 6,
+      "canonical_render_report": "override/enhanced.report.json",
+      "render": "override/enhanced.mp4"
+    }
+  ],
+  "equivalence": {
+    "original_inspections_identical": true,
+    "dry_runs_identical": true,
+    "render_report_differing_pointers": ["/output/path"],
+    "delivered_inspection_differing_pointers": ["/source/path"],
+    "render_bytes_identical": true,
+    "render_bytes": 91073983,
+    "render_sha256": "58b1622788f2a31de1a58c1f90125598f13bee446b2601e3e1d0321fa488d0a3",
+    "resolved_operations_sha256": "c35a8cf5759460f2a3129859a3f8d34fdd35d9be4a05cfa0d7a86fa7a15bcd46",
+    "vad_model_sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+    "delivered_program": {"integrated_loudness_lufs": -16.02, "true_peak_dbtp": -2.48, "loudness_range_lu": 16.9},
+    "peak_validation": "pass",
+    "timeline_validation": "pass",
+    "timeline_scope": "decoded_audio_duration_only",
+    "duration_delta_ms": 0.0
+  },
+  "negative_cases": [
+    {"case": "inspect_removed_flag", "exit": 2, "stdout_empty": true, "observed": "unrecognized arguments", "verdict": "PASS"},
+    {"case": "enhance_removed_flag", "exit": 2, "stdout_empty": true, "observed": "unrecognized arguments", "verdict": "PASS"},
+    {"case": "inspect_bad_override", "exit": 2, "stdout_empty": true, "observed": "VadError checksum mismatch", "verdict": "PASS"},
+    {"case": "enhance_bad_override", "exit": 2, "stdout_empty": true, "observed": "VadError checksum mismatch", "verdict": "PASS"}
+  ],
+  "optional_observations": [
+    "Intermediate speech-leveling reached its correction bound at -37.382 dBFS versus -30 dBFS target",
+    "Delivered LRA 16.9 LU remains above the 11 LU profile preference",
+    "Nine fixed final program intervals are inside target while five fresh candidates miss a separate relative-level target",
+    "Actual noise reduction, speech preservation, content alignment and A/V sync remain unmeasured"
+  ],
+  "not_required": ["Other transcription and mixed-language matrix rows for this narrow argument change", "ASR", "Visual analysis", "Filler cuts", "Human listening or model-accuracy judgment"]
+}
