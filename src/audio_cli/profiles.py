@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import json
 import math
 import re
+import tomllib
 from dataclasses import asdict, dataclass, fields
 from importlib.resources import files
 from importlib.resources.abc import Traversable
@@ -71,18 +71,9 @@ class Profile:
         return data
 
 
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate field {key!r}")
-        result[key] = value
-    return result
-
-
 def _validate_profile(data: object, name: str) -> Profile:
     if not isinstance(data, dict):
-        raise ValueError("profile must be a JSON object")
+        raise ValueError("profile must be a TOML table")
     expected = {field.name for field in fields(Profile)}
     if missing := expected - data.keys():
         raise ValueError(f"missing fields: {', '.join(sorted(missing))}")
@@ -157,18 +148,16 @@ def _validate_profile(data: object, name: str) -> Profile:
 def _load_profiles(directory: Traversable) -> dict[str, Profile]:
     profiles: dict[str, Profile] = {}
     for resource in sorted(directory.iterdir(), key=lambda entry: entry.name):
-        if not resource.is_file() or not resource.name.endswith(".json"):
+        if not resource.is_file() or not resource.name.endswith(".toml"):
             continue
-        name = resource.name.removesuffix(".json")
+        name = resource.name.removesuffix(".toml")
         try:
-            data = json.loads(
-                resource.read_text(encoding="utf-8"), object_pairs_hook=_unique_object
-            )
+            data = tomllib.loads(resource.read_text(encoding="utf-8"))
             profiles[name] = _validate_profile(data, name)
         except (ValueError, TypeError, OSError) as exc:
             raise ValueError(f"Invalid bundled profile {resource.name}: {exc}") from exc
     if not profiles:
-        raise ValueError("No bundled profile JSON files found")
+        raise ValueError("No bundled profile TOML files found")
     return profiles
 
 

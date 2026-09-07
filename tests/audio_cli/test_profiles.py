@@ -45,8 +45,19 @@ def test_bundled_profiles_preserve_version_five_settings() -> None:
     )
 
 
-def test_new_bundled_profile_is_discovered_by_cli(tmp_path, monkeypatch) -> None:
+def _toml_profile(data: dict) -> str:
     import json
+
+    return (
+        "\n".join(
+            f"{key} = {repr(value) if type(value) in (int, float) else json.dumps(value)}"
+            for key, value in data.items()
+        )
+        + "\n"
+    )
+
+
+def test_new_bundled_profile_is_discovered_by_cli(tmp_path, monkeypatch) -> None:
     from dataclasses import asdict
 
     from audio_cli import cli_parser
@@ -54,7 +65,7 @@ def test_new_bundled_profile_is_discovered_by_cli(tmp_path, monkeypatch) -> None
 
     data = asdict(PROFILES["transcription"])
     data["name"] = "meeting"
-    (tmp_path / "meeting.json").write_text(json.dumps(data))
+    (tmp_path / "meeting.toml").write_text(_toml_profile(data))
     loaded = _load_profiles(tmp_path)
     monkeypatch.setattr(cli_parser, "PROFILES", loaded)
     parser = cli_parser.build_parser()
@@ -70,7 +81,6 @@ def test_new_bundled_profile_is_discovered_by_cli(tmp_path, monkeypatch) -> None
 
 
 def test_invalid_bundled_profiles_are_rejected(tmp_path) -> None:
-    import json
     from dataclasses import asdict
 
     import pytest
@@ -100,16 +110,16 @@ def test_invalid_bundled_profiles_are_rejected(tmp_path) -> None:
         ("version", "", "positive integer string"),
         ("speech_transition_placement", "inside", "must be 'outside'"),
     ]
-    path = tmp_path / "transcription.json"
+    path = tmp_path / "transcription.toml"
     for key, value, message in cases:
-        path.write_text(json.dumps(original | {key: value}))
+        path.write_text(_toml_profile(original | {key: value}))
         with pytest.raises(ValueError, match=message):
             _load_profiles(tmp_path)
     for raw, message in [
-        ("[]", "JSON object"),
-        ("{}", "missing fields"),
-        ('{"name":"a","name":"b"}', "duplicate field"),
-        ("{", "Invalid bundled profile transcription.json"),
+        ("", "missing fields"),
+        ('name = "a"\nname = "b"', "Cannot overwrite a value"),
+        ("[", "Invalid bundled profile transcription.toml"),
+        ('name = { value = "transcription" }', "missing fields"),
     ]:
         path.write_text(raw)
         with pytest.raises(ValueError, match=message):
