@@ -59,7 +59,7 @@ Three unrelated things were previously all called `requires`. They are now `pack
 
 Machine-readable output goes to stdout; human progress goes to stderr, so an agent can pipe stdout safely. Note the distinction from a plan's `warnings` array, which is a stdout field of the plan document, not a stderr message.
 
-`run` defaults to `--format json` on stdout, matching the existing CLI's machine-readable convention. `--format md|txt` are for human consumption. An existing explicit output or its derived partial-result path is refused before decode unless `--force` is present. When `-o` is omitted, incomplete runs choose an unused sibling partial path instead of replacing an earlier attempt. Even with `--force`, `--output` may never resolve to an input transcript, its derived partial path, or canonical source media.
+`run` produces normalized JSON on stdout and also saves that JSON when `--output` is supplied. Successful stdout-only runs create no automatic file or sidecar. The explicit `--format json` spelling remains supported for script compatibility but is omitted from primary help and examples. Formatting belongs to `transcribe export`: one saved result can produce multiple TXT, Markdown, subtitle or JSONL exports without recognition again. Old `run --format txt` and `run --format md` invocations produce an argument error at exit 2 before request resolution, media probing or model execution, with guidance to save JSON and export it to a distinct destination. An existing explicit output or its derived partial-result path is refused before decode unless `--force` is present. When `-o` is omitted, incomplete runs choose an unused sibling partial path instead of replacing an earlier attempt. Even with `--force`, `--output` may never resolve to an input transcript, its derived partial path, or canonical source media.
 
 `--language` is the one caller-settable model input, and it is a hint passed to the ASR rather than a capability. Only the Qwen stacks accept it; `vibevoice` advertises code switching without language selection, and FireRed's ASR takes no language argument at all — its language is an output of the optional LID stage, not an input. Each stack's `languages` catalog entry says whether it takes one, and passing the flag to a stack that does not is `option_unsupported_on_stack` rather than a silently ignored argument.
 
@@ -187,9 +187,11 @@ Capability and plan estimates use the media-owned probed duration with `duration
 
 Request validation remedies correct the offending fields in prose and tell the caller to repeat its original command with every other argument preserved. They never change `run` to `plan`, drop range/output/format/language options, or silently choose a full-media run. This keeps fixed refusal payloads independent of execution-only options. Concrete provisioning and output retry commands remain runnable when their builders have the full context.
 
+The inventoried Python compatibility facade retains `render_human` and the `output_format` parameter, including legacy human-file publication for Python callers. Public CLI execution always selects JSON and never calls that renderer. Legacy human-output collisions give a Python retry remedy rather than an unsupported CLI format command. This compatibility surface adds no `transcribe -> export` dependency; new readable-output workflows use the export command.
+
 ### Published-run receipts
 
-`audio transcribe run --receipt` requires `--output PATH` and JSON format (`--format json`, including its default). It applies to all four stacks. The saved normalized JSON remains byte-for-byte identical to the same run without `--receipt`; only stdout becomes a JSON receipt. Default run stdout remains the full result. For example, a complete floors-only Qwen run with three segments and no abstentions returns:
+`audio transcribe run --receipt` requires `--output PATH`; runs always produce JSON. The compatibility spelling `--format json` remains accepted. It applies to all four stacks. The saved normalized JSON remains byte-for-byte identical to the same run without `--receipt`; only stdout becomes a JSON receipt. Default run stdout remains the full result. For example, a complete floors-only Qwen run with three segments and no abstentions returns:
 
 ```json
 {
@@ -253,6 +255,6 @@ Invalid receipt combinations refuse at exit 2 before request resolution, media p
   "output_supplied": false,
   "format": "json",
   "requires": ["--output", "--format json"],
-  "fix": "use --receipt with --output PATH and --format json, or remove --receipt; repeat the original command, preserving every other argument"
+  "fix": "use --receipt with --output PATH, or remove --receipt; repeat the original command, preserving every other argument"
 }
 ```

@@ -101,7 +101,7 @@ The `vibevoice` capabilities payload carries the same source-scoped truncation r
 audio packages pull --stack vibevoice
 audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,diarization,segment_timestamps,word_timestamps \
-  --format json -o demo.transcript.json
+  -o demo.transcript.json
 ```
 
 Exit 0. `demo.transcript.json`:

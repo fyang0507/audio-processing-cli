@@ -223,6 +223,7 @@ def _resume_command(
 
 
 def render_human(payload: Mapping[str, Any], output_format: str) -> str:
+    """Frozen Python compatibility renderer; the public CLI formats only through export."""
     lines = []
     for item in payload["segments"]:
         prefix = f"[{item['speaker']}] " if "speaker" in item else ""

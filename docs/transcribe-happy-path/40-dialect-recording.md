@@ -98,7 +98,7 @@ Exit 0. Segments carry no `speaker` key in the sample or the result: FireRed has
 audio packages pull --stack firered
 audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_timestamps,vad,segment_timestamps,lid \
-  --format json -o field.transcript.json
+  -o field.transcript.json
 ```
 
 Exit 0. `field.transcript.json`:

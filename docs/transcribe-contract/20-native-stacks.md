@@ -65,7 +65,7 @@ audio packages pull --stack vibevoice
 audio packages verify
 audio transcribe run --input demo.mp4 --stack vibevoice \
   --want verbatim,diarization,segment_timestamps,word_timestamps \
-  --format json -o demo.transcript.json
+  -o demo.transcript.json
 ```
 
 `verbatim` is the reason this stack's catalog is worth reading before choosing it, and it is worth being precise about what the capability claims. It claims the stack **can produce** verbatim text — that it emits what it heard rather than a cleaned rendering — and that is now measured rather than assumed: 28 filler hits here, 26 on both Qwen sizes, 24 on FireRed, no stack cleaning and no stack complete. Accuracy is a separate story, carried by `quality`. So `verbatim` resolves `native` here exactly as it does on `firered`, and the entire difference is that a recorded run *refuted* the quality half twice, on two clips and two lexemes. `quality: "refuted"` with an `observed_limit` is not the same statement as `unmeasured`; filing the normalization as unmeasured would have made the stack that failed the probe read like the stack that was never tested.
@@ -138,7 +138,7 @@ audio packages pull --stack firered
 audio packages verify
 audio transcribe run --input field.wav --stack firered \
   --want verbatim,word_timestamps,vad,segment_timestamps \
-  --format json -o field.transcript.json
+  -o field.transcript.json
 ```
 
 `firered-asr2s` is one package pinning four repositories and `pull` materializes all of them, LID weights included, whatever the plan asked for. The plan's `next` narrows missing package ids, not repositories inside a package. `pull` refuses `--want`; choose capabilities in `transcribe plan`, then use its explicit package selection. Neither the whole-package figure nor a narrowed one is recorded in a tracked artifact — the only tracked source is a pre-harness "~9.2 GB" note that its own document marks as history rather than decision evidence — so both appear as `approximate, unrecorded` until per-artifact sizes are recorded the way the MLX runs record `weight_bytes`.
@@ -158,7 +158,7 @@ audio transcribe plan --input field.wav --stack firered \
   --want verbatim,word_timestamps,lid
 audio packages pull --stack firered
 audio transcribe run --input field.wav --stack firered \
-  --want verbatim,word_timestamps,lid --format json -o field.lid.json
+  --want verbatim,word_timestamps,lid -o field.lid.json
 ```
 
 That plan adds the eighth and last role, and it is the one case where a requirement turns on a stage the stack already contains rather than adding a package:
@@ -190,7 +190,7 @@ FireRed has no speaker output, so speaker attribution here is an add-on like it 
 audio packages pull --stack firered
 audio transcribe run --input interview.wav --stack firered \
   --want verbatim,word_timestamps,diarization,overlapped_speech \
-  --format json -o interview.firered.json
+  -o interview.firered.json
 ```
 
 ### Interpreting VibeVoice startup warnings

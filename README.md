@@ -12,9 +12,7 @@ original + profile
 
 The CLI reports what it measured, which versioned rule matched, the exact DSP parameters it resolved, and whether the result conforms to the selected profile. It does not label audio universally “good” or “bad,” and it abstains where a mixed track cannot be changed safely.
 
-The second implemented surface is transcription, deterministic export, and its explicit provisioning layer. `audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact request, and `audio transcribe run` executes all four stacks: `qwen-1.7b`, `qwen-0.6b`, `firered`, and `vibevoice`. `audio transcribe export` renders normalized results without model work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims the pinned packages and runtimes. Provider ASR, alignment, and diarization downloads require an explicit `audio packages pull`. The small shared Silero VAD bootstrap used by inspection, enhancement, or transcription is the sole implicit model fetch and is described under Install.
-
-This implements [Issue #4 — Profile-driven automatic audio enhancement](https://github.com/fyang0507/audio-processing-cli/issues/4) within the product boundary established by [Issue #1](https://github.com/fyang0507/audio-processing-cli/issues/1).
+Transcription uses an explicit stack and produces a reusable JSON result for offline export. `audio transcribe capabilities` describes a stack, `audio transcribe plan` resolves an exact request, and `audio transcribe run` recognizes original media using one of four stacks: `qwen-1.7b`, `qwen-0.6b`, `firered`, and `vibevoice`. `audio transcribe export` renders normalized results without model work. `audio doctor` reports what the machine supplies, and `audio packages` installs, verifies, and reclaims the pinned packages and runtimes. Provider ASR, alignment, and diarization downloads require an explicit `audio packages pull`. The small shared Silero VAD bootstrap used by inspection, enhancement, or transcription is the sole implicit model fetch and is described under Install.
 
 ## Install
 
@@ -53,7 +51,7 @@ uv sync --extra dev
 uv run audio enhance --list-stages --profile product-demo
 ```
 
-When no valid local copy is available, the first VAD use downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches implicitly; `audio packages pull silero-vad` provisions it explicitly instead. The [VAD implementation](src/audio_cli/vad.py) enforces that SHA-256 pin. Set `AUDIO_PROCESSING_VAD_MODEL` or pass `--vad-model` to use a pre-populated copy of that same hash-pinned model; an arbitrary ONNX file is refused rather than run under false 6.2.1 provenance. No PyTorch runtime is required.
+When no valid local copy is available, the first VAD use downloads the pinned 2.2 MB Silero VAD 6.2.1 ONNX model from its official repository and verifies its SHA-256 digest. It is the only model this CLI fetches implicitly; `audio packages pull silero-vad` provisions it explicitly instead. The [VAD implementation](src/audio_cli/vad.py) enforces that SHA-256 pin. Set `AUDIO_PROCESSING_MODEL_CACHE` to select the shared provisioning root, or `AUDIO_PROCESSING_VAD_MODEL` to use a pre-populated copy of that same hash-pinned model outside the cache; an arbitrary ONNX file is refused rather than run under false 6.2.1 provenance. See the [migration guide](docs/vad-model-migration.md) for replacing the removed `--vad-model` option with a command-local environment assignment. No PyTorch runtime is required.
 
 ## Use
 
@@ -85,7 +83,14 @@ audio enhance demo.mp4 \
 
 The durable report is written beside the output as `demo-enhanced.mp4.report.json`. JSON is also emitted on stdout for agents.
 
-Use `audio report summary demo-enhanced.mp4.report.json` to locate recorded component outcomes, unresolved scopes, and measurement blocks without processing the media again. It prints a concise JSON projection with pointers into the original report and preserves abstentions; see [CLI feedback and report navigation](docs/cli-feedback.md).
+Use `audio report summary demo-enhanced.mp4.report.json` to locate recorded component outcomes, unresolved scopes, and measurement blocks without processing the media again. It prints a concise JSON projection with pointers into the original report and preserves abstentions; `--navigation` groups the recorded phases and scopes. Compare that saved render report with a fresh inspection of the delivered media:
+
+```bash
+audio inspect demo-enhanced.mp4 --report demo-delivered.inspect.json
+audio report compare demo-enhanced.mp4.report.json demo-delivered.inspect.json --navigation
+```
+
+Comparison uses recorded source identity and interval evidence. Fixed before/after regions and fresh detection scopes remain separate; differing speech references or non-speech intervals do not establish changed audio quality. See [report navigation](docs/cli-feedback.md) and [saved-report comparison](docs/report-comparison.md).
 
 For an enhanced speech-listening copy (keep canonical transcription on the original):
 
@@ -216,26 +221,31 @@ The stack is an explicit quality choice. Inspect its capabilities, resolve the p
 audio transcribe stacks
 audio transcribe capabilities --input meeting.m4a --stack qwen-1.7b
 audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
-  --want diarization,word_timestamps
+  --want diarization,word_timestamps --language Cantonese
 audio packages pull --stack qwen-1.7b
 audio transcribe run --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps --language Cantonese \
-  --format json -o meeting.timed.json
+  -o meeting.timed.json
 ```
+
+Runs emit reusable normalized JSON to stdout and also save it when `--output` is supplied; a successful stdout-only run creates no automatic file. The explicit `--format json` spelling remains accepted for scripts. Migrate old `run --format txt/md` commands by saving JSON first, then using `transcribe export` with a distinct readable destination. Removed formats fail with an argument error before media probing or model execution.
 
 Existing transcript and partial-result paths are preserved unless `--force` is explicit; no flag can make the output overwrite an input transcript, its derived partial path, or canonical source media.
 
-Transcript/export publication, URL-model downloads, and managed removals are bound to already-opened, non-symlink directories, so swapping a parent path during those operations cannot redirect their output or package cleanup. FluidAudio is patched at its pinned source commit to require the exact provisioned diarization model directory and to stay offline; its built product path and live SHA256 are receipt-bound and checked again before decode.
+Publication protects canonical media and saved inputs across path aliases and directory changes. See [output refusals](docs/transcribe-contract/40-refusals.md) for replacement and destination rules, and [environments](docs/ENVIRONMENTS.md) for managed-runtime integrity and offline execution.
 
 Omitting `--want` requests only the stack’s declared floors. `--language` is an optional closed Qwen hint and does not reach the forced aligner. Missing packages fail at exit 3 with an explicit `audio packages pull` fix before decode or model load. The [orchestrator](src/audio_cli/transcribe/orchestrator/__init__.py) dispatches all four stacks; [capability declarations](src/audio_cli/transcribe/stacks.json) and live `capabilities` output describe their requested features. Keep the original media as input, including when continuing a partial result with `--range`.
 
-During transcription, host stage and elapsed-time progress goes to stderr, while stdout remains the requested result format. Raw backend stdout/stderr is retained at announced temporary log paths, including on failure. Preserve those logs with any evidence before operating-system cleanup; warnings alone do not establish recognition quality.
+During transcription, host stage and elapsed-time progress goes to stderr, while stdout remains JSON. Raw backend stdout/stderr is retained at announced paths, including on failure. Use `--log-dir PATH` for durable storage; the default is temporary. Preserve those logs with the canonical result; warnings alone do not establish recognition quality. [Alignment diagnostics](docs/alignment-diagnostics.md) connects rejected or explicitly corrected bounds to their raw stage evidence.
 
-Use `transcribe plan --compact` to omit the generated sample while keeping all decisions and provisioning guidance. With `transcribe run --output PATH --format json --receipt`, stdout becomes a concise JSON receipt and the saved canonical JSON stays unchanged. An incomplete run still exits 4 with its refusal on stderr and a receipt naming the actual partial file and coverage.
+Use `transcribe plan --compact` to omit the generated sample while keeping all decisions and provisioning guidance. With `transcribe run --output PATH --receipt`, stdout becomes a concise JSON receipt and the saved canonical JSON stays unchanged. An incomplete run still exits 4 with its refusal on stderr and a receipt naming the actual partial file and coverage.
+
+Before exporting, inspect coverage, requested-capability outcomes and abstentions in the saved JSON: processing completion does not guarantee that requested timing or speakers were delivered. Retain the canonical result for subsequent exports.
 
 Export saved results without running models (`audio export` remains a compatibility alias):
 
 ```bash
+audio transcribe export --input meeting.timed.json --format txt -o meeting.txt
 audio transcribe export --input meeting.timed.json --format srt -o meeting.srt
 audio transcribe export --input meeting.timed.json --format md --timestamps -o meeting.md
 audio transcribe export --input meeting.timed.json --format md --provenance -o meeting.with-source.md
@@ -258,7 +268,7 @@ uv run --extra dev pre-commit install
 uv run --extra dev pre-commit run --all-files
 ```
 
-One agent skill is developed and shipped with the CLI under `skills/audio-cli/` in the source distribution. [`audio-cli`](skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix or measure someone's audio: it routes by request — diagnose and enhance, apply a targeted fix, provision transcription models, check command readiness — and holds only what `--help` cannot say, which is the judgment, the report semantics, and the limits worth admitting to a user. This layout keeps CLI user guidance outside development-agent auto-discovery; building the package does not install the skill into another workspace.
+One agent skill is developed and shipped with the CLI under `skills/audio-cli/` in the source distribution. [`audio-cli`](skills/audio-cli/SKILL.md) is the onboarding surface for an agent asked to fix or measure someone's audio: it routes to enhancement, targeted corrections, original-source transcription and export, saved-report interpretation and comparison, provisioning, readiness, and command failures. Its references explain judgment, result semantics, and evidence limits; live `--help` owns command syntax, flags, and defaults. This layout keeps CLI user guidance outside development-agent auto-discovery; building the package does not install the skill into another workspace.
 
 ## Repository layout
 

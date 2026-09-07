@@ -192,9 +192,8 @@ audio packages pull --stack qwen-1.7b
 audio packages verify
 audio packages list
 audio transcribe run --input meeting.m4a --stack qwen-1.7b --want diarization \
-  --format md
-audio transcribe run --input meeting.m4a --stack qwen-1.7b --want diarization \
-  --format json -o meeting.transcript.json
+  -o meeting.transcript.json
+audio transcribe export --input meeting.transcript.json --format md -o meeting.md
 ```
 
 The JSON result carries the executed plan as `provenance`, anonymous speaker
@@ -223,7 +222,7 @@ audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
 audio packages pull --stack qwen-1.7b
 audio transcribe run --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps,overlapped_speech,vad \
-  --format json -o meeting.timed.json
+  -o meeting.timed.json
 ```
 
 `word_timestamps` arrives `derived` with `evidence.quality: "unmeasured"`, because
@@ -292,7 +291,8 @@ without it this exits 3:
 ```bash
 audio packages pull --stack qwen-0.6b
 audio transcribe run --input meeting.m4a --stack qwen-0.6b --want diarization \
-  --language Cantonese --format md
+  --language Cantonese -o meeting.small.json
+audio transcribe export --input meeting.small.json --format md -o meeting.small.md
 ```
 
 Measured on the 30-minute Cantonese SpiCE fixture, Apple M4 Max / 64 GiB, batch 1

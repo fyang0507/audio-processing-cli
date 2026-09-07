@@ -220,6 +220,14 @@ def output_exists(
     run_range: str | None = None,
     output_format: str = "json",
 ) -> Refusal:
+    if output_format != "json":
+        return _output_exists(
+            output,
+            existing,
+            "repeat the original Python call with force=True to replace its legacy human "
+            "output; for CLI use, save JSON to a distinct path with audio transcribe run "
+            "and format it with audio transcribe export",
+        )
     return _output_exists(
         output,
         existing,
@@ -307,7 +315,7 @@ def receipt_options_invalid(output: Path | None, output_format: str) -> Refusal:
     return build_refusal(
         "receipt_options_invalid",
         2,
-        "use --receipt with --output PATH and --format json, or remove --receipt; "
+        "use --receipt with --output PATH, or remove --receipt; "
         "repeat the original command, preserving every other argument",
         field="--receipt",
         provided=True,

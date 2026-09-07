@@ -1,8 +1,13 @@
 # Transcribe original media and export saved results
 
-## Preserve the canonical transcript first
+## Save, check, and reuse the canonical result
 
-When transcription is requested or needed, transcribe the original source and save the normalized JSON unchanged. Reuse a saved original-source result when it already meets the request. If the task also includes enhancement, transcribe first and enhance last. A later ASR check on an enhanced copy is a separate comparison and does not replace this canonical record.
+1. Reuse an unchanged saved original-source JSON result when its scope and produced capabilities already meet the request.
+2. Otherwise choose a stack, plan the required capabilities, explicitly provision missing packages, and run recognition on the original media. Save the normalized JSON as the reusable canonical result.
+3. Read its range, coverage, requested-capability outcomes and abstentions before delivery. Processing completion is separate from delivery of requested timing or speakers; a receipt points to the evidence and does not replace it.
+4. Export the requested readable or subtitle deliverables from that saved JSON. Retain it for subsequent exports without rerunning models or rewriting the canonical text. Discover command syntax and controls through live help.
+
+If the task also includes enhancement, transcribe first and enhance last. A later ASR check on an enhanced copy is a separate comparison and does not replace this canonical record.
 
 Canonical identifies the unedited result and its source. It does not guarantee that recognition retained every filler, repetition, repair, or dialect form. `verbatim` expresses a text-fidelity capability; it is not a filler-recall guarantee or a switch that makes omitted words reappear. Do not clean the canonical text yourself or describe absent fillers as deliberate editorial cuts. Editorial and filler-removal decisions are outside the CLI scope; issues #1 and #39 are closed as `NOT_PLANNED`.
 
