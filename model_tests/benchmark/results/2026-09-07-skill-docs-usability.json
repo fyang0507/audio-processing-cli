@@ -1,0 +1,101 @@
+{
+  "date": "2026-09-07",
+  "topic": "shipped skill documentation usability",
+  "candidate": {
+    "commit": "115223076ef89399d611dd8c7fdad6712ade8430",
+    "scope": "Working-tree documentation changes plus a frozen complete skill snapshot; no implementation changes",
+    "executable": "/Users/fredy/Documents/fred-projects/audio-processing-cli/.venv/bin/audio",
+    "version": "0.1.0",
+    "binding": "Editable entrypoint and import verified against this checkout's src/audio_cli; see executable-identity.txt",
+    "evidence_root": "tests/artifacts/acceptance/2026-09-07-skill-docs-1152230",
+    "scope_record": "scope.md",
+    "snapshot": "skill",
+    "diff": "candidate.diff",
+    "identity_before": "identity-before.json",
+    "identity_after": "identity-after.json",
+    "skill_snapshot_and_original_identities_unchanged": true
+  },
+  "documentation": {
+    "word_count_basis": "Whitespace-delimited words in every shipped Markdown file, HEAD versus revised working tree",
+    "before_words": 6035,
+    "after_words": 2575,
+    "reduction_percent": 57.3,
+    "enhancement_before_words": 1557,
+    "enhancement_after_words": 374
+  },
+  "original_media": [
+    {
+      "path": "tests/artifacts/media/demo-video-audio-to-improve.mp4",
+      "sha256": "8af1c6e867f7e5decf770840ba95e66bdd5d98070331599cea45cdad3a9ff003",
+      "bytes": 91066646,
+      "unchanged": true
+    },
+    {
+      "path": "tests/artifacts/media/test-sample-multispeaker.m4a",
+      "sha256": "d5579a83d046f12ede2b98e21cc510c98e4015ad16310ef95c389fc2bd6a249c",
+      "bytes": 2331384,
+      "unchanged": true
+    }
+  ],
+  "fresh_operator_cases": [
+    {
+      "case": "method discovery and scoped input",
+      "operator": "/root/operator_methods",
+      "cli_calls": 4,
+      "all_cli_exits_zero": true,
+      "capability_verdict": "PASS",
+      "delivery_verdict": "PASS",
+      "evidence": "methods/plan-and-evidence.md",
+      "adjustment": "methods/adjustments.json",
+      "developer_validation": "Existing parser accepts exactly +3 dB, original interval 42-45 seconds, full band, using recorded source duration",
+      "processing_effect": "NOT REQUIRED"
+    },
+    {
+      "case": "saved-report interpretation",
+      "operator": "/root/operator_reports",
+      "cli_calls": 5,
+      "all_cli_exits_zero": true,
+      "capability_verdict": "PASS",
+      "delivery_verdict": "PASS",
+      "evidence": "reports/findings.md",
+      "inputs": ["inputs/enhanced-report.json", "inputs/delivered-inspect.json"],
+      "developer_validation": "Quoted delivered metrics, intermediate and final limits, fixed/fresh scopes and explicit sync abstention checked against raw artifacts",
+      "listening_quality": "NOT REQUIRED"
+    },
+    {
+      "case": "offline export and unmet-capability assessment",
+      "operator": "/root/operator_exports",
+      "cli_calls": 3,
+      "all_cli_exits_zero": true,
+      "capability_verdict": "PASS",
+      "delivery_verdict": "PASS",
+      "evidence": "exports/result.md",
+      "outputs": ["exports/plain.txt", "exports/plain.md"],
+      "developer_validation": "Every canonical segment remains in order in both native exports; both input JSON hashes unchanged",
+      "separate_saved_timing_requirement": {
+        "artifact": "inputs/timed-request.json",
+        "capability_verdict": "FAIL",
+        "reason": "Recorded word_timestamps abstained; seg_27 has neither word nor segment timing",
+        "timed_export": "NOT REQUIRED",
+        "assessment_verdict": "PASS",
+        "note": "Correct diagnosis of an existing unmet prerequisite is the documentation check; it does not establish successful timed delivery or a new recognition result"
+      },
+      "auxiliary_tooling_issue": "Non-audio inspection attempted unavailable python and exited 127 before any candidate CLI call. Scope clarification confirmed the predeclared stop rule concerns candidate audio failures; operator continued file inspection with an available tool. Preserved in exports/auxiliary-failure.md."
+    }
+  ],
+  "checks": {
+    "pytest": "PASS: 66 tests under tests/docs plus shipped-skill and file-size architecture tests",
+    "skill_quick_validate": "PASS",
+    "pre_commit_all_files": "PASS: Ruff lint/safe fixes and format",
+    "git_diff_check": "PASS",
+    "changed_document_links": "PASS",
+    "original_canonical_and_skill_preservation": "PASS",
+    "independent_review": "PASS: /root/review_overhaul found no blockers after checking the rewritten guidance, proposal sources, links and operator artifacts"
+  },
+  "limits": [
+    "Narrow documentation usability scope was declared before testing; new model runs, processing, provisioning, recovery execution and the full media regression matrix were not required.",
+    "No recognition accuracy, perceptual quality or performance claim is made.",
+    "The skill still supplies adjustment input because public help omits it. Saved-report discovery was usable, but summary help names only enhancement input and navigation outputs required selective JSON reads.",
+    "Private source media, transcripts and raw CLI evidence remain untracked in tests/artifacts."
+  ]
+}
