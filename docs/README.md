@@ -11,4 +11,5 @@
 - [Open-issue stack acceptance, 6 September 2026](model-tests/2026-09-06-open-issues-acceptance.md): earlier scoped feature verdicts, original-source artifacts and the strict/default Qwen timing-delivery failure.
 - [Alignment recovery and subtitle acceptance, 6 September 2026](model-tests/2026-09-06-alignment-recovery-acceptance.md): explicit clipping and word-preserving export results, retained failures, operator trace limits and human-judgment scope.
 - [Custom-clip report interpretation acceptance, 7 September 2026](model-tests/2026-09-07-report-interpretation-acceptance.md): scoped acceptance reporting, independent measurement-interval findings and fresh-agent saved-report checks on the demo video and mixed-language clip.
+- [JSON run and offline export acceptance, 7 September 2026](model-tests/2026-09-07-json-run-acceptance.md): one full-source recognition, reusable canonical JSON, readable exports, expected refusals and a separately disclosed setup-protocol deviation.
 - [Audio CLI skill](../skills/audio-cli/SKILL.md): CLI user guidance developed and shipped with the source distribution, outside development-agent auto-discovery.
