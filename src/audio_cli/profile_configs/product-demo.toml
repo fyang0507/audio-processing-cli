@@ -1,0 +1,56 @@
+# Complete enhancement preset; every Profile field is explicit.
+name = "product-demo"
+version = "5"
+
+# Stereo channel correction.
+channel_balance_enabled = true
+channel_no_op_db = 1.5
+channel_max_correction_db = 6.0
+channel_correlation_minimum = 0.92
+
+# Cleanup is conditional on measured evidence.
+environment_denoise_enabled = true
+highpass_hz = 75.0
+subbass_ratio_threshold = 0.02
+hum_excess_db_threshold = 8.0
+
+# Speech treatment before final program normalization.
+voice_enhance_enabled = true
+voice_target_rms_dbfs = -30.0
+voice_max_gain_db = 24.0
+voice_max_attenuation_db = 4.0
+voice_presence_gain_db = 2.0
+compressor_threshold_dbfs = -24.0
+compressor_ratio = 2.5
+
+# Balance eligible non-speech regions relative to speech.
+source_balance_enabled = true
+machine_relative_minimum_lu = -4.0
+machine_relative_maximum_lu = -2.0
+machine_relative_target_lu = -3.0
+machine_max_boost_db = 12.0
+machine_max_attenuation_db = 30.0
+
+# Final program loudness and codec headroom.
+program_loudness_enabled = true
+target_lufs = -16.0
+target_lra_lu = 11.0
+target_true_peak_dbtp = -1.5
+codec_true_peak_headroom_db = 1.0
+
+# Maximum stationary broadband reduction per spectral bin.
+broadband_max_reduction_db = 6.0
+
+# Speech detection and treatment boundaries.
+vad_threshold = 0.5
+vad_exit_threshold = 0.35
+vad_min_speech_ms = 100
+vad_min_silence_ms = 300
+vad_speech_pad_ms = 120
+region_fade_ms = 40
+speech_transition_placement = "outside"
+voice_boundary_bridge_silence_ms = 400
+voice_boundary_guard_ms = 80
+voice_boundary_search_ms = 2000
+voice_boundary_noise_margin_db = 6.0
+voice_boundary_speech_margin_db = 12.0

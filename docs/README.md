@@ -4,6 +4,7 @@
 - [Environments](ENVIRONMENTS.md): declared model packages, runtimes, and provisioning.
 - [Silero VAD configuration migration](vad-model-migration.md): replace the removed inspection/enhancement `--vad-model` option with shared environment configuration.
 - [Enhancement](enhancement.md), [broadband denoising](dsp/denoise/ALGORITHM.md), and [RNNoise](rnnoise-denoising.md): processing behavior and evidence limits.
+- [Developing bundled profiles](profile-authoring.md): contributor guidance for extending presets; separate from the shipped agent-user skill.
 - [CLI feedback](cli-feedback.md), [progress and logs](cli-progress-logging.md), [report comparison](report-comparison.md), and [timing evidence](timing-evidence.md): command feedback, saved evidence, and timeline validation.
 - [Model decisions](model-tests/DECISION_REPORT.md), [findings](model-tests/FINDINGS.md), and [experiments](model-tests/EXPERIMENT_RESULTS.md): research documentation; claims about measured output still require runner or artifact evidence.
 - [Benchmark guide](model-tests/benchmark/README.md): reproducible research workflows. Runners, manifests, tracked results, and ignored raw runs remain under `model_tests/`.
