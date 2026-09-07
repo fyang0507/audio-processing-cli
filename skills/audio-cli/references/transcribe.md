@@ -1,54 +1,35 @@
 # Transcribe original media and export saved results
 
-## Save, check, and reuse the canonical result
+## Save once, reuse for delivery
 
-1. Reuse an unchanged saved original-source JSON result when its scope and produced capabilities already meet the request.
-2. Otherwise choose a stack, plan the required capabilities, explicitly provision missing packages, and run recognition on the original media. Save the normalized JSON as the reusable canonical result.
-3. Read its range, coverage, requested-capability outcomes and abstentions before delivery. Processing completion is separate from delivery of requested timing or speakers; a receipt points to the evidence and does not replace it.
-4. Export the requested readable or subtitle deliverables from that saved JSON. Retain it for subsequent exports without rerunning models or rewriting the canonical text. Discover command syntax and controls through live help.
+1. Reuse unchanged original-source JSON when its scope and produced capabilities meet the request.
+2. Otherwise discover stacks, inspect the selected stack's capabilities, and plan the original input with only the capabilities needed. Use live help/catalogs for choices and syntax; a suggested minimal plan may need capabilities added for the user's deliverables.
+3. Provision the plan's missing packages through [model packages](model-packages.md), then run recognition and save canonical JSON. When enhancement is also requested, transcribe first and enhance last.
+4. Read the transcript, requested-capability outcomes, coverage, and abstentions before exporting. Processing completion does not guarantee complete timing, speech coverage, or attribution.
+5. Export readable/subtitle deliverables from that JSON with `audio transcribe export`; retain it for subsequent exports without rerunning models or editing recognized text.
 
-If the task also includes enhancement, transcribe first and enhance last. A later ASR check on an enhanced copy is a separate comparison and does not replace this canonical record.
+Choose based on required output and the catalog's stated limits. Package size and a declared capability do not establish accuracy on new media. For subtitles, request real `word_timestamps`. For speaker labels, request diarization; labels remain anonymous without independent identity evidence.
 
-Canonical identifies the unedited result and its source. It does not guarantee that recognition retained every filler, repetition, repair, or dialect form. `verbatim` expresses a text-fidelity capability; it is not a filler-recall guarantee or a switch that makes omitted words reappear. Do not clean the canonical text yourself or describe absent fillers as deliberate editorial cuts. Editorial and filler-removal decisions are outside the CLI scope; issues #1 and #39 are closed as `NOT_PLANNED`.
+## Decisions that need care
 
-## Choose, plan, and run
+- On Qwen, adding diarization changes recognition input spans and can change the text. Treat independently requested variants as separate results; do not require byte-identical wording or splice them together.
+- Canonical output and `verbatim` do not guarantee filler, repetition, or dialect recall. Do not clean the canonical text or describe omitted words as intentional cuts.
+- Published timing uses the original decoded-audio timeline. Do not pre-clip input for a retry, manually offset bounds, or add container/stream starts. Duration equality does not certify subtitle-to-video sync.
+- Read abstentions even on successful completion. Text can survive unavailable alignment; speaker labels on emitted segments do not establish attribution of all original speech. An empty overlap ledger does not establish no overlap if the plan did not detect it.
+- Never invent word timing from segment/turn extents or source duration. A capability that abstained remains unmet even when other output is useful; explain its affected scope.
 
-Choose the stack and the output needed, not every capability. Use `stacks` to discover the declared choices, `capabilities` to evaluate one for the original input, and `plan` to resolve the request. Read the live catalog's quality limits in their fixture and configuration context; neither package size nor a declared capability establishes accuracy on new media. Native versus derived capabilities affect the extra packages and work the plan requires.
+## Recover without changing the task silently
 
-The catalog's `next` is a concrete floors-only plan command, not a recommendation that its minimal output satisfies the user. Add the capabilities the task needs before planning. Request real `word_timestamps` for subtitles; optional speaker labels remain anonymous unless separate evidence establishes a person's identity or role.
+For partial results, retain the JSON and follow a concrete range-resume remedy against the original. If the run made no progress, repeating the same request is not a remedy. Use [failures](failures.md) for command failures and bounded repairs.
 
-On both Qwen stacks (`qwen-1.7b` and `qwen-0.6b`), requesting diarization changes the audio spans passed to recognition, so the text can differ from a plain transcription of the same original. Treat independently requested variants as separate canonical results; neither establishes ground truth or must preserve the other's text byte for byte. FireRed recognizes speech regions and adds speaker labels afterward. VibeVoice produces native speakers with its transcript. Requesting diarization does not reslice recognition input on either of those stacks.
+When the task permits alignment-boundary recovery, choose a clipping limit from the recorded overrun evidence and live help. Inspect recorded corrections and outcomes afterward. Clipping an estimate is not measuring its true acoustic endpoint, and a larger limit cannot fix missing output or text mismatches.
 
-Planning never provisions. Read `packages`, costs, and warnings. When packages are missing, the plan's conditional `next` names a pull for exactly the missing ids; it is absent when no pull is needed. Apply the selected executable and concrete-command checks in [failures.md](failures.md). For provisioning or verification, read [model-packages.md](model-packages.md); a `provisioned` plan entry is not a fresh integrity check. A selected package failure blocks execution before inference.
+A changed stack or alignment policy is a separate attempt with new result, export, and diagnostic destinations. Preserve the earlier evidence and required scope/capabilities. Check the new result before export; do not splice text, timing, or anonymous speaker labels across attempts. Stop when the authorized recovery is exhausted.
 
-If stack or input is missing, supply the actual missing value and repeat the intended command. Do not choose a different stack, drop the requested capabilities, or substitute an example file merely to turn a refusal into a zero exit.
+## Export prerequisites
 
-## Read what was produced
+SRT/VTT need real word timing; inspect export omissions as well as the produced cues. Timed text/Markdown need supplied segment or word timing for every segment. Follow the CLI's refusal when those prerequisites are unmet; do not manufacture bounds or silently downgrade a required timed deliverable.
 
-Follow host progress separately from raw backend diagnostics. Elapsed time reports that a child is running, not a completion percentage. Preserve the announced logs with the run evidence; warnings alone establish neither failure nor recognition quality. Use the command's exit status, result coverage, and semantic refusal to decide what action is needed.
+Merge only compatible disjoint results through the exporter. Independent VibeVoice runs with native diarization cannot be merged because equal-looking anonymous labels do not establish shared identity. Export them separately or plan the needed scope together.
 
-A concise receipt is a pointer to the saved canonical result, not a substitute for reading its transcript and abstentions. Its `outcomes` copies recorded requested-capability results: `produced` and `abstained` are distinct from processing `complete`, and absent capabilities are not inferred from counts. Check these outcomes before timing-dependent exports, then read canonical abstentions for affected scopes. Read its recorded range before interpreting completion; a completed selected interval does not mean the whole original file was transcribed. Choose durable diagnostic storage when logs must travel with the run evidence; discover the controls through live help.
-
-Published bounds refer to the original source decoded-audio timeline. Plans label their probed duration basis; runs label `source.duration_basis: canonical_decoded_pcm`, whose zero is the first decoded sample. Container duration, stream starts, and the enhancement decoder at a different sample rate can disagree without establishing lost words or an offset. Do not add a probed start to word or segment times, and do not certify subtitle-to-video sync from duration equality. Processing-container extents are not speech or word timings. Keep absent keys absent, and read the abstention ledger even on success. A requested capability may have outcome `abstained` while useful text or other timed spans survive; report its reason and affected scope rather than calling the entire result complete in that sense. An empty overlap ledger does not prove no overlap when the selected plan did not detect it.
-
-In diarized Qwen output, `overlap`, `short_turn`, and `raw_fragment` abstentions mark scopes withheld from recognition, which can have neither transcript text nor a speaker turn. Inspect their original-source bounds alongside `segments`, supplied `words`, `turns`, and `provenance.outcomes` in the saved JSON. A speaker label on every emitted segment does not establish full-source attribution or speech coverage; do not infer a speaker-accuracy or coverage percentage from it.
-
-A bracketed non-speech event can deliberately have no aligned words. Ordinary speech with an `alignment_unavailable` abstention retains its available text; do not fabricate word bounds from its segment extent. A speaker label withheld over ambiguous overlap stays absent. Scope withholding and unavailable alignment can occur with `complete: true`; they do not by themselves mean processing was truncated.
-
-Exit 4 preserves a conforming partial document. Read `complete` and `coverage`, keep the saved result, and evaluate its concrete range-resume fix against the original input. Do not pre-clip or manually offset timestamps. If no progress was made and the fix is a sentence, replaying the same request is not a remedy. Exit 1 is a backend failure and must not be reported as a successful abstention; see [failures.md](failures.md).
-
-## Recover when the task authorizes a changed attempt
-
-For an alignment boundary rejection, read the affected segment and unit, original word bounds, measured overrun and selected limit. If the user permits bounded clipping, choose an explicit limit using that evidence and live help; increasing it permits the CLI to clip a returned estimate to its input unit. Read the recorded corrections as well as capability outcomes afterward. A corrected bound is not a newly measured acoustic endpoint, and a higher limit cannot repair missing provider output, invalid words or text mismatches.
-
-An authorized alternative is a separately chosen stack: check its catalog and plan with the original scope and required capabilities. Changing a recognizer does not necessarily change its timing provider. Keep each attempt's canonical result and diagnostics, use new output paths, and inspect the new transcript, timing, speakers and abstentions before exporting. Neither alternate text nor equal-looking anonymous labels may be spliced into the earlier canonical result. The CLI does not switch models internally; the agent chooses the changed request. Preserve the earlier failure and report what the new attempt actually delivers. Stop when the authorized recovery is exhausted or a failure falls outside it.
-
-## Export without running models again
-
-Export saved JSON through `audio transcribe export` and inspect its live help for format and output controls. Compatible disjoint results can be merged on the original timeline. Independent VibeVoice runs with native diarization cannot be merged: identical anonymous labels across generations are not proof of shared speaker identity. Export those separately or generate the needed scope together.
-
-SRT/VTT require real word timing. Bounded non-speech events may be omitted; bounded ordinary speech may be omitted beside real cues only with a same-bounds `alignment_unavailable` abstention. Unbounded ordinary text refuses subtitle export, as does a nonempty transcript with no real word stream unless it is the supported bounded-event-only case. Do not use container or guessed bounds as a workaround.
-
-Plain text and Markdown remain untimed by default. Opt-in `--timestamps` uses supplied segment bounds, falling back to the real word-stream extent. Every segment must have one of those timing sources or export refuses; it does not silently skip untimed text. Inspect the selected invocation's help before requesting it. Do not synthesize readable timestamps from turns, coverage, source duration, or processing containers.
-
-File output is atomic and protects the input transcript and canonical media even when replacement is requested. Use a distinct destination, and retain the original JSON for future exports. Explain recognition, timing, and coverage limits in the reply without rewriting machine output.
+Use distinct output destinations and explain recognition, timing, and coverage limits in the reply. Keep the canonical JSON unchanged.
