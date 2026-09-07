@@ -96,7 +96,7 @@ def test_receipt_preserves_saved_bytes_and_partial_exit(tmp_path, monkeypatch, c
         assert receipt == documented
 
 
-@pytest.mark.parametrize("options", [[], ["--format", "txt"], ["-o", "result", "--format", "md"]])
+@pytest.mark.parametrize("options", [[], ["--format", "json"]])
 def test_receipt_invalid_combinations_refuse_before_resolution(monkeypatch, capsys, options):
     def forbidden(*args, **kwargs):
         raise AssertionError("invalid receipt reached request, media, packages, or model work")

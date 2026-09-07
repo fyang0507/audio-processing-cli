@@ -29,7 +29,11 @@ def run(
     vad_detector: Any | None = None,
     force: bool = False,
 ) -> RunProduct:
-    """Execute any shipped transcription stack over the canonical source timeline."""
+    """Execute any shipped transcription stack over the canonical source timeline.
+
+    ``output_format`` retains the legacy Python API's human-file behavior. The public
+    CLI only passes JSON and uses the separate export command for readable files.
+    """
     if request.stack.id == "firered":
         runner = _run_firered
     elif request.stack.id == "vibevoice":

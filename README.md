@@ -220,8 +220,10 @@ audio transcribe plan --input meeting.m4a --stack qwen-1.7b \
 audio packages pull --stack qwen-1.7b
 audio transcribe run --input meeting.m4a --stack qwen-1.7b \
   --want diarization,word_timestamps --language Cantonese \
-  --format json -o meeting.timed.json
+  -o meeting.timed.json
 ```
+
+Runs emit reusable normalized JSON to stdout and also save it when `--output` is supplied; a successful stdout-only run creates no automatic file. The explicit `--format json` spelling remains accepted for scripts. Migrate old `run --format txt/md` commands by saving JSON first, then using `transcribe export` with a distinct readable destination. Removed formats fail with an argument error before media probing or model execution.
 
 Existing transcript and partial-result paths are preserved unless `--force` is explicit; no flag can make the output overwrite an input transcript, its derived partial path, or canonical source media.
 
@@ -229,13 +231,16 @@ Transcript/export publication, URL-model downloads, and managed removals are bou
 
 Omitting `--want` requests only the stack’s declared floors. `--language` is an optional closed Qwen hint and does not reach the forced aligner. Missing packages fail at exit 3 with an explicit `audio packages pull` fix before decode or model load. The [orchestrator](src/audio_cli/transcribe/orchestrator/__init__.py) dispatches all four stacks; [capability declarations](src/audio_cli/transcribe/stacks.json) and live `capabilities` output describe their requested features. Keep the original media as input, including when continuing a partial result with `--range`.
 
-During transcription, host stage and elapsed-time progress goes to stderr, while stdout remains the requested result format. Raw backend stdout/stderr is retained at announced temporary log paths, including on failure. Preserve those logs with any evidence before operating-system cleanup; warnings alone do not establish recognition quality.
+During transcription, host stage and elapsed-time progress goes to stderr, while stdout remains JSON. Raw backend stdout/stderr is retained at announced temporary log paths, including on failure. Preserve those logs with any evidence before operating-system cleanup; warnings alone do not establish recognition quality.
 
-Use `transcribe plan --compact` to omit the generated sample while keeping all decisions and provisioning guidance. With `transcribe run --output PATH --format json --receipt`, stdout becomes a concise JSON receipt and the saved canonical JSON stays unchanged. An incomplete run still exits 4 with its refusal on stderr and a receipt naming the actual partial file and coverage.
+Use `transcribe plan --compact` to omit the generated sample while keeping all decisions and provisioning guidance. With `transcribe run --output PATH --receipt`, stdout becomes a concise JSON receipt and the saved canonical JSON stays unchanged. An incomplete run still exits 4 with its refusal on stderr and a receipt naming the actual partial file and coverage.
+
+Before exporting, inspect coverage, requested-capability outcomes and abstentions in the saved JSON: processing completion does not guarantee that requested timing or speakers were delivered. Retain the canonical result for subsequent exports.
 
 Export saved results without running models (`audio export` remains a compatibility alias):
 
 ```bash
+audio transcribe export --input meeting.timed.json --format txt -o meeting.txt
 audio transcribe export --input meeting.timed.json --format srt -o meeting.srt
 audio transcribe export --input meeting.timed.json --format md --timestamps -o meeting.md
 audio transcribe export --input meeting.timed.json --format md --provenance -o meeting.with-source.md

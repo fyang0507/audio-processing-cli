@@ -266,10 +266,8 @@ def _run_transcribe(args: argparse.Namespace) -> int:
             raise
         if args.receipt:
             _print_json(transcribe_execution.build_receipt(product.payload, args.output))
-        elif args.format == "json":
-            _print_json(product.payload)
         else:
-            sys.stdout.write(transcribe_orchestrator.render_human(product.payload, args.format))
+            _print_json(product.payload)
         return 0
     raise ValueError(f"unknown transcribe command {command!r}")
 

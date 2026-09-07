@@ -6,7 +6,7 @@ audio transcribe run --input meeting.m4a \
   --stack qwen-1.7b \
   --want diarization,word_timestamps \
   --language Cantonese \
-  --format json -o meeting.timed.json
+  -o meeting.timed.json
 ```
 
 Exit 0. `meeting.timed.json`:

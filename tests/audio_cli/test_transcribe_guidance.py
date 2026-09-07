@@ -180,9 +180,9 @@ def test_run_field_corrections_preserve_original_operation_options(
         "--range",
         "10:20",
         "--format",
-        "txt",
+        "json",
         "-o",
-        "review.txt",
+        "review.json",
         "--force",
     ]
     if stack.startswith("qwen"):

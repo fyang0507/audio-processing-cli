@@ -210,9 +210,13 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--alignment-max-overrun-ms", metavar="MS", help=alignment_help)
     run_parser = transcribe_commands.add_parser(
         "run",
-        help="Execute one resolved transcription request.",
+        help="Recognize original media and produce reusable normalized JSON.",
         usage="%(prog)s --stack STACK --input INPUT [options]",
         description=(
+            "Recognize original media and emit normalized JSON to stdout; --output also "
+            "saves that reusable result. Use audio transcribe export to format saved JSON "
+            "without rerunning models. Processing completion does not guarantee requested "
+            "timing or speakers: inspect coverage, capability outcomes and abstentions. "
             "Host stage and elapsed-time progress goes to stderr. Raw backend stdout/stderr "
             "is retained at the announced paths, including on failure. Use --log-dir for "
             "durable storage; the default uses temporary files. Backend warnings are "
@@ -231,8 +235,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--range", dest="run_range", help="Process units intersecting START: or START:END."
     )
-    run_parser.add_argument("--format", choices=("json", "md", "txt"), default="json")
-    run_parser.add_argument("-o", "--output", type=Path)
+    run_parser.add_argument("--format", type=_run_format, default="json", help=argparse.SUPPRESS)
+    run_parser.add_argument("-o", "--output", type=Path, help="Also save normalized JSON here.")
     run_parser.add_argument(
         "--log-dir",
         type=Path,
@@ -241,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--receipt",
         action="store_true",
-        help="With --output and --format json, print a concise JSON receipt; saved JSON is unchanged. "
+        help="With --output, print a concise JSON receipt; saved JSON is unchanged. "
         "Partial runs report the saved partial path and still exit 4.",
     )
     run_parser.add_argument(
@@ -261,7 +265,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_export_arguments(export_parser: argparse.ArgumentParser) -> None:
     export_parser.description = (
-        "Render saved result JSON offline; no stack selection or model provisioning is needed. "
+        "Format saved normalized JSON from audio transcribe run without rerunning models. "
+        "Reuse one saved result for multiple readable or subtitle exports; no stack selection "
+        "or model provisioning is needed. Missing timing is never invented. "
         "audio export is a compatibility alias for audio transcribe export."
     )
     export_parser.add_argument(
@@ -289,3 +295,15 @@ def _add_export_arguments(export_parser: argparse.ArgumentParser) -> None:
     export_parser.add_argument(
         "--force", action="store_true", help="Replace an existing export destination."
     )
+
+
+def _run_format(value: str) -> str:
+    """Keep the explicit JSON spelling while refusing retired formats before any I/O."""
+    if value != "json":
+        raise argparse.ArgumentTypeError(
+            "run produces normalized JSON only; save it with --output result.json, then use "
+            "audio transcribe export --input result.json --format "
+            + (value if value in {"txt", "md"} else "txt")
+            + "; use a distinct export destination"
+        )
+    return value
