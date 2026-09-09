@@ -1,5 +1,7 @@
 # audio-processing-cli
 
+[![Release](https://img.shields.io/github/v/release/fyang0507/audio-processing-cli)](https://github.com/fyang0507/audio-processing-cli/releases/latest) [![License](https://img.shields.io/github/license/fyang0507/audio-processing-cli)](LICENSE) [![Runtime](https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?logo=python&logoColor=white)](pyproject.toml) [![Agent-native](https://img.shields.io/badge/design-agent--native-8A2BE2)](skills/audio-cli/SKILL.md) [![Works with](https://img.shields.io/badge/works%20with-Codex%20%C2%B7%20Claude%20Code-black)](skills/audio-cli/SKILL.md)
+
 `audio` is a local-first CLI for audio inspection, profile-driven enhancement, transcription, deterministic transcript export, and explicit model provisioning. Enhancement follows a bounded loop:
 
 ```text
